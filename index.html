@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ages Ago</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="game-container"></div>
+      <div id="hud">
+        <header class="hud-top">
+          <div class="logo">
+            <span class="logo-icon">⚔</span>
+            <span class="logo-text">Ages Ago</span>
+          </div>
+          <div class="resource-bar">
+            <div class="res" title="Food"><span class="ricon">🍖</span><span id="res-food">0</span></div>
+            <div class="res" title="Wood"><span class="ricon">🪵</span><span id="res-wood">0</span></div>
+            <div class="res" title="Gold"><span class="ricon">🪙</span><span id="res-gold">0</span></div>
+            <div class="res" title="Villagers"><span class="ricon">👤</span><span id="res-pop">0</span></div>
+          </div>
+          <div class="hud-hint">
+            <kbd>LMB</kbd> select / drag-box &nbsp;·&nbsp; <kbd>A</kbd> all &nbsp;·&nbsp;
+            <kbd>RMB</kbd> move / gather &nbsp;·&nbsp; <kbd>Scroll</kbd> zoom &nbsp;·&nbsp;
+            <kbd>T</kbd> train &nbsp;·&nbsp; <kbd>F</kbd> first-person
+          </div>
+        </header>
+        <footer class="hud-bottom">
+          <div id="selection-panel" class="selection-panel hidden">
+            <div class="unit-portrait"></div>
+            <div class="unit-info">
+              <h3 id="unit-name">Villager</h3>
+              <p id="unit-status">Idle</p>
+            </div>
+          </div>
+          <button id="train-btn" class="train-btn">
+            Train Villager <span>50 🍖 · T</span>
+          </button>
+        </footer>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
