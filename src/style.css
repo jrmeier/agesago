@@ -159,6 +159,10 @@ body {
   backdrop-filter: blur(8px);
 }
 
+.hud-explore {
+  color: rgba(212, 168, 67, 0.85);
+}
+
 .hud-hint kbd {
   display: inline-block;
   padding: 2px 6px;
