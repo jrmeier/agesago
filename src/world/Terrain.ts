@@ -253,7 +253,7 @@ export class Terrain {
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(x, 64);
-      ctx.quadraticCurveTo(x + (Math.random() * 10 - 5), x + (Math.random() * 14 - 7), 5);
+      ctx.quadraticCurveTo(x + (Math.random() * 10 - 5), 34, x + (Math.random() * 14 - 7), 5);
       ctx.stroke();
     }
     const tex = new THREE.CanvasTexture(c);
