@@ -87,7 +87,7 @@ function floodFill(hf: Heightfield, layout: MapLayout, step = 0.5): (pos: Vec2) 
 describe('generateMap', () => {
   const maps = new Map<number, ReturnType<typeof generateMap>>();
   beforeAll(() => {
-    for (let seed = 1; seed <= 10; seed++) maps.set(seed, generateMap(seed));
+    for (let seed = 1; seed <= 20; seed++) maps.set(seed, generateMap(seed));
   }, 15000);
 
   it('repeats the complete layout, heights and ground for the same seed', () => {
@@ -104,6 +104,19 @@ describe('generateMap', () => {
     expect(same).toBe(true);
     expect(repeated.hf.ground(13.75, 161.25)).toEqual(first.hf.ground(13.75, 161.25));
   });
+
+  it.each([[1, 'f4777e29'], [7, '3cd3712b'], [10, 'f6c66be6'], [20, 'f8c4616']] as const)(
+    'preserves the pre-quarry resource layout outside the building ring for seed %i', (seed, expected) => {
+      const { layout } = maps.get(seed)!;
+      const nodes = layout.nodes.filter((node) => node.kind !== 'stone'
+        && (node.kind !== 'tree' || distance(node.pos, layout.townCenter) >= 12.5));
+      // FNV-1a of the original ordered node data, captured before quarry placement.
+      const serialized = JSON.stringify(nodes);
+      let hash = 2166136261;
+      for (let i = 0; i < serialized.length; i++) hash = Math.imul(hash ^ serialized.charCodeAt(i), 16777619);
+      expect((hash >>> 0).toString(16)).toBe(expected);
+    }
+  );
 
   it.each(Array.from({ length: 10 }, (_, i) => i + 1))('scales resources and keeps every node and villager reachable, including across fords, for seed %i', (seed) => {
     const { hf, layout } = maps.get(seed)!;
@@ -136,8 +149,8 @@ describe('generateMap', () => {
     expect(gold.some((node) => node.pos.x > f.river.fords[1].x + 8 && Math.abs(node.pos.z - f.river.fords[1].z) < 12)).toBe(true);
     const badPlacement = layout.nodes.filter((node) => {
       const g = hf.ground(node.pos.x, node.pos.z);
-      return node.amount !== (node.kind === 'tree' ? 100 : node.kind === 'berry' ? 125 : 400)
-        || g.path > 0.04 || g.sand > 0.24 || g.rock > 0.32 || distance(node.pos, tc) < 5.5
+      return node.amount !== (node.kind === 'tree' ? 100 : node.kind === 'berry' ? 125 : node.kind === 'stone' ? 350 : 400)
+        || g.path > 0.04 || g.sand > 0.24 || (node.kind !== 'stone' && g.rock > 0.32) || distance(node.pos, tc) < 5.5
         || (node.kind === 'tree' && hf.forestDensity(node.pos.x, node.pos.z) < 0.43);
     });
     expect(badPlacement).toEqual([]);
@@ -178,7 +191,7 @@ describe('generateMap', () => {
       for (const node of layout.nodes) {
         const dx = p.pos.x - node.pos.x;
         const dz = p.pos.z - node.pos.z;
-        const minimum = r + (node.kind === 'gold' ? 0.8 : 0.5) + 0.2;
+        const minimum = r + (node.kind === 'gold' || node.kind === 'stone' ? 0.8 : 0.5) + 0.2;
         if (dx * dx + dz * dz < minimum * minimum - 1e-8) overlap = true;
       }
       for (let j = 0; j < i; j++) {
@@ -218,6 +231,74 @@ describe('generateMap', () => {
     const { hf, layout } = maps.get(1)!;
     const reachable = floodFill(hf, layout, 1);
     expect([...layout.villagers, ...layout.nodes.map((node) => node.pos)].filter((pos) => !reachable(pos))).toEqual([]);
+  });
+
+  it.each(Array.from({ length: 20 }, (_, i) => i + 1))('places twelve spaced, accessible quarries on dry ground with rocky exploration rewards for seed %i', (seed) => {
+    const { hf, layout } = maps.get(seed)!;
+    const quarries = layout.nodes.filter((node) => node.kind === 'stone');
+    const starting = quarries.filter((node) => distance(node.pos, layout.townCenter) <= 16);
+    const distant = quarries.filter((node) => distance(node.pos, layout.townCenter) > 35);
+    const reachable = floodFill(hf, layout);
+    expect(quarries).toHaveLength(12);
+    expect(starting).toHaveLength(2);
+    expect(distant).toHaveLength(10);
+    expect(distant.filter((node) => hf.ground(node.pos.x, node.pos.z).rock > 0.05).length).toBeGreaterThanOrEqual(5);
+    const f = terrainFeatures(seed);
+    expect(distant.every((node) => [...f.outcrops, ...f.ridges.map((ridge) => ridge.center),
+      { x: f.river.fords[1].x + 15, z: f.river.fords[1].z - 15 }]
+      .some((landmark) => distance(node.pos, landmark) < 30))).toBe(true);
+    // The main river winds: compare with its bank at the quarry's actual latitude.
+    expect(distant.some((node) => {
+      const index = f.river.points.findIndex((point) => point.z >= node.pos.z);
+      if (index <= 0) return false;
+      const a = f.river.points[index - 1];
+      const b = f.river.points[index];
+      const bankX = a.x + (b.x - a.x) * (node.pos.z - a.z) / (b.z - a.z);
+      return node.pos.x > bankX + 8;
+    })).toBe(true);
+    for (const quarry of quarries) {
+      expect(quarry.amount).toBe(350);
+      expect(reachable(quarry.pos)).toBe(true);
+      for (const radius of [0, 0.8, 1.3]) {
+        for (let a = 0; a < 8; a++) {
+          const angle = a * Math.PI / 4;
+          const pos = { x: quarry.pos.x + Math.cos(angle) * radius, z: quarry.pos.z + Math.sin(angle) * radius };
+          expect(hf.isWater(pos.x, pos.z)).toBe(false);
+          expect(hf.isWalkable(pos.x, pos.z)).toBe(true);
+          expect(hf.ground(pos.x, pos.z).path).toBeLessThanOrEqual(0.04);
+          expect(reachable(pos)).toBe(true);
+        }
+      }
+      for (const other of layout.nodes) {
+        if (other === quarry) continue;
+        const minimum = other.kind === 'stone' ? 8 : other.kind === 'gold' ? 1.8 : 1.5;
+        expect(distance(quarry.pos, other.pos)).toBeGreaterThanOrEqual(minimum - 1e-9);
+      }
+    }
+  });
+
+  it.each(Array.from({ length: 20 }, (_, i) => i + 1))('clears building room around the TC while retaining starting food, gold and wood for seed %i', (seed) => {
+    const { hf, layout } = maps.get(seed)!;
+    const tc = layout.townCenter;
+    expect(layout.props.filter((prop) => distance(prop.pos, tc) < 12 + footprint(prop))).toEqual([]);
+    const nearbyTrees = layout.nodes.filter((node) => node.kind === 'tree' && distance(node.pos, tc) < 12.5);
+    expect(nearbyTrees).toHaveLength(1);
+    expect(distance(nearbyTrees[0].pos, tc)).toBeLessThanOrEqual(12);
+    expect(layout.nodes.filter((node) => node.kind === 'berry' && distance(node.pos, tc) <= 10)).toHaveLength(7);
+    expect(layout.nodes.filter((node) => node.kind === 'gold' && distance(node.pos, tc) <= 16)).toHaveLength(2);
+    // Verify actual house/storehouse footprints fit on open, walkable ground.
+    let sites = 0;
+    for (let a = 0; a < 24; a++) {
+      const angle = a * Math.PI / 12;
+      const center = { x: tc.x + Math.cos(angle) * 9, z: tc.z + Math.sin(angle) * 9 };
+      if (layout.nodes.some((node) => distance(node.pos, center) < 2.9)) continue;
+      let walkable = true;
+      for (const x of [-1.5, 0, 1.5]) {
+        for (const z of [-1.5, 0, 1.5]) if (!hf.isWalkable(center.x + x, center.z + z)) walkable = false;
+      }
+      if (walkable) sites++;
+    }
+    expect(sites).toBeGreaterThanOrEqual(12);
   });
 
   it('generates in under 500 ms and keeps 80k ground queries cheap', () => {
