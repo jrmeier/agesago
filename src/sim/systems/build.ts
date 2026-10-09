@@ -9,6 +9,7 @@ import type {
   ResourceType,
   Stockpile,
   Unit,
+  PlayerId,
   Vec2,
 } from '../../core/types';
 import { BALANCE } from '../balance';
@@ -20,13 +21,15 @@ import { buildingRect, footprintRect, inReach, snapRot } from './sites';
 
 const reject = (world: World, reason: RejectReason) => world.events.emit({ type: 'rejected', reason });
 
-function affordable(world: World, cost: Partial<Stockpile>): boolean {
-  for (const [r, n] of Object.entries(cost) as [ResourceType, number][]) if (world.stock[r] < n) return false;
+export function affordable(world: World, cost: Partial<Stockpile>, by: PlayerId): boolean {
+  const stock = world.stockOf(by);
+  for (const [r, n] of Object.entries(cost) as [ResourceType, number][]) if (stock[r] < n) return false;
   return true;
 }
 
-function pay(world: World, cost: Partial<Stockpile>, sign: 1 | -1): void {
-  for (const [r, n] of Object.entries(cost) as [ResourceType, number][]) world.stock[r] -= sign * n;
+export function pay(world: World, cost: Partial<Stockpile>, sign: 1 | -1, by: PlayerId): void {
+  const stock = world.stockOf(by);
+  for (const [r, n] of Object.entries(cost) as [ResourceType, number][]) stock[r] -= sign * n;
 }
 
 /** Footprints overlap by more than a hair (buildings may touch edge to edge). */
@@ -49,7 +52,7 @@ function discHits(p: Vec2, r: number, rect: Rect): boolean {
  * placement: on a non-walkable footprint they are nudged to its edge when the foundation is laid.
  * Unexplored ground is reported before water/slope so the check leaks nothing about hidden terrain.
  */
-export function canPlace(world: World, kind: BuildingKind, pos: Vec2, rot: number): PlacementCheck {
+export function canPlace(world: World, kind: BuildingKind, pos: Vec2, rot: number, by: PlayerId): PlacementCheck {
   const r = footprintRect(kind, pos, snapRot(rot));
   const hf = world.hf;
   if (!(r.x0 >= 0 && r.z0 >= 0 && r.x1 <= hf.width && r.z1 <= hf.depth)) return { ok: false, reason: 'out-of-bounds' };
@@ -58,7 +61,7 @@ export function canPlace(world: World, kind: BuildingKind, pos: Vec2, rot: numbe
   const e = 1e-3; // keep edge samples inside the footprint's own cells
   const nx = Math.max(1, Math.ceil((r.x1 - r.x0) / step));
   const nz = Math.max(1, Math.ceil((r.z1 - r.z0) / step));
-  const vis = world.visibility;
+  const vis = world.visibilityOf(by);
   let water = false;
   let slope = false;
   for (let j = 0; j <= nz; j++) {
@@ -78,32 +81,37 @@ export function canPlace(world: World, kind: BuildingKind, pos: Vec2, rot: numbe
   for (const n of world.nodes.values()) if (discHits(n.pos, n.radius, r)) return { ok: false, reason: 'occupied' };
   for (const o of world.nav.obstacles) if (discHits(o.pos, o.radius, r)) return { ok: false, reason: 'occupied' };
 
-  if (!affordable(world, BUILDINGS[kind].cost)) return { ok: false, reason: 'insufficient-resources' };
+  if (!affordable(world, BUILDINGS[kind].cost, by)) return { ok: false, reason: 'insufficient-resources' };
   return { ok: true };
 }
 
 /** 'build' command: validate, pay, lay the foundation and send the villagers to build it. */
-export function orderBuild(world: World, unitIds: EntityId[], kind: BuildingKind, pos: Vec2, rot: number): void {
+export function orderBuild(world: World, unitIds: EntityId[], kind: BuildingKind, pos: Vec2, rot: number, by: PlayerId): void {
   if (!BUILDINGS[kind].buildable) {
     reject(world, 'invalid-target');
     return;
   }
-  const check = canPlace(world, kind, pos, rot);
+  const check = canPlace(world, kind, pos, rot, by);
   if (!check.ok) {
     reject(world, check.reason === 'insufficient-resources' ? 'insufficient-resources' : 'blocked-site');
     return;
   }
-  pay(world, BUILDINGS[kind].cost, 1);
-  const b = layFoundation(world, kind, pos, snapRot(rot));
+  pay(world, BUILDINGS[kind].cost, 1, by);
+  const b = layFoundation(world, kind, pos, snapRot(rot), by);
   world.emitStock();
   sendBuilders(world, unitIds, b);
 }
 
 /** Create an unfinished building and emit 'spawned'; non-walkable footprints block nav at once. */
-export function layFoundation(world: World, kind: BuildingKind, pos: Vec2, rot: number): Building {
+export function layFoundation(world: World, kind: BuildingKind, pos: Vec2, rot: number, owner: PlayerId): Building {
+  const maxHp = BUILDINGS[kind].hp;
   const b: Building = {
     id: world.allocId(),
     kind,
+    owner,
+    // Foundations start fragile; construction raises hp toward maxHp.
+    hp: Math.max(1, Math.round(maxHp * 0.1)),
+    maxHp,
     pos: { x: pos.x, z: pos.z },
     rot,
     radius: footprintRadius(kind),
@@ -229,7 +237,9 @@ export function sendBuilders(world: World, unitIds: EntityId[], b: Building): vo
  */
 export function orderConstruct(world: World, unitIds: EntityId[], buildingId: EntityId): void {
   const b = world.buildings.get(buildingId);
-  if (!b) {
+  // Only the owner's villagers build, farm or reseed it.
+  unitIds = unitIds.filter((id) => world.units.get(id)?.owner === b?.owner);
+  if (!b || !unitIds.length) {
     reject(world, 'invalid-target');
     return;
   }
@@ -248,11 +258,11 @@ export function orderConstruct(world: World, unitIds: EntityId[], buildingId: En
       return;
     }
     const cost = BUILDINGS.farm.cost;
-    if (!affordable(world, cost)) {
+    if (!affordable(world, cost, b.owner)) {
       reject(world, 'insufficient-resources');
       return;
     }
-    pay(world, cost, 1);
+    pay(world, cost, 1, b.owner);
     b.food = FARM_FOOD;
     world.events.emit({ type: 'farmFood', id: b.id, food: b.food });
     world.emitStock();
@@ -267,7 +277,7 @@ export function orderCancelBuild(world: World, buildingId: EntityId): void {
     reject(world, 'invalid-target');
     return;
   }
-  pay(world, BUILDINGS[b.kind].cost, -1);
+  pay(world, BUILDINGS[b.kind].cost, -1, b.owner);
   removeBuilding(world, b);
   world.emitStock();
 }

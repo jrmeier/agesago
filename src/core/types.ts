@@ -13,6 +13,24 @@ export const DEFAULT_SEED = 1;
 
 export type EntityId = number;
 
+/** 0 is gaia (neutral: resources, wildlife); players are 1..4. */
+export type PlayerId = number;
+export const GAIA: PlayerId = 0;
+
+export interface Player {
+  id: PlayerId;
+  name: string;
+  /** Cloth/banner colour. */
+  color: number;
+  /** Players on the same team are allies. */
+  team: number;
+  /** Who issues this player's commands. */
+  control: 'human' | 'ai';
+}
+
+/** How a unit reacts to enemies it can see. */
+export type Stance = 'aggressive' | 'defensive' | 'standGround' | 'passive';
+
 export interface Vec2 {
   x: number;
   z: number;
@@ -22,10 +40,22 @@ export type ResourceType = 'wood' | 'food' | 'gold' | 'stone';
 export type Stockpile = Record<ResourceType, number>;
 
 export type NodeKind = 'tree' | 'berry' | 'gold' | 'stone';
-/** Player unit types. Villagers gather; scouts are fast, far-sighted explorers that cannot gather. */
-export type UnitKind = 'villager' | 'scout';
+/**
+ * Player unit types. Villagers gather and build; scouts are fast, far-sighted explorers that
+ * cannot gather; the rest are military. Stats live in core/units.ts.
+ */
+export type UnitKind = 'villager' | 'scout' | 'hoplite' | 'swordsman' | 'slinger' | 'archer' | 'horseman';
 /** Everything a player can build. Data (sizes, costs, build times) lives in core/buildings.ts. */
-export type BuildingKind = 'townCenter' | 'house' | 'storehouse' | 'granary' | 'miningCamp' | 'farm';
+export type BuildingKind =
+  | 'townCenter'
+  | 'house'
+  | 'storehouse'
+  | 'granary'
+  | 'miningCamp'
+  | 'farm'
+  | 'barracks'
+  | 'archeryRange'
+  | 'stable';
 export type EntityKind = UnitKind | NodeKind | BuildingKind;
 
 export const NODE_RESOURCE: Record<NodeKind, ResourceType> = {
@@ -103,12 +133,21 @@ export interface PropPlacement {
   blockRadius: number;
 }
 
+/** One player's starting Town Center, villagers and scouts. */
+export interface StartLayout {
+  townCenter: Vec2;
+  villagers: Vec2[];
+  scouts: Vec2[];
+}
+
 /** Plain-data starting layout produced by map generation and consumed by World. */
 export interface MapLayout {
   townCenter: Vec2;
   villagers: Vec2[];
   /** Starting scouts (usually one), placed just outside the Town Center. */
   scouts: Vec2[];
+  /** Opponents' starting positions (players 2, 3, …). Empty or absent for a solo map. */
+  extraStarts?: StartLayout[];
   nodes: { kind: NodeKind; pos: Vec2; amount: number }[];
   /** Scenery: ruins, rocks, fences, fields, houses… */
   props: PropPlacement[];
@@ -121,6 +160,12 @@ export type UnitState = 'idle' | 'moving' | 'toNode' | 'gathering' | 'toDrop' | 
 export interface Unit {
   id: EntityId;
   kind: UnitKind;
+  owner: PlayerId;
+  hp: number;
+  maxHp: number;
+  /** Entity this unit is attacking (or chasing), if any. */
+  target: EntityId | null;
+  stance: Stance;
   pos: Vec2;
   /** Position at the start of the last sim tick — renderers lerp prevPos → pos. */
   prevPos: Vec2;
@@ -149,6 +194,9 @@ export interface ResourceNode {
 export interface Building {
   id: EntityId;
   kind: BuildingKind;
+  owner: PlayerId;
+  hp: number;
+  maxHp: number;
   /** Footprint centre. */
   pos: Vec2;
   /** Yaw in radians; footprints rotate in 90° steps (0, π/2, π, 3π/2). */
@@ -159,8 +207,10 @@ export interface Building {
   complete: boolean;
   /** Construction progress 0..1 (1 when complete). */
   buildProgress: number;
-  /** Units queued for training (Town Center). */
+  /** Units queued for training, in order (head is in progress). */
   queue: number;
+  /** Kinds of the queued units, same length as `queue` (head first). */
+  queueKinds?: UnitKind[];
   /** Seconds of training completed on the current queue head. */
   progress: number;
   /** Farms only: food remaining in the field. */
@@ -174,7 +224,15 @@ export type Entity = Unit | ResourceNode | Building;
 export type Command =
   | { type: 'move'; unitIds: EntityId[]; target: Vec2 }
   | { type: 'gather'; unitIds: EntityId[]; nodeId: EntityId }
-  | { type: 'train'; buildingId: EntityId }
+  /** Train one unit (default: the building's first trainable kind, e.g. a villager at the TC). */
+  | { type: 'train'; buildingId: EntityId; unit?: UnitKind }
+  /** Attack a unit or building. */
+  | { type: 'attack'; unitIds: EntityId[]; targetId: EntityId }
+  /** Walk to a point, fighting any enemy met on the way. */
+  | { type: 'attackMove'; unitIds: EntityId[]; target: Vec2 }
+  /** Drop current orders and stand still. */
+  | { type: 'stop'; unitIds: EntityId[] }
+  | { type: 'stance'; unitIds: EntityId[]; stance: Stance }
   /** Place a foundation (cost is paid now) and send the units to build it. */
   | { type: 'build'; unitIds: EntityId[]; kind: BuildingKind; pos: Vec2; rot: number }
   /** Send units to help construct an existing foundation (or repair later). */
@@ -207,6 +265,14 @@ export type SimEvent =
   | { type: 'stockpile'; stock: Stockpile; pop: number; popCap: number }
   /** A foundation finished construction. */
   | { type: 'constructed'; id: EntityId }
+  /** An entity lost hit points (hp is the new value). */
+  | { type: 'damaged'; id: EntityId; hp: number; maxHp: number; by: EntityId | null }
+  /** A unit or building was destroyed (followed by 'removed'). */
+  | { type: 'died'; id: EntityId; kind: EntityKind; owner: PlayerId; pos: Vec2 }
+  /** A ranged attack was launched; renderers draw it flying for `flight` seconds. */
+  | { type: 'projectile'; kind: 'arrow' | 'stone' | 'javelin'; from: Vec2; to: Vec2; flight: number; targetId: EntityId }
+  /** One of `owner`'s units or buildings was hit by an enemy (for "under attack" alerts). */
+  | { type: 'attacked'; owner: PlayerId; id: EntityId; pos: Vec2 }
   /** A farm's remaining food changed (harvest or reseed); 0 = fallow. */
   | { type: 'farmFood'; id: EntityId; food: number }
   | { type: 'unitState'; id: EntityId; state: UnitState }

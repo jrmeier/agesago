@@ -46,6 +46,9 @@ function place(world: World, kind: BuildingKind, pos: Vec2, rot: number, complet
   const building: Building = {
     id: nextId++,
     kind,
+    owner: 1,
+    hp: 500,
+    maxHp: 500,
     pos: { ...pos },
     rot,
     radius: 2,

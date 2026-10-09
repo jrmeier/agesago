@@ -46,7 +46,7 @@ describe('build hotkeys', () => {
 
   it('gives every buildable kind a unique key that clashes with nothing else', () => {
     const kinds = buildableKinds();
-    expect(kinds).toEqual(['house', 'storehouse', 'miningCamp', 'granary', 'farm']);
+    expect(kinds).toEqual(['house', 'storehouse', 'miningCamp', 'granary', 'farm', 'barracks', 'archeryRange', 'stable']);
     const keys = kinds.map((k) => BUILD_HOTKEYS[k]);
     expect(keys.every(Boolean)).toBe(true);
     expect(new Set(keys).size).toBe(keys.length);

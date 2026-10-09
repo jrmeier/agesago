@@ -14,6 +14,9 @@ export const BUILD_HOTKEYS: Partial<Record<BuildingKind, string>> = {
   granary: 'KeyG',
   miningCamp: 'KeyM',
   farm: 'KeyP',
+  barracks: 'KeyB',
+  archeryRange: 'KeyY',
+  stable: 'KeyK',
 };
 
 /** Kinds shown in the villager build menu, in BUILDINGS order. */

@@ -1,5 +1,5 @@
 import { BUILDINGS, footprint } from '../../core/buildings';
-import type { Building, BuildingKind, ResourceType, Unit, Vec2 } from '../../core/types';
+import type { Building, BuildingKind, ResourceType, Unit, Vec2, PlayerId } from '../../core/types';
 import { BALANCE } from '../balance';
 import { rectApproach, rectDistance, type Rect } from '../nav';
 import type { World } from '../World';
@@ -35,10 +35,10 @@ export function siteApproach(from: Vec2, b: Building): Vec2 {
  * straight-line distance to the footprint (a cheap stand-in for path length; the TC and a
  * handful of camps make this a short loop). Null if none is reachable.
  */
-export function nearestDrop(world: World, from: Vec2, type: ResourceType): { b: Building; path: Vec2[] } | null {
+export function nearestDrop(world: World, from: Vec2, type: ResourceType, owner: PlayerId): { b: Building; path: Vec2[] } | null {
   const cands: { b: Building; d: number }[] = [];
   for (const b of world.buildings.values()) {
-    if (b.complete && BUILDINGS[b.kind].drop.includes(type)) cands.push({ b, d: rectDistance(from, buildingRect(b)) });
+    if (b.complete && b.owner === owner && BUILDINGS[b.kind].drop.includes(type)) cands.push({ b, d: rectDistance(from, buildingRect(b)) });
   }
   cands.sort((a, c) => a.d - c.d);
   for (const { b } of cands) {

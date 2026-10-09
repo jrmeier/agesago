@@ -73,8 +73,10 @@ describe('economy building models', () => {
   });
 
   it('has distinct silhouettes and seeded tile/thatch houses without crops baked into farms', () => {
-    const heights = kinds.map(kind => visibleBounds(buildingModel(kind)).max.y);
-    expect(new Set(heights.map(height => height.toFixed(2))).size).toBe(kinds.length);
+    // Economy buildings; the military buildings get their own models in the M6 models lane.
+    const economy: BuildingKind[] = ['townCenter', 'house', 'storehouse', 'granary', 'miningCamp', 'farm'];
+    const heights = economy.map(kind => visibleBounds(buildingModel(kind)).max.y);
+    expect(new Set(heights.map(height => height.toFixed(2))).size).toBe(economy.length);
     const signature = (seed: number): number[] => Array.from(meshes(buildingModel('house', { seed }))[0].geometry.getAttribute('color').array);
     expect(signature(1)).toEqual(signature(1));
     expect(signature(1)).not.toEqual(signature(2));

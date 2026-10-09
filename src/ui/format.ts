@@ -13,6 +13,11 @@ const GATHER_VERB: Record<ResourceType, string> = {
 const UNIT_NAMES: Record<UnitKind, [string, string]> = {
   villager: ['Villager', 'Villagers'],
   scout: ['Scout', 'Scouts'],
+  hoplite: ['Hoplite', 'Hoplites'],
+  swordsman: ['Swordsman', 'Swordsmen'],
+  slinger: ['Slinger', 'Slingers'],
+  archer: ['Archer', 'Archers'],
+  horseman: ['Horseman', 'Horsemen'],
 };
 
 /** Unit kinds the Explore command (button, E) applies to. */

@@ -21,6 +21,10 @@ export interface BuildingSpec {
   buildable: boolean;
   /** Fog-of-war sight radius once complete. */
   sight: number;
+  /** Hit points once complete (foundations scale with buildProgress). */
+  hp: number;
+  /** Damage reduction against attacks. */
+  armor: { melee: number; pierce: number };
 }
 
 export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
@@ -34,6 +38,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     walkable: false,
     buildable: false,
     sight: 11,
+    hp: 2400,
+    armor: { melee: 3, pierce: 7 },
   },
   house: {
     name: 'House',
@@ -45,6 +51,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     walkable: false,
     buildable: true,
     sight: 4,
+    hp: 550,
+    armor: { melee: 0, pierce: 7 },
   },
   storehouse: {
     name: 'Storehouse',
@@ -56,6 +64,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     walkable: false,
     buildable: true,
     sight: 5,
+    hp: 600,
+    armor: { melee: 0, pierce: 7 },
   },
   miningCamp: {
     name: 'Mining Camp',
@@ -67,6 +77,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     walkable: false,
     buildable: true,
     sight: 5,
+    hp: 600,
+    armor: { melee: 0, pierce: 7 },
   },
   granary: {
     name: 'Granary',
@@ -78,6 +90,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     walkable: false,
     buildable: true,
     sight: 5,
+    hp: 600,
+    armor: { melee: 0, pierce: 7 },
   },
   farm: {
     name: 'Farm',
@@ -89,6 +103,47 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     walkable: true,
     buildable: true,
     sight: 2,
+    hp: 480,
+    armor: { melee: 0, pierce: 0 },
+  },
+  barracks: {
+    name: 'Barracks',
+    size: { w: 4, d: 4 },
+    cost: { wood: 175 },
+    buildTime: 40,
+    popBonus: 0,
+    drop: [],
+    walkable: false,
+    buildable: true,
+    sight: 6,
+    hp: 1200,
+    armor: { melee: 1, pierce: 7 },
+  },
+  archeryRange: {
+    name: 'Archery Range',
+    size: { w: 4, d: 4 },
+    cost: { wood: 175 },
+    buildTime: 40,
+    popBonus: 0,
+    drop: [],
+    walkable: false,
+    buildable: true,
+    sight: 6,
+    hp: 1000,
+    armor: { melee: 1, pierce: 7 },
+  },
+  stable: {
+    name: 'Stable',
+    size: { w: 4, d: 4 },
+    cost: { wood: 175 },
+    buildTime: 40,
+    popBonus: 0,
+    drop: [],
+    walkable: false,
+    buildable: true,
+    sight: 6,
+    hp: 1000,
+    armor: { melee: 1, pierce: 7 },
   },
 };
 

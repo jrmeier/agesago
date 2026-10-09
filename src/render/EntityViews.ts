@@ -55,6 +55,9 @@ const BUILDING_HEIGHT: Record<BuildingKind, number> = {
   granary: 2.5,
   miningCamp: 2.2,
   farm: 0.75,
+  barracks: 3.2,
+  archeryRange: 3,
+  stable: 3,
 };
 
 /**

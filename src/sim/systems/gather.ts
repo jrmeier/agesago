@@ -148,7 +148,7 @@ export function nearestSources(world: World, type: ResourceType, from: Vec2, u: 
   }
   if (type === 'food') {
     for (const b of world.buildings.values()) {
-      if (!isWorkableFarm(b) || !farmFree(world, b, u)) continue;
+      if (b.owner !== u.owner || !isWorkableFarm(b) || !farmFree(world, b, u)) continue;
       const d = rectDistance(from, buildingRect(b));
       if (d <= r) out.push({ s: b, d });
     }
@@ -257,7 +257,7 @@ function gatherTick(world: World, u: Unit, dt: number): void {
 
 /** Walk to the nearest complete drop site accepting what `u` carries; idle if there is none. */
 export function sendToDrop(world: World, u: Unit): void {
-  const drop = u.carry ? nearestDrop(world, u.pos, u.carry.type) : null;
+  const drop = u.carry ? nearestDrop(world, u.pos, u.carry.type, u.owner) : null;
   if (!drop) {
     goIdle(world, u);
     return;
@@ -284,9 +284,9 @@ function deposit(world: World, u: Unit): void {
   }
   if (gs) gs.drop = undefined;
   if (u.carry && u.carry.amount > 0) {
-    world.stock[u.carry.type] += u.carry.amount;
+    world.stockOf(u.owner)[u.carry.type] += u.carry.amount;
     u.carry = null;
-    world.emitStock();
+    if (u.owner === world.localPlayer) world.emitStock();
   }
   const node = u.gatherNode !== null ? world.nodes.get(u.gatherNode) : undefined;
   if (node && sendToNode(world, u, node)) return;
