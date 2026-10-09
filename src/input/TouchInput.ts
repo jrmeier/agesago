@@ -6,6 +6,16 @@ const COMPAT_MOUSE_MS = 800;
 
 export type TouchMode = 'rts' | 'fps';
 
+/**
+ * Claims single-finger touches before gesture recognition (e.g. dragging a placement ghost).
+ * down() returns true to take the pointer; it then gets move/up instead of the recogniser.
+ */
+export interface TouchGrab {
+  down(x: number, y: number): boolean;
+  move(x: number, y: number): void;
+  up(): void;
+}
+
 /** Per-frame touch state read by Controls and the cameras. */
 export interface TouchState {
   /** Gestures recognised since the last frame (RTS mode only). */
@@ -34,6 +44,9 @@ export class TouchInput implements TouchState {
   private readonly recognizer = new GestureRecognizer();
   private readonly fps = new FpsTouch();
   private readonly ids = new Set<number>();
+  private grabber: TouchGrab | null = null;
+  /** Pointer currently owned by the grabber. */
+  private grabbed: number | null = null;
   private readonly ring: HTMLDivElement;
   private readonly knob: HTMLDivElement;
   private readonly off: (() => void)[] = [];
@@ -77,8 +90,19 @@ export class TouchInput implements TouchState {
     this.frame.push(...this.recognizer.reset());
     this.fps.reset();
     this.ids.clear();
+    if (this.grabbed !== null) this.grabber?.up();
+    this.grabbed = null;
     this.mode = mode;
     this.drawStick();
+  }
+
+  /** Install (or clear with null) a grabber that may claim new single-finger touches in RTS mode. */
+  setGrabber(g: TouchGrab | null): void {
+    if (this.grabbed !== null && g !== this.grabber) {
+      this.ids.delete(this.grabbed);
+      this.grabbed = null;
+    }
+    this.grabber = g;
   }
 
   endFrame(): void {
@@ -119,6 +143,10 @@ export class TouchInput implements TouchState {
     setTouchClass(true);
     this.ids.add(e.pointerId);
     const { x, y } = this.local(e);
+    if (this.mode === 'rts' && this.grabber && this.recognizer.count === 0 && this.grabbed === null && this.grabber.down(x, y)) {
+      this.grabbed = e.pointerId;
+      return;
+    }
     if (this.mode === 'rts') this.frame.push(...this.recognizer.down(e.pointerId, x, y, this.lastTouch));
     else {
       this.fps.down(e.pointerId, x, y, this.dom.clientWidth || window.innerWidth);
@@ -130,6 +158,10 @@ export class TouchInput implements TouchState {
     if (!this.ids.has(e.pointerId)) return;
     this.lastTouch = performance.now();
     const { x, y } = this.local(e);
+    if (e.pointerId === this.grabbed) {
+      this.grabber?.move(x, y);
+      return;
+    }
     if (this.mode === 'rts') {
       this.frame.push(...this.recognizer.move(e.pointerId, x, y, this.lastTouch));
       return;
@@ -148,6 +180,11 @@ export class TouchInput implements TouchState {
   private lift(e: PointerEvent, cancelled: boolean): void {
     if (!this.ids.delete(e.pointerId)) return;
     this.lastTouch = performance.now();
+    if (e.pointerId === this.grabbed) {
+      this.grabbed = null;
+      this.grabber?.up();
+      return;
+    }
     if (this.mode === 'rts') {
       const { x, y } = this.local(e);
       this.frame.push(

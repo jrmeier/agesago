@@ -13,9 +13,21 @@ export function nextScout<T extends Located>(scouts: readonly T[], lastId: Entit
 /** Last scout centred per world, so the hotkey and the minimap button cycle together. */
 const lastFocused = new WeakMap<object, EntityId>();
 
+/** Per-world listeners told which scout was just jumped to (Controls selects it). */
+const focusListeners = new WeakMap<object, Set<(id: EntityId) => void>>();
+
+/** Subscribe to scout jumps on `world` (hotkey or minimap button). Returns an unsubscribe function. */
+export function onScoutFocus(world: object, fn: (id: EntityId) => void): () => void {
+  let set = focusListeners.get(world);
+  if (!set) focusListeners.set(world, (set = new Set()));
+  set.add(fn);
+  return () => set.delete(fn);
+}
+
 /**
- * Centre the camera on the next scout (cycling if there are several). Shared by the
- * "." / Home hotkeys and the minimap's find-scout button. Returns the scout id, or null.
+ * Centre the camera on the next scout (cycling if there are several) and tell onScoutFocus
+ * listeners, which select it. Shared by the "." / Home hotkeys and the minimap's find-scout
+ * button. Returns the scout id, or null.
  */
 export function focusNextScout(
   world: { readonly units: ReadonlyMap<EntityId, Unit> },
@@ -26,5 +38,6 @@ export function focusNextScout(
   if (!s) return null;
   lastFocused.set(world, s.id);
   rig.focusOn(s.pos);
+  for (const fn of focusListeners.get(world) ?? []) fn(s.id);
   return s.id;
 }
