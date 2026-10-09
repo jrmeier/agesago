@@ -48,6 +48,16 @@ export class CameraRig {
     return () => this.listeners.delete(fn);
   }
 
+  /** Centre the RTS view on ground point `p` (e.g. from a minimap click). Ignored in first person. */
+  focusOn(p: Vec2): void {
+    if (this.mode === 'rts') this.rts.focusOn(p);
+  }
+
+  /** Ground quad (TL, TR, BR, BL) seen by the RTS camera. */
+  viewFootprint(): Vec2[] {
+    return this.rts.viewFootprint();
+  }
+
   setAspect(aspect: number): void {
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();

@@ -33,6 +33,15 @@ export function zoomFocusAbout(focus: THREE.Vector3, anchor: THREE.Vector3, k: n
   return out.copy(focus).sub(anchor).multiplyScalar(k).add(anchor);
 }
 
+const UP = new THREE.Vector3(0, 1, 0);
+/** Screen corners in NDC, clockwise from top-left. */
+const FOOTPRINT_NDC: readonly [number, number][] = [
+  [-1, 1],
+  [1, 1],
+  [1, -1],
+  [-1, -1],
+];
+
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 /**
@@ -136,6 +145,35 @@ export class RtsCamera {
     this.touchGrab = null;
     this.focusY = surfaceAt(this.hf, this.target.x, this.target.z);
     this.apply();
+  }
+
+  /** Centre the view on ground point `p` (clamped to the map), dropping any pan in progress. */
+  focusOn(p: Vec2): void {
+    this.grab = null;
+    this.touchGrab = null;
+    this.target.x = p.x;
+    this.target.z = p.z;
+    this.clampTarget();
+    this.focusY = surfaceAt(this.hf, this.target.x, this.target.z);
+    this.apply();
+  }
+
+  /**
+   * Ground footprint of the view: the screen corners (top-left, top-right, bottom-right,
+   * bottom-left) projected onto the horizontal plane at the focus height. A corner whose ray
+   * misses the plane is placed `far` units along the ray.
+   */
+  viewFootprint(far = 200): Vec2[] {
+    const cam = this.camera;
+    cam.updateMatrixWorld();
+    this.plane.set(UP, -this.focusY);
+    const hit = new THREE.Vector3();
+    return FOOTPRINT_NDC.map(([nx, ny]) => {
+      this.ray.origin.setFromMatrixPosition(cam.matrixWorld);
+      this.ray.direction.set(nx, ny, 0.5).unproject(cam).sub(this.ray.origin).normalize();
+      const p = this.ray.intersectPlane(this.plane, hit) ?? this.ray.at(far, hit);
+      return { x: p.x, z: p.z };
+    });
   }
 
   /** Current focus point (target at focusY). */
