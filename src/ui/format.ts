@@ -1,4 +1,4 @@
-import type { ResourceType, Unit } from '../core/types';
+import type { EntityId, ResourceType, Unit, UnitKind } from '../core/types';
 
 type StatusUnit = Pick<Unit, 'state' | 'carry' | 'gatherType'>;
 
@@ -8,9 +8,49 @@ const GATHER_VERB: Record<ResourceType, string> = {
   gold: 'Mining gold',
 };
 
+/** Singular / plural display names, in panel order. */
+const UNIT_NAMES: Record<UnitKind, [string, string]> = {
+  villager: ['Villager', 'Villagers'],
+  scout: ['Scout', 'Scouts'],
+};
+
+/** Unit kinds the Explore command (button, E) applies to. */
+const EXPLORERS: ReadonlySet<UnitKind> = new Set<UnitKind>(['scout', 'villager']);
+
 /** Panel title for a selection of `count` villagers. */
 export function unitName(count: number): string {
   return count === 1 ? 'Villager' : `${count} Villagers`;
+}
+
+/** Panel title for a selection: "Scout", "2 Scouts", "3 Villagers, 1 Scout". */
+export function selectionName(kinds: readonly UnitKind[]): string {
+  const groups = (Object.keys(UNIT_NAMES) as UnitKind[])
+    .map((k) => [k, kinds.filter((x) => x === k).length] as const)
+    .filter(([, n]) => n > 0);
+  if (groups.length === 1 && groups[0][1] === 1) return UNIT_NAMES[groups[0][0]][0];
+  return groups.map(([k, n]) => `${n} ${UNIT_NAMES[k][n === 1 ? 0 : 1]}`).join(', ');
+}
+
+/** Which portrait to show: the most common kind, villagers winning ties. */
+export function portraitKind(kinds: readonly UnitKind[]): UnitKind {
+  const scouts = kinds.filter((k) => k === 'scout').length;
+  return scouts > kinds.length - scouts ? 'scout' : 'villager';
+}
+
+/** Ids of the units the Explore command should send. */
+export function explorerIds(units: readonly Pick<Unit, 'id' | 'kind'>[]): EntityId[] {
+  return units.filter((u) => EXPLORERS.has(u.kind)).map((u) => u.id);
+}
+
+/** Show the Explore button when the selection holds at least one unit that can explore. */
+export function showExplore(units: readonly Pick<Unit, 'kind'>[]): boolean {
+  return units.some((u) => EXPLORERS.has(u.kind));
+}
+
+/** HUD readout for the explored share of the map, rounded down ("Explored 7%"). */
+export function exploredLabel(fraction: number): string {
+  const pct = Math.floor(Math.min(1, Math.max(0, fraction)) * 100 + 1e-9);
+  return `Explored ${pct}%`;
 }
 
 /** Human label for a villager's state and load, e.g. "Chopping wood (6/10)", "Carrying gold", "Idle". */
