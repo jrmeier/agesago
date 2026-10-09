@@ -28,7 +28,9 @@ jobs:
         with:
           node-version: 20
 
-      - run: npm install
+      - run: npm ci
+
+      - run: npm test
 
       # Enable Pages on first run (build_type = GitHub Actions) so no manual
       # "Settings → Pages" toggle is required.
