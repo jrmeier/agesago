@@ -45,7 +45,7 @@ export function lockText(tech: TechId, block: RejectReason | null, v: TechView):
       if (missing) return `Requires ${TECHS[missing].name}`;
       if (spec.ageUp !== undefined) {
         const needed = v.ageBuildingsNeeded ?? AGE_BUILDINGS_NEEDED;
-        return `Requires ${needed} ${AGE_NAMES[v.age]} buildings (${Math.min(v.ageBuildings, needed)}/${needed})`;
+        return `Requires ${needed} ${AGE_NAMES[v.age]} building${needed === 1 ? '' : 's'} (${Math.min(v.ageBuildings, needed)}/${needed})`;
       }
       return 'Requires another tech';
     }

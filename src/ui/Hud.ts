@@ -5,7 +5,7 @@ import { UNITS, trainable } from '../core/units';
 import type { Selection } from '../game/Selection';
 import { shownSelection, sightFromState, stepLastSeen, type LastSeenBuilding } from '../render/lastSeen';
 import { BALANCE } from '../sim/balance';
-import { ageBuildings, researchBlock, statOf } from '../sim/systems/research';
+import { ageBuildings, ageBuildingsNeeded, researchBlock, statOf } from '../sim/systems/research';
 import type { World } from '../sim/World';
 import {
   BUILD_HOTKEYS,
@@ -399,6 +399,7 @@ export class Hud {
       queued,
       stock: this.world.stock,
       ageBuildings: ageBuildings(this.world, local, age).length,
+      ageBuildingsNeeded: ageBuildingsNeeded(age),
     };
   }
 

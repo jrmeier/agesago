@@ -39,7 +39,7 @@ describe('lock reasons', () => {
     expect(lockText('ironAxe', 'requires', view({ age: 1 }))).toBe('Requires Bronze Axe');
     expect(lockText('townAge', 'requires', view({ ageBuildings: 1 }))).toBe('Requires 2 Village Age buildings (1/2)');
     expect(lockText('cityAge', 'requires', view({ age: 1 }))).toBe('Requires 2 Town Age buildings (0/2)');
-    expect(lockText('cityAge', 'insufficient-resources', view({ age: 1, stock: stock({ food: 900 }) }))).toBe('Not enough gold');
+    expect(lockText('cityAge', 'insufficient-resources', view({ age: 1, stock: stock({ food: TECHS.cityAge.cost.food! }) }))).toBe('Not enough gold');
     expect(lockText('bronzeAxe', 'insufficient-resources', view({ stock: stock() }))).toBe('Not enough food and wood');
     expect(lockText('bronzeAxe', 'researched', view({ queued: new Set<TechId>(['bronzeAxe']) }))).toBe('Queued');
     expect(lockText('bronzeAxe', 'busy', view())).toBe('Already advancing an age');
