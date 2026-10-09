@@ -80,6 +80,8 @@ export function statusLabel(u: StatusUnit, carryCap: number): string {
       return 'Going to build';
     case 'building':
       return 'Building';
+    case 'attacking':
+      return 'Attacking';
     case 'idle':
       return carry ? `Idle · ${carry.amount} ${carry.type}` : 'Idle';
   }

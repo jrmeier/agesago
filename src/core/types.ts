@@ -155,7 +155,17 @@ export interface MapLayout {
 
 // ---- Entities (plain data; owned and mutated only by the sim) ----
 
-export type UnitState = 'idle' | 'moving' | 'toNode' | 'gathering' | 'toDrop' | 'exploring' | 'toBuild' | 'building';
+export type UnitState =
+  | 'idle'
+  | 'moving'
+  | 'toNode'
+  | 'gathering'
+  | 'toDrop'
+  | 'exploring'
+  | 'toBuild'
+  | 'building'
+  /** Closing on or striking a target (see Unit.target). */
+  | 'attacking';
 
 export interface Unit {
   id: EntityId;
@@ -215,6 +225,8 @@ export interface Building {
   progress: number;
   /** Farms only: food remaining in the field. */
   food?: number;
+  /** Where newly trained units go: a point, or an entity (a resource to gather, a building to garrison later). */
+  rally?: { pos: Vec2; targetId?: EntityId };
 }
 
 export type Entity = Unit | ResourceNode | Building;
@@ -233,6 +245,8 @@ export type Command =
   /** Drop current orders and stand still. */
   | { type: 'stop'; unitIds: EntityId[] }
   | { type: 'stance'; unitIds: EntityId[]; stance: Stance }
+  /** Set a building's rally point; units it trains walk there (or gather/attack `targetId`). */
+  | { type: 'rally'; buildingId: EntityId; pos: Vec2; targetId?: EntityId }
   /** Place a foundation (cost is paid now) and send the units to build it. */
   | { type: 'build'; unitIds: EntityId[]; kind: BuildingKind; pos: Vec2; rot: number }
   /** Send units to help construct an existing foundation (or repair later). */

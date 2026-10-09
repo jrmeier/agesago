@@ -267,7 +267,8 @@ export class World {
       case 'attackMove':
       case 'stop':
       case 'stance':
-        // Combat lands in the combat lane (systems/combat.ts).
+      case 'rally':
+        // Combat and rally points land in the combat lane (systems/combat.ts).
         break;
     }
   }
