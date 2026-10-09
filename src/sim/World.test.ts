@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SEED, type Heightfield, type MapLayout, type SimEvent, type Vec2 } from '../core/types';
+import { DEFAULT_SEED, GRASS_ONLY, type Heightfield, type MapLayout, type SimEvent, type Vec2 } from '../core/types';
 import { BALANCE } from './balance';
 import { generateMap } from './mapgen';
 import { World } from './World';
@@ -16,11 +16,12 @@ function flatField(water: (x: number, z: number) => boolean = () => false): Heig
     isWater: water,
     isWalkable: (x, z) => inside(x, z) && !water(x, z),
     forestDensity: () => 0,
+    ground: () => GRASS_ONLY,
   };
 }
 
 function layout(villagers: Vec2[], nodes: MapLayout['nodes'] = []): MapLayout {
-  return { townCenter: { x: 32, z: 24 }, villagers, nodes };
+  return { townCenter: { x: 32, z: 24 }, villagers, nodes, props: [] };
 }
 
 function record(world: World): SimEvent[] {
@@ -258,5 +259,18 @@ describe('movement', () => {
     expect(minD).toBeGreaterThan(BALANCE.townCenterRadius);
     expect(u.pos).toEqual({ x: 38, z: 24 });
     expect(u.state).toBe('idle');
+  });
+
+  it('paths around blocking scenery but walks through walk-through props', () => {
+    const base = layout([{ x: 20, z: 24 }]);
+    const blocked = new World(flatField(), {
+      ...base,
+      props: [
+        { kind: 'boulder', pos: { x: 26, z: 24 }, rot: 0, scale: 1, blockRadius: 1.2 },
+        { kind: 'reeds', pos: { x: 23, z: 24 }, rot: 0, scale: 1, blockRadius: 0 },
+      ],
+    });
+    expect(blocked.nav.isFree({ x: 26, z: 24 })).toBe(false);
+    expect(blocked.nav.isFree({ x: 23, z: 24 })).toBe(true);
   });
 });

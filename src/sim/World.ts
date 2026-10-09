@@ -16,6 +16,7 @@ import {
 } from '../core/types';
 import { BALANCE } from './balance';
 import { NavGrid } from './nav';
+import { SIGHT, Visibility, type Viewer } from './visibility';
 import { gatherSystem, orderGather, type GatherState } from './systems/gather';
 import { movementSystem, orderMove } from './systems/movement';
 import { orderTrain, trainSystem } from './systems/train';
@@ -28,6 +29,9 @@ import { orderTrain, trainSystem } from './systems/train';
  * The constructor populates entities WITHOUT emitting 'spawned' — consumers read the
  * maps once at startup, then follow events.
  */
+/** Seconds between fog-of-war recomputes. */
+const FOG_INTERVAL = 0.2;
+
 export class World {
   readonly events = new EventBus<SimEvent>();
   readonly units = new Map<EntityId, Unit>();
@@ -38,6 +42,9 @@ export class World {
   time = 0;
   /** Navigation grid over the terrain with building footprints blocked. */
   readonly nav: NavGrid;
+  /** Fog of war for the (single) player. */
+  readonly visibility: Visibility;
+  private fogClock = 0;
   /** Per-unit gather timer and retarget anchor (system bookkeeping, not rendered). */
   readonly gatherState = new Map<EntityId, GatherState>();
   private nextId = 1;
@@ -55,7 +62,11 @@ export class World {
       progress: 0,
     };
     this.buildings.set(tc.id, tc);
-    this.nav = new NavGrid(hf, [tc]);
+    const scenery = layout.props
+      .filter((p) => p.blockRadius > 0)
+      .map((p) => ({ pos: { ...p.pos }, radius: p.blockRadius }));
+    this.nav = new NavGrid(hf, [tc, ...scenery]);
+    this.visibility = new Visibility(hf.width, hf.depth);
     for (const p of layout.villagers) this.addVillager(p);
     for (const n of layout.nodes) {
       const node: ResourceNode = {
@@ -68,6 +79,7 @@ export class World {
       };
       this.nodes.set(node.id, node);
     }
+    this.updateFog();
   }
 
   get pop(): number {
@@ -118,6 +130,19 @@ export class World {
     gatherSystem(this, dt, arrived);
     trainSystem(this, dt);
     this.time += dt;
+    this.fogClock -= dt;
+    if (this.fogClock <= 0) {
+      this.fogClock = FOG_INTERVAL;
+      this.updateFog();
+    }
+  }
+
+  /** Recompute fog of war from every unit and building's sight radius. */
+  updateFog(): void {
+    const viewers: Viewer[] = [];
+    for (const u of this.units.values()) viewers.push({ pos: u.pos, sight: SIGHT.villager });
+    for (const b of this.buildings.values()) viewers.push({ pos: b.pos, sight: SIGHT.townCenter });
+    this.visibility.update(viewers);
   }
 
   /** Change a unit's state, emitting 'unitState' if it actually changed. */

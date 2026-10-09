@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupStatus, statusLabel, trainLabel, unitName } from './format';
+import { formatCount, groupStatus, statusLabel, trainLabel, trainProgress, unitName } from './format';
 
 describe('HUD labels', () => {
   it('names the selection', () => {
@@ -29,8 +29,36 @@ describe('HUD labels', () => {
   });
 
   it('shows training progress', () => {
-    expect(trainLabel(0, 0, 8, 50)).toBe('50 🍖 · T');
+    expect(trainLabel(0, 0, 8, 50)).toBe('50 food · T');
     expect(trainLabel(1, 4, 8, 50)).toBe('Training 50%');
     expect(trainLabel(3, 2, 8, 50)).toBe('Training 25% · +2 queued');
+    expect(trainLabel(1, 8, 8, 50)).toBe('Training 99%');
+  });
+
+  it('drops the keyboard hint on touch', () => {
+    expect(trainLabel(0, 0, 8, 50, true)).toBe('50 food');
+    expect(trainLabel(0, 0, 8, 50, true)).not.toContain('T');
+    expect(trainLabel(2, 2, 8, 50, true)).toBe('Training 25% · +1 queued');
+  });
+
+  it('drives the progress ring', () => {
+    expect(trainProgress(0, 5, 8)).toBe(0);
+    expect(trainProgress(1, 2, 8)).toBe(0.25);
+    expect(trainProgress(1, 9, 8)).toBe(0.99);
+    expect(trainProgress(1, 2, 0)).toBe(0);
+  });
+
+  it('formats stockpile numbers', () => {
+    expect(formatCount(0)).toBe('0');
+    expect(formatCount(49.9)).toBe('49');
+    expect(formatCount(-3)).toBe('0');
+    expect(formatCount(999)).toBe('999');
+    expect(formatCount(1250)).toBe('1,250');
+    expect(formatCount(9999)).toBe('9,999');
+    expect(formatCount(12_345)).toBe('12.3k');
+    expect(formatCount(99_999)).toBe('99.9k');
+    expect(formatCount(123_456)).toBe('123k');
+    expect(formatCount(999_999)).toBe('999k');
+    expect(formatCount(1_250_000)).toBe('1.2M');
   });
 });

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import type { Heightfield, Unit } from '../core/types';
+import { GRASS_ONLY, type Heightfield, type Unit } from '../core/types';
 import { generateMap } from '../sim/mapgen';
 import { World } from '../sim/World';
 import { EntityViews } from './EntityViews';
@@ -34,6 +34,7 @@ describe('TerrainView', () => {
       isWater: () => false,
       isWalkable: () => true,
       forestDensity: (x) => (x > 40 ? 0.8 : 0),
+      ground: () => GRASS_ONLY,
     };
     const view = new TerrainView(hf);
     const ground = view.object.children[0] as THREE.Mesh;

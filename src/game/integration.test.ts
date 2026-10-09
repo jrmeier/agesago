@@ -44,3 +44,20 @@ describe('generated map + sim', () => {
     expect(world.pop).toBe(4);
   });
 });
+
+describe('fog of war on the generated map', () => {
+  it('reveals the start area at once and the explored area grows as villagers walk out', () => {
+    const { hf, layout } = generateMap(DEFAULT_SEED);
+    const world = new World(hf, layout);
+    const tc = world.townCenter.pos;
+    expect(world.visibility.isVisible(tc.x, tc.z)).toBe(true);
+    expect(world.visibility.isExplored(2, 2)).toBe(false);
+    const before = world.visibility.exploredFraction;
+
+    const far = nearest(world, 'tree');
+    world.dispatch({ type: 'gather', unitIds: [...world.units.keys()], nodeId: far.id });
+    run(world, 20);
+    expect(world.visibility.exploredFraction).toBeGreaterThanOrEqual(before);
+    expect(world.visibility.isVisible(far.pos.x, far.pos.z)).toBe(true);
+  });
+});

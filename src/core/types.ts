@@ -6,8 +6,8 @@
  * x ∈ [0, MAP_W], z ∈ [0, MAP_D]. Y is up; sea level is y = 0.
  */
 
-export const MAP_W = 64;
-export const MAP_D = 48;
+export const MAP_W = 176;
+export const MAP_D = 176;
 export const SEA_LEVEL = 0;
 export const DEFAULT_SEED = 1;
 
@@ -42,6 +42,60 @@ export interface Heightfield {
   isWalkable(x: number, z: number): boolean;
   /** 0..1 forest density, used for tree placement and ground tint. */
   forestDensity(x: number, z: number): number;
+  /**
+   * What the ground surface is made of at (x, z), for texturing and ground cover.
+   * Weights are 0..1 and roughly sum to 1. Cheap enough to call per render vertex.
+   */
+  ground(x: number, z: number): GroundWeights;
+}
+
+/** Surface material blend. Renderers splat textures and scatter grass/flowers from these. */
+export interface GroundWeights {
+  /** Short green grass. */
+  grass: number;
+  /** Tall grass with wildflowers. */
+  meadow: number;
+  /** Forest floor: leaf litter, moss. */
+  forest: number;
+  /** Bare earth, steep slopes, around buildings. */
+  dirt: number;
+  /** Exposed stone on cliffs and outcrops. */
+  rock: number;
+  /** Beaches, river and lake shores, and underwater beds. */
+  sand: number;
+  /** Trodden dirt roads and tracks. */
+  path: number;
+}
+
+/** Plain short grass everywhere — handy for hand-built test heightfields. */
+export const GRASS_ONLY: GroundWeights = { grass: 1, meadow: 0, forest: 0, dirt: 0, rock: 0, sand: 0, path: 0 };
+
+/** Decorative, non-harvestable scenery placed by map generation. */
+export type PropKind =
+  | 'boulder'
+  | 'rocks'
+  | 'standingStone'
+  | 'ruinColumn'
+  | 'ruinWall'
+  | 'fence'
+  | 'hayBale'
+  | 'wheatField'
+  | 'well'
+  | 'house'
+  | 'cart'
+  | 'reeds'
+  | 'bush'
+  | 'log';
+
+export interface PropPlacement {
+  kind: PropKind;
+  pos: Vec2;
+  /** Yaw in radians around +Y. */
+  rot: number;
+  /** Uniform scale multiplier (≈ 0.7–1.4). */
+  scale: number;
+  /** If > 0, units path around a disc of this radius. 0 = walk-through (reeds, flowers, fields). */
+  blockRadius: number;
 }
 
 /** Plain-data starting layout produced by map generation and consumed by World. */
@@ -49,6 +103,8 @@ export interface MapLayout {
   townCenter: Vec2;
   villagers: Vec2[];
   nodes: { kind: NodeKind; pos: Vec2; amount: number }[];
+  /** Scenery: ruins, rocks, fences, fields, houses… */
+  props: PropPlacement[];
 }
 
 // ---- Entities (plain data; owned and mutated only by the sim) ----

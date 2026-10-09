@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Heightfield, Vec2 } from '../core/types';
+import { GRASS_ONLY, type Heightfield, type Vec2 } from '../core/types';
 import { NavGrid } from './nav';
 
 /** Flat 64×48 field where `water(x, z)` marks lake cells. */
@@ -12,6 +12,7 @@ function flatField(water: (x: number, z: number) => boolean = () => false): Heig
     isWater: water,
     isWalkable: (x, z) => inside(x, z) && !water(x, z),
     forestDensity: () => 0,
+    ground: () => GRASS_ONLY,
   };
 }
 

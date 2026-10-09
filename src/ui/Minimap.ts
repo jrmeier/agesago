@@ -1,0 +1,257 @@
+import type { CameraRig, CameraMode } from '../camera/CameraRig';
+import type { NodeKind } from '../core/types';
+import type { World } from '../sim/World';
+import { footprintKey, mapToWorld, renderTerrain, worldToMap, type MapBox } from './minimapMath';
+
+/** Terrain raster resolution in pixels per world unit. */
+const TERRAIN_PX_PER_UNIT = 2;
+/** Seconds between redraws of the unit / resource layer (~5 Hz). */
+const DYNAMIC_INTERVAL = 0.2;
+
+const NODE_COLOR: Record<NodeKind, string> = {
+  tree: '#24401c',
+  berry: '#c8323c',
+  gold: '#f4c638',
+};
+const PLAYER = '#3fa0ff';
+const PLAYER_EDGE = '#0b2340';
+const VIEW = 'rgba(255, 246, 214, 0.95)';
+
+/**
+ * Framed minimap: terrain painted once from the Heightfield, resources / villagers / Town
+ * Center redrawn at ~5 Hz, and the RTS view footprint whenever it moves. Click, tap or drag
+ * to move the camera; input never reaches the game canvas. Hidden in first person.
+ * Owned by the HUD lane.
+ */
+export class Minimap {
+  readonly root: HTMLDivElement;
+  private readonly frame: HTMLDivElement;
+  private readonly units: HTMLCanvasElement;
+  private readonly view: HTMLCanvasElement;
+  private readonly toggle: HTMLButtonElement;
+  private readonly box: MapBox;
+  private readonly offMode: () => void;
+  private lastDynamic = -Infinity;
+  private lastView = '';
+  private cssW = 0;
+  /** Frame width from the ResizeObserver; null = measure on next update. */
+  private observedW: number | null = null;
+  private readonly resizer: ResizeObserver | null;
+  private dragId: number | null = null;
+  private collapsed = false;
+  private mode: CameraMode;
+
+  constructor(
+    container: HTMLElement,
+    readonly world: World,
+    readonly rig: CameraRig
+  ) {
+    const hf = world.hf;
+    this.box = { w: 1, h: 1, mapW: hf.width, mapD: hf.depth };
+
+    this.root = el('div', 'minimap');
+    this.root.dataset.hudInteractive = '';
+    this.frame = el('div', 'minimap-frame');
+    this.frame.style.aspectRatio = `${hf.width} / ${hf.depth}`;
+    this.frame.setAttribute('role', 'img');
+    this.frame.setAttribute('aria-label', 'Map — tap or drag to move the view');
+
+    const terrain = el('canvas', 'minimap-layer minimap-terrain');
+    terrain.width = Math.round(hf.width * TERRAIN_PX_PER_UNIT);
+    terrain.height = Math.round(hf.depth * TERRAIN_PX_PER_UNIT);
+    terrain.getContext('2d')?.putImageData(new ImageData(renderTerrain(hf, terrain.width, terrain.height), terrain.width), 0, 0);
+    this.units = el('canvas', 'minimap-layer');
+    this.view = el('canvas', 'minimap-layer');
+    this.frame.append(terrain, this.units, this.view);
+
+    this.toggle = el('button', 'minimap-toggle');
+    this.toggle.type = 'button';
+    this.toggle.setAttribute('aria-label', 'Hide map');
+    this.toggle.setAttribute('aria-expanded', 'true');
+    this.toggle.innerHTML = '<svg aria-hidden="true"><use href="#i-map"></use></svg>';
+    this.toggle.addEventListener('click', (e) => {
+      (e.currentTarget as HTMLElement).blur();
+      this.setCollapsed(!this.collapsed);
+    });
+
+    this.root.append(this.frame, this.toggle);
+    container.append(this.root);
+
+    this.frame.addEventListener('pointerdown', this.onDown);
+    this.frame.addEventListener('pointermove', this.onMove);
+    this.frame.addEventListener('pointerup', this.onUp);
+    this.frame.addEventListener('pointercancel', this.onUp);
+    this.root.addEventListener('contextmenu', stop);
+    this.root.addEventListener('wheel', stop, { passive: false });
+
+    this.resizer =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            this.observedW = this.frame.clientWidth;
+          });
+    this.resizer?.observe(this.frame);
+
+    this.mode = rig.mode;
+    this.offMode = rig.onModeChange((m) => {
+      this.mode = m;
+      this.syncVisibility();
+    });
+    this.setCollapsed(false);
+  }
+
+  /** Call every frame with elapsed seconds; redraws layers as needed. */
+  update(time: number): void {
+    if (this.mode !== 'rts' || this.collapsed) return;
+    const resized = this.fit();
+    if (resized || time - this.lastDynamic >= DYNAMIC_INTERVAL) {
+      this.lastDynamic = time;
+      this.drawUnits();
+    }
+    const quad = this.rig.viewFootprint();
+    const key = footprintKey(quad);
+    if (resized || key !== this.lastView) {
+      this.lastView = key;
+      this.drawView(quad);
+    }
+  }
+
+  dispose(): void {
+    this.offMode();
+    this.resizer?.disconnect();
+    this.root.remove();
+  }
+
+  private setCollapsed(on: boolean): void {
+    this.collapsed = on;
+    this.root.classList.toggle('collapsed', on);
+    this.toggle.setAttribute('aria-expanded', String(!on));
+    this.toggle.setAttribute('aria-label', on ? 'Show map' : 'Hide map');
+    this.lastView = '';
+    this.lastDynamic = -Infinity;
+    this.syncVisibility();
+  }
+
+  private syncVisibility(): void {
+    this.root.classList.toggle('hidden', this.mode !== 'rts');
+  }
+
+  /** Match the overlay canvases' backing size to the frame (CSS px × DPR). Returns true if it changed. */
+  private fit(): boolean {
+    if (this.observedW === null) this.observedW = this.frame.clientWidth;
+    const w = this.observedW;
+    if (!w || w === this.cssW) return false;
+    this.cssW = w;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const bw = Math.round(w * dpr);
+    const bh = Math.round((w * dpr * this.box.mapD) / this.box.mapW);
+    for (const c of [this.units, this.view]) {
+      c.width = bw;
+      c.height = bh;
+    }
+    this.box.w = bw;
+    this.box.h = bh;
+    return true;
+  }
+
+  private drawUnits(): void {
+    const ctx = this.units.getContext('2d');
+    if (!ctx) return;
+    const { w, h } = this.box;
+    const s = w / this.box.mapW;
+    ctx.clearRect(0, 0, w, h);
+
+    const r = Math.max(1, s * 0.55);
+    for (const kind of ['tree', 'berry', 'gold'] as const) {
+      ctx.fillStyle = NODE_COLOR[kind];
+      const size = kind === 'tree' ? r * 1.6 : r * 2.4;
+      for (const n of this.world.nodes.values()) {
+        if (n.kind !== kind || n.amount <= 0) continue;
+        const p = worldToMap(n.pos, this.box);
+        ctx.fillRect(p.u - size / 2, p.v - size / 2, size, size);
+      }
+    }
+
+    ctx.lineWidth = Math.max(1, s * 0.3);
+    ctx.strokeStyle = PLAYER_EDGE;
+    ctx.fillStyle = PLAYER;
+    for (const b of this.world.buildings.values()) {
+      const p = worldToMap(b.pos, this.box);
+      const half = Math.max(s * b.radius * 1.4, 4 * (w / 220));
+      ctx.fillRect(p.u - half, p.v - half, half * 2, half * 2);
+      ctx.strokeRect(p.u - half, p.v - half, half * 2, half * 2);
+    }
+    const ur = Math.max(1.6, s * 0.9);
+    ctx.beginPath();
+    for (const u of this.world.units.values()) {
+      const p = worldToMap(u.pos, this.box);
+      ctx.moveTo(p.u + ur, p.v);
+      ctx.arc(p.u, p.v, ur, 0, Math.PI * 2);
+    }
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  private drawView(quad: readonly { x: number; z: number }[]): void {
+    const ctx = this.view.getContext('2d');
+    if (!ctx) return;
+    const { w, h } = this.box;
+    ctx.clearRect(0, 0, w, h);
+    ctx.beginPath();
+    quad.forEach((q, i) => {
+      const p = worldToMap(q, this.box);
+      if (i) ctx.lineTo(p.u, p.v);
+      else ctx.moveTo(p.u, p.v);
+    });
+    ctx.closePath();
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(20, 12, 4, 0.55)';
+    ctx.lineWidth = Math.max(2, w / 110);
+    ctx.stroke();
+    ctx.strokeStyle = VIEW;
+    ctx.lineWidth = Math.max(1, w / 220);
+    ctx.stroke();
+  }
+
+  private moveCamera(e: PointerEvent): void {
+    const r = this.frame.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const p = mapToWorld(e.clientX - r.left, e.clientY - r.top, { w: r.width, h: r.height, mapW: this.box.mapW, mapD: this.box.mapD });
+    this.rig.focusOn(p);
+  }
+
+  private onDown = (e: PointerEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (this.dragId !== null) return;
+    this.dragId = e.pointerId;
+    this.frame.setPointerCapture?.(e.pointerId);
+    this.moveCamera(e);
+  };
+
+  private onMove = (e: PointerEvent): void => {
+    if (e.pointerId !== this.dragId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    this.moveCamera(e);
+  };
+
+  private onUp = (e: PointerEvent): void => {
+    if (e.pointerId !== this.dragId) return;
+    e.stopPropagation();
+    this.dragId = null;
+    if (this.frame.hasPointerCapture?.(e.pointerId)) this.frame.releasePointerCapture(e.pointerId);
+  };
+}
+
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string): HTMLElementTagNameMap[K] {
+  const e = document.createElement(tag);
+  e.className = className;
+  return e;
+}
+
+function stop(e: Event): void {
+  e.preventDefault();
+  e.stopPropagation();
+}

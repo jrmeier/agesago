@@ -1,4 +1,4 @@
-import { SEA_LEVEL, type Heightfield } from '../core/types';
+import { SEA_LEVEL, type GroundWeights, type Heightfield } from '../core/types';
 import { DIRT, FOREST_FLOOR, GRASS, SAND } from './palette';
 
 /** sRGB channels in 0..1. */
@@ -80,6 +80,32 @@ export function terrainVertexSrgb(sample: TerrainSample): Rgb {
   }
 
   return { r: clamp01(color.r), g: clamp01(color.g), b: clamp01(color.b) };
+}
+
+const SPLAT_KEYS = ['grass', 'meadow', 'forest', 'dirt', 'rock', 'sand', 'path'] as const;
+
+/** Normalised ground weights as two vec4s: (grass, meadow, forest, dirt) and (rock, sand, path, spare). */
+export interface SplatWeights {
+  splat0: [number, number, number, number];
+  splat1: [number, number, number, number];
+}
+
+/**
+ * Pack `GroundWeights` into the terrain splat attributes.
+ * Weights are clamped at 0 and normalised so the seven channels sum to 1.
+ * All-zero input becomes pure grass. `spare` is stored unnormalised (skirt darkening).
+ */
+export function packSplat(weights: GroundWeights, spare = 0): SplatWeights {
+  const raw = SPLAT_KEYS.map((key) => {
+    const v = weights[key];
+    return v > 0 ? v : 0;
+  });
+  let sum = 0;
+  for (const v of raw) sum += v;
+  const n = sum > 1e-5 ? raw.map((v) => v / sum) : [1, 0, 0, 0, 0, 0, 0];
+  const splat0: [number, number, number, number] = [n[0], n[1], n[2], n[3]];
+  const splat1: [number, number, number, number] = [n[4], n[5], n[6], spare];
+  return { splat0, splat1 };
 }
 
 function hexRgb(hex: number): Rgb {
