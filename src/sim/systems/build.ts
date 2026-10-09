@@ -110,7 +110,7 @@ export function layFoundation(world: World, kind: BuildingKind, pos: Vec2, rot: 
     kind,
     owner,
     // Foundations start fragile; construction raises hp toward maxHp.
-    hp: Math.max(1, Math.round(maxHp * 0.1)),
+    hp: Math.max(1, Math.round(maxHp * BALANCE.foundationHp)),
     maxHp,
     pos: { x: pos.x, z: pos.z },
     rot,
@@ -334,7 +334,10 @@ export function buildSystem(world: World, dt: number, arrived: Unit[]): void {
   for (const [bid, n] of workers) {
     const b = world.buildings.get(bid);
     if (!b || b.complete) continue;
+    const before = b.buildProgress;
     b.buildProgress = Math.min(1, b.buildProgress + (Math.pow(n, BALANCE.buildExponent) / BUILDINGS[b.kind].buildTime) * dt);
+    // Hit points rise with construction (damage taken meanwhile is kept).
+    b.hp = Math.min(b.maxHp, b.hp + (b.buildProgress - before) * b.maxHp * (1 - BALANCE.foundationHp));
     if (b.buildProgress >= 1 - 1e-9) completeBuilding(world, b);
   }
 }

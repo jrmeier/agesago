@@ -3,6 +3,7 @@ import { UNITS, trainable } from '../../core/units';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
 import { affordable, pay } from './build';
+import { applyRally } from './combat';
 
 function emitProgress(world: World, b: Building): void {
   if (b.owner !== world.localPlayer) return;
@@ -64,7 +65,8 @@ export function trainSystem(world: World, dt: number): void {
       b.queue--;
       b.queueKinds?.shift();
       b.progress = 0;
-      world.spawnUnit(kind, spawnPoint(world, b), b.owner);
+      const u = world.spawnUnit(kind, spawnPoint(world, b), b.owner);
+      applyRally(world, b, u);
       if (b.owner === world.localPlayer) world.emitStock();
     }
     emitProgress(world, b);

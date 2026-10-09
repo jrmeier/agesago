@@ -26,6 +26,18 @@ import { BALANCE } from './balance';
 import { NavGrid } from './nav';
 import { Visibility, sightOf, type Viewer } from './visibility';
 import { buildSystem, canPlace, orderBuild, orderCancelBuild, orderConstruct } from './systems/build';
+import {
+  combatSystem,
+  orderAttack,
+  orderAttackMove,
+  orderRally,
+  orderStance,
+  orderStop,
+  releaseCombat,
+  type CombatState,
+  type FleeState,
+  type PendingHit,
+} from './systems/combat';
 import { exploreSystem, orderExplore, type ExploreState } from './systems/explore';
 import { gatherSystem, orderFarm, orderGather, type GatherState } from './systems/gather';
 import { buildingRect } from './systems/sites';
@@ -87,6 +99,16 @@ export class World {
   readonly buildState = new Map<EntityId, EntityId>();
   /** Farm → the one villager working it (system bookkeeping; stale claims are dropped lazily). */
   readonly farmers = new Map<EntityId, EntityId>();
+  /** Per-unit combat bookkeeping: order, cooldown, chase and leash (system bookkeeping). */
+  readonly combatState = new Map<EntityId, CombatState>();
+  /** Villagers running from an attacker → the work they resume afterwards. */
+  readonly fleeState = new Map<EntityId, FleeState>();
+  /** Projectiles in flight (damage lands on impact). */
+  readonly projectiles: PendingHit[] = [];
+  /** Sim time of each player's last 'attacked' alert (rate limit). */
+  readonly lastAlert = new Map<PlayerId, number>();
+  /** Ticks run by the combat system (staggers target scans). */
+  combatTicks = 0;
   private nextId = 1;
 
   constructor(
@@ -236,6 +258,10 @@ export class World {
    */
   dispatch(cmd: Command, by: PlayerId = this.localPlayer): void {
     cmd = this.ownedOnly(cmd, by);
+    // Any other unit order supersedes fighting and fleeing.
+    if (cmd.type === 'move' || cmd.type === 'gather' || cmd.type === 'build' || cmd.type === 'construct' || cmd.type === 'explore') {
+      releaseCombat(this, cmd.unitIds);
+    }
     switch (cmd.type) {
       case 'move':
         orderMove(this, cmd.unitIds, cmd.target);
@@ -264,12 +290,23 @@ export class World {
         orderExplore(this, cmd.unitIds);
         break;
       case 'attack':
-      case 'attackMove':
-      case 'stop':
-      case 'stance':
-      case 'rally':
-        // Combat and rally points land in the combat lane (systems/combat.ts).
+        if (cmd.unitIds.length) orderAttack(this, cmd.unitIds, cmd.targetId, by);
         break;
+      case 'attackMove':
+        orderAttackMove(this, cmd.unitIds, cmd.target);
+        break;
+      case 'stop':
+        orderStop(this, cmd.unitIds);
+        break;
+      case 'stance':
+        orderStance(this, cmd.unitIds, cmd.stance);
+        break;
+      case 'rally': {
+        const b = this.buildings.get(cmd.buildingId);
+        if (b?.owner === by) orderRally(this, b, cmd.pos, cmd.targetId);
+        else this.events.emit({ type: 'rejected', reason: 'invalid-target' });
+        break;
+      }
     }
   }
 
@@ -286,6 +323,8 @@ export class World {
     const arrived = movementSystem(this, dt);
     gatherSystem(this, dt, arrived);
     buildSystem(this, dt, arrived);
+    // After gather/build so units it sends back to work aren't treated as arrivals this tick.
+    combatSystem(this, dt, arrived);
     exploreSystem(this);
     trainSystem(this, dt);
     this.time += dt;
