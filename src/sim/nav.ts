@@ -7,6 +7,39 @@ export interface Obstacle {
   radius: number;
 }
 
+/** Axis-aligned rectangle in ground coordinates (a building footprint; rotations are 90° steps). */
+export interface Rect {
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+}
+
+/** Distance from `p` to the rectangle (0 inside). */
+export function rectDistance(p: Vec2, r: Rect): number {
+  const dx = Math.max(r.x0 - p.x, 0, p.x - r.x1);
+  const dz = Math.max(r.z0 - p.z, 0, p.z - r.z1);
+  return Math.hypot(dx, dz);
+}
+
+/** Point of `r` grown by `margin` nearest to `p`: `p` clamped into it, pushed out to the nearest side if inside. */
+export function rectApproach(p: Vec2, r: Rect, margin: number): Vec2 {
+  const x0 = r.x0 - margin;
+  const x1 = r.x1 + margin;
+  const z0 = r.z0 - margin;
+  const z1 = r.z1 + margin;
+  const x = Math.min(x1, Math.max(x0, p.x));
+  const z = Math.min(z1, Math.max(z0, p.z));
+  if (x > x0 && x < x1 && z > z0 && z < z1) {
+    const m = Math.min(x - x0, x1 - x, z - z0, z1 - z);
+    if (m === x - x0) return { x: x0, z };
+    if (m === x1 - x) return { x: x1, z };
+    if (m === z - z0) return { x, z: z0 };
+    return { x, z: z1 };
+  }
+  return { x, z };
+}
+
 /** Nav grid cell size in world units. */
 export const NAV_CELL = 0.5;
 
@@ -21,12 +54,24 @@ const COST = [1, 1, 1, 1, Math.SQRT2, Math.SQRT2, Math.SQRT2, Math.SQRT2];
  * 8-connected with no corner cutting; obstacles are inflated by the villager radius.
  * The walkability grid and its connected regions are computed once, so unreachable
  * targets are rejected without a search and each A* run reuses typed scratch arrays.
+ *
+ * Buildings are rectangular obstacles added/removed at runtime (addRect / removeRect): only
+ * the cells under the footprint are re-marked, and regions are relabelled locally when that
+ * provably can't split or merge them (the usual case: a building on open ground), else in full.
  */
 export class NavGrid {
   readonly cols: number;
   readonly rows: number;
   /** 1 where a villager can stand at the cell centre. */
   private readonly walk: Uint8Array;
+  /** Walkability from terrain and circular obstacles only (never changes). */
+  private readonly base: Uint8Array;
+  /** Number of rectangular obstacles covering each cell. */
+  private readonly rectCount: Uint8Array;
+  private readonly rects = new Map<number, Rect>();
+  private nextLabel = 0;
+  /** Increments whenever walkability or region labels change (callers caching regions rebuild). */
+  version = 0;
   /** Connected-region label per cell (0 = blocked). */
   private readonly region: Int32Array;
   private readonly g: Float64Array;
@@ -47,6 +92,8 @@ export class NavGrid {
     this.rows = Math.max(1, Math.ceil(hf.depth / NAV_CELL));
     const n = this.cols * this.rows;
     this.walk = new Uint8Array(n);
+    this.base = new Uint8Array(n);
+    this.rectCount = new Uint8Array(n);
     this.region = new Int32Array(n);
     this.g = new Float64Array(n);
     this.parent = new Int32Array(n);
@@ -56,7 +103,67 @@ export class NavGrid {
       const c = this.center(i);
       this.walk[i] = this.isFree(c) ? 1 : 0;
     }
+    this.base.set(this.walk);
     this.labelRegions();
+  }
+
+  /** Block a rectangular footprint (inflated by the villager radius) under key `id`, re-marking only its cells. */
+  addRect(id: number, r: Rect): void {
+    if (this.rects.has(id)) this.removeRect(id);
+    this.rects.set(id, { ...r });
+    const box = this.cellBox(r);
+    if (!box) return;
+    const [cx0, cz0, cx1, cz1] = box;
+    const { cols, walk, region, rectCount } = this;
+    let changed = false;
+    for (let z = cz0; z <= cz1; z++) {
+      for (let x = cx0; x <= cx1; x++) {
+        const i = z * cols + x;
+        rectCount[i]++;
+        if (walk[i]) {
+          walk[i] = 0;
+          region[i] = 0;
+          changed = true;
+        }
+      }
+    }
+    if (!changed) return;
+    this.version++;
+    // A fully walkable ring around the box is one 4-connected loop, so blocking the box
+    // can't disconnect anything. Otherwise a region may have split: relabel.
+    if (!this.ringWalkable(cx0 - 1, cz0 - 1, cx1 + 1, cz1 + 1)) this.labelRegions();
+  }
+
+  /** Remove the rectangular obstacle `id` (no-op if unknown). */
+  removeRect(id: number): void {
+    const r = this.rects.get(id);
+    if (!r) return;
+    this.rects.delete(id);
+    const box = this.cellBox(r);
+    if (!box) return;
+    const [cx0, cz0, cx1, cz1] = box;
+    const { cols, walk, base, rectCount } = this;
+    const freed: number[] = [];
+    for (let z = cz0; z <= cz1; z++) {
+      for (let x = cx0; x <= cx1; x++) {
+        const i = z * cols + x;
+        if (rectCount[i] > 0) rectCount[i]--;
+        if (!walk[i] && base[i] && rectCount[i] === 0) {
+          walk[i] = 1;
+          freed.push(i);
+        }
+      }
+    }
+    if (!freed.length) return;
+    this.version++;
+    if (!this.labelFreed(freed)) this.labelRegions();
+  }
+
+  /** Walkable point nearest to `p` (`p` itself if already free), or null if there is none. */
+  nearestFree(p: Vec2): Vec2 | null {
+    if (this.isFree(p) && this.isWalkableCell(p)) return { x: p.x, z: p.z };
+    const i = this.nearestCell(p, 0);
+    return i < 0 ? null : this.center(i);
   }
 
   /** True if a villager can stand at `p`: walkable terrain, clear of every inflated obstacle. */
@@ -67,6 +174,10 @@ export class NavGrid {
       const dx = p.x - o.pos.x;
       const dz = p.z - o.pos.z;
       if (dx * dx + dz * dz < r * r) return false;
+    }
+    const m = BALANCE.villagerRadius;
+    for (const r of this.rects.values()) {
+      if (p.x > r.x0 - m && p.x < r.x1 + m && p.z > r.z0 - m && p.z < r.z1 + m) return false;
     }
     return true;
   }
@@ -178,6 +289,66 @@ export class NavGrid {
     return i < 0 ? 0 : this.region[i];
   }
 
+  /** Cells whose centres lie strictly inside `r` grown by the villager radius: [x0, z0, x1, z1], or null. */
+  private cellBox(r: Rect): [number, number, number, number] | null {
+    const m = BALANCE.villagerRadius;
+    // Centre (i + 0.5)·NAV_CELL strictly inside (a, b)  ⇔  a/NAV_CELL − 0.5 < i < b/NAV_CELL − 0.5.
+    const lo = (a: number) => Math.floor(a / NAV_CELL - 0.5) + 1;
+    const hi = (b: number) => Math.ceil(b / NAV_CELL - 0.5) - 1;
+    const cx0 = Math.max(0, lo(r.x0 - m));
+    const cz0 = Math.max(0, lo(r.z0 - m));
+    const cx1 = Math.min(this.cols - 1, hi(r.x1 + m));
+    const cz1 = Math.min(this.rows - 1, hi(r.z1 + m));
+    return cx0 > cx1 || cz0 > cz1 ? null : [cx0, cz0, cx1, cz1];
+  }
+
+  /** Every cell on the border of the box is walkable (off-grid cells count as blocked). */
+  private ringWalkable(x0: number, z0: number, x1: number, z1: number): boolean {
+    for (let x = x0; x <= x1; x++) if (!this.walkAt(x, z0) || !this.walkAt(x, z1)) return false;
+    for (let z = z0; z <= z1; z++) if (!this.walkAt(x0, z) || !this.walkAt(x1, z)) return false;
+    return true;
+  }
+
+  /**
+   * Label freshly walkable cells by flooding each connected group of them: a group joins the one
+   * region it touches, or gets a new label. False if a group touches two regions (a merge).
+   */
+  private labelFreed(freed: number[]): boolean {
+    const { cols, rows, walk, region } = this;
+    const stack: number[] = [];
+    for (const s of freed) {
+      if (region[s]) continue;
+      const group: number[] = [s];
+      region[s] = -1;
+      stack.push(s);
+      let touch = 0;
+      while (stack.length) {
+        const i = stack.pop()!;
+        const x = i % cols;
+        const z = (i - x) / cols;
+        for (let d = 0; d < 4; d++) {
+          const nx = x + DX[d];
+          const nz = z + DZ[d];
+          if (nx < 0 || nz < 0 || nx >= cols || nz >= rows) continue;
+          const ni = nz * cols + nx;
+          if (!walk[ni]) continue;
+          const r = region[ni];
+          if (r === 0) {
+            region[ni] = -1;
+            group.push(ni);
+            stack.push(ni);
+          } else if (r > 0) {
+            if (touch && touch !== r) return false;
+            touch = r;
+          }
+        }
+      }
+      const label = touch || ++this.nextLabel;
+      for (const i of group) region[i] = label;
+    }
+    return true;
+  }
+
   private walkAt(ix: number, iz: number): boolean {
     return ix >= 0 && iz >= 0 && ix < this.cols && iz < this.rows && this.walk[iz * this.cols + ix] === 1;
   }
@@ -226,6 +397,7 @@ export class NavGrid {
 
   private labelRegions(): void {
     const { cols, rows, walk, region } = this;
+    region.fill(0);
     const stack: number[] = [];
     let label = 0;
     for (let s = 0; s < walk.length; s++) {
@@ -248,6 +420,7 @@ export class NavGrid {
         }
       }
     }
+    this.nextLabel = label;
   }
 
   /** A* from cell to cell; returns the cell chain start→goal, or null. */

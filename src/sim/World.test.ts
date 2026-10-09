@@ -186,7 +186,8 @@ describe('training', () => {
   });
 
   it('enforces the pop cap counting queued villagers', () => {
-    const villagers = Array.from({ length: BALANCE.popCap - 1 }, (_, i) => ({ x: 4 + i * 2, z: 40 }));
+    // The Town Center alone houses 5.
+    const villagers = Array.from({ length: 4 }, (_, i) => ({ x: 4 + i * 2, z: 40 }));
     const world = new World(flatField(), layout(villagers));
     const log = record(world);
     world.stock.food = 500;
