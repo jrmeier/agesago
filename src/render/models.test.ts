@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import {
-  berryBushGeometry, createScout, createVillager, goldPileGeometry, modelMaterial, stumpGeometry, treeGeometries,
+  berryBushGeometry, createScout, createVillager, farmCropsGeometry, goldPileGeometry, modelMaterial,
+  stoneQuarryGeometry, stumpGeometry, treeGeometries,
 } from './models';
 import type { ScoutPose, VillagerPose } from './models';
 
@@ -154,6 +155,32 @@ describe('static models', () => {
     expect(hasColor(geometry, 0xd4a843)).toBe(true);
   });
 
+  it('makes pale cut limestone taller and squarer than gold within 300 triangles', () => {
+    const quarry = stoneQuarryGeometry();
+    const size = checkGeometry(quarry, 300);
+    expect(size.y).toBeGreaterThan(1.1);
+    expect(size.y).toBeLessThan(1.3);
+    expect(hasColor(quarry, 0xdad5bd)).toBe(true);
+    expect(hasColor(quarry, 0xd4a843)).toBe(false);
+    expect(size.y).toBeGreaterThan(goldPileGeometry().boundingBox!.max.y * 1.5);
+  });
+
+  it('makes separate, deterministic crop rows inside a 4×4 plot under 1500 triangles', () => {
+    const crops = farmCropsGeometry();
+    const size = checkGeometry(crops, 1500);
+    expect(size.x).toBeGreaterThan(3);
+    expect(size.z).toBeGreaterThan(3);
+    expect(size.x).toBeLessThan(3.8);
+    expect(size.z).toBeLessThan(3.8);
+    expect(size.y).toBeGreaterThan(0.5);
+    const repeat = farmCropsGeometry();
+    expect(Array.from(crops.getAttribute('position').array)).toEqual(Array.from(repeat.getAttribute('position').array));
+    const mesh = new THREE.Mesh(crops, modelMaterial());
+    mesh.scale.y = 0.25;
+    mesh.material.color.setHex(0xb79752);
+    expect(new THREE.Box3().setFromObject(mesh).max.y).toBeCloseTo(size.y * 0.25, 5);
+  });
+
   it('supplies a reusable flat-shaded Lambert material without textures', () => {
     const material = modelMaterial();
     expect(material).toBeInstanceOf(THREE.MeshLambertMaterial);
@@ -179,8 +206,8 @@ describe('static models', () => {
 });
 
 describe('villager', () => {
-  const poses: VillagerPose[] = ['idle', 'walk', 'chop', 'forage', 'mine'];
-  const carries = [undefined, null, 'wood', 'food', 'gold'] as const;
+  const poses: VillagerPose[] = ['idle', 'walk', 'chop', 'forage', 'mine', 'build'];
+  const carries = [undefined, null, 'wood', 'food', 'gold', 'stone'] as const;
 
   it.each([0, 1, 2])('stands near 0.95 m facing +z with dress variant %s under 600 triangles including hidden goods', seed => {
     const model = createVillager({ seed });
@@ -217,7 +244,8 @@ describe('villager', () => {
           expect(bounds.min.y).toBeLessThanOrEqual(0.021);
           expect(model.object.getObjectByName('axe')!.visible).toBe(pose === 'chop');
           expect(model.object.getObjectByName('pick')!.visible).toBe(pose === 'mine');
-          for (const resource of ['wood', 'food', 'gold']) {
+          expect(model.object.getObjectByName('mallet')!.visible).toBe(pose === 'build');
+          for (const resource of ['wood', 'food', 'gold', 'stone']) {
             expect(model.object.getObjectByName(`carry-${resource}`)!.visible).toBe(carry === resource);
           }
         }
@@ -243,7 +271,7 @@ describe('villager', () => {
   });
 
   it.each([
-    ['idle', 2.5], ['walk', 0.625], ['chop', 0.8], ['forage', 1], ['mine', 0.8],
+    ['idle', 2.5], ['walk', 0.625], ['chop', 0.8], ['forage', 1], ['mine', 0.8], ['build', 0.8],
   ] as const)('loops %s smoothly without accumulating pose changes', (pose, period) => {
     const model = createVillager({ seed: 19 });
     model.setPose(pose, 0.173, 'food');
@@ -253,6 +281,26 @@ describe('villager', () => {
     model.setPose('idle', 0);
     const fresh = createVillager({ seed: 19 });
     expect(transforms(model.object)).toEqual(transforms(fresh.object));
+  });
+
+  it('hammers with a mallet and carries a dressed block at shoulder height without replacing geometry', () => {
+    const model = createVillager();
+    const mallet = model.object.getObjectByName('mallet') as THREE.Mesh;
+    const stone = model.object.getObjectByName('carry-stone') as THREE.Mesh;
+    const geometry = mallet.geometry;
+    model.setPose('build', 0);
+    const start = model.object.getObjectByName('rightArm')!.rotation.x;
+    model.setPose('build', 0.4);
+    expect(model.object.getObjectByName('rightArm')!.rotation.x).not.toBeCloseTo(start, 3);
+    expect(mallet.visible).toBe(true);
+    expect(mallet.geometry).toBe(geometry);
+    model.setPose('walk', 0.5, 'stone');
+    expect(mallet.visible).toBe(false);
+    expect(stone.visible).toBe(true);
+    model.object.updateWorldMatrix(true, true);
+    const bounds = new THREE.Box3().setFromObject(stone);
+    expect(bounds.min.y).toBeGreaterThan(0.6);
+    expect(bounds.max.y).toBeLessThan(0.9);
   });
 
   it('preserves the renderer-owned world transform and applies custom colours including black', () => {
