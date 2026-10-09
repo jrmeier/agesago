@@ -119,7 +119,7 @@ export class EntityViews {
     this.world.events.on('spawned', (e) => {
       const entity = this.world.get(e.id);
       if (!entity) return;
-      if (entity.kind === 'villager') this.mountVillager(entity);
+      if ('carry' in entity) this.mountVillager(entity);
       else if (entity.kind === 'townCenter') this.mountTownCenter(entity);
       else this.mountNode(entity);
     });

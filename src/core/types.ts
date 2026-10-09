@@ -22,7 +22,9 @@ export type ResourceType = 'wood' | 'food' | 'gold';
 export type Stockpile = Record<ResourceType, number>;
 
 export type NodeKind = 'tree' | 'berry' | 'gold';
-export type EntityKind = 'villager' | NodeKind | 'townCenter';
+/** Player unit types. Villagers gather; scouts are fast, far-sighted explorers that cannot gather. */
+export type UnitKind = 'villager' | 'scout';
+export type EntityKind = UnitKind | NodeKind | 'townCenter';
 
 export const NODE_RESOURCE: Record<NodeKind, ResourceType> = {
   tree: 'wood',
@@ -102,6 +104,8 @@ export interface PropPlacement {
 export interface MapLayout {
   townCenter: Vec2;
   villagers: Vec2[];
+  /** Starting scouts (usually one), placed just outside the Town Center. */
+  scouts: Vec2[];
   nodes: { kind: NodeKind; pos: Vec2; amount: number }[];
   /** Scenery: ruins, rocks, fences, fields, houses… */
   props: PropPlacement[];
@@ -109,11 +113,11 @@ export interface MapLayout {
 
 // ---- Entities (plain data; owned and mutated only by the sim) ----
 
-export type UnitState = 'idle' | 'moving' | 'toNode' | 'gathering' | 'toDrop';
+export type UnitState = 'idle' | 'moving' | 'toNode' | 'gathering' | 'toDrop' | 'exploring';
 
 export interface Unit {
   id: EntityId;
-  kind: 'villager';
+  kind: UnitKind;
   pos: Vec2;
   /** Position at the start of the last sim tick — renderers lerp prevPos → pos. */
   prevPos: Vec2;
@@ -158,7 +162,9 @@ export type Entity = Unit | ResourceNode | Building;
 export type Command =
   | { type: 'move'; unitIds: EntityId[]; target: Vec2 }
   | { type: 'gather'; unitIds: EntityId[]; nodeId: EntityId }
-  | { type: 'train'; buildingId: EntityId };
+  | { type: 'train'; buildingId: EntityId }
+  /** Auto-explore: units head for the nearest reachable unexplored ground until told otherwise. */
+  | { type: 'explore'; unitIds: EntityId[] };
 
 export type RejectReason = 'insufficient-food' | 'pop-cap' | 'unreachable' | 'invalid-target';
 

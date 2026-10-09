@@ -21,7 +21,7 @@ function flatField(water: (x: number, z: number) => boolean = () => false): Heig
 }
 
 function layout(villagers: Vec2[], nodes: MapLayout['nodes'] = []): MapLayout {
-  return { townCenter: { x: 32, z: 24 }, villagers, nodes, props: [] };
+  return { townCenter: { x: 32, z: 24 }, villagers, scouts: [], nodes, props: [] };
 }
 
 function record(world: World): SimEvent[] {

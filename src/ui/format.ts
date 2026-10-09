@@ -28,6 +28,8 @@ export function statusLabel(u: StatusUnit, carryCap: number): string {
       return u.gatherType ? `Going for ${u.gatherType}` : 'Moving';
     case 'moving':
       return carry ? `Moving · ${carry.amount} ${carry.type}` : 'Moving';
+    case 'exploring':
+      return 'Exploring';
     case 'idle':
       return carry ? `Idle · ${carry.amount} ${carry.type}` : 'Idle';
   }
