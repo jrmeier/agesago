@@ -201,8 +201,9 @@ function lineField(points: Vec2[], reach: number, columns: number, rows: number,
 }
 
 /** Half-unit terrain and cached surface blends; render queries need only bilinear reads. */
-export function generateTerrain(seed: number, width = MAP_W, depth = MAP_D): Heightfield {
+export function generateTerrain(seed: number, width = MAP_W, depth = MAP_D, startPads?: readonly Vec2[]): Heightfield {
   const features = terrainFeatures(seed, width, depth);
+  const pads = startPads ?? [features.townCenter];
   const scale = Math.min(width / MAP_W, depth / MAP_D);
   const columns = Math.ceil(width * 2);
   const rows = Math.ceil(depth * 2);
@@ -231,10 +232,18 @@ export function generateTerrain(seed: number, width = MAP_W, depth = MAP_D): Hei
     { x: width * 0.48, z: depth * 0.15, rx: 35 * scale, rz: 20 * scale },
     { x: features.townCenter.x - 14 * scale, z: features.townCenter.z - 5 * scale, rx: 15 * scale, rz: 13 * scale },
   ];
+  // Larger rosters reserve more of the old forest belts. Keep a substantial
+  // neutral wood reward in the shared valley rather than crowding any start.
+  if (pads.length > 2) belts.push({ x: width * 0.5, z: depth * 0.5, rx: 34 * scale, rz: 32 * scale });
   const rolling = (x: number, z: number): number => SEA_LEVEL + 0.85
     + 1.45 * valueNoise(x / (38 * scale), z / (38 * scale), seed)
     + 0.55 * valueNoise(x / (15 * scale), z / (15 * scale), seed + 1013);
-  const padHeight = rolling(features.townCenter.x, features.townCenter.z);
+  const padHeights = pads.map((pos) => rolling(pos.x, pos.z));
+  // Supplied starts include a level economy area, with a gentle transition back
+  // to the countryside. Legacy terrain calls retain their small square TC pad.
+  const padDistanceAt = (x: number, z: number, pos: Vec2): number => startPads
+    ? Math.hypot(x - pos.x, z - pos.z)
+    : Math.max(Math.abs(x - pos.x), Math.abs(z - pos.z));
 
   for (let row = 0; row <= rows; row++) {
     for (let column = 0; column <= columns; column++) {
@@ -278,8 +287,12 @@ export function generateTerrain(seed: number, width = MAP_W, depth = MAP_D): Hei
         height = Math.min(height, mix(bed, crossing, ford));
         shore = Math.min(shore, mix(d - radius, 4 * scale, ford));
       }
-      const padDistance = Math.max(Math.abs(x - features.townCenter.x), Math.abs(z - features.townCenter.z));
-      height = mix(padHeight, height, smoothstep(3.5 * scale, 7 * scale, padDistance));
+      for (let p = 0; p < pads.length; p++) {
+        const d = padDistanceAt(x, z, pads[p]);
+        const blend = smoothstep((startPads ? 18 : 3.5) * scale, (startPads ? 30 : 7) * scale, d);
+        height = mix(padHeights[p], height, blend);
+        if (startPads) shore = mix(30 * scale, shore, blend);
+      }
       heights[i] = height;
       shores[i] = shore;
     }
@@ -309,10 +322,12 @@ export function generateTerrain(seed: number, width = MAP_W, depth = MAP_D): Hei
       const z = row * stepZ;
       const h = heights[i];
       const slope = slopeAt(x, z);
-      const padDistance = Math.max(Math.abs(x - features.townCenter.x), Math.abs(z - features.townCenter.z));
+      let padDistance = Infinity;
+      for (const pos of pads) padDistance = Math.min(padDistance, padDistanceAt(x, z, pos));
       const pad = 1 - smoothstep(3.5 * scale, 7 * scale, padDistance);
       const path = (1 - smoothstep(0.85 * scale, 1.8 * scale, roadDistance[i]))
-        * smoothstep(SEA_LEVEL, SEA_LEVEL + 0.15, h) * (1 - smoothstep(0.65, 1, slope));
+        * smoothstep(SEA_LEVEL, SEA_LEVEL + 0.15, h) * (1 - smoothstep(0.65, 1, slope))
+        * (startPads ? smoothstep(20 * scale, 25 * scale, padDistance) : 1);
       let belt = 0;
       for (const b of belts) {
         const r = Math.hypot((x - b.x) / b.rx, (z - b.z) / b.rz);
@@ -327,6 +342,12 @@ export function generateTerrain(seed: number, width = MAP_W, depth = MAP_D): Hei
       forest[i] = clamp(belt * (0.76 + 0.24 * mask) * clearing
         * smoothstep(0.7 * scale, 3.4 * scale, shores[i]) * smoothstep(0.45, 1.1, h)
         * (1 - smoothstep(0.45, 0.85, slope)) * (1 - path), 0, 1);
+      if (startPads) {
+        for (const pos of pads) {
+          const woodDistance = Math.hypot(x - pos.x + 14 * scale, z - pos.z + 4 * scale);
+          forest[i] = Math.max(forest[i], 1 - smoothstep(4.5 * scale, 7 * scale, woodDistance));
+        }
+      }
       const sand = h < SEA_LEVEL ? 1 : (1 - smoothstep(0.15 * scale, 2.6 * scale, shores[i])) * (1 - pad);
       const rock = smoothstep(0.35, 0.92, slope);
       const dirt = Math.max(pad * 0.86, smoothstep(0.18, 0.58, slope) * 0.55);
