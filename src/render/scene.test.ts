@@ -105,8 +105,8 @@ describe('EntityViews', () => {
   it('mounts the starting villagers, nodes and town center', () => {
     expect(instanceCount()).toBe(world.nodes.size);
     const top = views.object.children;
-    expect(top.filter((obj) => obj.name === 'villager')).toHaveLength(world.units.size);
-    const buildings = top.filter((obj) => obj.name !== 'villager' && (obj as THREE.Group).children.length > 3);
+    expect(top.filter((obj) => obj.name === 'villager' || obj.name === 'scout')).toHaveLength(world.units.size);
+    const buildings = top.filter((obj) => obj.name !== 'villager' && obj.name !== 'scout' && (obj as THREE.Group).children.length > 3);
     expect(buildings).toHaveLength(1);
   });
 

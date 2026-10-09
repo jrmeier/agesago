@@ -5,12 +5,12 @@ import { buildTownCenter } from './buildings';
 import { applyFog, createFogDepthMaterial, isConcealed, matrixForConcealment, type FogOfWar } from './fog';
 import {
   berryBushGeometry,
+  createScout,
   createVillager,
   goldPileGeometry,
   modelMaterial,
   stumpGeometry,
   treeGeometries,
-  type VillagerModel,
   type VillagerPose,
 } from './models';
 import { MOVE_MARKER, SELECTION } from './palette';
@@ -30,8 +30,10 @@ interface SpriteSize {
   height: number;
 }
 
-interface VillagerView {
-  model: VillagerModel;
+/** A unit's model plus its blob shadow; `pose` animates it from the unit's sim state. */
+interface UnitView {
+  object: THREE.Object3D;
+  pose(unit: Unit, time: number): void;
   shadow: THREE.Mesh;
 }
 
@@ -40,6 +42,8 @@ const TC_SIZE: SpriteSize = { width: 3.05, height: 3.85 };
 /** Units are drawn larger than life (as in classic RTS games) so they stay readable when zoomed out. */
 const VILLAGER_SCALE = 1.35;
 const VILLAGER_SIZE: SpriteSize = { width: 0.7 * VILLAGER_SCALE, height: 1.0 * VILLAGER_SCALE };
+const SCOUT_SCALE = 1.1;
+const SCOUT_SIZE: SpriteSize = { width: 1.4 * SCOUT_SCALE, height: 2.0 * SCOUT_SCALE };
 const TUNICS = [0x8b4513, 0x3f6e9a, 0x4f7a3a];
 const GATHER_POSE: Record<string, VillagerPose> = { wood: 'chop', food: 'forage', gold: 'mine' };
 
@@ -57,7 +61,7 @@ export class EntityViews {
   private readonly material = modelMaterial();
   private readonly geometries: Record<NodeKind, THREE.BufferGeometry[]>;
   private readonly stumps: InstancePool;
-  private readonly villagers = new Map<EntityId, VillagerView>();
+  private readonly villagers = new Map<EntityId, UnitView>();
   private readonly pools = new Map<string, InstancePool>();
   private readonly nodePool = new Map<EntityId, InstancePool>();
   private readonly buildings = new Map<EntityId, THREE.Group>();
@@ -241,17 +245,27 @@ export class EntityViews {
 
   private mountVillager(unit: Unit): void {
     if (this.villagers.has(unit.id)) return;
-    const model = createVillager({ tunic: TUNICS[unit.id % TUNICS.length], seed: unit.id });
-    model.object.scale.setScalar(VILLAGER_SCALE);
     const shadow = new THREE.Mesh(this.shadowGeo, this.shadowMat);
     shadow.renderOrder = 2;
-    model.object.traverse((obj) => {
+    let view: UnitView;
+    if (unit.kind === 'scout') {
+      const model = createScout({ cloak: TUNICS[unit.id % TUNICS.length], seed: unit.id });
+      model.object.scale.setScalar(SCOUT_SCALE);
+      shadow.scale.setScalar(1.7);
+      view = { object: model.object, shadow, pose: (u, t) => model.setPose(u.path.length > 0 ? 'gallop' : 'idle', t) };
+      this.sizeOf.set(unit.id, SCOUT_SIZE);
+    } else {
+      const model = createVillager({ tunic: TUNICS[unit.id % TUNICS.length], seed: unit.id });
+      model.object.scale.setScalar(VILLAGER_SCALE);
+      view = { object: model.object, shadow, pose: (u, t) => model.setPose(poseOf(u), t, u.carry?.type ?? null) };
+      this.sizeOf.set(unit.id, VILLAGER_SIZE);
+    }
+    view.object.traverse((obj) => {
       obj.castShadow = this.shadows;
       obj.receiveShadow = this.shadows;
     });
-    this.object.add(model.object, shadow);
-    this.villagers.set(unit.id, { model, shadow });
-    this.sizeOf.set(unit.id, VILLAGER_SIZE);
+    this.object.add(view.object, shadow);
+    this.villagers.set(unit.id, view);
     this.placeVillager(unit, 1, 0);
   }
 
@@ -301,7 +315,7 @@ export class EntityViews {
   private unmount(id: EntityId): void {
     const villager = this.villagers.get(id);
     if (villager) {
-      this.object.remove(villager.model.object, villager.shadow);
+      this.object.remove(villager.object, villager.shadow);
       this.villagers.delete(id);
     }
     const pool = this.nodePool.get(id);
@@ -380,9 +394,9 @@ export class EntityViews {
     const x = unit.prevPos.x + (unit.pos.x - unit.prevPos.x) * alpha;
     const z = unit.prevPos.z + (unit.pos.z - unit.prevPos.z) * alpha;
     const ground = this.groundY(x, z);
-    view.model.object.position.set(x, ground, z);
-    view.model.object.rotation.set(0, unit.facing, 0);
-    view.model.setPose(poseOf(unit), time, unit.carry?.type ?? null);
+    view.object.position.set(x, ground, z);
+    view.object.rotation.set(0, unit.facing, 0);
+    view.pose(unit, time);
     view.shadow.position.set(x, ground + 0.04, z);
   }
 
@@ -396,6 +410,7 @@ export class EntityViews {
       const x = unit.prevPos.x + (unit.pos.x - unit.prevPos.x) * alpha;
       const z = unit.prevPos.z + (unit.pos.z - unit.prevPos.z) * alpha;
       ring.position.set(x, this.groundY(x, z) + 0.07, z);
+      ring.scale.setScalar(unit.kind === 'scout' ? 1.8 : 1);
       ring.visible = true;
     }
     for (let i = n; i < this.rings.length; i++) this.rings[i].visible = false;
