@@ -7,8 +7,8 @@ import { RtsCamera } from './RtsCamera';
 export type CameraMode = 'rts' | 'fps';
 
 /**
- * Owns the PerspectiveCamera and the active controller; F toggles RTS ↔ first person
- * (restoring the RTS pose on return). Owned by the Controls lane (T5).
+ * Owns the PerspectiveCamera and the active controller; F (or the touch button, via setMode)
+ * toggles RTS ↔ first person (restoring the RTS pose on return). Owned by the Controls lane (T5).
  * Public surface FROZEN: constructor, camera, mode, update, setAspect.
  */
 export class CameraRig {
@@ -36,6 +36,7 @@ export class CameraRig {
   setMode(mode: CameraMode): void {
     if (mode === this.mode) return;
     this.mode = mode;
+    this.input.touch.setMode(mode);
     if (mode === 'fps') this.fps.enter(this.rts.target, 0);
     else this.rts.settle();
     for (const fn of this.listeners) fn(mode);

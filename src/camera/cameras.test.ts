@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import type { GestureEvent } from '../input/gestures';
 import type { Input } from '../input/Input';
+import type { TouchState } from '../input/TouchInput';
 import { pickGround3, screenRay } from '../input/pickGround';
 import { testField } from '../input/testField';
 import { EYE_HEIGHT, FpsCamera } from './FpsCamera';
@@ -16,9 +18,18 @@ function toPx(p: THREE.Vector3, cam: THREE.Camera): { x: number; y: number } {
   return { x: ((v.x + 1) / 2) * W, y: ((1 - v.y) / 2) * H };
 }
 
-function fakeInput(keys: string[] = []): Input {
+function fakeTouch(touch: Partial<TouchState> = {}): TouchState {
+  return { gestures: [], stick: { x: 0, y: 0 }, lookX: 0, lookY: 0, active: false, ...touch };
+}
+
+function fakeInput(keys: string[] = [], touch: Partial<TouchState> = {}): Input {
   const held = new Set(keys);
   return {
+    touch: fakeTouch(touch),
+    x: 0,
+    y: 0,
+    width: W,
+    height: H,
     key: (c: string) => held.has(c),
     isDown: () => false,
     drag: () => undefined,
@@ -90,6 +101,64 @@ describe('RtsCamera zoom-to-cursor', () => {
   });
 });
 
+describe('RtsCamera touch', () => {
+  const frame = (rts: RtsCamera, gestures: GestureEvent[]) => rts.update(1 / 60, fakeInput([], { gestures, active: true }));
+
+  for (const flat of [true, false]) {
+    it(`pinch keeps the ground point under the midpoint (${flat ? 'flat' : 'hilly'})`, () => {
+      const hf = testField(flat);
+      for (const [mx, my] of [
+        [640, 360],
+        [300, 250],
+        [1000, 520],
+      ]) {
+        for (const scale of [1.25, 0.8]) {
+          const rts = new RtsCamera(makeCamera(), hf, { x: 32, z: 26 });
+          const g = pickGround3(screenRay(rts.camera, mx, my, W, H), hf)!;
+          frame(rts, [{ type: 'panStart', x: mx, y: my }]);
+          for (let i = 0; i < 3; i++) frame(rts, [{ type: 'pan', x: mx, y: my }, { type: 'pinch', x: mx, y: my, scale }]);
+          expect(Math.sign(rts.distance - 26)).toBe(-Math.sign(scale - 1));
+          const px = toPx(g, rts.camera);
+          expect(Math.hypot(px.x - mx, px.y - my)).toBeLessThan(1);
+        }
+      }
+    });
+  }
+
+  it('one-finger pan drags the grabbed ground point with the finger', () => {
+    const hf = testField(true);
+    const rts = new RtsCamera(makeCamera(), hf, { x: 32, z: 26 });
+    const g = pickGround3(screenRay(rts.camera, 640, 360, W, H), hf)!;
+    frame(rts, [{ type: 'panStart', x: 640, y: 360 }]);
+    frame(rts, [
+      { type: 'pan', x: 600, y: 380 },
+      { type: 'pan', x: 520, y: 420 },
+    ]);
+    const px = toPx(g, rts.camera);
+    expect(Math.hypot(px.x - 520, px.y - 420)).toBeLessThan(1);
+    expect(rts.target.x).toBeGreaterThan(32);
+    frame(rts, [{ type: 'panEnd' }]);
+    const before = { ...rts.target };
+    frame(rts, [{ type: 'pan', x: 100, y: 100 }]);
+    expect(rts.target).toEqual(before);
+  });
+
+  it('a pinch–spread zooms in, a pinch–close zooms out', () => {
+    const rts = new RtsCamera(makeCamera(), testField(true), { x: 32, z: 26 });
+    frame(rts, [{ type: 'pinch', x: 640, y: 360, scale: 2 }]);
+    expect(rts.distance).toBeCloseTo(13);
+    frame(rts, [{ type: 'pinch', x: 640, y: 360, scale: 0.5 }]);
+    expect(rts.distance).toBeCloseTo(26);
+  });
+
+  it('does not edge-scroll while touch is active', () => {
+    const rts = new RtsCamera(makeCamera(), testField(true), { x: 32, z: 26 });
+    const input = Object.assign(fakeInput([], { active: true }), { inside: true, clientX: 2, clientY: 2, viewWidth: W, viewHeight: H });
+    rts.update(0.5, input);
+    expect(rts.target).toEqual({ x: 32, z: 26 });
+  });
+});
+
 describe('edgeScrollDir', () => {
   it('scrolls only within 18 px of an edge', () => {
     expect(edgeScrollDir(640, 360, W, H)).toEqual({ x: 0, y: 0 });
@@ -127,6 +196,29 @@ describe('FpsCamera', () => {
     fps.enter({ x: 60, z: 30 }, -Math.PI / 2); // facing +x
     for (let i = 0; i < 200; i++) fps.update(1 / 30, fakeInput(['KeyW']));
     expect(fps.pos.x).toBeLessThanOrEqual(64);
+  });
+
+  it('walks with the touch joystick at analog speed', () => {
+    const full = new FpsCamera(makeCamera(), testField(true));
+    const half = new FpsCamera(makeCamera(), testField(true));
+    full.enter({ x: 30, z: 30 }, 0);
+    half.enter({ x: 30, z: 30 }, 0);
+    full.update(0.5, fakeInput([], { stick: { x: 0, y: 1 } }));
+    half.update(0.5, fakeInput([], { stick: { x: 0, y: 0.5 } }));
+    expect(full.pos.z).toBeCloseTo(30 - 2.5);
+    expect(half.pos.z).toBeCloseTo(30 - 1.25);
+    const strafe = new FpsCamera(makeCamera(), testField(true));
+    strafe.enter({ x: 30, z: 30 }, 0);
+    strafe.update(0.5, fakeInput([], { stick: { x: 1, y: 0 } }));
+    expect(strafe.pos.x).toBeCloseTo(32.5);
+  });
+
+  it('turns with a touch look drag', () => {
+    const fps = new FpsCamera(makeCamera(), testField());
+    fps.enter({ x: 30, z: 30 }, 0);
+    fps.update(1 / 60, fakeInput([], { lookX: 100, lookY: -50 }));
+    expect(fps.yaw).toBeLessThan(0);
+    expect(fps.pitch).toBeGreaterThan(-0.12);
   });
 
   it('nudges an entry point out of the water', () => {

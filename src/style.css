@@ -13,6 +13,12 @@ body {
   font-family: 'Inter', system-ui, sans-serif;
   color: #e8dcc8;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  /* No page pinch-zoom, scroll, double-tap zoom or pull-to-refresh. */
+  touch-action: none;
+  overscroll-behavior: none;
 }
 
 #app {
@@ -28,6 +34,7 @@ body {
 
 #game-container canvas {
   display: block;
+  touch-action: none;
 }
 
 #hud {
@@ -239,4 +246,180 @@ body {
   font-size: 12px;
   color: rgba(232, 220, 200, 0.6);
   margin-top: 2px;
+}
+
+/* ---- Touch (body.touch: coarse pointer or a touch seen) ---- */
+
+.touch-bar {
+  display: none;
+}
+
+.touch-btn {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 12px;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #e8dcc8;
+  background: rgba(16, 22, 16, 0.88);
+  border: 1px solid rgba(212, 168, 67, 0.35);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.touch-btn .ticon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.touch-btn:active {
+  transform: translateY(1px);
+  filter: brightness(1.2);
+}
+
+.touch-btn[aria-pressed='true'] {
+  color: #1a1206;
+  background: linear-gradient(180deg, #e7c368 0%, #c99a3c 100%);
+}
+
+.touch-stick {
+  display: none;
+  position: fixed;
+  z-index: 15;
+  border-radius: 50%;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(232, 220, 200, 0.35);
+}
+
+.touch-stick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(232, 220, 200, 0.45);
+  transform: translate(-50%, -50%);
+}
+
+.press-ring {
+  position: fixed;
+  z-index: 20;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 2px solid rgba(138, 255, 192, 0.9);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+body.touch .hud-hint {
+  display: none;
+}
+
+body.touch .hud-top {
+  justify-content: center;
+  gap: 12px;
+  padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 10px
+    max(12px, env(safe-area-inset-left));
+}
+
+body.touch .resource-bar {
+  gap: 2px;
+  padding: 4px 6px;
+}
+
+body.touch .res {
+  min-width: 0;
+  gap: 4px;
+  padding: 2px 7px;
+  font-size: 14px;
+}
+
+body.touch .hud-bottom {
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 12px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
+}
+
+body.touch .touch-bar {
+  order: -1;
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+body.touch.fps-mode .rts-only {
+  display: none;
+}
+
+body.touch .train-btn {
+  position: static;
+  justify-content: center;
+  min-height: 52px;
+  padding: 8px 14px;
+  font-size: 13px;
+  touch-action: manipulation;
+}
+
+/* Narrow screens: the selection panel floats above the button row. */
+body.touch .selection-panel {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  gap: 10px;
+  padding: 8px 14px;
+  white-space: nowrap;
+}
+
+body.touch .selection-panel.hidden {
+  transform: translate(-50%, 12px);
+}
+
+body.touch .unit-portrait {
+  width: 36px;
+  height: 36px;
+  flex: none;
+}
+
+body.touch .unit-info {
+  min-width: 0;
+}
+
+body.touch .unit-info p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 600px) {
+  body.touch .logo {
+    display: none;
+  }
+}
+
+/* Wide enough (landscape phones, tablets): the panel sits in the bottom row. */
+@media (min-width: 720px) {
+  body.touch .selection-panel {
+    position: static;
+    transform: none;
+    max-width: none;
+  }
+
+  body.touch .selection-panel.hidden {
+    transform: translateY(12px);
+  }
 }

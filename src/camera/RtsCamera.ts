@@ -37,7 +37,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 
 /**
  * Overhead RTS controller: zoom-to-cursor (against the terrain), RMB-drag and Space+drag
- * pan, edge scroll (ignoring HUD buttons), map/zoom clamps. Owned by the Controls lane (T5).
+ * pan, touch pan / pinch-zoom, edge scroll (ignoring HUD buttons and touch), map/zoom clamps. Owned by the Controls lane (T5).
  * The camera looks along −z with a fixed pitch; screen up is world −z.
  */
 export class RtsCamera {
@@ -50,6 +50,8 @@ export class RtsCamera {
   private pendingZoom = 0;
   /** Grab-the-ground pan in progress: the world point held under the cursor. */
   private grab: { button: number; point: THREE.Vector3 } | null = null;
+  /** Touch pan in progress: the world point held under the finger / pinch midpoint. */
+  private touchGrab: THREE.Vector3 | null = null;
   private readonly back: THREE.Vector3;
   private readonly ray = new THREE.Ray();
   private readonly plane = new THREE.Plane();
@@ -68,11 +70,12 @@ export class RtsCamera {
   update(dt: number, input: Input): void {
     this.apply();
     this.updatePan(input);
+    this.updateTouch(input);
 
-    if (!this.grab) {
+    if (!this.grab && !this.touchGrab) {
       let sx = 0;
       let sy = 0;
-      if (input.inside && !input.overHud && !input.isDown(LMB) && !input.isDown(RMB)) {
+      if (input.inside && !input.overHud && !input.touch.active && !input.isDown(LMB) && !input.isDown(RMB)) {
         const e = edgeScrollDir(input.clientX, input.clientY, input.viewWidth, input.viewHeight);
         sx += e.x;
         sy += e.y;
@@ -130,6 +133,7 @@ export class RtsCamera {
   settle(): void {
     this.pendingZoom = 0;
     this.grab = null;
+    this.touchGrab = null;
     this.focusY = surfaceAt(this.hf, this.target.x, this.target.z);
     this.apply();
   }
@@ -148,11 +152,39 @@ export class RtsCamera {
         if (hit) this.grab = { button: d.button, point: hit };
       }
     }
-    if (!this.grab) return;
-    const now = this.planeHit(input, input.x, input.y, this.grab.point.y);
+    if (this.grab) this.dragTo(input, this.grab.point, input.x, input.y);
+  }
+
+  /**
+   * Touch: one- or two-finger pan holds the grabbed ground point under the finger (or
+   * midpoint); pinch zooms about the midpoint with the same math as zoom-to-cursor.
+   */
+  private updateTouch(input: Input): void {
+    for (const g of input.touch.gestures) {
+      switch (g.type) {
+        case 'panStart':
+          this.touchGrab = this.planeHit(input, g.x, g.y, null);
+          break;
+        case 'pan':
+          if (this.touchGrab) this.dragTo(input, this.touchGrab, g.x, g.y);
+          break;
+        case 'pinch':
+          this.zoomAt(g.x, g.y, input.width, input.height, 1 / g.scale);
+          this.touchGrab = this.planeHit(input, g.x, g.y, null) ?? this.touchGrab;
+          break;
+        case 'panEnd':
+          this.touchGrab = null;
+          break;
+      }
+    }
+  }
+
+  /** Move the target so the world `point` sits under canvas pixel (x, y). */
+  private dragTo(input: Input, point: THREE.Vector3, x: number, y: number): void {
+    const now = this.planeHit(input, x, y, point.y);
     if (!now) return;
-    this.target.x += this.grab.point.x - now.x;
-    this.target.z += this.grab.point.z - now.z;
+    this.target.x += point.x - now.x;
+    this.target.z += point.z - now.z;
     this.clampTarget();
     this.apply();
   }

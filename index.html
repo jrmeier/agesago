@@ -2,7 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Ages Ago</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -40,6 +46,17 @@
               <h3 id="unit-name">Villager</h3>
               <p id="unit-status">Idle</p>
             </div>
+          </div>
+          <div class="touch-bar">
+            <button id="touch-select-all" class="touch-btn rts-only" aria-label="Select all villagers">
+              <span class="ticon">👥</span><span>All</span>
+            </button>
+            <button id="touch-deselect" class="touch-btn rts-only" aria-label="Deselect">
+              <span class="ticon">✕</span><span>None</span>
+            </button>
+            <button id="touch-fps" class="touch-btn" aria-label="Toggle first-person view" aria-pressed="false">
+              <span class="ticon">👁</span><span>View</span>
+            </button>
           </div>
           <button id="train-btn" class="train-btn">
             Train Villager <span>50 🍖 · T</span>

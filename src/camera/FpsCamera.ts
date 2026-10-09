@@ -8,6 +8,7 @@ const WALK_SPEED = 5;
 const RUN_FACTOR = 2.2;
 const KEY_LOOK_SPEED = 1.8;
 const DRAG_LOOK_PER_PX = 0.004;
+const TOUCH_LOOK_PER_PX = 0.006;
 const MAX_PITCH = 1.4;
 const HEIGHT_RATE = 10;
 /** Keep the observer this far inside the map edge. */
@@ -23,7 +24,8 @@ export function yawBasis(yaw: number): { forward: Vec2; right: Vec2 } {
 
 /**
  * Terrain-following first-person observer: WASD move (Shift runs; blocked by water and the
- * map edge, sliding along obstacles), arrows / LMB-drag look, eye at max(heightAt, 0) + 1.7.
+ * map edge, sliding along obstacles), arrows / LMB-drag look, touch joystick + drag look,
+ * eye at max(heightAt, 0) + 1.7.
  * Owned by the Controls lane (T5).
  */
 export class FpsCamera {
@@ -55,13 +57,17 @@ export class FpsCamera {
       this.yaw -= input.moveX * DRAG_LOOK_PER_PX;
       this.pitch -= input.moveY * DRAG_LOOK_PER_PX;
     }
+    const { touch } = input;
+    this.yaw -= touch.lookX * TOUCH_LOOK_PER_PX;
+    this.pitch -= touch.lookY * TOUCH_LOOK_PER_PX;
     this.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, this.pitch));
 
-    const fwd = (input.key('KeyW') ? 1 : 0) - (input.key('KeyS') ? 1 : 0);
-    const side = (input.key('KeyD') ? 1 : 0) - (input.key('KeyA') ? 1 : 0);
+    const fwd = (input.key('KeyW') ? 1 : 0) - (input.key('KeyS') ? 1 : 0) + touch.stick.y;
+    const side = (input.key('KeyD') ? 1 : 0) - (input.key('KeyA') ? 1 : 0) + touch.stick.x;
     if (fwd || side) {
       const { forward, right } = yawBasis(this.yaw);
-      const step = ((input.shift ? RUN_FACTOR : 1) * WALK_SPEED * dt) / Math.hypot(fwd, side);
+      // Keys give unit (or diagonal) input; the analog stick may be partially deflected.
+      const step = ((input.shift ? RUN_FACTOR : 1) * WALK_SPEED * dt) / Math.max(1, Math.hypot(fwd, side));
       this.move((forward.x * fwd + right.x * side) * step, (forward.z * fwd + right.z * side) * step);
     }
 
