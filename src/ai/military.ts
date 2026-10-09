@@ -1,11 +1,11 @@
 import type { BuildingKind, EntityId, Stockpile, Unit, UnitKind, Vec2 } from '../core/types';
-import { UNITS, damage, trainable, type UnitClass } from '../core/units';
+import { isAnimal, UNITS, damage, trainable, type UnitClass } from '../core/units';
 import { canAfford, dist, type Ctx, type Snapshot } from './context';
 import { PRODUCTION, norm, type Economy } from './economy';
 import type { SeenBuilding } from './intel';
 
 /** A typical member of each class, for judging matchups. */
-const TYPICAL: Record<UnitClass, UnitKind> = { villager: 'villager', infantry: 'swordsman', archer: 'archer', cavalry: 'horseman' };
+const TYPICAL: Record<UnitClass, UnitKind> = { villager: 'villager', infantry: 'swordsman', archer: 'archer', cavalry: 'horseman', wildlife: 'deer' };
 const CLASSES: UnitClass[] = ['infantry', 'archer', 'cavalry'];
 /** Enemies this close to the base (or to where we were just hit) are a threat. */
 const BASE_RADIUS = 26;
@@ -109,9 +109,9 @@ export class Military {
     if (!this.c.profile.counters) return opts[Math.floor(this.c.rng() * opts.length)];
     const seen = this.c.intel.enemyMix();
     // Prior until we've seen something: mostly infantry.
-    const mix: Record<UnitClass, number> = { villager: 0, infantry: seen.infantry + 2, archer: seen.archer + 1, cavalry: seen.cavalry + 1 };
+    const mix: Record<UnitClass, number> = { villager: 0, infantry: seen.infantry + 2, archer: seen.archer + 1, cavalry: seen.cavalry + 1, wildlife: 0 };
     const total = mix.infantry + mix.archer + mix.cavalry;
-    const mine: Record<UnitClass, number> = { villager: 0, infantry: 0, archer: 0, cavalry: 0 };
+    const mine: Record<UnitClass, number> = { villager: 0, infantry: 0, archer: 0, cavalry: 0, wildlife: 0 };
     for (const u of s.army) mine[UNITS[u.kind].unitClass]++;
     const army = Math.max(1, s.army.length);
     let best: UnitKind | null = null;
@@ -135,7 +135,7 @@ export class Military {
     const hit = this.lastHit && world.time - this.lastHit.at < 12 ? this.lastHit.pos : null;
     const out: Unit[] = [];
     for (const u of world.units.values()) {
-      if (u.kind === 'villager' || !world.areEnemies(player, u.owner) || !intel.sees(u.pos.x, u.pos.z)) continue;
+      if (u.kind === 'villager' || isAnimal(u.kind) || !world.areEnemies(player, u.owner) || !intel.sees(u.pos.x, u.pos.z)) continue;
       if (dist(u.pos, this.c.home) < BASE_RADIUS || (hit && dist(u.pos, hit) < 14) || s.buildings.some((b) => dist(u.pos, b.pos) < 10)) out.push(u);
     }
     return out;

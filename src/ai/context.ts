@@ -1,5 +1,6 @@
 import { BUILDINGS } from '../core/buildings';
 import type { Building, BuildingKind, Command, EntityId, PlayerId, ResourceType, Stockpile, Unit, Vec2 } from '../core/types';
+import { isAnimal } from '../core/units';
 import type { World } from '../sim/World';
 import type { Intel } from './intel';
 import type { Profile } from './profile';
@@ -39,7 +40,7 @@ export interface Snapshot {
 export function snapshot(world: World, player: PlayerId): Snapshot {
   const s: Snapshot = { villagers: [], scouts: [], army: [], buildings: [], tc: undefined, popUsed: 0, popCap: world.popCapOf(player), count: {}, building: {} };
   for (const u of world.units.values()) {
-    if (u.owner !== player) continue;
+    if (u.owner !== player || isAnimal(u.kind)) continue;
     s.popUsed++;
     if (u.kind === 'villager') s.villagers.push(u);
     else if (u.kind === 'scout') s.scouts.push(u);

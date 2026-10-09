@@ -6,8 +6,9 @@ import { dist } from './context';
 import { makeGame, run } from './harness';
 
 const DROP_SITES: BuildingKind[] = ['storehouse', 'granary', 'miningCamp'];
-/** Sim minutes per game: enough to boom past 30 villagers and run the berries dry. */
-const MINUTES = 12;
+/** Sim minutes per game: enough to boom past 30 villagers and run the berries dry.
+ *  A shore fish patch can push the first farm past 12 minutes; it still waits for the berries. */
+const MINUTES = 15;
 /** Longest pop-cap stall tolerated (sim seconds): the build pass runs every few seconds. */
 const MAX_STALL = 10;
 /** Berries this close to the Town Center count as the home berries. */

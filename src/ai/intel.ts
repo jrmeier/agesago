@@ -1,5 +1,5 @@
 import type { BuildingKind, EntityId, PlayerId, ResourceNode, ResourceType, UnitKind, Vec2 } from '../core/types';
-import { UNITS, type UnitClass } from '../core/units';
+import { isAnimal, UNITS, type UnitClass } from '../core/units';
 import type { World } from '../sim/World';
 
 /** An enemy building as last seen. */
@@ -65,7 +65,7 @@ export class Intel {
       if (!w.buildings.has(id) && this.seesFootprint(s.pos, s.radius)) this.buildings.delete(id);
     }
     for (const u of w.units.values()) {
-      if (!w.areEnemies(this.player, u.owner)) continue;
+      if (isAnimal(u.kind) || !w.areEnemies(this.player, u.owner)) continue;
       if (this.sees(u.pos.x, u.pos.z)) this.seen.set(u.id, { kind: u.kind, at: w.time });
     }
     for (const [id, s] of this.seen) if (w.time - s.at > UNIT_MEMORY || !w.units.has(id)) this.seen.delete(id);
@@ -78,7 +78,7 @@ export class Intel {
 
   /** Recently seen enemy units by class (scouts and villagers excluded). */
   enemyMix(): Record<UnitClass, number> {
-    const mix: Record<UnitClass, number> = { villager: 0, infantry: 0, archer: 0, cavalry: 0 };
+    const mix: Record<UnitClass, number> = { villager: 0, infantry: 0, archer: 0, cavalry: 0, wildlife: 0 };
     for (const s of this.seen.values()) if (s.kind !== 'scout') mix[UNITS[s.kind].unitClass]++;
     return mix;
   }

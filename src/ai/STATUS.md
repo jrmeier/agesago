@@ -13,11 +13,12 @@ resource trickle).
 - Builds drop sites (storehouse, granary, mining camp) next to gatherers working far from one.
 - Builds farms after the berries near the base are gone, and reseeds fallow farms.
 - Sends the scout to unexplored ground, then patrols.
+- Herdables are not population and not soldiers. A sheep in sight does not stall training or call the army home.
 - Military (barracks, waves, defence, retreat) is in `military.ts`. It is not part of this ticket's acceptance.
 
 ## Acceptance test
 
-`src/ai/economy.test.ts` runs seeds 1–5 at moderate difficulty for 12 sim minutes each against
+`src/ai/economy.test.ts` runs seeds 1–5 at moderate difficulty for 15 sim minutes each against
 an idle human. It checks for each seed:
 
 - at least 30 villagers

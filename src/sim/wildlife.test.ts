@@ -105,7 +105,7 @@ describe('wildlife and fishing', () => {
     world.tick(DT);
     expect(sheep.owner).toBe(1);
     world.units.delete(villager(world).id);
-    world.buildings.delete(world.townCenter.id);
+    world.buildings.delete(world.townCenterOf(1)!.id);
     world.victoryClock = 0;
     world.tick(DT);
     expect(world.isDefeated(1)).toBe(true);
