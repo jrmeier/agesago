@@ -69,7 +69,7 @@ describe('research queue', () => {
     run(w, 1.1);
     expect(w.players.get(1)!.researched.has('bronzeAxe')).toBe(true);
     expect(events.some((e) => e.type === 'researched' && e.tech === 'bronzeAxe')).toBe(true);
-    expect(statOf(w, 1, { unit: 'villager' }, 'gather.wood', 1)).toBeCloseTo(1.15);
+    expect(statOf(w, 1, { unit: 'villager' }, 'gather.wood', 1)).toBeCloseTo(TECHS.bronzeAxe.effects[0].value);
   });
 
   it('refunds on cancel and rejects duplicates, missing ages and prerequisites', () => {
