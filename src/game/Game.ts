@@ -108,6 +108,7 @@ export class Game {
 
     this.fog.update(dt);
     this.props.syncFog();
+    this.props.update(this.rig.camera);
     const focus = this.focus();
     this.renderer.update(focus, this.elapsed);
     this.terrain.update(this.elapsed);

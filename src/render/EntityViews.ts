@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BUILDINGS, FARM_FOOD } from '../core/buildings';
-import { SEA_LEVEL, type Building, type BuildingKind, type EntityId, type NodeKind, type ResourceNode, type ResourceType, type Unit, type Vec2 } from '../core/types';
+import { SEA_LEVEL, type Building, type BuildingKind, type EntityId, type NodeKind, type ResourceNode, type Unit, type Vec2 } from '../core/types';
 import type { World } from '../sim/World';
 import { createBuildingVisual, createGhost, footprintMinY, tintGhost, type BuildingVisual } from './buildingVisuals';
 import { applyFog, createFogDepthMaterial, isConcealed, matrixForConcealment, type FogOfWar } from './fog';
@@ -312,7 +312,7 @@ export class EntityViews {
     } else {
       const model = createVillager({ tunic: TUNICS[unit.id % TUNICS.length], seed: unit.id });
       model.object.scale.setScalar(VILLAGER_SCALE);
-      view = { object: model.object, shadow, pose: (u, t) => model.setPose(poseOf(u), t, carriedLook(u.carry?.type ?? null)) };
+      view = { object: model.object, shadow, pose: (u, t) => model.setPose(poseOf(u), t, u.carry?.type ?? null) };
       this.sizeOf.set(unit.id, VILLAGER_SIZE);
     }
     view.object.traverse((obj) => {
@@ -657,7 +657,7 @@ function poseOf(unit: Unit): VillagerPose {
     case 'gathering':
       return GATHER_POSE[unit.gatherType ?? 'food'];
     case 'building':
-      return 'chop';
+      return 'build';
     default:
       return 'idle';
   }
@@ -670,9 +670,4 @@ function frac(n: number): number {
 
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
-}
-
-/** Villager models show wood, food or gold bundles; stone reuses the gold look until models grow a stone bundle. */
-function carriedLook(type: ResourceType | null): 'wood' | 'food' | 'gold' | null {
-  return type === 'stone' ? 'gold' : type;
 }
