@@ -4,7 +4,6 @@ import { BALANCE } from '../sim/balance';
 import type { World } from '../sim/World';
 import { groupStatus, trainLabel, unitName } from './format';
 
-
 /**
  * Binds the existing DOM in index.html: #res-food/#res-wood/#res-gold/#res-pop,
  * #selection-panel (+ .hidden), #unit-name, #unit-status, #train-btn.
