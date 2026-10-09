@@ -282,7 +282,7 @@ export function generateMap(seed: number): { hf: Heightfield; layout: MapLayout 
   }
 
   const propTarget = 720 + Math.floor(random() * 180);
-  for (let attempt = 0; layout.props.length < propTarget && attempt < 40000; attempt++) {
+  for (let attempt = 0; layout.props.length < propTarget && attempt < 80000; attempt++) {
     const pos = { x: 2 + random() * (hf.width - 4), z: 2 + random() * (hf.depth - 4) };
     const ground = hf.ground(pos.x, pos.z);
     const height = hf.heightAt(pos.x, pos.z);
@@ -292,8 +292,13 @@ export function generateMap(seed: number): { hf: Heightfield; layout: MapLayout 
     else if (ground.rock > 0.12 || height > 3.5 || features.outcrops.some((p) => distance(p, pos) < 7)) {
       kind = random() < 0.55 ? 'boulder' : 'rocks';
     } else if (density > 0.35) kind = random() < 0.30 ? 'log' : 'bush';
-    else if (random() < 0.7) kind = 'bush';
-    else kind = random() < 0.65 ? 'boulder' : 'rocks';
+    else {
+      // Open meadow stays open: the odd shrub, rare stones, and a clear start area.
+      const fromTc = distance(pos, townCenter);
+      if (fromTc < 12 || random() < 0.45) continue;
+      if (fromTc > 20 && random() < 0.12) kind = random() < 0.5 ? 'boulder' : 'rocks';
+      else kind = 'bush';
+    }
     addProp(kind, pos, random() * Math.PI * 2, 0.7 + random() * 0.65);
   }
   if (layout.props.length < 500) throw new Error(`Insufficient scenery for seed ${seed}`);
