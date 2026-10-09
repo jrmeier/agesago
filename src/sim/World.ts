@@ -507,7 +507,7 @@ export class World {
       hp,
       maxHp: hp,
       target: null,
-      stance: kind === 'villager' || isAnimal(kind) ? 'passive' : 'aggressive',
+      stance: kind === 'villager' || kind === 'tradeCart' || isAnimal(kind) ? 'passive' : 'aggressive',
       pos: { ...p },
       prevPos: { ...p },
       facing: 0,
