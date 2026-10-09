@@ -98,15 +98,15 @@ const table = {
   // ---- Ages (Town Center) ----
   townAge: {
     name: 'Town Age', description: 'Advance to the Town Age: archery range, stable, towers, forge and market.',
-    at: 'townCenter', cost: { food: 500 }, time: 60, age: 0, effects: [], ageUp: 1,
+    at: 'townCenter', cost: { food: 400 }, time: 60, age: 0, effects: [], ageUp: 1,
   },
   cityAge: {
     name: 'City Age', description: 'Advance to the City Age: academy, unit upgrades and stronger defences.',
-    at: 'townCenter', cost: { food: 800, gold: 200 }, time: 90, age: 1, effects: [], ageUp: 2,
+    at: 'townCenter', cost: { food: 3800, gold: 800 }, time: 150, age: 1, effects: [], ageUp: 2,
   },
   empireAge: {
     name: 'Empire Age', description: 'Advance to the Empire Age: elite units and the finest techs.',
-    at: 'townCenter', cost: { food: 1000, gold: 800, stone: 200 }, time: 120, age: 2, effects: [], ageUp: 3,
+    at: 'townCenter', cost: { food: 12000, gold: 1500, stone: 1000 }, time: 240, age: 2, effects: [], ageUp: 3,
   },
 
   // ---- Town Center ----
@@ -117,7 +117,7 @@ const table = {
   },
   donkeyPacks: {
     name: 'Donkey Packs', description: 'Villagers walk 10% faster and carry 3 more.',
-    at: 'townCenter', cost: { food: 175, wood: 50 }, time: 75, age: 0,
+    at: 'townCenter', cost: { food: 175, wood: 50 }, time: 50, age: 0,
     effects: [mul('villager', 'speed', 1.1), ...(['wood', 'food', 'gold', 'stone'] as const).map((r) => add('villager', `carry.${r}`, 3))],
   },
   oxCarts: {
@@ -150,58 +150,58 @@ const table = {
   // ---- Storehouse (wood) ----
   bronzeAxe: {
     name: 'Bronze Axe', description: '+20% wood gathering.',
-    at: 'storehouse', cost: { food: 100, wood: 50 }, time: 25, age: 0, effects: [mul('villager', 'gather.wood', 1.2)],
+    at: 'storehouse', cost: { food: 90, wood: 50 }, time: 25, age: 0, effects: [mul('villager', 'gather.wood', 1.2)],
   },
   ironAxe: {
     name: 'Iron Axe', description: 'Another +15% wood gathering.',
-    at: 'storehouse', cost: { food: 200, gold: 100 }, time: 50, age: 1, requires: ['bronzeAxe'],
+    at: 'storehouse', cost: { food: 125, gold: 50 }, time: 45, age: 1, requires: ['bronzeAxe'],
     effects: [mul('villager', 'gather.wood', 1.15)],
   },
   twoManSaw: {
-    name: 'Two-Man Saw', description: 'Another +10% wood gathering.',
-    at: 'storehouse', cost: { food: 300, gold: 200 }, time: 75, age: 2, requires: ['ironAxe'],
-    effects: [mul('villager', 'gather.wood', 1.1)],
+    name: 'Two-Man Saw', description: 'Another +20% wood gathering.',
+    at: 'storehouse', cost: { food: 150, gold: 75 }, time: 60, age: 2, requires: ['ironAxe'],
+    effects: [mul('villager', 'gather.wood', 1.2)],
   },
 
   // ---- Mining camp ----
   bronzePicks: {
     name: 'Bronze Picks', description: '+20% gold mining.',
-    at: 'miningCamp', cost: { food: 100, wood: 75 }, time: 30, age: 0, effects: [mul('villager', 'gather.gold', 1.2)],
+    at: 'miningCamp', cost: { food: 75, wood: 75 }, time: 30, age: 0, effects: [mul('villager', 'gather.gold', 1.2)],
   },
   stoneChisels: {
     name: 'Stone Chisels', description: '+20% stone quarrying.',
-    at: 'miningCamp', cost: { food: 100, wood: 75 }, time: 30, age: 0, effects: [mul('villager', 'gather.stone', 1.2)],
+    at: 'miningCamp', cost: { food: 75, wood: 75 }, time: 30, age: 0, effects: [mul('villager', 'gather.stone', 1.2)],
   },
   deepShafts: {
     name: 'Deep Shafts', description: 'Another +15% gold and stone mining.',
-    at: 'miningCamp', cost: { food: 200, wood: 150 }, time: 50, age: 1, requires: ['bronzePicks'],
+    at: 'miningCamp', cost: { food: 150, wood: 100 }, time: 45, age: 1, requires: ['bronzePicks'],
     effects: [mul('villager', 'gather.gold', 1.15), mul('villager', 'gather.stone', 1.15)],
   },
   oreSledges: {
-    name: 'Ore Sledges', description: 'Villagers carry 3 more gold and stone.',
-    at: 'miningCamp', cost: { food: 300, wood: 200 }, time: 60, age: 2, requires: ['deepShafts'],
-    effects: [add('villager', 'carry.gold', 3), add('villager', 'carry.stone', 3)],
+    name: 'Ore Sledges', description: 'Villagers carry 5 more gold and stone.',
+    at: 'miningCamp', cost: { food: 150, wood: 100 }, time: 50, age: 2, requires: ['deepShafts'],
+    effects: [add('villager', 'carry.gold', 5), add('villager', 'carry.stone', 5)],
   },
 
   // ---- Granary ----
   oxPlough: {
-    name: 'Ox Plough', description: 'Farms hold 75 more food and are worked 10% faster.',
+    name: 'Ox Plough', description: 'Farms hold 75 more food and are worked 15% faster.',
     at: 'granary', cost: { food: 75, wood: 75 }, time: 25, age: 0,
-    effects: [add('farm', 'farmFood', 75), mul('villager', 'gather.farm', 1.1)],
+    effects: [add('farm', 'farmFood', 75), mul('villager', 'gather.farm', 1.15)],
   },
   ironPloughshare: {
-    name: 'Iron Ploughshare', description: 'Farms hold 125 more food and are worked 10% faster.',
-    at: 'granary', cost: { food: 250, wood: 125 }, time: 50, age: 1, requires: ['oxPlough'],
-    effects: [add('farm', 'farmFood', 125), mul('villager', 'gather.farm', 1.1)],
+    name: 'Iron Ploughshare', description: 'Farms hold 125 more food and are worked 15% faster.',
+    at: 'granary', cost: { food: 125, wood: 75 }, time: 45, age: 1, requires: ['oxPlough'],
+    effects: [add('farm', 'farmFood', 125), mul('villager', 'gather.farm', 1.15)],
   },
   cropRotation: {
-    name: 'Crop Rotation', description: 'Farms hold 175 more food and are worked 10% faster.',
-    at: 'granary', cost: { food: 400, wood: 250 }, time: 70, age: 2, requires: ['ironPloughshare'],
-    effects: [add('farm', 'farmFood', 175), mul('villager', 'gather.farm', 1.1)],
+    name: 'Crop Rotation', description: 'Farms hold 175 more food and are worked 20% faster.',
+    at: 'granary', cost: { food: 150, wood: 100 }, time: 50, age: 2, requires: ['ironPloughshare'],
+    effects: [add('farm', 'farmFood', 175), mul('villager', 'gather.farm', 1.2)],
   },
   threshingFloor: {
     name: 'Threshing Floor', description: '+20% food from berries, hunting and fishing.',
-    at: 'granary', cost: { food: 150, wood: 100 }, time: 40, age: 1,
+    at: 'granary', cost: { food: 100, wood: 50 }, time: 40, age: 1,
     effects: [mul('villager', 'gather.food', 1.2)],
   },
 
