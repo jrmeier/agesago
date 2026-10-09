@@ -2919,3 +2919,19 @@ body.touch .res-age .ricon {
 body.touch .tech-tile .build-lock {
   font-size: 9px;
 }
+
+/* Desktop: a long research list wraps into rows instead of running under the minimap. */
+body:not(.touch) .selection-panel {
+  max-width: max(420px, min(780px, calc(100% - 540px)));
+}
+
+/* 360px phones: six plaques must fit without sideways scroll. */
+@media (max-width: 380px) {
+  body.touch .resource-bar {
+    gap: 2px;
+  }
+
+  body.touch .res-age {
+    padding: 2px 4px;
+  }
+}
