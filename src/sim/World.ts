@@ -55,7 +55,10 @@ export class World {
       progress: 0,
     };
     this.buildings.set(tc.id, tc);
-    this.nav = new NavGrid(hf, [tc]);
+    const scenery = layout.props
+      .filter((p) => p.blockRadius > 0)
+      .map((p) => ({ pos: { ...p.pos }, radius: p.blockRadius }));
+    this.nav = new NavGrid(hf, [tc, ...scenery]);
     for (const p of layout.villagers) this.addVillager(p);
     for (const n of layout.nodes) {
       const node: ResourceNode = {

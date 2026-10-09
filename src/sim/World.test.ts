@@ -260,4 +260,17 @@ describe('movement', () => {
     expect(u.pos).toEqual({ x: 38, z: 24 });
     expect(u.state).toBe('idle');
   });
+
+  it('paths around blocking scenery but walks through walk-through props', () => {
+    const base = layout([{ x: 20, z: 24 }]);
+    const blocked = new World(flatField(), {
+      ...base,
+      props: [
+        { kind: 'boulder', pos: { x: 26, z: 24 }, rot: 0, scale: 1, blockRadius: 1.2 },
+        { kind: 'reeds', pos: { x: 23, z: 24 }, rot: 0, scale: 1, blockRadius: 0 },
+      ],
+    });
+    expect(blocked.nav.isFree({ x: 26, z: 24 })).toBe(false);
+    expect(blocked.nav.isFree({ x: 23, z: 24 })).toBe(true);
+  });
 });

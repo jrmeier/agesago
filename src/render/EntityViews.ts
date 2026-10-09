@@ -71,6 +71,7 @@ export class EntityViews {
   private readonly dummy = new THREE.Object3D();
   private readonly v = new THREE.Vector3();
   private selected: ReadonlySet<EntityId> = new Set();
+  private shadows = false;
   private markerPos: Vec2 = { x: 0, z: 0 };
   private markerStart: number | null = null;
   private markerPending = false;
@@ -177,6 +178,17 @@ export class EntityViews {
     return ids;
   }
 
+  /** Let trees, resources, villagers and buildings cast (and receive) sun shadows. */
+  setShadows(on: boolean): void {
+    this.shadows = on;
+    this.object.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh || mesh.material === this.shadowMat || mesh.material === this.ringMat || mesh.material === this.markerMat) return;
+      mesh.castShadow = on;
+      mesh.receiveShadow = on;
+    });
+  }
+
   setSelected(ids: ReadonlySet<EntityId>): void {
     this.selected = ids;
   }
@@ -194,6 +206,10 @@ export class EntityViews {
     model.object.scale.setScalar(VILLAGER_SCALE);
     const shadow = new THREE.Mesh(this.shadowGeo, this.shadowMat);
     shadow.renderOrder = 2;
+    model.object.traverse((obj) => {
+      obj.castShadow = this.shadows;
+      obj.receiveShadow = this.shadows;
+    });
     this.object.add(model.object, shadow);
     this.villagers.set(unit.id, { model, shadow });
     this.sizeOf.set(unit.id, VILLAGER_SIZE);
@@ -267,6 +283,8 @@ export class EntityViews {
     if (!pool) {
       pool = new InstancePool(geometry, this.material, capacity);
       pool.mesh.name = key;
+      pool.mesh.castShadow = this.shadows;
+      pool.mesh.receiveShadow = this.shadows;
       this.object.add(pool.mesh);
       this.pools.set(key, pool);
     }
@@ -277,6 +295,8 @@ export class EntityViews {
     const src = pool.mesh;
     const next = new THREE.InstancedMesh(src.geometry, src.material, src.instanceMatrix.count * 2);
     next.name = src.name;
+    next.castShadow = src.castShadow;
+    next.receiveShadow = src.receiveShadow;
     next.frustumCulled = false;
     next.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     next.count = pool.ids.length;
