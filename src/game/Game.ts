@@ -9,6 +9,7 @@ import { BALANCE } from '../sim/balance';
 import { generateMap } from '../sim/mapgen';
 import { World } from '../sim/World';
 import { Hud } from '../ui/Hud';
+import { Minimap } from '../ui/Minimap';
 import { Selection } from './Selection';
 
 const STEP = 1 / BALANCE.tickRate;
@@ -28,6 +29,7 @@ export class Game {
   private readonly views: EntityViews;
   private readonly controls: Controls;
   private readonly hud: Hud;
+  private readonly minimap: Minimap;
   private accumulator = 0;
   private last = performance.now();
   private elapsed = 0;
@@ -57,6 +59,7 @@ export class Game {
       hud: document.getElementById('hud') ?? container,
     });
     this.hud = new Hud(this.world, this.selection, () => this.train());
+    this.minimap = new Minimap(document.getElementById('hud') ?? container, this.world, this.rig);
 
     window.addEventListener('resize', this.onResize);
     this.resize();
@@ -87,6 +90,7 @@ export class Game {
     this.terrain.update(this.elapsed);
     this.views.sync(this.accumulator / STEP, this.elapsed, this.rig.camera);
     this.hud.update();
+    this.minimap.update(this.elapsed);
     this.renderer.render(this.rig.camera);
     this.input.endFrame();
     this.raf = requestAnimationFrame(this.frame);
@@ -103,6 +107,7 @@ export class Game {
     cancelAnimationFrame(this.raf);
     window.removeEventListener('resize', this.onResize);
     this.input.dispose();
+    this.minimap.dispose();
     this.renderer.domElement.remove();
   }
 }
