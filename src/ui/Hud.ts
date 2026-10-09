@@ -1,9 +1,11 @@
 import { BUILDINGS, FARM_FOOD } from '../core/buildings';
+import { AGE_NAMES, TECHS, buildingTier, techsAt, unitLine, type Age, type TechId } from '../core/techs';
 import type { Building, BuildingKind, ResourceType, Stockpile, Unit, UnitKind } from '../core/types';
-import { UNITS } from '../core/units';
+import { UNITS, trainable } from '../core/units';
 import type { Selection } from '../game/Selection';
 import { shownSelection, sightFromState, stepLastSeen, type LastSeenBuilding } from '../render/lastSeen';
 import { BALANCE } from '../sim/balance';
+import { ageBuildings, ageBuildingsNeeded, researchBlock, statOf } from '../sim/systems/research';
 import type { World } from '../sim/World';
 import {
   BUILD_HOTKEYS,
@@ -20,22 +22,41 @@ import { formatCount, groupStatus, portraitKind, selectionName, showExplore, tra
 import {
   STANCES,
   canTrainAt,
-  combatChips,
   hpLabel,
   isMilitary,
-  queueView,
   sharedStance,
   totalHp,
   trainBatch,
   trainEntries,
 } from './military';
 import { MarketPanel } from './market';
+import {
+  agedUpText,
+  ageLockText,
+  queueItems,
+  researchLabel,
+  techEntries,
+  techTip,
+  techsNewAt,
+  timeLabel,
+  unitAge,
+  upgradedBuildingChips,
+  upgradedUnitChips,
+  type TechEntry,
+  type TechView,
+} from './research';
 import { closeTouchMenus, toggleTouchMenu, touchMenuOpen, type TouchMenu } from './touchMenus';
 
 /** Length of the train ring's circle (its `pathLength`). */
 const RING = 100;
 /** How long the "Need more houses" note stays up (ms). */
 const POP_NOTE_MS = 2600;
+/** How long the "Entered the Town Age" banner stays up (ms). */
+const AGE_BANNER_MS = 3200;
+/** Touch: hold a tile this long to see its tooltip (ms). */
+const LONG_PRESS_MS = 450;
+/** Short age labels for the phone's top bar. */
+const AGE_SHORT = ['I', 'II', 'III', 'IV'] as const;
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -56,6 +77,11 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * #select-same-btn shows when the selection is one kind of own unit. #train-btn
  * (.train-sub label, .train-ring-fill progress ring, .training while queued). Updates from
  * world.events and selection changes.
+ * M8: the training grid also lists the selected building's techs under a "Research" header
+ * (click queues `research`; locked tiles say why; long-press on touch shows the tooltip), the
+ * queue strip mixes research (first) with units, #age-plaque shows the age with a slim bar
+ * while an age-up runs, #age-banner announces a new age, and age-locked build / train tiles
+ * are greyed with "Requires Town Age".
  * Owned by the HUD lane. Public surface FROZEN: constructor, update.
  */
 export class Hud {
@@ -84,7 +110,23 @@ export class Hud {
     commands: byId('command-card'),
     menus: byId('menu-tabs'),
     same: byId('select-same-btn'),
+    agePlaque: byId('age-plaque'),
+    age: byId('res-age'),
+    banner: byId('age-banner'),
+    tip: byId('tech-tip'),
   };
+  private readonly ageFill: HTMLElement | null;
+  private readonly techButtons = new Map<TechId, HTMLButtonElement>();
+  private researchHead: HTMLElement | null = null;
+  private researchKey = '';
+  /** Techs that opened up at the last age-up and haven't been looked at yet. */
+  private readonly fresh = new Set<TechId>();
+  private ageKey = '';
+  private bannerTimer = 0;
+  private pressTimer = 0;
+  private tipTimer = 0;
+  /** Set by a long-press so the click that follows doesn't also queue. */
+  private swallowClick = false;
   private readonly trainSub: HTMLElement | null;
   private readonly trainRing: SVGElement | null;
   private readonly portrait: HTMLElement | null;
@@ -127,6 +169,7 @@ export class Hud {
     this.progressFill = this.el.progress?.querySelector<HTMLElement>('.build-progress-fill') ?? null;
     this.hpFill = this.el.hp?.querySelector<HTMLElement>('.unit-hp-fill') ?? null;
     this.hpText = this.el.hp?.querySelector<HTMLElement>('.unit-hp-text') ?? null;
+    this.ageFill = this.el.agePlaque?.querySelector<HTMLElement>('.age-bar-fill') ?? null;
     for (const btn of this.el.commands?.querySelectorAll<HTMLElement>('[data-stance]') ?? []) {
       this.stanceButtons.set(btn.dataset.stance!, btn);
     }
@@ -150,6 +193,13 @@ export class Hud {
       if (e.reason === 'insufficient-food' || e.reason === 'pop-cap') this.flashTrain();
       if (e.reason === 'insufficient-resources' || e.reason === 'pop-cap') this.flashTrainGrid();
       if (e.reason === 'pop-cap') this.flashPop();
+      if (e.reason === 'age' || e.reason === 'requires' || e.reason === 'busy') this.flashTrainGrid();
+    });
+    world.events.on('agedUp', (e) => {
+      if (e.owner !== world.localPlayer) return;
+      for (const t of techsNewAt(e.age)) this.fresh.add(t);
+      this.researchKey = '';
+      this.showBanner(agedUpText(e.age));
     });
     selection.onChange(() => this.updateSelection());
     this.el.train?.addEventListener('click', (e) => {
@@ -157,11 +207,27 @@ export class Hud {
       this.onTrain();
     });
     this.el.trainGrid?.addEventListener('click', (e) => {
+      if (this.swallowClick) {
+        this.swallowClick = false;
+        return;
+      }
+      const tech = (e.target as Element).closest<HTMLElement>('[data-research]');
+      if (tech) {
+        tech.blur();
+        this.researchAt(tech.dataset.research as TechId, tech.dataset.locked === 'true');
+        return;
+      }
       const btn = (e.target as Element).closest<HTMLElement>('[data-train]');
       if (!btn) return;
       btn.blur();
+      if (btn.dataset.locked === 'true') {
+        this.flashTrainGrid();
+        return;
+      }
       this.trainAt(btn.dataset.train as UnitKind, (e as MouseEvent).shiftKey);
     });
+    this.bindLongPress(this.el.trainGrid);
+    this.bindLongPress(this.el.grid);
     this.update();
   }
 
@@ -170,6 +236,96 @@ export class Hud {
     this.updateSelection();
     this.updateTrain();
     this.market.update();
+    this.updateAge();
+  }
+
+  private playerAge(): Age {
+    return this.world.players.get(this.world.localPlayer)?.age ?? 0;
+  }
+
+  /** Queue `tech` at the building whose panel is open; a locked tile just shakes and shows why. */
+  private researchAt(tech: TechId, locked: boolean): void {
+    const id = this.trainBuildingId;
+    if (id === null) return;
+    if (locked) {
+      this.flashTrainGrid();
+      const btn = this.techButtons.get(tech);
+      if (btn && document.body.classList.contains('touch')) this.showTip(btn);
+      return;
+    }
+    this.world.dispatch({ type: 'research', buildingId: id, tech });
+  }
+
+  /** Touch: holding a tile shows its tooltip (title) in #tech-tip instead of clicking it. */
+  private bindLongPress(grid: HTMLElement | null): void {
+    if (!grid) return;
+    const clear = () => clearTimeout(this.pressTimer);
+    grid.addEventListener('pointerdown', (e) => {
+      clear();
+      if (e.pointerType === 'mouse') return;
+      const btn = (e.target as Element).closest<HTMLElement>('[data-tip]');
+      if (!btn) return;
+      this.pressTimer = window.setTimeout(() => {
+        this.swallowClick = true;
+        this.showTip(btn);
+      }, LONG_PRESS_MS);
+    });
+    grid.addEventListener('pointerup', clear);
+    grid.addEventListener('pointercancel', clear);
+    grid.addEventListener('pointerleave', clear);
+    grid.addEventListener('contextmenu', (e) => {
+      if ((e.target as Element).closest('[data-tip]')) e.preventDefault();
+    });
+  }
+
+  private showTip(btn: HTMLElement): void {
+    const tip = this.el.tip;
+    if (!tip) return;
+    tip.textContent = btn.dataset.tip ?? btn.title;
+    tip.hidden = false;
+    clearTimeout(this.tipTimer);
+    this.tipTimer = window.setTimeout(() => (tip.hidden = true), 4000);
+  }
+
+  /** Age plaque text, and its slim bar while an age-up researches at a Town Center. */
+  private updateAge(): void {
+    const age = this.playerAge();
+    let progress = -1;
+    for (const b of this.world.buildings.values()) {
+      if (b.owner !== this.world.localPlayer || b.kind !== 'townCenter') continue;
+      const head = b.research?.[0];
+      if (head && TECHS[head].ageUp !== undefined) progress = Math.min(1, (b.researchProgress ?? 0) / TECHS[head].time);
+    }
+    const key = `${age}|${progress < 0 ? '' : (progress * 100).toFixed(0)}`;
+    if (key === this.ageKey) return;
+    this.ageKey = key;
+    if (this.el.age) {
+      setText(this.el.age, AGE_NAMES[age]);
+      this.el.age.dataset.short = AGE_SHORT[age];
+    }
+    if (this.el.agePlaque) {
+      this.el.agePlaque.classList.toggle('advancing', progress >= 0);
+      this.el.agePlaque.title = progress >= 0
+        ? `${AGE_NAMES[age]} · advancing ${Math.floor(progress * 100)}%`
+        : `Current age: ${AGE_NAMES[age]}`;
+    }
+    if (this.ageFill) this.ageFill.style.width = `${Math.max(0, progress) * 100}%`;
+  }
+
+  /** "Entered the Town Age": fades in and out (CSS keeps it still under reduced motion). */
+  private showBanner(text: string): void {
+    const banner = this.el.banner;
+    if (!banner) return;
+    banner.textContent = text;
+    banner.hidden = false;
+    banner.classList.remove('show');
+    void banner.offsetWidth;
+    banner.classList.add('show');
+    clearTimeout(this.bannerTimer);
+    this.bannerTimer = window.setTimeout(() => {
+      banner.classList.remove('show');
+      banner.hidden = true;
+    }, AGE_BANNER_MS);
   }
 
   /** Queue `kind` at the building whose training panel is open (five with Shift). */
@@ -210,6 +366,9 @@ export class Hud {
     const grid = this.el.trainGrid;
     if (!grid) return;
     grid.replaceChildren();
+    this.techButtons.clear();
+    this.researchKey = '';
+    this.researchHead = null;
     if (!kind) return;
     for (const e of trainEntries(kind, this.world.stock)) {
       const btn = tile(`#i-${e.kind}`, e.name, e.cost, e.key, 'Shift-click: queue 5');
@@ -217,6 +376,50 @@ export class Hud {
       btn.dataset.train = e.kind;
       grid.append(btn);
       this.trainButtons.set(e.kind, btn);
+    }
+    if (techsAt(kind).length) {
+      const head = document.createElement('h4');
+      head.className = 'research-head';
+      head.textContent = 'Research';
+      grid.append(head);
+      this.researchHead = head;
+    }
+  }
+
+  /** What researchBlock and the tiles need to know about the local player. */
+  private techView(): TechView {
+    const local = this.world.localPlayer;
+    const p = this.world.players.get(local);
+    const queued = new Set<TechId>();
+    for (const b of this.world.buildings.values()) if (b.owner === local) for (const t of b.research ?? []) queued.add(t);
+    const age = p?.age ?? 0;
+    return {
+      age,
+      researched: p?.researched ?? new Set(),
+      queued,
+      stock: this.world.stock,
+      ageBuildings: ageBuildings(this.world, local, age).length,
+      ageBuildingsNeeded: ageBuildingsNeeded(age),
+    };
+  }
+
+  /** Rebuild the tech tiles under the Research header when anything about them changed. */
+  private updateResearch(b: Building): void {
+    const grid = this.el.trainGrid;
+    if (!grid || !this.researchHead) return;
+    const view = this.techView();
+    const entries = techEntries(b.kind, view, (t) => researchBlock(this.world, this.world.localPlayer, t));
+    const key = entries.map((e) => `${e.tech}:${e.locked ? 'L' : ''}${e.unaffordable ? 'U' : ''}${e.reason}${this.fresh.has(e.tech) ? '*' : ''}`).join(',');
+    setHidden(this.researchHead, !entries.length);
+    this.menuTabs.train?.classList.toggle('has-new', entries.some((e) => this.fresh.has(e.tech)));
+    if (key === this.researchKey) return;
+    this.researchKey = key;
+    for (const btn of this.techButtons.values()) btn.remove();
+    this.techButtons.clear();
+    for (const e of entries) {
+      const btn = techTile(e, this.fresh.has(e.tech));
+      grid.append(btn);
+      this.techButtons.set(e.tech, btn);
     }
   }
 
@@ -257,16 +460,19 @@ export class Hud {
     this.updateBuilding(target === 'building' ? building : undefined, ownBuilding);
     if (target === 'units') {
       const kinds = units.map((u) => u.kind);
-      setText(this.el.name, selectionName(kinds));
+      const lineOf = (k: UnitKind) => unitLine(this.world.players.get(units[0].owner)?.researched ?? new Set(), k);
+      const same = kinds.every((k) => k === kinds[0]);
+      const line = same ? lineOf(kinds[0]) : null;
+      setText(this.el.name, line && line.tier > 0 ? (units.length > 1 ? `${units.length} × ${line.title}` : line.title) : selectionName(kinds));
       setText(this.el.status, foreign ? this.ownerName(owner) : groupStatus(units, BALANCE.carryCap));
       this.setPortrait(`#i-${portraitKind(kinds)}`, units.length > 1 ? String(units.length) : '');
       const hp = totalHp(units);
       this.setHp(hp.hp, hp.maxHp);
       const single = kinds.every((k) => k === kinds[0]) ? kinds[0] : null;
-      this.setStats(single && (isMilitary(single) || foreign) ? single : null);
+      this.setStats(single && (isMilitary(single) || foreign) ? single : null, units[0].owner);
     } else if (building) {
       this.setHp(building.complete ? building.hp : -1, building.maxHp);
-      this.setStats(null);
+      this.setBuildingStats(building.complete ? building : null);
     } else if (remembered) {
       setText(this.el.name, BUILDINGS[remembered.kind].name);
       setText(this.el.status, this.ownerName(remembered.owner));
@@ -326,17 +532,27 @@ export class Hud {
     setHidden(this.el.bell, !shelter);
     setHidden(this.el.ungarrison, !shelter || !(own?.occupants?.length));
     const trainer = own && canTrainAt(own) ? own : undefined;
-    const kind = trainer?.kind ?? '';
-    if (kind !== this.trainKind) this.buildTrainGrid(kind);
-    this.trainBuildingId = trainer?.id ?? null;
-    setHidden(this.el.trainGrid, !trainer);
-    setHidden(this.el.queue, !trainer || trainer.queue <= 0);
-    if (trainer) {
+    const researcher = own && own.complete && techsAt(own.kind).length ? own : undefined;
+    const panel = trainer ?? researcher;
+    const kind = panel?.kind ?? '';
+    if (kind !== this.trainKind) {
+      // Leaving a building's panel: its new techs have been seen.
+      if (this.trainKind) for (const t of techsAt(this.trainKind)) this.fresh.delete(t);
+      this.buildTrainGrid(kind);
+    }
+    this.trainBuildingId = panel?.id ?? null;
+    setHidden(this.el.trainGrid, !panel);
+    setHidden(this.el.queue, !panel || (panel.queue <= 0 && !panel.research?.length));
+    if (!panel) this.menuTabs.train?.classList.remove('has-new');
+    if (panel) {
+      setText(this.menuTabs.train, trainable(panel.kind).length ? 'Train' : 'Research');
       this.updateTrainAffordable();
-      this.updateQueue(trainer);
+      this.updateResearch(panel);
+      this.updateQueue(panel);
     }
     if (!b) return;
-    setText(this.el.name, BUILDINGS[b.kind].name);
+    const researched = this.world.players.get(b.owner)?.researched ?? new Set<TechId>();
+    setText(this.el.name, buildingTier(researched, b.kind).title ?? BUILDINGS[b.kind].name);
     this.setPortrait(`#i-b-${b.kind}`, '');
     if (!own) {
       setText(this.el.status, this.ownerName(b.owner));
@@ -344,6 +560,8 @@ export class Hud {
       setText(this.el.status, constructionLabel(b.buildProgress));
       const w = `${(Math.min(1, Math.max(0, b.buildProgress)) * 100).toFixed(1)}%`;
       if (this.progressFill && this.progressFill.style.width !== w) this.progressFill.style.width = w;
+    } else if (panel && panel.research?.length) {
+      setText(this.el.status, researchLabel(panel.research[0], panel.researchProgress ?? 0, panel.research.length));
     } else if (trainer && b.queue > 0) {
       const head = b.queueKinds?.[0];
       const total = head ? UNITS[head].trainTime : BALANCE.trainTime;
@@ -357,22 +575,30 @@ export class Hud {
   private updateQueue(b: Building): void {
     const q = this.el.queue;
     if (!q) return;
-    const view = queueView(b);
-    const key = view.kinds.join(',');
+    const view = queueItems(b);
+    const key = `${b.id}|${view.items.map((it) => (it.type === 'tech' ? `t:${it.tech}` : it.unit)).join(',')}`;
     if (key !== this.queueKey) {
       this.queueKey = key;
       this.queueHead = '';
       q.replaceChildren();
-      view.kinds.forEach((k, i) => {
+      view.items.forEach((it, i) => {
         const item = document.createElement('button');
         item.type = 'button';
-        item.className = i === 0 ? 'queue-item head' : 'queue-item';
-        item.title = `${UNITS[k].name}${i === 0 ? ' (training)' : ''} — click to cancel`;
+        item.className = `queue-item${i === 0 ? ' head' : ''}${it.type === 'tech' ? ' tech' : ''}`;
+        if (it.type === 'tech') {
+          item.dataset.tech = it.tech;
+          item.title = `${TECHS[it.tech].name}${i === 0 ? ' (researching)' : ''} — click to cancel (refund)`;
+        } else {
+          const doing = i === 0 ? ' (training)' : it.index === 0 && b.research?.length ? ' (waits for research)' : '';
+          item.title = `${UNITS[it.unit].name}${doing} — click to cancel`;
+        }
+        item.setAttribute('aria-label', item.title);
         item.addEventListener('click', (e) => {
           e.stopPropagation();
-          this.world.dispatch({ type: 'cancelTrain', buildingId: b.id, index: i });
+          if (it.type === 'tech') this.world.dispatch({ type: 'cancelResearch', buildingId: b.id, index: it.index });
+          else this.world.dispatch({ type: 'cancelTrain', buildingId: b.id, index: it.index });
         });
-        item.append(icon(`#i-${k}`, 'queue-icon'));
+        item.append(icon(it.type === 'tech' ? techIcon(it.tech) : `#i-${it.unit}`, 'queue-icon'));
         if (i === 0) {
           const bar = document.createElement('span');
           bar.className = 'queue-fill';
@@ -404,17 +630,36 @@ export class Hud {
     }
   }
 
-  /** Attack / armour / range chips for a single unit kind (null hides them). */
-  private setStats(kind: UnitKind | null): void {
+  /** Attack / armour / range chips for a single unit kind with `owner`'s upgrades, "5 (+2)" (null hides them). */
+  private setStats(kind: UnitKind | null, owner = this.world.localPlayer): void {
+    const n = this.world.players.get(owner)?.researched.size ?? 0;
+    this.showChips(kind ? `u:${kind}|${owner}|${n}` : '', () =>
+      kind ? upgradedUnitChips(UNITS[kind], (stat, base) => statOf(this.world, owner, { unit: kind }, stat, base)) : []
+    );
+  }
+
+  /** Towers and the Town Center: attack / armour / range with upgrades. Other buildings hide the chips. */
+  private setBuildingStats(b: Building | null): void {
+    const spec = b ? BUILDINGS[b.kind] : null;
+    if (!b || !spec?.attack) {
+      this.setStats(null);
+      return;
+    }
+    const n = this.world.players.get(b.owner)?.researched.size ?? 0;
+    this.showChips(`b:${b.kind}|${b.owner}|${n}`, () =>
+      upgradedBuildingChips(spec, (stat, base) => statOf(this.world, b.owner, { building: b.kind }, stat, base))
+    );
+  }
+
+  private showChips(key: string, chips: () => readonly { icon: string; text: string; title: string }[]): void {
     const el = this.el.stats;
     if (!el) return;
-    setHidden(el, !kind);
-    const key = kind ?? '';
+    setHidden(el, !key);
     if (key === this.statsKey) return;
     this.statsKey = key;
     el.replaceChildren();
-    if (!kind) return;
-    for (const chip of combatChips(UNITS[kind])) {
+    if (!key) return;
+    for (const chip of chips()) {
       const span = document.createElement('span');
       span.className = 'stat-chip';
       span.title = chip.title;
@@ -433,11 +678,17 @@ export class Hud {
 
   /** Grey out build buttons the stockpile can't pay for (only touches the DOM when that changes). */
   private updateAffordable(): void {
-    this.affordKey = markAffordable(this.buildButtons, (k) => BUILDINGS[k].cost, this.world.stock, this.affordKey);
+    const age = this.playerAge();
+    this.affordKey = markAffordable(this.buildButtons, (k) => BUILDINGS[k].cost, this.world.stock, this.affordKey, (k) =>
+      ageLockText(BUILDINGS[k].age, age)
+    );
   }
 
   private updateTrainAffordable(): void {
-    this.trainAffordKey = markAffordable(this.trainButtons, (k) => UNITS[k].cost, this.world.stock, this.trainAffordKey);
+    const age = this.playerAge();
+    this.trainAffordKey = markAffordable(this.trainButtons, (k) => UNITS[k].cost, this.world.stock, this.trainAffordKey, (k) =>
+      ageLockText(unitAge(k), age)
+    );
   }
 
   private updateExplore(units: readonly Unit[]): void {
@@ -512,6 +763,8 @@ function tile(iconHref: string, name: string, cost: Partial<Stockpile>, code: st
   btn.type = 'button';
   btn.className = 'build-btn';
   btn.title = `${name} — ${formatCost(cost)}${key ? ` (${key})` : ''}${extra ? `. ${extra}` : ''}`;
+  btn.dataset.baseTitle = btn.title;
+  btn.dataset.tip = btn.title;
   btn.setAttribute('aria-label', btn.title);
   btn.append(icon(iconHref, 'build-icon'));
   const label = document.createElement('span');
@@ -528,10 +781,45 @@ function tile(iconHref: string, name: string, cost: Partial<Stockpile>, code: st
     costEl.append(part);
   }
   btn.append(costEl);
+  const lock = document.createElement('span');
+  lock.className = 'build-lock';
+  btn.append(lock);
   if (key) {
     const kbd = document.createElement('kbd');
     kbd.textContent = key;
     btn.append(kbd);
+  }
+  return btn;
+}
+
+/** Sprite for a tech: the age glyph for age-ups, the scroll for everything else. */
+function techIcon(tech: TechId): string {
+  return TECHS[tech].ageUp !== undefined ? '#i-age' : '#i-tech';
+}
+
+/** A research tile: glyph, name, cost, time; greyed with the reason when it can't start. */
+function techTile(e: TechEntry, fresh: boolean): HTMLButtonElement {
+  const btn = tile(techIcon(e.tech), e.name, e.cost, undefined);
+  btn.classList.add('train-tile', 'tech-tile');
+  if (e.ageUp) btn.classList.add('age-tile');
+  btn.dataset.research = e.tech;
+  btn.dataset.locked = String(e.locked);
+  btn.classList.toggle('locked', e.locked);
+  btn.classList.toggle('unaffordable', e.unaffordable);
+  btn.classList.toggle('fresh', fresh);
+  btn.setAttribute('aria-disabled', String(e.locked || e.unaffordable));
+  const tip = techTip(e.tech, formatCost(e.cost), e.reason);
+  btn.title = tip;
+  btn.dataset.tip = tip;
+  btn.setAttribute('aria-label', tip);
+  const time = document.createElement('span');
+  time.className = 'tech-time';
+  time.textContent = timeLabel(e.time);
+  btn.querySelector('.build-cost')?.append(time);
+  const lock = btn.querySelector<HTMLElement>('.build-lock');
+  if (lock) lock.textContent = e.reason;
+  for (const part of btn.querySelectorAll<HTMLElement>('.build-cost-part')) {
+    part.classList.toggle('short', e.unaffordable && e.reason.includes(part.dataset.res ?? '-'));
   }
   return btn;
 }
@@ -544,20 +832,30 @@ function markAffordable<K>(
   buttons: ReadonlyMap<K, HTMLButtonElement>,
   costOf: (k: K) => Partial<Stockpile>,
   stock: Stockpile,
-  prevKey: string
+  prevKey: string,
+  lockOf: (k: K) => string = () => ''
 ): string {
   let key = '';
   for (const k of buttons.keys()) {
     const cost = costOf(k);
-    key += canAfford(cost, stock) ? '1' : '0';
+    key += `${canAfford(cost, stock) ? '1' : '0'}${lockOf(k)}|`;
     for (const e of costEntries(cost)) key += stock[e.type] < e.amount ? 's' : '';
   }
   if (key === prevKey) return key;
   for (const [k, btn] of buttons) {
     const cost = costOf(k);
     const ok = canAfford(cost, stock);
+    const lock = lockOf(k);
     btn.classList.toggle('unaffordable', !ok);
-    btn.setAttribute('aria-disabled', String(!ok));
+    btn.classList.toggle('locked', !!lock);
+    btn.setAttribute('aria-disabled', String(!ok || !!lock));
+    btn.dataset.locked = String(!!lock);
+    const note = btn.querySelector<HTMLElement>('.build-lock');
+    if (note) note.textContent = lock;
+    const title = `${btn.dataset.baseTitle ?? ''}${lock ? `. ${lock}` : ''}`;
+    btn.title = title;
+    btn.dataset.tip = title;
+    btn.setAttribute('aria-label', title);
     for (const part of btn.querySelectorAll<HTMLElement>('.build-cost-part')) {
       const type = part.dataset.res as ResourceType | undefined;
       part.classList.toggle('short', !!type && stock[type] < (cost[type] ?? 0));

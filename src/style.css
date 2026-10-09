@@ -2875,3 +2875,240 @@ body.touch.menu-train #market-panel {
   width: 100%;
   min-width: 0;
 }
+
+/* ---- Research and ages (M8-14 / M8-6) ---- */
+
+/* Age plaque: the age name, with a slim bronze bar along its foot while an age-up runs. */
+.res-age {
+  position: relative;
+  font-family: var(--title);
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.age-bar {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 2px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  display: none;
+}
+
+.res-age.advancing .age-bar {
+  display: block;
+}
+
+.age-bar-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--bronze-face);
+}
+
+/* Phones: the plaque shrinks to a numeral (I–IV) so the bar never scrolls sideways. */
+body.touch .res-age .ricon {
+  display: none;
+}
+
+@media (max-width: 719px) {
+  body.touch #res-age {
+    font-size: 0;
+  }
+
+  body.touch #res-age::after {
+    content: attr(data-short);
+    font-size: 14px;
+  }
+
+  body.touch .res-age {
+    padding: 2px 6px;
+  }
+}
+
+/* "Entered the Town Age": a bronze-lettered slab that fades in and out. */
+.age-banner {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  z-index: 14;
+  max-width: calc(100% - 32px);
+  padding: 10px 28px;
+  border-radius: 3px;
+  pointer-events: none;
+  text-align: center;
+  font-family: var(--title);
+  font-size: clamp(18px, 4vw, 30px);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  background: var(--papyrus);
+  border: 1px solid #8a6230;
+  box-shadow:
+    0 0 0 2px var(--wood),
+    0 0 0 3px var(--bronze),
+    0 10px 26px rgba(0, 0, 0, 0.5);
+}
+
+.age-banner[hidden] {
+  display: none;
+}
+
+.age-banner.show {
+  animation: age-banner 3.2s ease both;
+}
+
+@keyframes age-banner {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  12%,
+  80% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .age-banner.show {
+    animation: none;
+  }
+}
+
+/* Research header and tiles inside the training grid. */
+.research-head {
+  flex: 1 0 100%;
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  font-family: var(--title);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #6b4612;
+}
+
+.research-head[hidden] {
+  display: none;
+}
+
+.tech-tile .build-name {
+  white-space: normal;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.tech-tile .build-cost {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.tech-time {
+  font-weight: 700;
+  opacity: 0.75;
+}
+
+.age-tile {
+  border-color: var(--bronze);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 250, 230, 0.8),
+    0 0 0 1px var(--bronze),
+    0 2px 4px rgba(60, 35, 10, 0.35);
+}
+
+.build-lock {
+  max-width: 100%;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  color: #8a1c0c;
+}
+
+.build-lock:empty {
+  display: none;
+}
+
+.build-btn.locked {
+  cursor: not-allowed;
+}
+
+.build-btn.locked .build-icon,
+.build-btn.locked .build-name,
+.build-btn.locked .build-cost {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+/* New after an age-up: a small bronze pip in the corner (and on the phone's Train tab). */
+.tech-tile.fresh::after,
+.menu-tab.has-new::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e0a838;
+  box-shadow: 0 0 0 1px #5a3a10;
+}
+
+.menu-tab {
+  position: relative;
+}
+
+.queue-item.tech {
+  border-radius: 4px;
+  background: rgba(255, 248, 228, 0.6);
+}
+
+.tech-tip {
+  flex: 1 0 100%;
+  margin: 4px 0 0;
+  padding: 5px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: normal;
+  color: var(--ink);
+  background: rgba(255, 248, 228, 0.85);
+  border: 1px solid var(--bronze-lo);
+}
+
+.tech-tip[hidden] {
+  display: none;
+}
+
+.toast-research .toast-icon {
+  background: var(--bronze-face);
+}
+
+body.touch .tech-tile .build-lock {
+  font-size: 9px;
+}
+
+/* Desktop: a long research list wraps into rows instead of running under the minimap. */
+body:not(.touch) .selection-panel {
+  max-width: max(420px, min(780px, calc(100% - 540px)));
+}
+
+/* 360px phones: six plaques must fit without sideways scroll. */
+@media (max-width: 380px) {
+  body.touch .resource-bar {
+    gap: 2px;
+  }
+
+  body.touch .res-age {
+    padding: 2px 4px;
+  }
+}

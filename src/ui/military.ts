@@ -13,7 +13,7 @@ export const STANCES: readonly { stance: Stance; label: string; hint: string }[]
 
 /** Soldiers, excluding civilian units and wildlife. */
 export function isMilitary(kind: UnitKind): boolean {
-  return kind !== 'villager' && kind !== 'scout' && !isAnimal(kind);
+  return kind !== 'villager' && kind !== 'scout' && kind !== 'tradeCart' && !isAnimal(kind);
 }
 
 /** Shift-click / Shift+hotkey queues five. */

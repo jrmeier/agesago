@@ -28,6 +28,7 @@ const ACTION_LABEL: Record<string, string> = {
 
 /** Printable name for a KeyboardEvent.code. */
 export function hotkeyGlyph(code: string): string {
+  if (code.startsWith('Shift+')) return `Shift+${hotkeyGlyph(code.slice(6))}`;
   if (code === 'Comma') return ',';
   if (code === 'Period') return '.';
   if (code === 'Escape') return 'Esc';
