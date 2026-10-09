@@ -209,7 +209,7 @@ export class Minimap {
 
     const r = Math.max(1, s * 0.55);
     const vis = this.world.visibility;
-    for (const kind of ['tree', 'berry', 'gold'] as const) {
+    for (const kind of ['tree', 'berry', 'gold', 'stone'] as const) {
       ctx.fillStyle = NODE_COLOR[kind];
       const size = kind === 'tree' ? r * 1.6 : r * 2.4;
       for (const n of this.world.nodes.values()) {
