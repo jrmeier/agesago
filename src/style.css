@@ -1706,6 +1706,13 @@ body.touch .build-icon {
   box-shadow: 0 -1px 0 rgba(40, 22, 6, 0.6);
 }
 
+/* A queued unit is a cancel button. On a phone it has to be a thumb target. */
+body.touch .queue-item,
+body.touch .queue-item.head {
+  width: 44px;
+  height: 44px;
+}
+
 /* ---- Command card: attack-move, stop, stances ---- */
 
 .command-card {
