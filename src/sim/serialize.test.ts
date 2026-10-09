@@ -156,7 +156,7 @@ describe('world save/load', () => {
   });
 
   it('rejects unsupported versions before regenerating a map', () => {
-    expect(() => deserializeWorld({ version: SAVE_VERSION + 1 } as never)).toThrow('Unsupported save version 2; expected 1');
+    expect(() => deserializeWorld({ version: SAVE_VERSION + 1 } as never)).toThrow(`Unsupported save version ${SAVE_VERSION + 1}; expected ${SAVE_VERSION}`);
     expect(() => deserializeWorld({ version: 0 } as never)).toThrow('Unsupported save version 0');
   });
 
