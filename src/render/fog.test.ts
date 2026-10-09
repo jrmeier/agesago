@@ -370,13 +370,17 @@ describe('concealed scenery', () => {
 
     const farTree = [...world.nodes.values()].find((node) => node.pos.x === 3)!;
     world.events.emit({ type: 'removed', id: farTree.id });
-    const stumps = views.object.children.find((obj) => obj.name === 'stumps') as THREE.InstancedMesh;
-    expect(stumps.count).toBe(1);
-    expect(columnScale(stumps, 3, 3)).toBeCloseTo(0);
+    let stumpCount = 0;
+    views.object.traverse((obj) => {
+      const mesh = obj as THREE.InstancedMesh;
+      if (mesh.isInstancedMesh && mesh.name.startsWith('stumps:') && !mesh.name.endsWith(':lod')) stumpCount += mesh.count;
+    });
+    expect(stumpCount).toBe(1);
+    expect(columnScale(views.object, 3, 3)).toBeCloseTo(0);
 
     world.visibility.update([{ pos: { x: 3, z: 3 }, sight: 4 }]);
     views.syncFog();
-    expect(columnScale(stumps, 3, 3)).toBeCloseTo(far);
+    expect(columnScale(views.object, 3, 3)).toBeCloseTo(far);
     expect(columnScale(views.object, 34, 26)).toBeCloseTo(near);
   });
 });

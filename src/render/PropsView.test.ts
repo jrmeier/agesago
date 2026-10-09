@@ -36,9 +36,12 @@ describe('PropsView', () => {
     for (const object of view.object.children) {
       expect(object).toBeInstanceOf(THREE.InstancedMesh);
       const mesh = object as THREE.InstancedMesh;
-      count += mesh.count;
-      expect(mesh.castShadow && mesh.receiveShadow).toBe(true);
+      const lod = mesh.name.endsWith(':lod');
+      if (!lod) count += mesh.count;
+      expect(mesh.castShadow && mesh.receiveShadow).toBe(!lod);
       expect(mesh.boundingSphere).not.toBeNull();
+      expect((mesh.boundingSphere as THREE.Sphere).radius).toBeLessThan(24);
+      expect(mesh.frustumCulled).toBe(true);
       expect(names.has(mesh.name)).toBe(false);
       names.add(mesh.name);
       materials.add(mesh.material as THREE.Material);
@@ -48,7 +51,10 @@ describe('PropsView', () => {
     view.setShadows(false);
     expect(view.object.children.every(child => !child.castShadow && !child.receiveShadow)).toBe(true);
     view.setShadows(true);
-    expect(view.object.children.every(child => child.castShadow && child.receiveShadow)).toBe(true);
+    for (const child of view.object.children) {
+      const mesh = child as THREE.InstancedMesh;
+      expect(mesh.castShadow && mesh.receiveShadow).toBe(!mesh.name.endsWith(':lod'));
+    }
     view.dispose();
     expect(view.object.children).toHaveLength(0);
   });
