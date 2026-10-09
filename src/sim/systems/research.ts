@@ -1,7 +1,7 @@
 import { BUILDINGS } from '../../core/buildings';
 import { TECHS, hasFlag, statMods, type Stat, type Subject, type TechFlag, type TechId } from '../../core/techs';
 import type { Age, Building, BuildingKind, EntityId, PlayerId, RejectReason, UnitKind } from '../../core/types';
-import type { World } from '../World';
+import type { PlayerState, World } from '../World';
 import { affordable, pay } from './build';
 import { applyResearch } from './upgrades';
 
@@ -159,7 +159,7 @@ export function completeResearch(world: World, owner: PlayerId, tech: TechId): v
   const p = world.players.get(owner);
   if (!p || p.researched.has(tech)) return;
   p.researched.add(tech);
-  statCache.get(world)?.delete(owner);
+  statCache.delete(p);
   applyResearch(world, owner, tech);
   world.events.emit({ type: 'researched', owner, tech });
   const age = TECHS[tech].ageUp;
@@ -186,21 +186,20 @@ interface PlayerMods {
   size: number;
 }
 
-const statCache = new WeakMap<World, Map<PlayerId, PlayerMods>>();
+/** Keyed by the player's state object: one WeakMap lookup per stat read. */
+const statCache = new WeakMap<PlayerState, PlayerMods>();
 
 /** Forget cached stats (after loading a save or editing `researched` directly in tests). */
 export function clearStatCache(world: World): void {
-  statCache.delete(world);
+  for (const p of world.players.values()) statCache.delete(p);
 }
 
-function playerMods(world: World, owner: PlayerId, researchedSize: number): PlayerMods {
-  let perWorld = statCache.get(world);
-  if (!perWorld) statCache.set(world, (perWorld = new Map()));
-  let c = perWorld.get(owner);
+function playerMods(p: PlayerState): PlayerMods {
+  let c = statCache.get(p);
   // A size change catches tests (and loads) that edit `researched` without clearing the cache.
-  if (!c || c.size !== researchedSize) {
-    c = { units: new Map(), buildings: new Map(), player: new Map(), size: researchedSize };
-    perWorld.set(owner, c);
+  if (!c || c.size !== p.researched.size) {
+    c = { units: new Map(), buildings: new Map(), player: new Map(), size: p.researched.size };
+    statCache.set(p, c);
   }
   return c;
 }
@@ -209,7 +208,7 @@ function playerMods(world: World, owner: PlayerId, researchedSize: number): Play
 export function unitStat(world: World, owner: PlayerId, kind: UnitKind, stat: Stat, base: number): number {
   const p = world.players.get(owner);
   if (!p || p.researched.size === 0) return base;
-  const c = playerMods(world, owner, p.researched.size);
+  const c = playerMods(p);
   let byStat = c.units.get(kind);
   if (!byStat) c.units.set(kind, (byStat = new Map()));
   let m = byStat.get(stat);
@@ -221,7 +220,7 @@ export function unitStat(world: World, owner: PlayerId, kind: UnitKind, stat: St
 export function buildingStat(world: World, owner: PlayerId, kind: BuildingKind, stat: Stat, base: number): number {
   const p = world.players.get(owner);
   if (!p || p.researched.size === 0) return base;
-  const c = playerMods(world, owner, p.researched.size);
+  const c = playerMods(p);
   let byStat = c.buildings.get(kind);
   if (!byStat) c.buildings.set(kind, (byStat = new Map()));
   let m = byStat.get(stat);
@@ -237,7 +236,7 @@ export function statOf(world: World, owner: PlayerId, subject: Subject, stat: St
   if (subject === 'player') {
     const p = world.players.get(owner);
     if (!p || p.researched.size === 0) return base;
-    const c = playerMods(world, owner, p.researched.size);
+    const c = playerMods(p);
     let m = c.player.get(stat);
     if (!m) c.player.set(stat, (m = statMods(p.researched, 'player', stat)));
     return (base + m.add) * m.mul;

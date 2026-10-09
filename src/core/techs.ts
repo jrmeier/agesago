@@ -149,8 +149,8 @@ const table = {
 
   // ---- Storehouse (wood) ----
   bronzeAxe: {
-    name: 'Bronze Axe', description: '+15% wood gathering.',
-    at: 'storehouse', cost: { food: 100, wood: 50 }, time: 25, age: 0, effects: [mul('villager', 'gather.wood', 1.15)],
+    name: 'Bronze Axe', description: '+20% wood gathering.',
+    at: 'storehouse', cost: { food: 100, wood: 50 }, time: 25, age: 0, effects: [mul('villager', 'gather.wood', 1.2)],
   },
   ironAxe: {
     name: 'Iron Axe', description: 'Another +15% wood gathering.',
@@ -165,12 +165,12 @@ const table = {
 
   // ---- Mining camp ----
   bronzePicks: {
-    name: 'Bronze Picks', description: '+15% gold mining.',
-    at: 'miningCamp', cost: { food: 100, wood: 75 }, time: 30, age: 0, effects: [mul('villager', 'gather.gold', 1.15)],
+    name: 'Bronze Picks', description: '+20% gold mining.',
+    at: 'miningCamp', cost: { food: 100, wood: 75 }, time: 30, age: 0, effects: [mul('villager', 'gather.gold', 1.2)],
   },
   stoneChisels: {
-    name: 'Stone Chisels', description: '+15% stone quarrying.',
-    at: 'miningCamp', cost: { food: 100, wood: 75 }, time: 30, age: 0, effects: [mul('villager', 'gather.stone', 1.15)],
+    name: 'Stone Chisels', description: '+20% stone quarrying.',
+    at: 'miningCamp', cost: { food: 100, wood: 75 }, time: 30, age: 0, effects: [mul('villager', 'gather.stone', 1.2)],
   },
   deepShafts: {
     name: 'Deep Shafts', description: 'Another +15% gold and stone mining.',
@@ -200,9 +200,9 @@ const table = {
     effects: [add('farm', 'farmFood', 175), mul('villager', 'gather.farm', 1.1)],
   },
   threshingFloor: {
-    name: 'Threshing Floor', description: '+15% food from berries, hunting and fishing.',
+    name: 'Threshing Floor', description: '+20% food from berries, hunting and fishing.',
     at: 'granary', cost: { food: 150, wood: 100 }, time: 40, age: 1,
-    effects: [mul('villager', 'gather.food', 1.15)],
+    effects: [mul('villager', 'gather.food', 1.2)],
   },
 
   // ---- Forge: melee attack (infantry + cavalry) ----

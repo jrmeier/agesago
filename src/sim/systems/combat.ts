@@ -769,7 +769,7 @@ function shootBuilding(world: World, b: Building, t: Unit, pierce: number): void
 /**
  * Where a shot from `from` at moving unit `t` is aimed, and its flight time. Without Ballistics
  * a shooter leads by only BALANCE.untrainedLead of the target's velocity × flight time, so fast
- * units walking across the line of fire dodge; with Ballistics it solves for the intercept
+ * units racing across the line of fire at long range dodge; with Ballistics it solves for the intercept
  * (lead by the full velocity, refined over a few iterations). Deterministic.
  */
 export function aimAt(world: World, owner: PlayerId, from: Vec2, t: Unit): { aim: Vec2; flight: number } {
