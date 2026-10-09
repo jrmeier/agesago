@@ -8,6 +8,7 @@ import { Water } from './Water';
 
 const STEP = 0.5;
 const SKIRT_DROP = 4;
+const APRON_COLOR = 0x15110d;
 
 interface EdgeVert {
   x: number;
@@ -33,6 +34,7 @@ export class TerrainView {
     this.object.add(this.ground);
     this.water = new Water(hf, quality);
     this.object.add(this.water.mesh);
+    this.object.add(buildApron(hf));
   }
 
   /** Per-frame water motion. `time` in seconds. */
@@ -228,3 +230,28 @@ float agNoise(vec2 p) {
     );
   };
 }
+
+/** Off-map darkness framing the playable area, so the world edge reads as a border, not a hole into the sky. */
+function buildApron(hf: Heightfield): THREE.Mesh {
+  const reach = 400;
+  const y = -SKIRT_DROP + 0.5;
+  const w = hf.width;
+  const d = hf.depth;
+  // Four quads around the map rectangle (x, z extents), wound to face up.
+  const quads = [
+    [-reach, -reach, w + reach, 0],
+    [-reach, d, w + reach, d + reach],
+    [-reach, 0, 0, d],
+    [w, 0, w + reach, d],
+  ];
+  const positions: number[] = [];
+  for (const [x0, z0, x1, z1] of quads) {
+    positions.push(x0, y, z0, x0, y, z1, x1, y, z1, x0, y, z0, x1, y, z1, x1, y, z0);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  const apron = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: APRON_COLOR, fog: true }));
+  apron.name = 'apron';
+  return apron;
+}
+
