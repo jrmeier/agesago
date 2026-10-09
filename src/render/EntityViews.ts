@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SEA_LEVEL, type Building, type EntityId, type NodeKind, type ResourceNode, type Unit, type Vec2 } from '../core/types';
+import { SEA_LEVEL, type Building, type BuildingKind, type EntityId, type NodeKind, type ResourceNode, type ResourceType, type Unit, type Vec2 } from '../core/types';
 import type { World } from '../sim/World';
 import { buildTownCenter } from './buildings';
 import { applyFog, createFogDepthMaterial, isConcealed, matrixForConcealment, type FogOfWar } from './fog';
@@ -86,7 +86,8 @@ export class EntityViews {
   private readonly pose = new THREE.Matrix4();
 
   constructor(readonly world: World) {
-    this.geometries = { tree: treeGeometries(), berry: [berryBushGeometry()], gold: [goldPileGeometry()] };
+    // Stone quarries reuse the gold pile until the models lane adds a quarry geometry.
+    this.geometries = { tree: treeGeometries(), berry: [berryBushGeometry()], gold: [goldPileGeometry()], stone: [goldPileGeometry()] };
     for (const list of Object.values(this.geometries)) for (const geo of list) geo.computeBoundingBox();
     this.stumps = new InstancePool(stumpGeometry(), this.material, 64);
     this.stumps.mesh.name = 'stumps';
@@ -129,7 +130,7 @@ export class EntityViews {
       const entity = this.world.get(e.id);
       if (!entity) return;
       if ('carry' in entity) this.mountVillager(entity);
-      else if (entity.kind === 'townCenter') this.mountTownCenter(entity);
+      else if ('complete' in entity) this.mountTownCenter(entity);
       else this.mountNode(entity);
     });
     this.world.events.on('removed', (e) => this.unmount(e.id));
@@ -232,6 +233,14 @@ export class EntityViews {
     });
   }
 
+  /**
+   * Show a translucent placement preview of `kind` at `pos`/`rot`, tinted green when `valid`
+   * and red otherwise. FROZEN signature (UI placement mode). STUB until the Render lane lands.
+   */
+  showGhost(_kind: BuildingKind, _pos: Vec2, _rot: number, _valid: boolean): void {}
+
+  hideGhost(): void {}
+
   setSelected(ids: ReadonlySet<EntityId>): void {
     this.selected = ids;
   }
@@ -257,7 +266,7 @@ export class EntityViews {
     } else {
       const model = createVillager({ tunic: TUNICS[unit.id % TUNICS.length], seed: unit.id });
       model.object.scale.setScalar(VILLAGER_SCALE);
-      view = { object: model.object, shadow, pose: (u, t) => model.setPose(poseOf(u), t, u.carry?.type ?? null) };
+      view = { object: model.object, shadow, pose: (u, t) => model.setPose(poseOf(u), t, carriedLook(u.carry?.type ?? null)) };
       this.sizeOf.set(unit.id, VILLAGER_SIZE);
     }
     view.object.traverse((obj) => {
@@ -628,4 +637,9 @@ function frac(n: number): number {
 
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+/** Villager models show wood, food or gold bundles; stone reuses the gold look for now. */
+function carriedLook(type: ResourceType | null): 'wood' | 'food' | 'gold' | null {
+  return type === 'stone' ? 'gold' : type;
 }

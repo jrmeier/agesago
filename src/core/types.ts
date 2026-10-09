@@ -18,18 +18,21 @@ export interface Vec2 {
   z: number;
 }
 
-export type ResourceType = 'wood' | 'food' | 'gold';
+export type ResourceType = 'wood' | 'food' | 'gold' | 'stone';
 export type Stockpile = Record<ResourceType, number>;
 
-export type NodeKind = 'tree' | 'berry' | 'gold';
+export type NodeKind = 'tree' | 'berry' | 'gold' | 'stone';
 /** Player unit types. Villagers gather; scouts are fast, far-sighted explorers that cannot gather. */
 export type UnitKind = 'villager' | 'scout';
-export type EntityKind = UnitKind | NodeKind | 'townCenter';
+/** Everything a player can build. Data (sizes, costs, build times) lives in core/buildings.ts. */
+export type BuildingKind = 'townCenter' | 'house' | 'storehouse' | 'granary' | 'miningCamp' | 'farm';
+export type EntityKind = UnitKind | NodeKind | BuildingKind;
 
 export const NODE_RESOURCE: Record<NodeKind, ResourceType> = {
   tree: 'wood',
   berry: 'food',
   gold: 'gold',
+  stone: 'stone',
 };
 
 /** Terrain query surface. Implemented by sim/terrain.ts; read by everything. */
@@ -113,7 +116,7 @@ export interface MapLayout {
 
 // ---- Entities (plain data; owned and mutated only by the sim) ----
 
-export type UnitState = 'idle' | 'moving' | 'toNode' | 'gathering' | 'toDrop' | 'exploring';
+export type UnitState = 'idle' | 'moving' | 'toNode' | 'gathering' | 'toDrop' | 'exploring' | 'toBuild' | 'building';
 
 export interface Unit {
   id: EntityId;
@@ -145,14 +148,23 @@ export interface ResourceNode {
 
 export interface Building {
   id: EntityId;
-  kind: 'townCenter';
+  kind: BuildingKind;
+  /** Footprint centre. */
   pos: Vec2;
-  /** Footprint radius; blocks movement. */
+  /** Yaw in radians; footprints rotate in 90° steps (0, π/2, π, 3π/2). */
+  rot: number;
+  /** Footprint bounding radius (≈ half the diagonal of the BUILDINGS size); used for picking and drop-off reach. */
   radius: number;
-  /** Villagers queued for training. */
+  /** False while still a foundation under construction. */
+  complete: boolean;
+  /** Construction progress 0..1 (1 when complete). */
+  buildProgress: number;
+  /** Units queued for training (Town Center). */
   queue: number;
   /** Seconds of training completed on the current queue head. */
   progress: number;
+  /** Farms only: food remaining in the field. */
+  food?: number;
 }
 
 export type Entity = Unit | ResourceNode | Building;
@@ -163,15 +175,36 @@ export type Command =
   | { type: 'move'; unitIds: EntityId[]; target: Vec2 }
   | { type: 'gather'; unitIds: EntityId[]; nodeId: EntityId }
   | { type: 'train'; buildingId: EntityId }
+  /** Place a foundation (cost is paid now) and send the units to build it. */
+  | { type: 'build'; unitIds: EntityId[]; kind: BuildingKind; pos: Vec2; rot: number }
+  /** Send units to help construct an existing foundation (or repair later). */
+  | { type: 'construct'; unitIds: EntityId[]; buildingId: EntityId }
+  /** Cancel an unfinished foundation; refunds the cost. */
+  | { type: 'cancelBuild'; buildingId: EntityId }
   /** Auto-explore: units head for the nearest reachable unexplored ground until told otherwise. */
   | { type: 'explore'; unitIds: EntityId[] };
 
-export type RejectReason = 'insufficient-food' | 'pop-cap' | 'unreachable' | 'invalid-target';
+export type RejectReason =
+  | 'insufficient-food'
+  | 'insufficient-resources'
+  | 'pop-cap'
+  | 'unreachable'
+  | 'invalid-target'
+  | 'blocked-site';
+
+/** Result of checking whether a building fits at a spot (World.canPlace). */
+export interface PlacementCheck {
+  ok: boolean;
+  /** Why not, when !ok. */
+  reason?: 'water' | 'slope' | 'unexplored' | 'occupied' | 'out-of-bounds' | 'insufficient-resources';
+}
 
 export type SimEvent =
   | { type: 'spawned'; id: EntityId; kind: EntityKind }
   | { type: 'removed'; id: EntityId }
-  | { type: 'stockpile'; stock: Stockpile; pop: number }
+  | { type: 'stockpile'; stock: Stockpile; pop: number; popCap: number }
+  /** A foundation finished construction. */
+  | { type: 'constructed'; id: EntityId }
   | { type: 'unitState'; id: EntityId; state: UnitState }
   | { type: 'trainProgress'; buildingId: EntityId; queue: number; progress: number; total: number }
   | { type: 'rejected'; reason: RejectReason };

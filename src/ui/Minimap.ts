@@ -17,6 +17,7 @@ const NODE_COLOR: Record<NodeKind, string> = {
   tree: '#24401c',
   berry: '#c8323c',
   gold: '#f4c638',
+  stone: '#c9c3b4',
 };
 const PLAYER = '#3fa0ff';
 const PLAYER_EDGE = '#0b2340';

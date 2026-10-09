@@ -1,7 +1,10 @@
+import { BUILDINGS, MAX_POP } from '../core/buildings';
 import { EventBus } from '../core/events';
 import {
   NODE_RESOURCE,
   type Building,
+  type BuildingKind,
+  type PlacementCheck,
   type Command,
   type Entity,
   type EntityId,
@@ -63,7 +66,10 @@ export class World {
       id: this.nextId++,
       kind: 'townCenter',
       pos: { ...layout.townCenter },
+      rot: 0,
       radius: BALANCE.townCenterRadius,
+      complete: true,
+      buildProgress: 1,
       queue: 0,
       progress: 0,
     };
@@ -91,6 +97,22 @@ export class World {
   }
 
   /** Every unit (villagers and scouts) — the pop cap applies to all of them. */
+  /** Housing capacity from completed buildings, capped at MAX_POP. */
+  get popCap(): number {
+    let cap = 0;
+    for (const b of this.buildings.values()) if (b.complete) cap += BUILDINGS[b.kind].popBonus;
+    return Math.min(MAX_POP, cap);
+  }
+
+  /**
+   * Can a `kind` building go at `pos` with yaw `rot`? Checks bounds, water, slope, explored
+   * ground, overlaps and cost. FROZEN signature (UI placement mode calls it every frame).
+   * STUB until the Sim lane implements it.
+   */
+  canPlace(_kind: BuildingKind, _pos: Vec2, _rot: number): PlacementCheck {
+    return { ok: true };
+  }
+
   get pop(): number {
     return this.units.size;
   }
@@ -174,7 +196,7 @@ export class World {
 
   /** Emit the current stockpile and population. */
   emitStock(): void {
-    this.events.emit({ type: 'stockpile', stock: { ...this.stock }, pop: this.pop });
+    this.events.emit({ type: 'stockpile', stock: { ...this.stock }, pop: this.pop, popCap: this.popCap });
   }
 
   /** Create a villager at `p` and emit 'spawned'. */

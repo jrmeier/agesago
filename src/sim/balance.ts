@@ -12,7 +12,7 @@ export const BALANCE = {
   trainCost: { food: 50 },
   trainTime: 8,
   popCap: 25,
-  startingStock: { wood: 0, food: 0, gold: 0 },
+  startingStock: { wood: 0, food: 0, gold: 0, stone: 0 },
   villagerRadius: 0.3,
   townCenterRadius: 1.6,
   /** Gap kept between a villager's edge and the node / building it walks up to. */

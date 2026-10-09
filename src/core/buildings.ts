@@ -1,0 +1,111 @@
+import type { BuildingKind, ResourceType, Stockpile } from './types';
+
+/**
+ * Building data table — the single source of truth for sizes, costs and roles.
+ * FROZEN contract (integrator-owned); request balance changes rather than editing in a lane.
+ */
+export interface BuildingSpec {
+  name: string;
+  /** Footprint in world units before rotation (x = width, z = depth). */
+  size: { w: number; d: number };
+  cost: Partial<Stockpile>;
+  /** Seconds for one builder; more builders speed it up with diminishing returns. */
+  buildTime: number;
+  /** Population capacity provided once complete. */
+  popBonus: number;
+  /** Resource types villagers may deposit here once complete. */
+  drop: ResourceType[];
+  /** Units can walk across it (farms). Otherwise it blocks pathing. */
+  walkable: boolean;
+  /** Shown in the villager build menu. */
+  buildable: boolean;
+  /** Fog-of-war sight radius once complete. */
+  sight: number;
+}
+
+export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
+  townCenter: {
+    name: 'Town Center',
+    size: { w: 3.2, d: 3.2 },
+    cost: { wood: 275, stone: 100 },
+    buildTime: 150,
+    popBonus: 5,
+    drop: ['wood', 'food', 'gold', 'stone'],
+    walkable: false,
+    buildable: false,
+    sight: 11,
+  },
+  house: {
+    name: 'House',
+    size: { w: 2.6, d: 2.6 },
+    cost: { wood: 30 },
+    buildTime: 15,
+    popBonus: 5,
+    drop: [],
+    walkable: false,
+    buildable: true,
+    sight: 4,
+  },
+  storehouse: {
+    name: 'Storehouse',
+    size: { w: 3, d: 3 },
+    cost: { wood: 100 },
+    buildTime: 25,
+    popBonus: 0,
+    drop: ['wood'],
+    walkable: false,
+    buildable: true,
+    sight: 5,
+  },
+  miningCamp: {
+    name: 'Mining Camp',
+    size: { w: 3, d: 3 },
+    cost: { wood: 100 },
+    buildTime: 25,
+    popBonus: 0,
+    drop: ['gold', 'stone'],
+    walkable: false,
+    buildable: true,
+    sight: 5,
+  },
+  granary: {
+    name: 'Granary',
+    size: { w: 3, d: 3 },
+    cost: { wood: 100 },
+    buildTime: 25,
+    popBonus: 0,
+    drop: ['food'],
+    walkable: false,
+    buildable: true,
+    sight: 5,
+  },
+  farm: {
+    name: 'Farm',
+    size: { w: 4, d: 4 },
+    cost: { wood: 60 },
+    buildTime: 10,
+    popBonus: 0,
+    drop: [],
+    walkable: true,
+    buildable: true,
+    sight: 2,
+  },
+};
+
+/** Food a new farm holds. */
+export const FARM_FOOD = 250;
+/** Absolute population ceiling regardless of houses. */
+export const MAX_POP = 200;
+
+/** Footprint half-extents after rotation (rot snapped to 90° steps). */
+export function footprint(kind: BuildingKind, rot: number): { hw: number; hd: number } {
+  const { w, d } = BUILDINGS[kind].size;
+  const quarter = Math.round(rot / (Math.PI / 2)) & 1;
+  return quarter ? { hw: d / 2, hd: w / 2 } : { hw: w / 2, hd: d / 2 };
+}
+
+/** Bounding radius of a footprint (half its diagonal). */
+export function footprintRadius(kind: BuildingKind): number {
+  const { w, d } = BUILDINGS[kind].size;
+  return Math.hypot(w, d) / 2;
+}
