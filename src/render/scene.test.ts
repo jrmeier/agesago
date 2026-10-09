@@ -117,7 +117,8 @@ describe('EntityViews', () => {
     expect(instanceCount()).toBe(world.nodes.size);
     const top = views.object.children;
     expect(top.filter((obj) => obj.name === 'villager' || obj.name === 'scout')).toHaveLength(world.units.size);
-    expect(top.filter((obj) => obj.name === 'town-center')).toHaveLength(1);
+    const townCenters = [...world.buildings.values()].filter((b) => b.kind === 'townCenter').length;
+    expect(top.filter((obj) => obj.name === 'town-center')).toHaveLength(townCenters);
   });
 
   it('picks the villager under the cursor and box-selects by foot or centre', () => {
