@@ -14,6 +14,10 @@ export const CROP_THIN = 0xc6a24a;
 
 
 const boxCache = new Map<string, THREE.BoxGeometry>();
+const BANNER_POLE = new THREE.CylinderGeometry(0.04, 0.05, 1, 5);
+const BANNER_CLOTH = new THREE.BoxGeometry(0.62, 0.34, 0.05);
+BANNER_POLE.userData.shared = 1;
+BANNER_CLOTH.userData.shared = 1;
 
 export interface BuildingVisual {
   object: THREE.Group;
@@ -44,18 +48,19 @@ export function footprintMinY(hf: Heightfield, kind: BuildingKind, pos: Vec2, ro
   return min === Infinity ? SEA_LEVEL : min;
 }
 
-export function createBuildingVisual(kind: BuildingKind): BuildingVisual {
+export function createBuildingVisual(kind: BuildingKind, color?: number): BuildingVisual {
   const root = new THREE.Group();
   root.name = kind === 'townCenter' ? 'town-center' : `building:${kind}`;
   const stages = foundationModel(kind);
   const foundation = stages.object;
   foundation.name = 'foundation';
   ownMaterials(foundation);
-  const finished = finishedFor(kind);
+  const finished = finishedFor(kind, color);
   const bar = progressBar();
   const top = modelTop(finished);
   bar.position.y = top + 0.55;
   root.add(foundation, finished, bar);
+  if (color !== undefined) addBanner(root, kind, color);
 
   const crops = finished.getObjectByName('crops');
   const cropMat = (crops?.userData.cropMat as THREE.MeshLambertMaterial | undefined) ?? null;
@@ -144,14 +149,35 @@ export function tintGhost(ghost: THREE.Group, valid: boolean): void {
   });
 }
 
-function finishedFor(kind: BuildingKind): THREE.Object3D {
+function finishedFor(kind: BuildingKind, color?: number): THREE.Object3D {
   const group = new THREE.Group();
   group.name = 'finished';
   // Farms keep the animated tilled field (crops track food); other kinds use the ancient-world models.
-  const model = kind === 'farm' ? farmField() : buildingModel(kind);
+  const model = kind === 'farm' ? farmField() : buildingModel(kind, { seed: 1, color } as { seed?: number });
   if (kind !== 'farm') ownMaterials(model);
   group.add(model);
   return group;
+}
+
+/** Cloth banner in the owner's colour. Placement ghosts omit it (no colour passed). */
+function addBanner(root: THREE.Group, kind: BuildingKind, color: number): void {
+  const { w, d } = BUILDINGS[kind].size;
+  const height = kind === 'farm' ? 1.15 : kind === 'townCenter' ? 3.6 : 2.5;
+  const banner = new THREE.Group();
+  banner.name = 'owner-banner';
+  const pole = new THREE.Mesh(BANNER_POLE, new THREE.MeshLambertMaterial({ color: 0x5c4030 }));
+  pole.scale.y = height;
+  pole.position.y = height / 2;
+  pole.castShadow = true;
+  pole.receiveShadow = true;
+  const cloth = new THREE.Mesh(BANNER_CLOTH, new THREE.MeshLambertMaterial({ color }));
+  cloth.name = 'owner-banner-cloth';
+  cloth.position.set(0.34, height - 0.28, 0);
+  cloth.castShadow = true;
+  cloth.receiveShadow = true;
+  banner.add(pole, cloth);
+  banner.position.set(w * 0.32, 0, d * 0.32);
+  root.add(banner);
 }
 
 function farmField(): THREE.Group {
