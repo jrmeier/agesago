@@ -8,7 +8,8 @@ import {
   type VillagerCarry,
   type VillagerPose,
 } from './models';
-import * as modelApi from './models';
+import { createSoldier, projectileGeometry as modelProjectile } from './models';
+import { rubbleGeometry as propsRubble } from './props';
 
 /**
  * Thin adapter over the Models lane.
@@ -26,8 +27,11 @@ export interface UnitAvatar {
 
 interface SoldierModel {
   object: THREE.Group;
-  setPose(pose: 'idle' | 'walk' | 'attack' | 'die', t: number): void;
+  setPose(pose: 'idle' | 'walk' | 'attack' | 'die', t: number, extra?: { progress?: number }): void;
 }
+
+/** Seconds a soldier takes to fall when killed. */
+const DIE_SECONDS = 1.2;
 
 type SoldierFactory = (kind: UnitKind, opts: { color: number; seed?: number }) => SoldierModel;
 type ProjectileFactory = (kind: ProjKind) => THREE.BufferGeometry;
@@ -70,22 +74,16 @@ const PENNANT_Y: Record<UnitKind, number> = {
   horseman: 1.7,
 };
 
-/** Optional Models-lane export. Dynamic so the build stays quiet until the name exists. */
-function optionalFn<T>(name: string): T | undefined {
-  const fn = (modelApi as unknown as Record<string, unknown>)[name];
-  return typeof fn === 'function' ? (fn as T) : undefined;
-}
-
 function soldierFactory(): SoldierFactory | undefined {
-  return optionalFn<SoldierFactory>('createSoldier');
+  return createSoldier as unknown as SoldierFactory;
 }
 
 function projectileFactory(): ProjectileFactory | undefined {
-  return optionalFn<ProjectileFactory>('projectileGeometry');
+  return modelProjectile;
 }
 
 function rubbleFactory(): RubbleFactory | undefined {
-  return optionalFn<RubbleFactory>('rubbleGeometry');
+  return propsRubble;
 }
 
 function acceptsPose(fn: (...args: never[]) => void, pose: string): boolean {
@@ -252,7 +250,9 @@ function fromSoldier(kind: UnitKind, color: number, seed: number, factory: Soldi
     setPose(pose: string, time: number): void {
       model.object.userData.pose = pose;
       const next = pose === 'walk' || pose === 'attack' || pose === 'die' ? pose : 'idle';
-      model.setPose(next, time);
+      // For 'die', `time` is seconds since death; the model wants fall progress 0..1.
+      if (next === 'die') model.setPose('die', time, { progress: Math.min(1, time / DIE_SECONDS) });
+      else model.setPose(next, time);
     },
     setOpacity: (opacity) => setTreeOpacity(model.object, opacity),
   };
