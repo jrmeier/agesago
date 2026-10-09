@@ -48,9 +48,28 @@ export function groupStatus(units: readonly StatusUnit[], carryCap: number): str
     .join(', ');
 }
 
-/** Train-button subtitle: cost hint when idle, else queue size and head progress. */
-export function trainLabel(queue: number, progress: number, total: number, cost: number): string {
-  if (queue <= 0) return `${cost} 🍖 · T`;
-  const pct = Math.min(99, Math.floor((progress / total) * 100));
+/**
+ * Train-button subtitle: cost (plus the T hotkey hint, except on touch) when idle, else
+ * queue size and head progress.
+ */
+export function trainLabel(queue: number, progress: number, total: number, cost: number, touch = false): string {
+  if (queue <= 0) return touch ? `${cost} food` : `${cost} food · T`;
+  const pct = Math.floor(trainProgress(queue, progress, total) * 100);
   return `Training ${pct}%${queue > 1 ? ` · +${queue - 1} queued` : ''}`;
+}
+
+/** Head-of-queue progress 0..0.99 for the train ring; 0 when nothing is queued. */
+export function trainProgress(queue: number, progress: number, total: number): number {
+  if (queue <= 0 || total <= 0) return 0;
+  return Math.min(0.99, Math.max(0, progress / total));
+}
+
+/** Stockpile number: whole units ("1,250"), then "12.3k", "123k", "1.2M" — always rounded down. */
+export function formatCount(n: number): string {
+  const v = Math.max(0, Math.floor(n));
+  if (v < 1000) return String(v);
+  if (v < 10_000) return `${Math.floor(v / 1000)},${String(v % 1000).padStart(3, '0')}`;
+  if (v < 100_000) return `${(Math.floor(v / 100) / 10).toFixed(1)}k`;
+  if (v < 1_000_000) return `${Math.floor(v / 1000)}k`;
+  return `${(Math.floor(v / 100_000) / 10).toFixed(1)}M`;
 }
