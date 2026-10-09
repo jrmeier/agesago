@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GRASS_ONLY, type Heightfield } from '../core/types';
-import { hash01, sampleTerrain, terrainVertexSrgb } from './terrainColor';
+import { hash01, packSplat, sampleTerrain, terrainVertexSrgb } from './terrainColor';
 
 describe('terrainVertexSrgb', () => {
   const flat = { slope: 0, forest: 0, variation: 0 };
@@ -30,6 +30,34 @@ describe('terrainVertexSrgb', () => {
     const shore = terrainVertexSrgb({ ...flat, height: 0.2 });
     const bed = terrainVertexSrgb({ ...flat, height: -2 });
     expect(bed.r + bed.g + bed.b).toBeLessThan((shore.r + shore.g + shore.b) * 0.75);
+  });
+});
+
+describe('packSplat', () => {
+  const empty = { grass: 0, meadow: 0, forest: 0, dirt: 0, rock: 0, sand: 0, path: 0 };
+
+  it('normalises weights and keeps the spare channel', () => {
+    const packed = packSplat({ ...empty, grass: 2, meadow: 2 }, 0.25);
+    expect(packed.splat0[0]).toBeCloseTo(0.5);
+    expect(packed.splat0[1]).toBeCloseTo(0.5);
+    expect(packed.splat0[2]).toBe(0);
+    expect(packed.splat1[3]).toBeCloseTo(0.25);
+    const sum =
+      packed.splat0[0] +
+      packed.splat0[1] +
+      packed.splat0[2] +
+      packed.splat0[3] +
+      packed.splat1[0] +
+      packed.splat1[1] +
+      packed.splat1[2];
+    expect(sum).toBeCloseTo(1);
+  });
+
+  it('treats a blank blend as grass and drops negative weights', () => {
+    expect(packSplat(empty).splat0[0]).toBe(1);
+    const packed = packSplat({ ...empty, rock: 2, sand: -1 });
+    expect(packed.splat1[0]).toBeCloseTo(1);
+    expect(packed.splat1[1]).toBe(0);
   });
 });
 
