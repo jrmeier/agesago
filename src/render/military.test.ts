@@ -331,7 +331,7 @@ describe('military rendering', () => {
     expect(dust).toBe(1);
   });
 
-  it('hides enemy units that are not visible, keeps explored enemy buildings, and will not pick either while hidden', () => {
+  it('hides enemy units outside sight and freezes a last-seen enemy building until it is visible again', () => {
     const world = makeWorld();
     const views = new EntityViews(world);
     const enemy = world.spawnUnit('swordsman', { x: 8, z: 8 }, 2);
@@ -356,8 +356,22 @@ describe('military rendering', () => {
     expect(views.pick(new THREE.Vector2(0, 0), camera)).toBe(enemy.id);
     expect(views.idsInRect({ x0: 0, y0: 0, x1: 200, y1: 200 }, camera, { width: 200, height: 200 })).toContain(enemy.id);
     expect(building.visible).toBe(true);
+    expect(building.getObjectByName('finished')!.visible).toBe(true);
+
+    views.setSelected(new Set([barracks.id]));
+    views.sync(0, 0.1, buildingCam);
+    const fill = () => views.object.getObjectByName('hp-fill') as THREE.InstancedMesh;
+    const color = new THREE.Color();
+    expect(fill().count).toBe(1);
+    fill().getColorAt(0, color);
+    expect(color.g).toBeGreaterThan(color.r);
 
     world.visibility.update([]);
+    barracks.hp = 1;
+    barracks.complete = false;
+    barracks.buildProgress = 0.1;
+    barracks.rot = Math.PI / 2;
+    barracks.pos = { x: 12.4, z: 8.4 };
     views.sync(0, 0.2, camera);
     expect(world.visibility.isExplored(8, 8)).toBe(true);
     expect(world.visibility.isVisible(8, 8)).toBe(false);
@@ -365,12 +379,57 @@ describe('military rendering', () => {
     expect(views.pick(new THREE.Vector2(0, 0), camera)).not.toBe(enemy.id);
     expect(views.idsInRect({ x0: 0, y0: 0, x1: 200, y1: 200 }, camera, { width: 200, height: 200 })).not.toContain(enemy.id);
     expect(world.visibility.isExplored(12, 8)).toBe(true);
+    expect(world.visibility.isVisible(12, 8)).toBe(false);
     expect(building.visible).toBe(true);
-    expect(views.pick(new THREE.Vector2(0, 0), buildingCam)).toBe(barracks.id);
+    expect(building.getObjectByName('finished')!.visible).toBe(true);
+    expect(building.getObjectByName('foundation')!.visible).toBe(false);
+    expect(building.position.x).toBeCloseTo(12);
+    expect(building.position.z).toBeCloseTo(8);
+    expect(building.rotation.y).toBeCloseTo(0);
+    expect(views.pick(new THREE.Vector2(0, 0), buildingCam)).not.toBe(barracks.id);
+    fill().getColorAt(0, color);
+    expect(color.g).toBeGreaterThan(color.r);
 
     const own = world.spawnUnit('archer', { x: 6, z: 6 }, 1);
     expect(world.visibility.isVisible(6, 6)).toBe(false);
     expect(unitObject(views, own.id).visible).toBe(true);
+
+    world.buildings.delete(barracks.id);
+    world.events.emit({ type: 'died', id: barracks.id, kind: 'barracks', owner: 2, pos: { x: 12, z: 8 } });
+    world.events.emit({ type: 'removed', id: barracks.id });
+    views.sync(0, 0.4, buildingCam);
+    expect(unitObject(views, barracks.id).visible).toBe(true);
+    expect(views.object.getObjectByName('deaths')!.getObjectByName('rubble')).toBeFalsy();
+    expect(views.pick(new THREE.Vector2(0, 0), buildingCam)).not.toBe(barracks.id);
+    fill().getColorAt(0, color);
+    expect(color.g).toBeGreaterThan(color.r);
+
+    world.visibility.update([{ pos: { x: 12, z: 8 }, sight: 4 }]);
+    views.sync(0, 0.6, buildingCam);
+    expect(views.object.children.some((obj) => obj.userData.entityId === barracks.id)).toBe(false);
+    expect(views.object.getObjectByName('deaths')!.getObjectByName('rubble')).toBeTruthy();
+  });
+
+  it('uses the same last-seen rules on the low quality tier', () => {
+    const world = makeWorld();
+    const views = new EntityViews(world, qualityTier('low'));
+    const enemy = world.spawnUnit('archer', { x: 8, z: 8 }, 2);
+    const barracks = place(world, views, 'barracks', { x: 12, z: 8 }, 2);
+    expect(unitObject(views, enemy.id).visible).toBe(false);
+    expect(unitObject(views, barracks.id).visible).toBe(false);
+
+    world.visibility.update([{ pos: { x: 12, z: 8 }, sight: 6 }]);
+    const camera = cameraAt(12, 8);
+    views.sync(0, 0, camera);
+    expect(unitObject(views, enemy.id).visible).toBe(true);
+    expect(unitObject(views, barracks.id).visible).toBe(true);
+
+    world.visibility.update([]);
+    views.sync(0, 0.2, camera);
+    expect(unitObject(views, enemy.id).visible).toBe(false);
+    expect(unitObject(views, barracks.id).visible).toBe(true);
+    expect(views.pick(new THREE.Vector2(0, 0), camera)).not.toBe(barracks.id);
+    expect(views.pick(new THREE.Vector2(0, 0), camera)).not.toBe(enemy.id);
   });
 
   it('draws the owner colour on friendly rings and red on an enemy', () => {

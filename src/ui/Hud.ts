@@ -2,6 +2,7 @@ import { BUILDINGS, FARM_FOOD } from '../core/buildings';
 import type { Building, BuildingKind, ResourceType, Stockpile, Unit, UnitKind } from '../core/types';
 import { UNITS } from '../core/units';
 import type { Selection } from '../game/Selection';
+import { shownSelection, sightFromState, stepLastSeen, type LastSeenBuilding } from '../render/lastSeen';
 import { BALANCE } from '../sim/balance';
 import type { World } from '../sim/World';
 import {
@@ -108,6 +109,8 @@ export class Hud {
   private statsKey = '';
   private hpKey = '';
   private readonly menuTabs: Record<TouchMenu, HTMLElement | null>;
+  /** Enemy buildings the panel may describe while they are out of sight. */
+  private snaps = new Map<number, LastSeenBuilding>();
 
   constructor(
     readonly world: World,
@@ -214,15 +217,27 @@ export class Hud {
 
   private updateSelection(): void {
     const local = this.world.localPlayer;
+    const vis = this.world.visibility;
+    const sightAt = (x: number, z: number) => sightFromState(vis.stateAt(x, z));
+    // Fogged enemies come from `shown` only. Do not read the live building for hp or progress.
+    this.snaps = stepLastSeen(this.snaps, this.world.buildings.values(), local, sightAt).snaps;
+    const shown = shownSelection(
+      this.selection.ids,
+      local,
+      (id) => this.world.units.get(id),
+      (id) => this.world.buildings.get(id),
+      this.snaps,
+      sightAt,
+    );
     const units: Unit[] = [];
-    let building: Building | undefined;
-    for (const id of this.selection.ids) {
+    for (const id of shown.unitIds) {
       const u = this.world.units.get(id);
       if (u) units.push(u);
-      else building ??= this.world.buildings.get(id);
     }
-    const target = units.length ? 'units' : building ? 'building' : null;
-    const owner = units.length ? units[0].owner : building?.owner;
+    const building = shown.liveBuildingId != null ? this.world.buildings.get(shown.liveBuildingId) : undefined;
+    const remembered = shown.remembered;
+    const target = units.length ? 'units' : building || remembered ? 'building' : null;
+    const owner = units.length ? units[0].owner : (building?.owner ?? remembered?.owner);
     const foreign = target !== null && owner !== local;
     const own = foreign ? [] : units;
     const ownBuilding = foreign ? undefined : building;
@@ -244,8 +259,14 @@ export class Hud {
       this.setHp(hp.hp, hp.maxHp);
       const single = kinds.every((k) => k === kinds[0]) ? kinds[0] : null;
       this.setStats(single && (isMilitary(single) || foreign) ? single : null);
-    } else if (target === 'building' && building) {
+    } else if (building) {
       this.setHp(building.complete ? building.hp : -1, building.maxHp);
+      this.setStats(null);
+    } else if (remembered) {
+      setText(this.el.name, BUILDINGS[remembered.kind].name);
+      setText(this.el.status, this.ownerName(remembered.owner));
+      this.setPortrait(`#i-b-${remembered.kind}`, '');
+      this.setHp(remembered.complete ? remembered.hp : -1, remembered.maxHp);
       this.setStats(null);
     } else {
       this.setHp(-1, 0);

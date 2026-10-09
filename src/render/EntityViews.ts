@@ -17,9 +17,19 @@ import {
   type Vec2,
 } from '../core/types';
 import type { World } from '../sim/World';
+import type { Visibility } from '../sim/visibility';
 import { createBuildingVisual, createGhost, footprintMinY, tintGhost, type BuildingVisual } from './buildingVisuals';
 import { DeathGhosts } from './deaths';
 import { applyFog, createFogDepthMaterial, isConcealed, matrixForConcealment, type FogOfWar } from './fog';
+import {
+  buildingMayTarget,
+  buildingPresentation,
+  sightFromState,
+  stepLastSeen,
+  unitMayShow,
+  type LastSeenBuilding,
+  type Sight,
+} from './lastSeen';
 import { HealthBars } from './hpBars';
 import { SpatialInstances } from './instanceChunks';
 import { berryLodGeometry, goldLodGeometry, stoneLodGeometry, stoneNodeGeometry, treeLodGeometry } from './lod';
@@ -130,6 +140,11 @@ export class EntityViews {
   private readonly pools = new Map<string, SpatialInstances>();
   private readonly nodePool = new Map<EntityId, SpatialInstances>();
   private readonly buildingViews = new Map<EntityId, BuildingVisual>();
+  /** Enemy buildings kept on screen after they die in fog, until the site is seen again. */
+  private readonly memoryViews = new Map<EntityId, BuildingVisual>();
+  private lastSeen = new Map<EntityId, LastSeenBuilding>();
+  /** Deaths whose rubble waits until the player looks at the site. */
+  private readonly deferredDeaths = new Map<EntityId, LastSeenBuilding>();
   private readonly ghosts = new Map<BuildingKind, THREE.Group>();
   /** Cloned ghosts for a wall-line preview. Capped so a map-length drag stays cheap. */
   private readonly lineGhosts: THREE.Group[] = [];
@@ -234,7 +249,10 @@ export class EntityViews {
     this.world.events.on('constructed', (e) => {
       const building = this.world.buildings.get(e.id);
       const view = this.buildingViews.get(e.id);
-      if (building && view) view.setProgress(building.buildProgress, true);
+      if (!building || !view) return;
+      // Completing in fog must not swap the mesh to the finished model.
+      if (building.owner !== this.world.localPlayer && !this.sight().isVisible(building.pos.x, building.pos.z)) return;
+      view.setProgress(building.buildProgress, true);
     });
 
     for (const building of this.world.buildings.values()) this.mountBuilding(building);
@@ -245,6 +263,7 @@ export class EntityViews {
   /**
    * Fog resource nodes, stumps and buildings. Own units stay fully lit — they are the viewers.
    * Other players' units are hidden unless their cell is currently visible.
+   * Other players' buildings stay as a last-seen mesh once explored, until the cell is visible again.
    * `sync` already calls `syncFog`. Call `fog.update` before `sync` so the mask and the scales match.
    */
   setFog(fog: FogOfWar): void {
@@ -256,6 +275,8 @@ export class EntityViews {
     for (const pool of this.pools.values()) pool.forEachMesh((mesh) => this.hook(mesh));
     this.stumps.forEachMesh((mesh) => this.hook(mesh));
     for (const view of this.buildingViews.values()) this.fogBuilding(view.object);
+    for (const view of this.memoryViews.values()) this.fogBuilding(view.object);
+    this.stepSight();
     this.fogVersion = -1;
     this.syncFog();
     this.refreshUnitVisibility();
@@ -270,6 +291,7 @@ export class EntityViews {
 
   /** Update visuals. `alpha` ∈ [0,1] interpolates unit prevPos → pos; `time` in seconds. */
   sync(alpha: number, time: number, camera: THREE.Camera): void {
+    this.stepSight();
     this.syncFog();
     this.cullChunks(camera);
     const t = clamp01(alpha);
@@ -299,7 +321,7 @@ export class EntityViews {
       this.consider(hits, camera, ndc, node.id, PICK_RANK.node, node.pos.x, node.pos.z, size);
     }
     for (const building of this.world.buildings.values()) {
-      if (!this.buildingShown(building)) continue;
+      if (!this.buildingTargetable(building)) continue;
       this.considerBuilding(hits, camera, ndc, building);
     }
     return choosePick(hits);
@@ -479,15 +501,13 @@ export class EntityViews {
     if (this.buildingViews.has(building.id)) return;
     const visual = createBuildingVisual(building.kind, this.ownerColor(building.owner));
     visual.object.userData.entityId = building.id;
-    const y = footprintMinY(this.world.hf, building.kind, building.pos, building.rot);
-    visual.object.position.set(building.pos.x, y, building.pos.z);
-    visual.object.rotation.y = building.rot;
+    this.poseBuilding(visual, building.kind, building.pos, building.rot);
     visual.setProgress(building.buildProgress, building.complete);
     if (building.kind === 'farm') visual.setFarmFood(building.food ?? (building.complete ? FARM_FOOD : 0));
     this.applyBuildingShadows(visual.object);
     this.object.add(visual.object);
     this.buildingViews.set(building.id, visual);
-    visual.object.visible = this.buildingShown(building);
+    visual.object.visible = this.buildingVisible(building);
     if (this.fog) {
       this.fogBuilding(visual.object);
       this.refreshConcealment();
@@ -503,16 +523,20 @@ export class EntityViews {
       this.deaths.addUnit(unit, e.owner, e.pos, this.ghostShown(e.owner, e.pos.x, e.pos.z, false));
       return;
     }
-    const visual = this.buildingViews.get(e.id);
-    if (visual) {
-      this.object.remove(visual.object);
-      disposeMaterials(visual.object);
-      this.buildingViews.delete(e.id);
-    }
     if (!isBuildingKind(e.kind)) return;
-    if (e.owner !== this.world.localPlayer && !this.sight().isExplored(e.pos.x, e.pos.z)) return;
-    const { w, d } = BUILDINGS[e.kind].size;
-    this.deaths.addRubble(e.owner, e.pos, this.groundY(e.pos.x, e.pos.z), Math.max(w, d) * 0.55, this.ghostShown(e.owner, e.pos.x, e.pos.z, true));
+    const visual = this.buildingViews.get(e.id);
+    const enemy = e.owner !== this.world.localPlayer;
+    const sight = this.cellSight(e.pos.x, e.pos.z);
+    // Died out of sight after we had seen it: keep the mesh until the player looks again.
+    if (visual && enemy && sight === 'explored' && this.lastSeen.has(e.id)) {
+      this.parkBuilding(e.id, visual);
+      const snap = this.lastSeen.get(e.id);
+      if (snap) this.deferredDeaths.set(e.id, snap);
+      return;
+    }
+    if (visual) this.dropBuildingView(e.id);
+    if (enemy && sight !== 'visible') return;
+    this.addBuildingRubble(e.kind, e.owner, e.pos);
   }
 
   private unmount(id: EntityId): void {
@@ -528,11 +552,17 @@ export class EntityViews {
       if (base && pool.label.startsWith('tree:')) this.stumps.add(id, base);
       this.nodePool.delete(id);
     }
+    if (this.memoryViews.has(id)) {
+      this.sizeOf.delete(id);
+      if (this.fog) this.refreshConcealment();
+      return;
+    }
     const building = this.buildingViews.get(id);
     if (building) {
-      this.object.remove(building.object);
-      disposeMaterials(building.object);
-      this.buildingViews.delete(id);
+      const snap = this.lastSeen.get(id);
+      const park = snap && snap.owner !== this.world.localPlayer && this.cellSight(snap.pos.x, snap.pos.z) === 'explored';
+      if (park) this.parkBuilding(id, building);
+      else this.dropBuildingView(id);
     }
     this.sizeOf.delete(id);
     if (this.fog) this.refreshConcealment();
@@ -571,6 +601,22 @@ export class EntityViews {
     for (const building of this.world.buildings.values()) {
       const view = this.buildingViews.get(building.id);
       if (!view) continue;
+      const mode = this.presentation(building);
+      if (mode === 'hidden') {
+        view.object.visible = false;
+        continue;
+      }
+      if (mode === 'snapshot') {
+        const snap = this.lastSeen.get(building.id);
+        if (!snap) {
+          view.object.visible = false;
+          continue;
+        }
+        this.poseBuilding(view, snap.kind, snap.pos, snap.rot);
+        view.object.visible = true;
+        continue;
+      }
+      this.poseBuilding(view, building.kind, building.pos, building.rot);
       view.setProgress(building.buildProgress, building.complete);
       if (building.kind === 'farm') {
         const food = building.food !== undefined ? building.food : building.complete ? FARM_FOOD : 0;
@@ -578,7 +624,13 @@ export class EntityViews {
       }
       const showBar = !building.complete || this.selected.has(building.id);
       view.setBar(showBar, building.buildProgress, camera);
-      view.object.visible = this.buildingShown(building);
+      view.object.visible = true;
+    }
+    for (const [id, view] of this.memoryViews) {
+      const snap = this.lastSeen.get(id);
+      if (!snap) continue;
+      this.poseBuilding(view, snap.kind, snap.pos, snap.rot);
+      view.object.visible = true;
     }
   }
 
@@ -593,12 +645,18 @@ export class EntityViews {
       this.bars.push(x, this.groundY(x, z) + BAR_Y[unit.kind], z, fraction(unit.hp, unit.maxHp), width);
     }
     for (const building of this.world.buildings.values()) {
-      if (!this.buildingShown(building)) continue;
-      if (!this.wantsHealth(building.hp, building.maxHp, building.id)) continue;
-      const { w } = BUILDINGS[building.kind].size;
-      const width = Math.min(2.2, Math.max(0.8, w * 0.55));
-      const y = this.groundY(building.pos.x, building.pos.z) + BUILDING_HEIGHT[building.kind] + 0.95;
-      this.bars.push(building.pos.x, y, building.pos.z, fraction(building.hp, building.maxHp), width);
+      const mode = this.presentation(building);
+      if (mode === 'hidden') continue;
+      if (mode === 'snapshot') {
+        const snap = this.lastSeen.get(building.id);
+        if (snap) this.pushBuildingBar(snap.kind, snap.pos, snap.hp, snap.maxHp, snap.id);
+        continue;
+      }
+      this.pushBuildingBar(building.kind, building.pos, building.hp, building.maxHp, building.id);
+    }
+    for (const [id, snap] of this.lastSeen) {
+      if (this.world.buildings.has(id) || !this.memoryViews.has(id)) continue;
+      this.pushBuildingBar(snap.kind, snap.pos, snap.hp, snap.maxHp, snap.id);
     }
     this.bars.end();
   }
@@ -814,8 +872,9 @@ export class EntityViews {
     for (const [id, view] of this.buildingViews) {
       const building = this.world.buildings.get(id);
       if (!building) continue;
-      view.object.visible = this.buildingShown(building);
+      view.object.visible = this.buildingVisible(building);
     }
+    for (const [id, view] of this.memoryViews) view.object.visible = this.lastSeen.has(id);
   }
 
   private refreshUnitVisibility(): void {
@@ -831,17 +890,94 @@ export class EntityViews {
   /** Local units always draw. Everyone else draws only in a currently visible cell. Garrisoned units are inside. */
   private unitShown(unit: Unit): boolean {
     if (unit.state === 'garrisoned') return false;
-    if (unit.owner === this.world.localPlayer) return true;
-    return this.sight().isVisible(unit.pos.x, unit.pos.z);
+    return unitMayShow(unit.owner === this.world.localPlayer, this.cellSight(unit.pos.x, unit.pos.z));
   }
 
   /**
-   * Own buildings hide on unexplored ground once fog is attached (existing shroud).
-   * Other players' buildings stay up after the cell has been explored.
+   * Own buildings hide on unexplored ground once fog is attached.
+   * Enemy buildings: live while visible, last-seen mesh while only explored, hidden if never seen.
    */
-  private buildingShown(building: Building): boolean {
-    if (building.owner === this.world.localPlayer && !this.fog) return true;
-    return this.sight().isExplored(building.pos.x, building.pos.z);
+  private presentation(building: Building): 'live' | 'snapshot' | 'hidden' {
+    return buildingPresentation({
+      ownerIsLocal: building.owner === this.world.localPlayer,
+      sight: this.cellSight(building.pos.x, building.pos.z),
+      fogActive: this.fog !== null,
+      snap: this.lastSeen.get(building.id),
+    });
+  }
+
+  private buildingVisible(building: Building): boolean {
+    return this.presentation(building) !== 'hidden';
+  }
+
+  /** Live enemy buildings only. A last-seen ghost is not a pick or attack target. */
+  private buildingTargetable(building: Building): boolean {
+    return buildingMayTarget(
+      building.owner === this.world.localPlayer,
+      this.cellSight(building.pos.x, building.pos.z),
+      this.fog !== null,
+    );
+  }
+
+  /** Footprint height, then xz and yaw. Last-seen ghosts use this with the snapshot pose — not a second transform. */
+  private poseBuilding(view: BuildingVisual, kind: BuildingKind, pos: Vec2, rot: number): void {
+    const y = footprintMinY(this.world.hf, kind, pos, rot);
+    view.object.position.set(pos.x, y, pos.z);
+    view.object.rotation.y = rot;
+  }
+
+  private pushBuildingBar(kind: BuildingKind, pos: Vec2, hp: number, maxHp: number, id: EntityId): void {
+    if (!this.wantsHealth(hp, maxHp, id)) return;
+    const { w } = BUILDINGS[kind].size;
+    const width = Math.min(2.2, Math.max(0.8, w * 0.55));
+    const y = this.groundY(pos.x, pos.z) + BUILDING_HEIGHT[kind] + 0.95;
+    this.bars.push(pos.x, y, pos.z, fraction(hp, maxHp), width);
+  }
+
+  private stepSight(): void {
+    const stepped = stepLastSeen(
+      this.lastSeen,
+      this.world.buildings.values(),
+      this.world.localPlayer,
+      (x, z) => this.cellSight(x, z),
+    );
+    this.lastSeen = stepped.snaps;
+    for (const snap of stepped.confirmedGone) {
+      this.dropBuildingView(snap.id);
+      const death = this.deferredDeaths.get(snap.id);
+      this.deferredDeaths.delete(snap.id);
+      if (death) this.addBuildingRubble(death.kind, death.owner, death.pos);
+    }
+  }
+
+  private parkBuilding(id: EntityId, visual: BuildingVisual): void {
+    this.buildingViews.delete(id);
+    this.memoryViews.set(id, visual);
+    visual.object.visible = true;
+  }
+
+  private dropBuildingView(id: EntityId): void {
+    const visual = this.memoryViews.get(id) ?? this.buildingViews.get(id);
+    if (!visual) return;
+    this.object.remove(visual.object);
+    disposeMaterials(visual.object);
+    this.memoryViews.delete(id);
+    this.buildingViews.delete(id);
+  }
+
+  private addBuildingRubble(kind: BuildingKind, owner: PlayerId, pos: Vec2): void {
+    const { w, d } = BUILDINGS[kind].size;
+    this.deaths.addRubble(
+      owner,
+      pos,
+      this.groundY(pos.x, pos.z),
+      Math.max(w, d) * 0.55,
+      this.ghostShown(owner, pos.x, pos.z, true),
+    );
+  }
+
+  private cellSight(x: number, z: number): Sight {
+    return sightFromState(this.sight().stateAt(x, z));
   }
 
   private ghostShown(owner: PlayerId, x: number, z: number, rubble: boolean): boolean {
@@ -850,7 +986,7 @@ export class EntityViews {
     return rubble ? vis.isExplored(x, z) : vis.isVisible(x, z);
   }
 
-  private sight(): { isVisible(x: number, z: number): boolean; isExplored(x: number, z: number): boolean } {
+  private sight(): Visibility {
     return this.fog?.visibility ?? this.world.visibility;
   }
 
