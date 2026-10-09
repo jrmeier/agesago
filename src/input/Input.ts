@@ -61,6 +61,7 @@ export class Input {
   private readonly drags = new Map<number, DragState>();
   private readonly keys = new Set<string>();
   private readonly pressedKeys = new Set<string>();
+  private readonly pressedMods = new Map<string, { ctrl: boolean; alt: boolean; shift: boolean }>();
   private readonly off: (() => void)[] = [];
 
   constructor(readonly dom: HTMLElement) {
@@ -121,6 +122,14 @@ export class Input {
     return this.pressedKeys.has(code);
   }
 
+  /**
+   * Modifiers held when `code` went down this frame (null if it didn't). Read from the event,
+   * so a quick Ctrl+1 whose Ctrl is released before the next frame still counts as Ctrl+1.
+   */
+  keyMods(code: string): { ctrl: boolean; alt: boolean; shift: boolean } | null {
+    return this.pressedMods.get(code) ?? null;
+  }
+
   get space(): boolean {
     return this.keys.has('Space');
   }
@@ -129,11 +138,21 @@ export class Input {
     return this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
   }
 
+  /** Ctrl, or Cmd on a Mac (control-group assign, Ctrl+right-click attack-move). */
+  get ctrl(): boolean {
+    return this.keys.has('ControlLeft') || this.keys.has('ControlRight') || this.keys.has('MetaLeft') || this.keys.has('MetaRight');
+  }
+
+  get alt(): boolean {
+    return this.keys.has('AltLeft') || this.keys.has('AltRight');
+  }
+
   /** Clear per-frame edge state. Called by Game once at the end of every frame. */
   endFrame(): void {
     this.pressedButtons.clear();
     this.releasedButtons.clear();
     this.pressedKeys.clear();
+    this.pressedMods.clear();
     this.wheel = 0;
     this.moveX = 0;
     this.moveY = 0;
@@ -222,14 +241,23 @@ export class Input {
   private onKeyDown = (e: KeyboardEvent): void => {
     if (isTextField(e.target)) return;
     if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
-    if (e.repeat || this.keys.has(e.code)) return;
+    // Ctrl / Cmd / Alt + digit assigns a control group; keep the browser's hands off where it lets us.
+    if ((e.ctrlKey || e.metaKey || e.altKey) && /^(Digit|Numpad)[1-9]$/.test(e.code)) e.preventDefault();
+    if (e.repeat) return;
+    // macOS sends no keyup for keys released while Cmd is held, so a stale entry may linger.
+    if (this.keys.has(e.code) && !e.metaKey) return;
     this.keys.add(e.code);
     this.pressedKeys.add(e.code);
+    this.pressedMods.set(e.code, { ctrl: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey });
   };
 
   private onKeyUp = (e: KeyboardEvent): void => {
     if (e.code === 'Space') e.preventDefault();
     this.keys.delete(e.code);
+    if (e.key === 'Meta') {
+      // Drop keys whose keyup macOS swallowed while Cmd was down (modifiers keep their own state).
+      for (const k of [...this.keys]) if (!/^(Shift|Control|Alt|Meta)/.test(k)) this.keys.delete(k);
+    }
   };
 
   private onBlur = (): void => {
