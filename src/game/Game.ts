@@ -3,6 +3,7 @@ import { CameraRig } from '../camera/CameraRig';
 import { Controls } from '../input/Controls';
 import { Input } from '../input/Input';
 import { EntityViews } from '../render/EntityViews';
+import { PropsView } from '../render/PropsView';
 import { Renderer } from '../render/Renderer';
 import { TerrainView } from '../render/TerrainView';
 import { BALANCE } from '../sim/balance';
@@ -27,6 +28,7 @@ export class Game {
   private readonly input: Input;
   private readonly terrain: TerrainView;
   private readonly views: EntityViews;
+  private readonly props: PropsView;
   private readonly controls: Controls;
   private readonly hud: Hud;
   private readonly minimap: Minimap;
@@ -46,7 +48,8 @@ export class Game {
 
     this.terrain = new TerrainView(hf);
     this.views = new EntityViews(this.world);
-    this.renderer.scene.add(this.terrain.object, this.views.object);
+    this.props = new PropsView(hf, layout.props);
+    this.renderer.scene.add(this.terrain.object, this.props.object, this.views.object);
 
     this.selection.onChange((ids) => this.views.setSelected(ids));
     this.controls = new Controls({
@@ -108,6 +111,7 @@ export class Game {
     window.removeEventListener('resize', this.onResize);
     this.input.dispose();
     this.minimap.dispose();
+    this.props.dispose();
     this.renderer.domElement.remove();
   }
 }
