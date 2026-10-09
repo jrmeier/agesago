@@ -34,6 +34,33 @@ function pathStaysDry(hf: Heightfield, from: Vec2, path: Vec2[]): boolean {
 }
 
 describe('NavGrid', () => {
+  it('snaps to unreserved free cell centres in the requested connected region', () => {
+    const nav = new NavGrid(flatField((x) => x >= 30 && x <= 32));
+    const region = nav.regionAt({ x: 10, z: 24 });
+    const first = nav.nearestFreeCell({ x: 31, z: 24 }, region)!;
+    const second = nav.nearestFreeCell(first, region, (p) => p.x !== first.x || p.z !== first.z)!;
+    expect(first.x).toBeLessThan(30);
+    expect(second).not.toEqual(first);
+    for (const p of [first, second]) {
+      expect(nav.isFree(p)).toBe(true);
+      expect(nav.regionOfCell(p)).toBe(region);
+      expect(p.x % 0.5).toBe(0.25);
+      expect(p.z % 0.5).toBe(0.25);
+    }
+  });
+
+  it('clamps the full steering segment before water or a building even if its endpoint is clear', () => {
+    const nav = new NavGrid(flatField((x) => x >= 20 && x <= 21));
+    const shore = nav.clampMove({ x: 18, z: 24 }, { x: 23, z: 24 });
+    expect(shore.x).toBeLessThan(20);
+    expect(nav.isFree(shore)).toBe(true);
+    nav.addRect(99, { x0: 10, x1: 11, z0: 20, z1: 28 });
+    const edge = nav.clampMove({ x: 8, z: 24 }, { x: 14, z: 24 });
+    expect(edge.x).toBeLessThanOrEqual(9.7);
+    expect(nav.isFree(edge)).toBe(true);
+    expect(nav.clampMove({ x: 5, z: 5 }, { x: 8, z: 7 })).toEqual({ x: 8, z: 7 });
+  });
+
   it('returns a direct segment on open ground', () => {
     const nav = new NavGrid(flatField());
     expect(nav.findPath({ x: 5, z: 5 }, { x: 40.3, z: 30.7 })).toEqual([{ x: 40.3, z: 30.7 }]);

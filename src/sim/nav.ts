@@ -166,6 +166,35 @@ export class NavGrid {
     return i < 0 ? null : this.center(i);
   }
 
+  /** Nearest free cell centre in `reg` (0 = any), optionally excluding reserved formation space. */
+  nearestFreeCell(p: Vec2, reg = 0, accept?: (p: Vec2) => boolean): Vec2 | null {
+    const i = this.nearestCell(p, reg, accept);
+    return i < 0 ? null : this.center(i);
+  }
+
+  /** Clamp a steering displacement to free ground, checking the segment as well as its end. */
+  clampMove(from: Vec2, to: Vec2): Vec2 {
+    const dx = to.x - from.x;
+    const dz = to.z - from.z;
+    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / (NAV_CELL / 4)));
+    let safe = 0;
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      if (!this.isFree({ x: from.x + dx * t, z: from.z + dz * t })) {
+        let blocked = t;
+        // Preserve the clear prefix; do not jump across a wall to a free endpoint.
+        for (let j = 0; j < 8; j++) {
+          const mid = (safe + blocked) / 2;
+          if (this.isFree({ x: from.x + dx * mid, z: from.z + dz * mid })) safe = mid;
+          else blocked = mid;
+        }
+        return { x: from.x + dx * safe, z: from.z + dz * safe };
+      }
+      safe = t;
+    }
+    return { x: to.x, z: to.z };
+  }
+
   /** True if a villager can stand at `p`: walkable terrain, clear of every inflated obstacle. */
   isFree(p: Vec2): boolean {
     if (!this.hf.isWalkable(p.x, p.z)) return false;
@@ -365,7 +394,7 @@ export class NavGrid {
   }
 
   /** Walkable cell nearest to `p` (in region `reg`, or any region when 0), or -1. */
-  private nearestCell(p: Vec2, reg: number): number {
+  private nearestCell(p: Vec2, reg: number, accept?: (p: Vec2) => boolean): number {
     const cx = Math.min(this.cols - 1, Math.max(0, Math.floor(p.x / NAV_CELL)));
     const cz = Math.min(this.rows - 1, Math.max(0, Math.floor(p.z / NAV_CELL)));
     const maxR = Math.max(this.cols, this.rows);
@@ -381,6 +410,7 @@ export class NavGrid {
             const i = iz * this.cols + ix;
             if (this.walk[i] === 1 && (reg === 0 || this.region[i] === reg)) {
               const c = this.center(i);
+              if (accept && !accept(c)) continue;
               const d = Math.hypot(c.x - p.x, c.z - p.z);
               if (d < bestD) {
                 bestD = d;
