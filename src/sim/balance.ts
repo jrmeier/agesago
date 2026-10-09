@@ -64,6 +64,12 @@ export const BALANCE = {
   projectileSpeed: 18,
   /** A projectile hits if the target is still within this radius of the aim point when it lands. */
   hitRadius: 0.8,
+  /**
+   * Without Ballistics, shooters lead a moving target by only this fraction of its velocity ×
+   * flight time (infantry and horsemen still get hit; scouts racing across the line of fire at long range dodge).
+   * Ballistics leads by the full amount.
+   */
+  untrainedLead: 0.6,
   /** Ranged units step back when a melee attacker closes within this edge distance… */
   kiteDistance: 1.5,
   /** …by this far. */

@@ -10,7 +10,9 @@ import { cancelExplore, settleCancelled } from './explore';
 import { nearestSources, sendToDrop, sendToFarm, sendToNode, sendToSource } from './gather';
 import { formationOffset } from './movement';
 import { siteApproach } from './sites';
-import { damageTo, edgeDistance, isRanged, nearestPoint, unitRadius, unitSpeed } from './stats';
+import { playerHasFlag } from './research';
+import { carryCap } from './gather';
+import { armorOf, buildingAttack, damageTo, edgeDistance, isRanged, nearestPoint, unitRadius, unitRange, unitSight, unitSpeed } from './stats';
 
 /** Per-unit combat bookkeeping kept off the frozen Unit shape (created on first engagement). */
 export interface CombatState {
@@ -132,20 +134,19 @@ function bucketsOf(world: World): UnitBuckets {
 }
 
 /** How far `u` looks for enemies on its own (−1: never). */
-function acquireRadius(u: Unit, cs: CombatState | undefined): number {
-  if (cs?.order === 'attackMove') return UNITS[u.kind].sight;
-  return stanceRadius(u, u.stance);
+function acquireRadius(world: World, u: Unit, cs: CombatState | undefined): number {
+  if (cs?.order === 'attackMove') return unitSight(world, u.owner, u.kind);
+  return stanceRadius(world, u, u.stance);
 }
 
-function stanceRadius(u: Unit, stance: Stance): number {
-  const spec = UNITS[u.kind];
+function stanceRadius(world: World, u: Unit, stance: Stance): number {
   switch (stance) {
     case 'aggressive':
-      return spec.sight;
+      return unitSight(world, u.owner, u.kind);
     case 'defensive':
-      return spec.sight / 2;
+      return unitSight(world, u.owner, u.kind) / 2;
     case 'standGround':
-      return spec.range;
+      return unitRange(world, u.owner, u.kind);
     case 'passive':
       return -1;
   }
@@ -372,7 +373,7 @@ function disengage(world: World, u: Unit, cs: CombatState): void {
   cs.goal = null;
   cs.anchor = null;
   if (cs.order === 'attack') cs.order = null;
-  const next = findEnemy(world, u, acquireRadius(u, cs));
+  const next = findEnemy(world, u, acquireRadius(world, u, cs));
   if (next) {
     engage(world, u, next, false);
     return;
@@ -422,7 +423,7 @@ function attackTick(world: World, u: Unit, cs: CombatState, threat: Unit | undef
   }
   const spec = UNITS[u.kind];
   const d = edgeDistance(u, t);
-  if (d <= spec.range + 1e-6) {
+  if (d <= unitRange(world, u.owner, u.kind) + 1e-6) {
     cs.anchor = { ...u.pos };
     if (!(threat && kite(world, u, cs, threat))) u.path = [];
     if (!u.path.length) {
@@ -444,7 +445,7 @@ function attackTick(world: World, u: Unit, cs: CombatState, threat: Unit | undef
     disengage(world, u, cs);
     return;
   }
-  if (!explicit && cs.order === null && u.stance === 'defensive' && cs.post && dist(u.pos, cs.post) > spec.sight) {
+  if (!explicit && cs.order === null && u.stance === 'defensive' && cs.post && dist(u.pos, cs.post) > unitSight(world, u.owner, u.kind)) {
     disengage(world, u, cs);
     return;
   }
@@ -482,7 +483,7 @@ function kite(world: World, u: Unit, cs: CombatState, threat: Unit): boolean {
   u.path = path;
   cs.goal = spot;
   // Don't let the chase logic re-path back toward the target until the step is done.
-  cs.repath = BALANCE.kiteStep / UNITS[u.kind].speed;
+  cs.repath = BALANCE.kiteStep / unitSpeed(u, world);
   return true;
 }
 
@@ -490,22 +491,12 @@ function kite(world: World, u: Unit, cs: CombatState, threat: Unit): boolean {
 function strike(world: World, u: Unit, t: Target): void {
   const spec = UNITS[u.kind];
   if (!spec.projectile) {
-    applyDamage(world, t, damageTo(u.kind, t), u.id, u.owner, u.pos);
+    applyDamage(world, t, damageTo(u.kind, t, world, u.owner), u.id, u.owner, u.pos);
     return;
   }
   const from = { x: u.pos.x, z: u.pos.z };
-  let aim = nearestPoint(from, t);
-  let flight = dist(from, aim) / BALANCE.projectileSpeed;
-  if (isUnit(t)) {
-    // Lead a moving target by its last tick's displacement.
-    const dt = 1 / BALANCE.tickRate;
-    const vx = (t.pos.x - t.prevPos.x) / dt;
-    const vz = (t.pos.z - t.prevPos.z) / dt;
-    aim = { x: t.pos.x + vx * flight, z: t.pos.z + vz * flight };
-    flight = dist(from, aim) / BALANCE.projectileSpeed;
-  } else {
-    aim = { x: aim.x, z: aim.z };
-  }
+  const near = nearestPoint(from, t);
+  const { aim, flight } = isUnit(t) ? aimAt(world, u.owner, from, t) : { aim: { x: near.x, z: near.z }, flight: dist(from, near) / BALANCE.projectileSpeed };
   world.events.emit({ type: 'projectile', kind: spec.projectile, from, to: aim, flight, targetId: t.id });
   world.projectiles.push({ at: world.time + flight, targetId: t.id, aim, by: u.id, kind: u.kind, owner: u.owner, from });
 }
@@ -526,7 +517,7 @@ function resolveProjectiles(world: World): void {
     if (!t || t.hp <= 0) continue;
     if (isUnit(t) && t.state === 'garrisoned') continue;
     if (isUnit(t) && dist(t.pos, p.aim) > BALANCE.hitRadius) continue; // dodged
-    const amount = p.pierce !== undefined ? Math.max(1, p.pierce - pierceArmor(t)) : damageTo(p.kind, t);
+    const amount = p.pierce !== undefined ? Math.max(1, p.pierce - armorOf(world, t).pierce) : damageTo(p.kind, t, world, p.owner);
     applyDamage(world, t, amount, p.by, p.owner, p.from);
   }
 }
@@ -567,7 +558,7 @@ function react(world: World, v: Unit, by: EntityId | null, byOwner: PlayerId, fr
   if (v.state !== 'idle' || v.stance === 'passive' || !world.areEnemies(v.owner, byOwner)) return;
   const a = by !== null ? world.units.get(by) : undefined;
   if (!a) return;
-  if (v.stance === 'standGround' && edgeDistance(v, a) > UNITS[v.kind].range) return;
+  if (v.stance === 'standGround' && edgeDistance(v, a) > unitRange(world, v.owner, v.kind)) return;
   engage(world, v, a, false);
 }
 
@@ -611,7 +602,7 @@ function resume(world: World, u: Unit): void {
     sendBuilders(world, [u.id], site);
     if (u.state === 'toBuild') return;
   }
-  if (u.carry && u.carry.amount >= BALANCE.carryCap) {
+  if (u.carry && u.carry.amount >= carryCap(world, u, u.carry.type)) {
     sendToDrop(world, u);
     return;
   }
@@ -630,10 +621,6 @@ function resume(world: World, u: Unit): void {
 // ---- Death ----
 
 /** Remove a dead unit: 'died' then 'removed', and every system's bookkeeping about it. */
-function pierceArmor(t: Target): number {
-  return isUnit(t) ? UNITS[t.kind].armor.pierce : BUILDINGS[t.kind].armor.pierce;
-}
-
 export function killUnit(world: World, u: Unit): void {
   if (u.shelter != null) {
     const b = world.buildings.get(u.shelter);
@@ -711,7 +698,7 @@ export function combatSystem(world: World, dt: number, arrived: Unit[]): void {
     if (a.state !== 'attacking' || a.target === null || isRanged(a.kind)) continue;
     const t = world.units.get(a.target);
     if (!t || t.state !== 'attacking' || !isRanged(t.kind) || (t.stance !== 'aggressive' && t.stance !== 'defensive')) continue;
-    if (unitSpeed(t) <= unitSpeed(a)) continue; // can't outrun it: stand and shoot
+    if (unitSpeed(t, world) <= unitSpeed(a, world)) continue; // can't outrun it: stand and shoot
 
     const d = edgeDistance(a, t);
     if (d > BALANCE.kiteDistance) continue;
@@ -737,7 +724,7 @@ export function combatSystem(world: World, dt: number, arrived: Unit[]): void {
     }
     const scanning = (u.state === 'idle' && u.stance !== 'passive') || (u.state === 'moving' && cs?.order === 'attackMove');
     if (!scanning || (tick + u.id) % BALANCE.scanTicks !== 0) continue;
-    const t = findEnemy(world, u, acquireRadius(u, cs));
+    const t = findEnemy(world, u, acquireRadius(world, u, cs));
     if (t) engage(world, u, t, false);
   }
   defenceFire(world, dt);
@@ -746,8 +733,8 @@ export function combatSystem(world: World, dt: number, arrived: Unit[]): void {
 /** Watch towers, and shelters with villagers inside, fire a volley at the nearest enemies in range. */
 function defenceFire(world: World, dt: number): void {
   for (const b of world.buildings.values()) {
-    const attack = BUILDINGS[b.kind].attack;
-    if (!attack || !b.complete || b.hp <= 0) continue;
+    if (!BUILDINGS[b.kind].attack || !b.complete || b.hp <= 0) continue;
+    const attack = buildingAttack(world, b)!;
     const arrows = attack.arrows + (b.occupants?.length ?? 0);
     if (arrows <= 0) continue;
     b.cooldown = (b.cooldown ?? 0) - dt;
@@ -774,13 +761,28 @@ function enemiesInRange(world: World, b: Building, range: number): Unit[] {
 
 function shootBuilding(world: World, b: Building, t: Unit, pierce: number): void {
   const from = { x: b.pos.x, z: b.pos.z };
-  const dt = 1 / BALANCE.tickRate;
-  const flight0 = dist(from, t.pos) / BALANCE.projectileSpeed;
-  const aim = {
-    x: t.pos.x + ((t.pos.x - t.prevPos.x) / dt) * flight0,
-    z: t.pos.z + ((t.pos.z - t.prevPos.z) / dt) * flight0,
-  };
-  const flight = dist(from, aim) / BALANCE.projectileSpeed;
+  const { aim, flight } = aimAt(world, b.owner, from, t);
   world.events.emit({ type: 'projectile', kind: 'arrow', from, to: aim, flight, targetId: t.id });
   world.projectiles.push({ at: world.time + flight, targetId: t.id, aim, by: b.id, kind: 'archer', owner: b.owner, from, pierce });
+}
+
+/**
+ * Where a shot from `from` at moving unit `t` is aimed, and its flight time. Without Ballistics
+ * a shooter leads by only BALANCE.untrainedLead of the target's velocity × flight time, so fast
+ * units racing across the line of fire at long range dodge; with Ballistics it solves for the intercept
+ * (lead by the full velocity, refined over a few iterations). Deterministic.
+ */
+export function aimAt(world: World, owner: PlayerId, from: Vec2, t: Unit): { aim: Vec2; flight: number } {
+  const dt = 1 / BALANCE.tickRate;
+  const vx = (t.pos.x - t.prevPos.x) / dt;
+  const vz = (t.pos.z - t.prevPos.z) / dt;
+  const ballistics = playerHasFlag(world, owner, 'ballistics');
+  const lead = ballistics ? 1 : BALANCE.untrainedLead;
+  let flight = dist(from, t.pos) / BALANCE.projectileSpeed;
+  let aim = { x: t.pos.x + vx * flight * lead, z: t.pos.z + vz * flight * lead };
+  for (let i = 0; i < (ballistics ? 3 : 1); i++) {
+    flight = dist(from, aim) / BALANCE.projectileSpeed;
+    aim = { x: t.pos.x + vx * flight * lead, z: t.pos.z + vz * flight * lead };
+  }
+  return { aim, flight: dist(from, aim) / BALANCE.projectileSpeed };
 }

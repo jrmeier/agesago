@@ -2,6 +2,7 @@ import { BUILDINGS, MAX_POP } from '../core/buildings';
 import type { Building, BuildingKind, EntityId, ResourceNode, ResourceType, Unit, UnitState, Vec2 } from '../core/types';
 import { canAfford, dist, dropsFor, nearestSiteDist, type Ctx, type Snapshot } from './context';
 import { findSpot, type SpotQuery } from './placement';
+import { ageLocked } from '../sim/systems/build';
 
 const TYPES: ResourceType[] = ['food', 'wood', 'gold', 'stone'];
 const WORKING: ReadonlySet<UnitState> = new Set(['toNode', 'gathering', 'toDrop']);
@@ -304,7 +305,10 @@ export class Economy {
     if (s.villagers.length < profile.barracksAt + Math.min(have, 3) * 3) return null;
     const spacing = have === 0 ? 0 : have < 3 ? profile.productionSpacing * 0.5 : profile.productionSpacing;
     if (world.time - this.lastProduction < spacing) return null;
-    const kind = PRODUCTION[have % PRODUCTION.length];
+    // Only kinds our age allows (the range and stable wait for the Town Age).
+    const open = PRODUCTION.filter((k) => !ageLocked(world, k, this.c.player));
+    if (!open.length) return null;
+    const kind = open[have % open.length];
     const enemy = this.c.intel.enemyStart;
     const toward = enemy ? norm({ x: enemy.x - this.c.home.x, z: enemy.z - this.c.home.z }) : undefined;
     const r = this.place(s, { kind, center: this.c.home, minR: 9, maxR: 28, clearOfNodes: 3, gap: 1.5, toward, bias: 8 }, profile.builders);
@@ -315,6 +319,7 @@ export class Economy {
   /** Lay a foundation found by `q` and send `n` builders. */
   private place(s: Snapshot, q: SpotQuery, n: number, near?: Vec2): boolean | null {
     const { world, player, intel } = this.c;
+    if (ageLocked(world, q.kind, player)) return null;
     if (!canAfford(world.stockOf(player), BUILDINGS[q.kind].cost)) return false;
     const builders = this.builders(s, near ?? q.center, n, q.kind === 'farm');
     if (!builders.length) return null;

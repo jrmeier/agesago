@@ -3,6 +3,7 @@ import { isAnimal, UNITS, damage, trainable, type UnitClass } from '../core/unit
 import { canAfford, dist, type Ctx, type Snapshot } from './context';
 import { PRODUCTION, norm, type Economy } from './economy';
 import type { SeenBuilding } from './intel';
+import { ageOf } from '../sim/systems/research';
 
 /** A typical member of each class, for judging matchups. */
 const TYPICAL: Record<UnitClass, UnitKind> = { villager: 'villager', infantry: 'swordsman', archer: 'archer', cavalry: 'horseman', wildlife: 'deer' };
@@ -104,7 +105,10 @@ export class Military {
 
   /** The unit to train at `building`: best counter to the enemy's seen mix, kept varied. */
   chooseUnit(building: BuildingKind, s: Snapshot, stock: Stockpile, reserve: Partial<Stockpile>): UnitKind | null {
-    const opts = trainable(building).filter((k) => k !== 'scout' && k !== 'villager' && canAfford(stock, UNITS[k].cost, reserve));
+    const age = ageOf(this.c.world, this.c.player);
+    const opts = trainable(building).filter(
+      (k) => k !== 'scout' && k !== 'villager' && (UNITS[k].age ?? 0) <= age && canAfford(stock, UNITS[k].cost, reserve)
+    );
     if (!opts.length) return null;
     if (!this.c.profile.counters) return opts[Math.floor(this.c.rng() * opts.length)];
     const seen = this.c.intel.enemyMix();

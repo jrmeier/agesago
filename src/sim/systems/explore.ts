@@ -1,6 +1,7 @@
 import type { EntityId, Unit, Vec2 } from '../../core/types';
 import { BALANCE } from '../balance';
-import { UNEXPLORED, sightOf } from '../visibility';
+import { UNEXPLORED } from '../visibility';
+import { unitSight } from './stats';
 import type { World } from '../World';
 import { route } from './passage';
 
@@ -215,7 +216,7 @@ export function findFrontier(world: World, u: Unit): Vec2 | null {
   const uz = u.pos.z;
   const bias = BALANCE.exploreForwardBias / 2;
 
-  const claimR = sightOf(u.kind);
+  const claimR = unitSight(world, u.owner, u.kind);
   const claimR2 = claimR * claimR;
   const claims: number[] = [];
   for (const [id, st] of world.exploreState) {

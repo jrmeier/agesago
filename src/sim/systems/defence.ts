@@ -1,7 +1,7 @@
-import { BUILDINGS } from '../../core/buildings';
 import type { Building, EntityId, PlayerId, Unit } from '../../core/types';
 import type { World } from '../World';
 import { builderSpot } from './build';
+import { garrisonCap } from './stats';
 import { cancelExplore, settleCancelled } from './explore';
 import { route } from './passage';
 import { inReach, siteApproach } from './sites';
@@ -10,7 +10,7 @@ const reject = (world: World, reason: 'invalid-target' | 'unreachable') => world
 
 /** Free beds left, counting villagers already walking in. */
 function room(world: World, b: Building): number {
-  const cap = BUILDINGS[b.kind].garrison ?? 0;
+  const cap = garrisonCap(world, b.owner, b.kind);
   if (!b.complete || cap <= 0) return 0;
   let used = b.occupants?.length ?? 0;
   for (const u of world.units.values()) if (u.state === 'toShelter' && u.shelter === b.id) used++;
@@ -33,7 +33,7 @@ function dropWork(world: World, units: Unit[]): Unit[] {
 }
 
 function enter(world: World, u: Unit, b: Building): boolean {
-  const cap = BUILDINGS[b.kind].garrison ?? 0;
+  const cap = garrisonCap(world, b.owner, b.kind);
   if (!b.complete || (b.occupants?.length ?? 0) >= cap || !inReach(u, b)) return false;
   u.path = [];
   u.pos = { x: b.pos.x, z: b.pos.z };
@@ -76,7 +76,7 @@ function eject(world: World, b: Building, u: Unit): void {
  */
 export function orderGarrison(world: World, unitIds: EntityId[], buildingId: EntityId, quiet = false): boolean {
   const b = world.buildings.get(buildingId);
-  const cap = b ? (BUILDINGS[b.kind].garrison ?? 0) : 0;
+  const cap = b ? garrisonCap(world, b.owner, b.kind) : 0;
   const villagers = unitIds
     .map((id) => world.units.get(id))
     .filter((u): u is Unit => !!u && u.kind === 'villager' && u.owner === b?.owner && u.state !== 'garrisoned');
@@ -129,7 +129,7 @@ export function orderUngarrison(world: World, buildingId: EntityId, by: PlayerId
 export function orderTownBell(world: World, by: PlayerId): void {
   const villagers = [...world.units.values()].filter((u) => u.owner === by && u.kind === 'villager' && u.state !== 'garrisoned');
   const shelters = [...world.buildings.values()].filter(
-    (b) => b.owner === by && b.complete && (BUILDINGS[b.kind].garrison ?? 0) > 0,
+    (b) => b.owner === by && b.complete && garrisonCap(world, b.owner, b.kind) > 0,
   );
   if (!villagers.length || !shelters.length) {
     reject(world, 'invalid-target');

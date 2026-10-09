@@ -5,6 +5,7 @@ import { deserializeWorld, SAVE_VERSION, serializeWorld } from './serialize';
 import { World } from './World';
 import { completeBuilding, layFoundation } from './systems/build';
 import { applyDamage } from './systems/combat';
+import { completeResearch, statOf } from './systems/research';
 
 const SEED = 17;
 const DT = 0.05;
@@ -155,8 +156,43 @@ describe('world save/load', () => {
     expect(events).toEqual([]);
   });
 
+  it('round-trips research, ages, prices and research queues, and reads stats fresh after a load', () => {
+    const a = fresh();
+    const p = a.players.get(1)!;
+    p.age = 1;
+    completeResearch(a, 1, 'bronzeAxe');
+    completeResearch(a, 2, 'wovenTunics');
+    p.prices.wood = 130;
+    const tc = a.townCenter!;
+    Object.assign(a.stock, { food: 1000, wood: 1000 });
+    a.dispatch({ type: 'research', buildingId: tc.id, tech: 'census' });
+    run(a, 20);
+    expect(tc.research).toEqual(['census']);
+    const save = JSON.parse(JSON.stringify(serializeWorld(a)));
+    const b = deserializeWorld(save, hf);
+    const q = b.players.get(1)!;
+    expect([...q.researched]).toEqual(['bronzeAxe']);
+    expect([...b.players.get(2)!.researched]).toEqual(['wovenTunics']);
+    expect(q.age).toBe(1);
+    expect(q.prices.wood).toBe(130);
+    expect(b.townCenter!.research).toEqual(['census']);
+    expect(b.townCenter!.researchProgress).toBeCloseTo(1);
+    expect(statOf(b, 1, { unit: 'villager' }, 'gather.wood', 1)).toBeCloseTo(1.2);
+    expect(statOf(b, 2, { unit: 'villager' }, 'hp', 25)).toBe(40);
+    expect(hash(b)).toBe(hash(a));
+    run(a, 800);
+    run(b, 800);
+    expect(b.players.get(1)!.researched.has('census')).toBe(true);
+    expect(hash(b)).toBe(hash(a));
+  });
+
+  it('rejects saves from before research with a clear message', () => {
+    const old = { ...serializeWorld(fresh()), version: 1 };
+    expect(() => deserializeWorld(old, hf)).toThrow('before ages and research');
+  });
+
   it('rejects unsupported versions before regenerating a map', () => {
-    expect(() => deserializeWorld({ version: SAVE_VERSION + 1 } as never)).toThrow('Unsupported save version 2; expected 1');
+    expect(() => deserializeWorld({ version: SAVE_VERSION + 1 } as never)).toThrow(`Unsupported save version ${SAVE_VERSION + 1}; expected ${SAVE_VERSION}`);
     expect(() => deserializeWorld({ version: 0 } as never)).toThrow('Unsupported save version 0');
   });
 

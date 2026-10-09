@@ -1,14 +1,17 @@
 import { BUILDINGS } from '../core/buildings';
-import type { Building, EntityId, Heightfield, Player, PlayerId, ResourceNode, Stockpile, Unit } from '../core/types';
+import { TECHS } from '../core/techs';
+import type { Age, Building, EntityId, Heightfield, MarketResource, Player, PlayerId, ResourceNode, Stockpile, TechId, Unit } from '../core/types';
 import { generateMap } from './mapgen';
 import { World } from './World';
 import type { CombatState, FleeState, PendingHit } from './systems/combat';
 import type { ExploreState } from './systems/explore';
 import type { GatherState } from './systems/gather';
+import { clearStatCache } from './systems/research';
 import { buildingRect } from './systems/sites';
 import type { GameResult } from './systems/victory';
 
-export const SAVE_VERSION = 1;
+/** 2: M8 research (researched techs, ages, market prices, building research queues). */
+export const SAVE_VERSION = 2;
 
 /** Plain JSON, with ordered entries: iteration order affects scans, training and exploration. */
 export interface SaveData {
@@ -21,6 +24,10 @@ export interface SaveData {
     player: Player;
     stock: Stockpile;
     visibility: { version: number; runs: number[] };
+    /** Finished techs, in completion order. */
+    researched: TechId[];
+    age: Age;
+    prices: Record<MarketResource, number>;
   }[];
   units: Unit[];
   nodes: ResourceNode[];
@@ -93,8 +100,9 @@ export function serializeWorld(world: World): SaveData {
     playerCount: world.players.size,
     width: world.hf.width,
     depth: world.hf.depth,
-    players: [...world.players.values()].map(({ player, stock, visibility }) => ({
+    players: [...world.players.values()].map(({ player, stock, visibility, researched, age, prices }) => ({
       player, stock, visibility: { version: visibility.version, runs: encode(visibility.state) },
+      researched: [...researched], age, prices,
     })),
     units: [...world.units.values()],
     nodes: [...world.nodes.values()],
@@ -129,7 +137,11 @@ function restoreMap<K, V>(map: Map<K, V>, entries: [K, V][]): void {
 /** Regenerate static scenery from the seed; retain queues, jobs, exact fog and clocks. */
 export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   if (!data || data.version !== SAVE_VERSION) {
-    throw new Error(`Unsupported save version ${data?.version}; expected ${SAVE_VERSION}`);
+    const old = typeof data?.version === 'number' && data.version < SAVE_VERSION;
+    throw new Error(
+      `Unsupported save version ${data?.version}; expected ${SAVE_VERSION}` +
+        (old ? ' (saves from before ages and research can no longer be loaded)' : '')
+    );
   }
   if (!Number.isSafeInteger(data.seed) || !Number.isInteger(data.playerCount) || data.playerCount < 1 || data.playerCount > 4
     || data.players.length !== data.playerCount) throw new Error('Invalid save: map identity or player count');
@@ -162,7 +174,17 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
     Object.assign(state.stock, p.stock);
     decode(p.visibility.runs, state.visibility.state);
     state.visibility.version = p.visibility.version;
+    if (!Array.isArray(p.researched) || p.researched.some((t) => !(t in TECHS))) throw new Error('Invalid save: researched techs');
+    if (![0, 1, 2, 3].includes(p.age)) throw new Error('Invalid save: age');
+    state.researched.clear();
+    for (const t of p.researched) state.researched.add(t);
+    state.age = p.age;
+    Object.assign(state.prices, p.prices);
   }
+  for (const b of world.buildings.values()) {
+    if (b.research?.some((t) => !(t in TECHS))) throw new Error('Invalid save: research queue');
+  }
+  clearStatCache(world);
   world.time = saved.time;
   world.restoreClocks(saved.clocks);
   const s = saved.systems;

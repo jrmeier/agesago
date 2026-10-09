@@ -1,7 +1,9 @@
+import type { Stat } from '../../core/techs';
 import type { Building, EntityId, ResourceNode, ResourceType, Unit, UnitState, Vec2 } from '../../core/types';
 import { BALANCE } from '../balance';
 import { rectDistance } from '../nav';
 import type { World } from '../World';
+import { unitStat } from './research';
 import { route } from './passage';
 import { cancelExplore, settleCancelled } from './explore';
 import { buildingRect, inReach, nearestDrop, nodeApproach, nodeInReach } from './sites';
@@ -17,6 +19,21 @@ export interface GatherState {
 }
 
 const dist = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.z - b.z);
+
+/** Stat names per resource, prebuilt so hot loops don't build strings. */
+const CARRY_STAT: Record<ResourceType, Stat> = { wood: 'carry.wood', food: 'carry.food', gold: 'carry.gold', stone: 'carry.stone' };
+const GATHER_STAT: Record<ResourceType, Stat> = { wood: 'gather.wood', food: 'gather.food', gold: 'gather.gold', stone: 'gather.stone' };
+
+/** How much of `type` villager `u` can carry (BALANCE.carryCap plus its owner's research). */
+export function carryCap(world: World, u: Unit, type: ResourceType): number {
+  return Math.round(unitStat(world, u.owner, u.kind, CARRY_STAT[type], BALANCE.carryCap));
+}
+
+/** Seconds per resource unit for `u` on a node of `type` (farm: a farm field). */
+export function gatherInterval(world: World, u: Unit, type: ResourceType, farm: boolean): number {
+  if (farm) return BALANCE.farmInterval / unitStat(world, u.owner, u.kind, 'gather.farm', 1);
+  return BALANCE.gatherIntervals[type] / unitStat(world, u.owner, u.kind, GATHER_STAT[type], 1);
+}
 
 /** States in which a farmer keeps its claim on a farm. */
 const FARMING: ReadonlySet<UnitState> = new Set(['toNode', 'gathering', 'toDrop']);
@@ -225,18 +242,19 @@ function gatherTick(world: World, u: Unit, dt: number): void {
   }
   const type: ResourceType = node ? node.type : 'food';
   const pos = node ? node.pos : farm!.pos;
-  const interval = node ? BALANCE.gatherIntervals[type] : BALANCE.farmInterval;
+  const interval = gatherInterval(world, u, type, !node);
+  const cap = carryCap(world, u, type);
   let amount = node ? node.amount : farm!.food!;
   if (u.carry && u.carry.type !== type) u.carry = null;
   let gs = world.gatherState.get(u.id);
   if (!gs) world.gatherState.set(u.id, (gs = { timer: 0, anchor: { ...pos } }));
-  if (!(u.carry && u.carry.amount >= BALANCE.carryCap)) {
+  if (!(u.carry && u.carry.amount >= cap)) {
     gs.timer += dt;
     while (gs.timer >= interval - 1e-9 && amount > 0) {
       gs.timer -= interval;
       amount -= 1;
       u.carry = { type, amount: (u.carry?.amount ?? 0) + 1 };
-      if (u.carry.amount >= BALANCE.carryCap) break;
+      if (u.carry.amount >= cap) break;
     }
   }
   if (node) {
@@ -251,7 +269,7 @@ function gatherTick(world: World, u: Unit, dt: number): void {
     world.events.emit({ type: 'farmFood', id: farm!.id, food: amount });
     if (amount <= 0) world.farmers.delete(farm!.id);
   }
-  if ((u.carry && u.carry.amount >= BALANCE.carryCap) || amount <= 0) {
+  if ((u.carry && u.carry.amount >= cap) || amount <= 0) {
     gs.timer = 0;
     if (u.carry && u.carry.amount > 0) sendToDrop(world, u);
     else retarget(world, u);
