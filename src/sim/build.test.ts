@@ -503,7 +503,7 @@ describe('farms', () => {
     const log = record(w);
     runUntil(w, () => farm.complete);
     w.dispatch({ type: 'gather', unitIds: [other.id], nodeId: farm.id });
-    expect(log).toContainEqual({ type: 'rejected', reason: 'invalid-target' });
+    expect(log).toContainEqual({ type: 'rejected', reason: 'occupied' });
     expect(other.state).toBe('idle');
     // Once the farmer leaves, the farm is free again.
     w.dispatch({ type: 'move', unitIds: [u.id], target: { x: 10, z: 10 } });

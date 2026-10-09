@@ -75,6 +75,7 @@ export class Game {
       selection: this.selection,
       canvas: this.renderer.domElement,
       hud: document.getElementById('hud') ?? container,
+      props: layout.props,
     });
     this.hud = new Hud(this.world, this.selection, () => this.train());
     this.minimap = new Minimap(document.getElementById('hud') ?? container, this.world, this.rig);

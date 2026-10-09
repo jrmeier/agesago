@@ -76,7 +76,7 @@ export function orderFarm(world: World, unitIds: EntityId[], farm: Building): vo
   }
   settleCancelled(world, cancelled);
   // Nobody took it: the farm is busy (or fallow / unreachable) and no other free farm is near.
-  if (unitIds.length && !sent) world.events.emit({ type: 'rejected', reason: 'invalid-target' });
+  if (unitIds.length && !sent) world.events.emit({ type: 'rejected', reason: 'occupied' });
 }
 
 /** Plain move to the edge of `node` (for units that can't gather). False if unreachable. */
@@ -245,6 +245,7 @@ function gatherTick(world: World, u: Unit, dt: number): void {
   } else {
     // A harvested-out farm stays as a fallow field (food 0) until reseeded.
     farm!.food = amount;
+    world.events.emit({ type: 'farmFood', id: farm!.id, food: amount });
     if (amount <= 0) world.farmers.delete(farm!.id);
   }
   if ((u.carry && u.carry.amount >= BALANCE.carryCap) || amount <= 0) {

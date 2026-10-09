@@ -190,7 +190,9 @@ export type RejectReason =
   | 'pop-cap'
   | 'unreachable'
   | 'invalid-target'
-  | 'blocked-site';
+  | 'blocked-site'
+  /** A farm (or similar single-worker site) already has its worker. */
+  | 'occupied';
 
 /** Result of checking whether a building fits at a spot (World.canPlace). */
 export interface PlacementCheck {
@@ -205,6 +207,8 @@ export type SimEvent =
   | { type: 'stockpile'; stock: Stockpile; pop: number; popCap: number }
   /** A foundation finished construction. */
   | { type: 'constructed'; id: EntityId }
+  /** A farm's remaining food changed (harvest or reseed); 0 = fallow. */
+  | { type: 'farmFood'; id: EntityId; food: number }
   | { type: 'unitState'; id: EntityId; state: UnitState }
   | { type: 'trainProgress'; buildingId: EntityId; queue: number; progress: number; total: number }
   | { type: 'rejected'; reason: RejectReason };

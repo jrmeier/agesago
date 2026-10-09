@@ -254,6 +254,7 @@ export function orderConstruct(world: World, unitIds: EntityId[], buildingId: En
     }
     pay(world, cost, 1);
     b.food = FARM_FOOD;
+    world.events.emit({ type: 'farmFood', id: b.id, food: b.food });
     world.emitStock();
   }
   orderFarm(world, unitIds, b);
