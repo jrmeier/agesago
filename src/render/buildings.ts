@@ -31,8 +31,8 @@ export function buildTownCenter(baseHeight: number): THREE.Group {
   flag.position.set(1.12, 3.35, 0);
 
   for (const m of [foundation, walls, roof, door, pole, flag]) {
-    m.castShadow = true;
-    m.receiveShadow = true;
+    m.castShadow = false;
+    m.receiveShadow = false;
     g.add(m);
   }
 
