@@ -49,14 +49,16 @@ export function coverTint(x: number, z: number, meadow: number): { r: number; g:
   const v = wrap01(z * GROUND_UV_SCALE);
   const n = tileNoise(u, v, 4);
   const blade = tileNoise(u, v, 11);
-  const shade = 0.42 + n * 0.16 - blade * 0.06;
+  const shade = 0.92 + n * 0.2 - blade * 0.08;
   const g = lerpRgb(hexRgb(0x2c5418), hexRgb(0x4f8a32), n);
   const m = lerpRgb(hexRgb(0x3d6e22), hexRgb(0x6a9a38), n);
   const t = clamp01(meadow);
+  // hexRgb is 0..255 (canvas paint space); tints are 0..1 sRGB.
+  const k = shade / 255;
   return {
-    r: clamp01((g[0] + (m[0] - g[0]) * t) * shade),
-    g: clamp01((g[1] + (m[1] - g[1]) * t) * shade),
-    b: clamp01((g[2] + (m[2] - g[2]) * t) * shade),
+    r: clamp01((g[0] + (m[0] - g[0]) * t) * k),
+    g: clamp01((g[1] + (m[1] - g[1]) * t) * k),
+    b: clamp01((g[2] + (m[2] - g[2]) * t) * k),
   };
 }
 

@@ -1,8 +1,10 @@
-import { DEFAULT_SEED } from '../core/types';
+import { detectQuality, type Quality } from '../core/quality';
+import { DEFAULT_SEED, type Vec2 } from '../core/types';
 import { CameraRig } from '../camera/CameraRig';
 import { Controls } from '../input/Controls';
 import { Input } from '../input/Input';
 import { EntityViews } from '../render/EntityViews';
+import { GrassField } from '../render/Grass';
 import { PropsView } from '../render/PropsView';
 import { Renderer } from '../render/Renderer';
 import { TerrainView } from '../render/TerrainView';
@@ -25,10 +27,12 @@ export class Game {
   readonly renderer: Renderer;
   readonly rig: CameraRig;
   readonly selection = new Selection();
+  readonly quality: Quality;
   private readonly input: Input;
   private readonly terrain: TerrainView;
   private readonly views: EntityViews;
   private readonly props: PropsView;
+  private readonly grass: GrassField;
   private readonly controls: Controls;
   private readonly hud: Hud;
   private readonly minimap: Minimap;
@@ -42,14 +46,18 @@ export class Game {
     const { hf, layout } = generateMap(seed);
     this.world = new World(hf, layout);
 
-    this.renderer = new Renderer(container);
+    this.quality = detectQuality();
+    this.renderer = new Renderer(container, this.quality);
     this.input = new Input(this.renderer.domElement);
     this.rig = new CameraRig(hf, this.input, layout.townCenter);
 
-    this.terrain = new TerrainView(hf);
+    this.terrain = new TerrainView(hf, this.quality);
     this.views = new EntityViews(this.world);
     this.props = new PropsView(hf, layout.props);
-    this.renderer.scene.add(this.terrain.object, this.props.object, this.views.object);
+    this.grass = new GrassField(hf, this.quality);
+    this.views.setShadows(this.quality.shadows);
+    this.props.setShadows(this.quality.shadows);
+    this.renderer.scene.add(this.terrain.object, this.props.object, this.grass.object, this.views.object);
 
     this.selection.onChange((ids) => this.views.setSelected(ids));
     this.controls = new Controls({
@@ -90,7 +98,10 @@ export class Game {
     }
     if (steps === MAX_STEPS_PER_FRAME) this.accumulator = 0;
 
+    const focus = this.focus();
+    this.renderer.update(focus, this.elapsed);
     this.terrain.update(this.elapsed);
+    this.grass.update(focus, this.elapsed);
     this.views.sync(this.accumulator / STEP, this.elapsed, this.rig.camera);
     this.hud.update();
     this.minimap.update(this.elapsed);
@@ -98,6 +109,12 @@ export class Game {
     this.input.endFrame();
     this.raf = requestAnimationFrame(this.frame);
   };
+
+  /** Ground point the player is looking at: shadows, grass and sky follow it. */
+  private focus(): Vec2 {
+    const p = this.rig.mode === 'fps' ? this.rig.fps.pos : this.rig.rts.target;
+    return { x: p.x, z: p.z };
+  }
 
   private resize(): void {
     const w = this.container.clientWidth || window.innerWidth;

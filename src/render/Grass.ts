@@ -218,7 +218,7 @@ function windMaterial(kind: 'grass' | 'flower', time: { value: number }): THREE.
   });
   const tint =
     kind === 'grass'
-      ? 'vColor.rgb = aTint * mix(vec3(0.72, 0.86, 0.55), vec3(1.0, 1.08, 0.62), uv.y);'
+      ? 'vColor.rgb = aTint * mix(vec3(0.62, 0.74, 0.5), vec3(0.92, 1.02, 0.78), uv.y);'
       : 'vColor.rgb = mix(vec3(0.16, 0.28, 0.1), aTint, smoothstep(0.4, 0.62, uv.y));';
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = time;

@@ -38,7 +38,7 @@ export class Renderer {
     this.webgl.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.pixelRatio));
     this.webgl.outputColorSpace = THREE.SRGBColorSpace;
     this.webgl.toneMapping = THREE.ACESFilmicToneMapping;
-    this.webgl.toneMappingExposure = 1.05;
+    this.webgl.toneMappingExposure = 1.2;
     this.webgl.shadowMap.enabled = quality.shadows;
     // r185 deprecates PCFSoftShadowMap and implements the soft filter as PCFShadowMap.
     this.webgl.shadowMap.type = THREE.PCFShadowMap;
@@ -50,7 +50,7 @@ export class Renderer {
     this.sky = new Sky();
     this.scene.add(this.sky.object);
 
-    const hemi = new THREE.HemisphereLight(0x9eb6d4, 0xb8895a, 0.48);
+    const hemi = new THREE.HemisphereLight(0x9eb6d4, 0xb8895a, 0.85);
     this.scene.add(hemi);
 
     this.sun = new THREE.DirectionalLight(SUN_COLOR, 2.15);
