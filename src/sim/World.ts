@@ -1,8 +1,9 @@
 import { BUILDINGS, MAX_POP, footprintRadius } from '../core/buildings';
 import { EventBus } from '../core/events';
-import { UNITS } from '../core/units';
+import { isAnimal, UNITS } from '../core/units';
 import {
   NODE_RESOURCE,
+  GAIA,
   type Player,
   type PlayerId,
   type StartLayout,
@@ -44,6 +45,7 @@ import { buildingRect } from './systems/sites';
 import { movementSystem, orderMove } from './systems/movement';
 import { orderTrain, trainSystem } from './systems/train';
 import { resign, victorySystem, type GameResult } from './systems/victory';
+import { wildlifeSystem } from './systems/wildlife';
 
 /**
  * The simulation. Plain data; mutate only through dispatch(); advance with tick(dt).
@@ -158,6 +160,7 @@ export class World {
     starts.forEach((start, i) => {
       for (const p of start.scouts) this.addUnit('scout', p, i + 1);
     });
+    for (const animal of layout.animals ?? []) this.addUnit(animal.kind, animal.pos, GAIA);
     this.updateFog();
   }
 
@@ -203,10 +206,10 @@ export class World {
     return Math.min(MAX_POP, cap);
   }
 
-  /** Every unit a player owns counts toward the pop cap. */
+  /** Player units count toward the pop cap; herdables do not. */
   popOf(player: PlayerId): number {
     let n = 0;
-    for (const u of this.units.values()) if (u.owner === player) n++;
+    for (const u of this.units.values()) if (u.owner === player && !isAnimal(u.kind)) n++;
     return n;
   }
 
@@ -335,6 +338,7 @@ export class World {
     gatherSystem(this, dt, arrived);
     buildSystem(this, dt, arrived);
     // After gather/build so units it sends back to work aren't treated as arrivals this tick.
+    wildlifeSystem(this, dt);
     combatSystem(this, dt, arrived);
     exploreSystem(this);
     trainSystem(this, dt);
@@ -366,7 +370,7 @@ export class World {
   updateFog(): void {
     const viewers = new Map<PlayerId, Viewer[]>();
     for (const id of this.players.keys()) viewers.set(id, []);
-    for (const u of this.units.values()) viewers.get(u.owner)?.push({ pos: u.pos, sight: sightOf(u.kind) });
+    for (const u of this.units.values()) if (!isAnimal(u.kind)) viewers.get(u.owner)?.push({ pos: u.pos, sight: sightOf(u.kind) });
     for (const b of this.buildings.values()) {
       if (b.complete) viewers.get(b.owner)?.push({ pos: b.pos, sight: BUILDINGS[b.kind].sight });
     }
@@ -402,7 +406,7 @@ export class World {
 
   /** Create a unit of `kind` at `p` and emit 'spawned'. */
   spawnUnit(kind: UnitKind, p: Vec2, owner: PlayerId = this.localPlayer): Unit {
-    const u = this.addUnit(kind, p, owner);
+    const u = this.addUnit(kind, p, isAnimal(kind) ? GAIA : owner);
     this.events.emit({ type: 'spawned', id: u.id, kind });
     return u;
   }
@@ -446,7 +450,7 @@ export class World {
       hp,
       maxHp: hp,
       target: null,
-      stance: kind === 'villager' ? 'passive' : 'aggressive',
+      stance: kind === 'villager' || isAnimal(kind) ? 'passive' : 'aggressive',
       pos: { ...p },
       prevPos: { ...p },
       facing: 0,
@@ -456,6 +460,7 @@ export class World {
       gatherType: null,
       carry: null,
     };
+    if (isAnimal(kind)) u.leashAnchor = { ...p };
     this.units.set(u.id, u);
     return u;
   }

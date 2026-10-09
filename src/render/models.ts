@@ -99,6 +99,63 @@ export function grounded(parts: THREE.BufferGeometry[], name: string): THREE.Buf
   return geometry;
 }
 
+/** Box-built quadrupeds, facing +Z with four hooves seated at Y=0. */
+export function createAnimal(kind: 'deer' | 'boar' | 'sheep'): SoldierModel {
+  const object = new THREE.Group();
+  object.name = kind;
+  const rig = new THREE.Group();
+  object.add(rig);
+  const color = kind === 'sheep' ? 0xe2dcc5 : kind === 'boar' ? 0x574437 : 0xa97848;
+  const legHeight = kind === 'deer' ? 0.55 : 0.25;
+  const bodyY = legHeight + 0.22;
+  const parts = [
+    part(new THREE.BoxGeometry(kind === 'deer' ? 0.36 : 0.55, 0.44, 0.85), color, [0, bodyY, 0]),
+    part(new THREE.BoxGeometry(0.27, 0.3, 0.32), kind === 'sheep' ? 0x6c5b47 : color, [0, bodyY + (kind === 'deer' ? 0.27 : 0.02), 0.55]),
+  ];
+  for (const x of [-0.16, 0.16]) for (const z of [-0.3, 0.3]) {
+    parts.push(part(new THREE.BoxGeometry(0.09, legHeight, 0.09), 0x554334, [x, legHeight / 2, z]));
+  }
+  for (const side of [-1, 1]) {
+    parts.push(part(new THREE.BoxGeometry(0.16, 0.07, 0.12), color, [side * 0.2, bodyY + 0.21, 0.5]));
+    if (kind === 'deer') {
+      parts.push(part(new THREE.BoxGeometry(0.05, 0.35, 0.05), 0xd6c5a0, [side * 0.12, bodyY + 0.55, 0.5]));
+      parts.push(part(new THREE.BoxGeometry(0.2, 0.05, 0.05), 0xd6c5a0, [side * 0.17, bodyY + 0.62, 0.5]));
+    }
+    if (kind === 'boar') parts.push(part(new THREE.BoxGeometry(0.055, 0.13, 0.07), 0xe9dfbf, [side * 0.12, bodyY - 0.03, 0.74]));
+  }
+  const geometry = grounded(parts, `${kind}-body`);
+  geometry.userData.dispose = 1;
+  const material = modelMaterial();
+  material.userData.owned = 1;
+  rig.add(new THREE.Mesh(geometry, material));
+  return {
+    object,
+    setPose(pose, time, extra): void {
+      const progress = typeof extra === 'number' ? extra : extra?.progress ?? 0;
+      rig.position.y = pose === 'walk' ? Math.abs(Math.sin(time * 6)) * 0.025 : 0;
+      rig.rotation.x = pose === 'attack' ? -Math.max(0, Math.sin(time * 6)) * 0.18 : 0;
+      rig.rotation.z = pose === 'die' ? Math.min(1, progress) * Math.PI / 2 : 0;
+    },
+  };
+}
+
+export function carcassGeometry(): THREE.BufferGeometry {
+  return grounded([
+    part(new THREE.BoxGeometry(0.7, 0.22, 0.9), 0x8a5540, [0, 0.11, 0]),
+    part(new THREE.BoxGeometry(0.3, 0.17, 0.28), 0xa77b55, [0.1, 0.085, 0.5]),
+    part(new THREE.BoxGeometry(0.85, 0.08, 0.12), 0x594334, [0, 0.04, -0.23]),
+  ], 'carcass');
+}
+
+export function fishGeometry(): THREE.BufferGeometry {
+  const pieces: THREE.BufferGeometry[] = [];
+  for (const [x, z] of [[-0.24, -0.15], [0.24, 0.15], [0, 0.55]]) {
+    pieces.push(part(new THREE.BoxGeometry(0.15, 0.09, 0.4), 0x92b6bb, [x, 0.045, z]));
+    pieces.push(part(new THREE.BoxGeometry(0.24, 0.07, 0.08), 0x4b8995, [x, 0.045, z - 0.24]));
+  }
+  return grounded(pieces, 'fish-school');
+}
+
 /** Roughen shared vertices consistently so faceted surfaces remain watertight. */
 export function roughen(geometry: THREE.BufferGeometry, random: Random): THREE.BufferGeometry {
   const vertices = geometry.getAttribute('position');

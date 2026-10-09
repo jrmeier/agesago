@@ -98,6 +98,16 @@ describe('orders that depend on ownership', () => {
   const ground = { x: 10, z: 20 };
   const enemy = { id: 50, owner: 2, pos: { x: 3, z: 4 }, visible: true };
 
+  it('hunts visible wildlife, including own sheep, while respecting fog', () => {
+    const selection = { unitIds: [1], rallyBuildingId: null };
+    for (const kind of ['deer', 'boar', 'sheep'] as const) {
+      const animal = { ...enemy, owner: kind === 'sheep' ? 1 : 0, kind };
+      expect(resolveTargetOrder(selection, animal, ground, enemyOf1)).toEqual({ type: 'attack', unitIds: [1], targetId: 50 });
+      expect(resolveTargetOrder(selection, { ...animal, visible: false }, ground, enemyOf1)).toBeNull();
+    }
+    expect(resolveTargetOrder(selection, { ...enemy, owner: 0 }, ground, enemyOf1)).toBeNull();
+  });
+
   it('attacks a visible enemy unit or building with own units selected', () => {
     expect(resolveTargetOrder({ unitIds: [1, 2], rallyBuildingId: null }, enemy, ground, enemyOf1)).toEqual({
       type: 'attack',

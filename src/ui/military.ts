@@ -1,5 +1,5 @@
 import type { Building, BuildingKind, Stance, Stockpile, Unit, UnitKind } from '../core/types';
-import { UNITS, trainable, type UnitSpec } from '../core/units';
+import { isAnimal, UNITS, trainable, type UnitSpec } from '../core/units';
 import { TRAIN_SLOT_KEYS } from '../input/hotkeys';
 import { canAfford } from './build';
 
@@ -11,9 +11,9 @@ export const STANCES: readonly { stance: Stance; label: string; hint: string }[]
   { stance: 'passive', label: 'Passive', hint: 'Never attack' },
 ];
 
-/** Soldiers: everything but villagers and scouts. */
+/** Soldiers, excluding civilian units and wildlife. */
 export function isMilitary(kind: UnitKind): boolean {
-  return kind !== 'villager' && kind !== 'scout';
+  return kind !== 'villager' && kind !== 'scout' && !isAnimal(kind);
 }
 
 /** Shift-click / Shift+hotkey queues five. */

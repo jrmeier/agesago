@@ -179,10 +179,10 @@ describe('generateMap', () => {
     const { hf, layout } = maps.get(`${players}/${seed}`)!;
     const reachable = floodFill(hf, layout);
     const units = [layout, ...layout.extraStarts!].flatMap((start) => [...start.villagers, ...start.scouts]);
-    expect([...units, ...layout.nodes.map((node) => node.pos)].filter((pos) => !reachable(pos))).toEqual([]);
+    expect([...units, ...layout.nodes.filter((node) => node.kind !== 'fish').map((node) => node.pos)].filter((pos) => !reachable(pos))).toEqual([]);
     const quarries = layout.nodes.filter((node) => node.kind === 'stone');
     expect(quarries).toHaveLength(10 + players * 2);
-    const blockedApproaches = layout.nodes.filter((node) => {
+    const blockedApproaches = layout.nodes.filter((node) => node.kind !== 'fish').filter((node) => {
       const radius = node.kind === 'stone' || node.kind === 'gold' ? 1.3 : 1.1;
       const approaches = Array.from({ length: 8 }, (_, a) => {
         const angle = a * Math.PI / 4;
@@ -191,7 +191,32 @@ describe('generateMap', () => {
       return node.kind === 'stone' ? approaches.some((clear) => !clear) : !approaches.some(Boolean);
     });
     expect(blockedApproaches).toEqual([]);
+    expect(layout.animals).toHaveLength(12);
+    for (const animal of layout.animals!) {
+      expect(reachable(animal.pos)).toBe(true);
+      for (const start of [layout, ...layout.extraStarts!]) expect(distance(animal.pos, start.townCenter)).toBeGreaterThanOrEqual(START_RADIUS + 5);
+      const density = hf.forestDensity(animal.pos.x, animal.pos.z);
+      if (animal.kind === 'boar') expect(density).toBeGreaterThanOrEqual(0.35);
+      else expect(density).toBeLessThanOrEqual(0.25);
+    }
+    const fish = layout.nodes.filter((node) => node.kind === 'fish');
+    expect(fish).toHaveLength(10);
+    for (const node of fish) {
+      expect(hf.isWater(node.pos.x, node.pos.z)).toBe(true);
+      expect(hf.isWalkable(node.pos.x, node.pos.z)).toBe(false);
+      expect(node.amount).toBe(200);
+      let shore = false;
+      for (let a = 0; a < 32; a++) for (let r = 0.5; r <= 4; r += 0.5) {
+        const angle = a * Math.PI / 16;
+        if (reachable({ x: node.pos.x + Math.cos(angle) * r, z: node.pos.z + Math.sin(angle) * r })) shore = true;
+      }
+      expect(shore).toBe(true);
+    }
     const f = terrainFeatures(seed);
+    for (const node of fish) {
+      for (const ford of f.river.fords) expect(Math.abs(node.pos.x - ford.x) >= 10.5 || Math.abs(node.pos.z - ford.z) >= 4.5).toBe(true);
+      expect(Math.abs(node.pos.x - f.tributary.ford.x) >= 4.5 || Math.abs(node.pos.z - f.tributary.ford.z) >= 10.5).toBe(true);
+    }
     for (const ford of f.river.fords) {
       expect(reachable({ x: ford.x - 8, z: ford.z })).toBe(true);
       expect(reachable({ x: ford.x + 8, z: ford.z })).toBe(true);
@@ -215,7 +240,7 @@ describe('generateMap', () => {
     expect(layout.props.filter((p) => p.kind === 'house').length).toBeGreaterThanOrEqual(3);
     expect(layout.props.some((p) => p.kind === 'well')).toBe(true);
     expect(layout.props.some((p) => p.kind === 'wheatField')).toBe(true);
-    const invalid = layout.nodes.filter((node) => {
+    const invalid = layout.nodes.filter((node) => node.kind !== 'fish').filter((node) => {
       const g = hf.ground(node.pos.x, node.pos.z);
       return node.amount !== (node.kind === 'tree' ? 100 : node.kind === 'berry' ? 125 : node.kind === 'stone' ? 350 : 400)
         || !hf.isWalkable(node.pos.x, node.pos.z) || g.path > 0.04 || g.sand > 0.24
@@ -264,7 +289,7 @@ describe('generateMap', () => {
   it('also keeps resources connected on the coarser navigation grid', () => {
     const { hf, layout } = maps.get('4/1')!;
     const reachable = floodFill(hf, layout, 1);
-    expect(layout.nodes.filter((node) => !reachable(node.pos))).toEqual([]);
+    expect(layout.nodes.filter((node) => node.kind !== 'fish' && !reachable(node.pos))).toEqual([]);
   });
 
   it.each(Array.from({ length: 10 }, (_, i) => i + 11))('retains the earlier extended seed coverage for seed %i', (seed) => {
@@ -272,7 +297,7 @@ describe('generateMap', () => {
     const reachable = floodFill(hf, layout);
     expect(layout.extraStarts).toHaveLength(1);
     expect(layout.nodes.filter((node) => node.kind === 'stone')).toHaveLength(14);
-    expect(layout.nodes.filter((node) => !reachable(node.pos))).toEqual([]);
+    expect(layout.nodes.filter((node) => node.kind !== 'fish' && !reachable(node.pos))).toEqual([]);
     expect([layout, ...layout.extraStarts!].flatMap((start) => [...start.villagers, ...start.scouts])
       .filter((pos) => !reachable(pos))).toEqual([]);
   });

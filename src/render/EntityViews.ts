@@ -26,6 +26,8 @@ import { berryLodGeometry, goldLodGeometry, stoneLodGeometry, stoneNodeGeometry,
 import { createUnitAvatar } from './modelBridge';
 import {
   berryBushGeometry,
+  carcassGeometry,
+  fishGeometry,
   goldPileGeometry,
   modelMaterial,
   stumpGeometry,
@@ -74,6 +76,9 @@ const UNIT_SCALE: Record<UnitKind, number> = {
   slinger: 1.25,
   archer: 1.25,
   horseman: 1.15,
+  deer: 1.3,
+  boar: 1.3,
+  sheep: 1.3,
 };
 /** World-space bar height, already including the unit's draw scale. */
 const BAR_Y: Record<UnitKind, number> = {
@@ -84,6 +89,9 @@ const BAR_Y: Record<UnitKind, number> = {
   slinger: 1.75,
   archer: 1.8,
   horseman: 2.4,
+  deer: 2,
+  boar: 1.3,
+  sheep: 1.3,
 };
 const BUILDING_HEIGHT: Record<BuildingKind, number> = {
   townCenter: 4.2,
@@ -152,12 +160,16 @@ export class EntityViews {
       berry: [berryBushGeometry()],
       gold: [goldPileGeometry()],
       stone: [stoneNodeGeometry()],
+      carcass: [carcassGeometry()],
+      fish: [fishGeometry()],
     };
     this.lodGeometries = {
       tree: treeLodGeometry(),
       berry: berryLodGeometry(),
       gold: goldLodGeometry(),
       stone: stoneLodGeometry(),
+      carcass: carcassGeometry(),
+      fish: fishGeometry(),
     };
     for (const list of Object.values(this.geometries)) for (const geo of list) if (geo.boundingBox === null) geo.computeBoundingBox();
 
@@ -396,7 +408,7 @@ export class EntityViews {
     const capacity = node.kind === 'tree' ? 48 : 24;
     const pool = this.poolFor(node.kind, variant, geometry, capacity);
     const scale = 0.9 + frac(node.id * 12.9898) * 0.2;
-    this.dummy.position.set(node.pos.x, this.groundY(node.pos.x, node.pos.z), node.pos.z);
+    this.dummy.position.set(node.pos.x, node.kind === 'fish' ? SEA_LEVEL + 0.03 : this.groundY(node.pos.x, node.pos.z), node.pos.z);
     this.dummy.rotation.set(0, frac(node.id * 78.233) * Math.PI * 2, 0);
     this.dummy.scale.set(scale, scale, scale);
     this.dummy.updateMatrix();

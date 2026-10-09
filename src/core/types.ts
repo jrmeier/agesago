@@ -39,12 +39,13 @@ export interface Vec2 {
 export type ResourceType = 'wood' | 'food' | 'gold' | 'stone';
 export type Stockpile = Record<ResourceType, number>;
 
-export type NodeKind = 'tree' | 'berry' | 'gold' | 'stone';
+export type NodeKind = 'tree' | 'berry' | 'gold' | 'stone' | 'carcass' | 'fish';
+export type AnimalKind = 'deer' | 'boar' | 'sheep';
 /**
- * Player unit types. Villagers gather and build; scouts are fast, far-sighted explorers that
- * cannot gather; the rest are military. Stats live in core/units.ts.
+ * Villagers gather and build; scouts explore; soldiers fight; wildlife starts as Gaia.
+ * Stats live in core/units.ts.
  */
-export type UnitKind = 'villager' | 'scout' | 'hoplite' | 'swordsman' | 'slinger' | 'archer' | 'horseman';
+export type UnitKind = 'villager' | 'scout' | 'hoplite' | 'swordsman' | 'slinger' | 'archer' | 'horseman' | AnimalKind;
 /** Everything a player can build. Data (sizes, costs, build times) lives in core/buildings.ts. */
 export type BuildingKind =
   | 'townCenter'
@@ -63,6 +64,8 @@ export const NODE_RESOURCE: Record<NodeKind, ResourceType> = {
   berry: 'food',
   gold: 'gold',
   stone: 'stone',
+  carcass: 'food',
+  fish: 'food',
 };
 
 /** Terrain query surface. Implemented by sim/terrain.ts; read by everything. */
@@ -149,6 +152,8 @@ export interface MapLayout {
   /** Opponents' starting positions (players 2, 3, …). Empty or absent for a solo map. */
   extraStarts?: StartLayout[];
   nodes: { kind: NodeKind; pos: Vec2; amount: number }[];
+  /** Neutral wildlife; absent in older layouts. */
+  animals?: { kind: AnimalKind; pos: Vec2 }[];
   /** Scenery: ruins, rocks, fences, fields, houses… */
   props: PropPlacement[];
 }
@@ -189,6 +194,8 @@ export interface Unit {
   /** Resource type the unit is assigned to (survives node depletion for retargeting). */
   gatherType: ResourceType | null;
   carry: { type: ResourceType; amount: number } | null;
+  /** Wildlife's original home, retained through fleeing and save/load. */
+  leashAnchor?: Vec2;
 }
 
 export interface ResourceNode {
