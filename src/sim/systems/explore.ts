@@ -143,6 +143,8 @@ class FrontierGrid {
   /** A search that found nothing: skip identical searches until the fog changes. */
   emptyVersion = -1;
   emptyRegion = 0;
+  /** nav.version this copy was built from; buildings placed or removed since make it stale. */
+  readonly navVersion: number;
 
   constructor(
     world: World,
@@ -157,6 +159,7 @@ class FrontierGrid {
     this.seen = new Int32Array(n);
     this.queue = new Int32Array(n);
     this.offsets = Int32Array.of(1, -1, w, -w, w + 1, w - 1, -w + 1, -w - 1);
+    this.navVersion = world.nav.version;
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         this.fog[(r + 1) * w + c + 1] = r * cols + c;
@@ -181,7 +184,11 @@ const grids = new WeakMap<World, FrontierGrid>();
 
 function gridOf(world: World): FrontierGrid {
   let g = grids.get(world);
-  if (!g) grids.set(world, (g = new FrontierGrid(world)));
+  if (!g || g.navVersion !== world.nav.version) {
+    const fresh = new FrontierGrid(world);
+    if (g) fresh.visited = g.visited; // keep the work meter monotonic
+    grids.set(world, (g = fresh));
+  }
   return g;
 }
 
