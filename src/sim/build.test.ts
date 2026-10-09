@@ -137,7 +137,7 @@ describe('canPlace', () => {
     const w = new World(hf, l);
     w.visibility.state.fill(EXPLORED);
     w.stock.wood = 1000;
-    const tc = w.townCenter.pos;
+    const tc = w.townCenter!.pos;
     const kinds = ['farm', 'house', 'storehouse'] as const;
     for (let i = 0; i < 200; i++) w.canPlace(kinds[i % 3], { x: tc.x + (i % 20) - 10, z: tc.z + 8 }, 0); // warm up
     const n = 2000;
@@ -299,9 +299,9 @@ describe('build command', () => {
     expect(w.nav.findPath({ x: 12, z: 16 }, { x: 20, z: 16 })).toEqual([{ x: 20, z: 16 }]);
     expect(u.state).toBe('idle');
     // Complete buildings cannot be cancelled.
-    w.dispatch({ type: 'cancelBuild', buildingId: w.townCenter.id });
+    w.dispatch({ type: 'cancelBuild', buildingId: w.townCenter!.id });
     expect(log.pop()).toEqual({ type: 'rejected', reason: 'invalid-target' });
-    expect(w.buildings.has(w.townCenter.id)).toBe(true);
+    expect(w.buildings.has(w.townCenter!.id)).toBe(true);
   });
 });
 
@@ -362,7 +362,7 @@ describe('NavGrid rectangles', () => {
   it('adding a building on open ground is cheap', () => {
     const { hf, layout: l } = generateMap(DEFAULT_SEED);
     const w = new World(hf, l);
-    const tc = w.townCenter.pos;
+    const tc = w.townCenter!.pos;
     const t0 = performance.now();
     for (let i = 0; i < 50; i++) {
       w.nav.addRect(1000 + i, { x0: tc.x + 6, z0: tc.z + 6, x1: tc.x + 9, z1: tc.z + 9 });
@@ -380,9 +380,9 @@ describe('population', () => {
     expect(w.pop).toBe(4);
     expect(w.popCap).toBe(BUILDINGS.townCenter.popBonus);
     w.stock.food = 500;
-    w.dispatch({ type: 'train', buildingId: w.townCenter.id });
-    w.dispatch({ type: 'train', buildingId: w.townCenter.id });
-    expect(w.townCenter.queue).toBe(1);
+    w.dispatch({ type: 'train', buildingId: w.townCenter!.id });
+    w.dispatch({ type: 'train', buildingId: w.townCenter!.id });
+    expect(w.townCenter!.queue).toBe(1);
     expect(w.stock.food).toBe(450);
     expect(log).toContainEqual({ type: 'rejected', reason: 'pop-cap' });
   });
@@ -392,11 +392,11 @@ describe('population', () => {
     const log = record(w);
     const [builder] = units(w);
     w.dispatch({ type: 'build', unitIds: [builder.id], kind: 'house', pos: { x: 16, z: 16 }, rot: 0 });
-    w.dispatch({ type: 'train', buildingId: w.townCenter.id });
+    w.dispatch({ type: 'train', buildingId: w.townCenter!.id });
     expect(log.pop()).toEqual({ type: 'rejected', reason: 'pop-cap' });
     runUntil(w, () => newest(w).complete);
-    w.dispatch({ type: 'train', buildingId: w.townCenter.id });
-    expect(w.townCenter.queue).toBe(1);
+    w.dispatch({ type: 'train', buildingId: w.townCenter!.id });
+    expect(w.townCenter!.queue).toBe(1);
   });
 });
 
@@ -411,7 +411,7 @@ describe('drop sites', () => {
     w.dispatch({ type: 'gather', unitIds: [u.id], nodeId: [...w.nodes.keys()][0] });
     // Foundation storehouse: still walks to the TC.
     runUntil(w, () => u.state === 'toDrop');
-    expect(w.gatherState.get(u.id)!.drop).toBe(w.townCenter.id);
+    expect(w.gatherState.get(u.id)!.drop).toBe(w.townCenter!.id);
     // Complete it (and the granary, which takes no wood): the next trip ends there.
     store.complete = granary.complete = true;
     store.buildProgress = granary.buildProgress = 1;
@@ -593,6 +593,6 @@ describe('stone', () => {
     const [u] = units(w) as Unit[];
     w.dispatch({ type: 'gather', unitIds: [u.id], nodeId: [...w.nodes.keys()][0] });
     runUntil(w, () => u.state === 'toDrop');
-    expect(w.gatherState.get(u.id)!.drop).toBe(w.townCenter.id);
+    expect(w.gatherState.get(u.id)!.drop).toBe(w.townCenter!.id);
   });
 });

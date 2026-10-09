@@ -83,6 +83,11 @@ export class NavGrid {
   expanded = 0;
   private heapCell: number[] = [];
   private heapF: number[] = [];
+  /**
+   * Rectangles treated as blocked for the current query only (enemy gates).
+   * They are not written into `walk`, so the owner's paths still use the opening.
+   */
+  private mask: readonly Rect[] | null = null;
 
   constructor(
     readonly hf: Heightfield,
@@ -105,6 +110,20 @@ export class NavGrid {
     }
     this.base.set(this.walk);
     this.labelRegions();
+  }
+
+  /**
+   * Run `fn` with `rects` blocked on top of the shared grid. Empty or null is the shared grid.
+   * Nested calls restore the previous mask. Used so a gate stays open for its owner.
+   */
+  withMask<T>(rects: readonly Rect[] | null, fn: () => T): T {
+    const prev = this.mask;
+    this.mask = rects && rects.length ? rects : null;
+    try {
+      return fn();
+    } finally {
+      this.mask = prev;
+    }
   }
 
   /** Block a rectangular footprint (inflated by the villager radius) under key `id`, re-marking only its cells. */
@@ -166,6 +185,35 @@ export class NavGrid {
     return i < 0 ? null : this.center(i);
   }
 
+  /** Nearest free cell centre in `reg` (0 = any), optionally excluding reserved formation space. */
+  nearestFreeCell(p: Vec2, reg = 0, accept?: (p: Vec2) => boolean): Vec2 | null {
+    const i = this.nearestCell(p, reg, accept);
+    return i < 0 ? null : this.center(i);
+  }
+
+  /** Clamp a steering displacement to free ground, checking the segment as well as its end. */
+  clampMove(from: Vec2, to: Vec2): Vec2 {
+    const dx = to.x - from.x;
+    const dz = to.z - from.z;
+    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / (NAV_CELL / 4)));
+    let safe = 0;
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      if (!this.isFree({ x: from.x + dx * t, z: from.z + dz * t })) {
+        let blocked = t;
+        // Preserve the clear prefix; do not jump across a wall to a free endpoint.
+        for (let j = 0; j < 8; j++) {
+          const mid = (safe + blocked) / 2;
+          if (this.isFree({ x: from.x + dx * mid, z: from.z + dz * mid })) safe = mid;
+          else blocked = mid;
+        }
+        return { x: from.x + dx * safe, z: from.z + dz * safe };
+      }
+      safe = t;
+    }
+    return { x: to.x, z: to.z };
+  }
+
   /** True if a villager can stand at `p`: walkable terrain, clear of every inflated obstacle. */
   isFree(p: Vec2): boolean {
     if (!this.hf.isWalkable(p.x, p.z)) return false;
@@ -179,7 +227,7 @@ export class NavGrid {
     for (const r of this.rects.values()) {
       if (p.x > r.x0 - m && p.x < r.x1 + m && p.z > r.z0 - m && p.z < r.z1 + m) return false;
     }
-    return true;
+    return !this.maskCovers(p);
   }
 
   /** True if the nav cell containing `p` is walkable. */
@@ -202,7 +250,7 @@ export class NavGrid {
    */
   findPath(from: Vec2, to: Vec2, greed = 1): Vec2[] | null {
     let start = this.cellOf(from);
-    const startFree = start >= 0 && this.walk[start] === 1;
+    const startFree = start >= 0 && this.passCell(start);
     if (!startFree) {
       start = this.nearestCell(from, 0);
       if (start < 0) return null;
@@ -210,7 +258,7 @@ export class NavGrid {
     const reg = this.region[start];
 
     let goal = this.cellOf(to);
-    const goalExact = goal >= 0 && this.walk[goal] === 1;
+    const goalExact = goal >= 0 && this.passCell(goal);
     if (goalExact) {
       if (this.region[goal] !== reg) return null;
     } else {
@@ -257,10 +305,10 @@ export class NavGrid {
     let tz = dz > 0 ? (iz + 1 - z0) * tdz : dz < 0 ? (z0 - iz) * tdz : Infinity;
     let steps = Math.abs(ex - ix) + Math.abs(ez - iz) + 2;
     while (steps-- > 0) {
-      if (!this.walkAt(ix, iz)) return false;
+      if (!this.passAt(ix, iz)) return false;
       if (ix === ex && iz === ez) return true;
       if (Math.abs(tx - tz) < 1e-9) {
-        if (!this.walkAt(ix + sx, iz) || !this.walkAt(ix, iz + sz)) return false;
+        if (!this.passAt(ix + sx, iz) || !this.passAt(ix, iz + sz)) return false;
         ix += sx;
         iz += sz;
         tx += tdx;
@@ -353,6 +401,27 @@ export class NavGrid {
     return ix >= 0 && iz >= 0 && ix < this.cols && iz < this.rows && this.walk[iz * this.cols + ix] === 1;
   }
 
+  /** `walkAt`, plus the current query mask (enemy gates). */
+  private passAt(ix: number, iz: number): boolean {
+    if (!this.walkAt(ix, iz)) return false;
+    return !this.mask || !this.maskCovers(this.center(iz * this.cols + ix));
+  }
+
+  private passCell(i: number): boolean {
+    if (this.walk[i] !== 1) return false;
+    return !this.mask || !this.maskCovers(this.center(i));
+  }
+
+  private maskCovers(p: Vec2): boolean {
+    const mask = this.mask;
+    if (!mask) return false;
+    const m = BALANCE.villagerRadius;
+    for (const r of mask) {
+      if (p.x > r.x0 - m && p.x < r.x1 + m && p.z > r.z0 - m && p.z < r.z1 + m) return true;
+    }
+    return false;
+  }
+
   private cellOf(p: Vec2): number {
     const ix = Math.floor(p.x / NAV_CELL);
     const iz = Math.floor(p.z / NAV_CELL);
@@ -365,7 +434,7 @@ export class NavGrid {
   }
 
   /** Walkable cell nearest to `p` (in region `reg`, or any region when 0), or -1. */
-  private nearestCell(p: Vec2, reg: number): number {
+  private nearestCell(p: Vec2, reg: number, accept?: (p: Vec2) => boolean): number {
     const cx = Math.min(this.cols - 1, Math.max(0, Math.floor(p.x / NAV_CELL)));
     const cz = Math.min(this.rows - 1, Math.max(0, Math.floor(p.z / NAV_CELL)));
     const maxR = Math.max(this.cols, this.rows);
@@ -379,8 +448,9 @@ export class NavGrid {
         for (let ix = cx - r; ix <= cx + r; ix += edge ? 1 : 2 * r) {
           if (ix >= 0 && ix < this.cols) {
             const i = iz * this.cols + ix;
-            if (this.walk[i] === 1 && (reg === 0 || this.region[i] === reg)) {
+            if (this.passCell(i) && (reg === 0 || this.region[i] === reg)) {
               const c = this.center(i);
+              if (accept && !accept(c)) continue;
               const d = Math.hypot(c.x - p.x, c.z - p.z);
               if (d < bestD) {
                 bestD = d;
@@ -426,7 +496,7 @@ export class NavGrid {
   /** A* from cell to cell; returns the cell chain start→goal, or null. */
   private search(start: number, goal: number, greed: number): number[] | null {
     const w = 1.0001 * Math.max(1, greed);
-    const { cols, rows, walk, g, parent, seen, closed } = this;
+    const { cols, rows, g, parent, seen, closed } = this;
     const gen = ++this.gen;
     const gx = goal % cols;
     const gz = (goal - gx) / cols;
@@ -459,8 +529,8 @@ export class NavGrid {
         const nz = z + DZ[d];
         if (nx < 0 || nz < 0 || nx >= cols || nz >= rows) continue;
         const ni = nz * cols + nx;
-        if (!walk[ni] || closed[ni] === gen) continue;
-        if (d >= 4 && (!walk[z * cols + nx] || !walk[nz * cols + x])) continue;
+        if (!this.passCell(ni) || closed[ni] === gen) continue;
+        if (d >= 4 && (!this.passCell(z * cols + nx) || !this.passCell(nz * cols + x))) continue;
         const ng = g[cur] + COST[d];
         if (seen[ni] !== gen || ng < g[ni]) {
           seen[ni] = gen;

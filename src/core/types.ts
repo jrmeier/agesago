@@ -13,6 +13,24 @@ export const DEFAULT_SEED = 1;
 
 export type EntityId = number;
 
+/** 0 is gaia (neutral: resources, wildlife); players are 1..4. */
+export type PlayerId = number;
+export const GAIA: PlayerId = 0;
+
+export interface Player {
+  id: PlayerId;
+  name: string;
+  /** Cloth/banner colour. */
+  color: number;
+  /** Players on the same team are allies. */
+  team: number;
+  /** Who issues this player's commands. */
+  control: 'human' | 'ai';
+}
+
+/** How a unit reacts to enemies it can see. */
+export type Stance = 'aggressive' | 'defensive' | 'standGround' | 'passive';
+
 export interface Vec2 {
   x: number;
   z: number;
@@ -21,11 +39,28 @@ export interface Vec2 {
 export type ResourceType = 'wood' | 'food' | 'gold' | 'stone';
 export type Stockpile = Record<ResourceType, number>;
 
-export type NodeKind = 'tree' | 'berry' | 'gold' | 'stone';
-/** Player unit types. Villagers gather; scouts are fast, far-sighted explorers that cannot gather. */
-export type UnitKind = 'villager' | 'scout';
+export type NodeKind = 'tree' | 'berry' | 'gold' | 'stone' | 'carcass' | 'fish';
+export type AnimalKind = 'deer' | 'boar' | 'sheep';
+/**
+ * Villagers gather and build; scouts explore; soldiers fight; wildlife starts as Gaia.
+ * Stats live in core/units.ts.
+ */
+export type UnitKind = 'villager' | 'scout' | 'hoplite' | 'swordsman' | 'slinger' | 'archer' | 'horseman' | AnimalKind;
 /** Everything a player can build. Data (sizes, costs, build times) lives in core/buildings.ts. */
-export type BuildingKind = 'townCenter' | 'house' | 'storehouse' | 'granary' | 'miningCamp' | 'farm';
+export type BuildingKind =
+  | 'townCenter'
+  | 'house'
+  | 'storehouse'
+  | 'granary'
+  | 'miningCamp'
+  | 'farm'
+  | 'barracks'
+  | 'archeryRange'
+  | 'stable'
+  | 'watchTower'
+  | 'palisade'
+  | 'stoneWall'
+  | 'gate';
 export type EntityKind = UnitKind | NodeKind | BuildingKind;
 
 export const NODE_RESOURCE: Record<NodeKind, ResourceType> = {
@@ -33,6 +68,8 @@ export const NODE_RESOURCE: Record<NodeKind, ResourceType> = {
   berry: 'food',
   gold: 'gold',
   stone: 'stone',
+  carcass: 'food',
+  fish: 'food',
 };
 
 /** Terrain query surface. Implemented by sim/terrain.ts; read by everything. */
@@ -103,24 +140,55 @@ export interface PropPlacement {
   blockRadius: number;
 }
 
+/** One player's starting Town Center, villagers and scouts. */
+export interface StartLayout {
+  townCenter: Vec2;
+  villagers: Vec2[];
+  scouts: Vec2[];
+}
+
 /** Plain-data starting layout produced by map generation and consumed by World. */
 export interface MapLayout {
   townCenter: Vec2;
   villagers: Vec2[];
   /** Starting scouts (usually one), placed just outside the Town Center. */
   scouts: Vec2[];
+  /** Opponents' starting positions (players 2, 3, …). Empty or absent for a solo map. */
+  extraStarts?: StartLayout[];
   nodes: { kind: NodeKind; pos: Vec2; amount: number }[];
+  /** Neutral wildlife; absent in older layouts. */
+  animals?: { kind: AnimalKind; pos: Vec2 }[];
   /** Scenery: ruins, rocks, fences, fields, houses… */
   props: PropPlacement[];
 }
 
 // ---- Entities (plain data; owned and mutated only by the sim) ----
 
-export type UnitState = 'idle' | 'moving' | 'toNode' | 'gathering' | 'toDrop' | 'exploring' | 'toBuild' | 'building';
+export type UnitState =
+  | 'idle'
+  | 'moving'
+  | 'toNode'
+  | 'gathering'
+  | 'toDrop'
+  | 'exploring'
+  | 'toBuild'
+  | 'building'
+  /** Walking into a Town Center or tower. */
+  | 'toShelter'
+  /** Inside a building: off the map, untargetable, until ungarrisoned. */
+  | 'garrisoned'
+  /** Closing on or striking a target (see Unit.target). */
+  | 'attacking';
 
 export interface Unit {
   id: EntityId;
   kind: UnitKind;
+  owner: PlayerId;
+  hp: number;
+  maxHp: number;
+  /** Entity this unit is attacking (or chasing), if any. */
+  target: EntityId | null;
+  stance: Stance;
   pos: Vec2;
   /** Position at the start of the last sim tick — renderers lerp prevPos → pos. */
   prevPos: Vec2;
@@ -134,6 +202,10 @@ export interface Unit {
   /** Resource type the unit is assigned to (survives node depletion for retargeting). */
   gatherType: ResourceType | null;
   carry: { type: ResourceType; amount: number } | null;
+  /** Town Center or tower this unit is entering, or inside while garrisoned. */
+  shelter?: EntityId | null;
+  /** Wildlife's original home, retained through fleeing and save/load. */
+  leashAnchor?: Vec2;
 }
 
 export interface ResourceNode {
@@ -149,6 +221,9 @@ export interface ResourceNode {
 export interface Building {
   id: EntityId;
   kind: BuildingKind;
+  owner: PlayerId;
+  hp: number;
+  maxHp: number;
   /** Footprint centre. */
   pos: Vec2;
   /** Yaw in radians; footprints rotate in 90° steps (0, π/2, π, 3π/2). */
@@ -159,12 +234,20 @@ export interface Building {
   complete: boolean;
   /** Construction progress 0..1 (1 when complete). */
   buildProgress: number;
-  /** Units queued for training (Town Center). */
+  /** Units queued for training, in order (head is in progress). */
   queue: number;
+  /** Kinds of the queued units, same length as `queue` (head first). */
+  queueKinds?: UnitKind[];
   /** Seconds of training completed on the current queue head. */
   progress: number;
   /** Farms only: food remaining in the field. */
   food?: number;
+  /** Where newly trained units go: a point, or an entity (a resource to gather, a building to garrison later). */
+  rally?: { pos: Vec2; targetId?: EntityId };
+  /** Villagers inside this shelter, in entry order. */
+  occupants?: EntityId[];
+  /** Seconds until the next defensive volley. */
+  cooldown?: number;
 }
 
 export type Entity = Unit | ResourceNode | Building;
@@ -174,7 +257,21 @@ export type Entity = Unit | ResourceNode | Building;
 export type Command =
   | { type: 'move'; unitIds: EntityId[]; target: Vec2 }
   | { type: 'gather'; unitIds: EntityId[]; nodeId: EntityId }
-  | { type: 'train'; buildingId: EntityId }
+  /** Train one unit (default: the building's first trainable kind, e.g. a villager at the TC). */
+  | { type: 'train'; buildingId: EntityId; unit?: UnitKind }
+  /** Remove queue entry `index` (0 = the one in training) and refund its cost. */
+  | { type: 'cancelTrain'; buildingId: EntityId; index: number }
+  /** Attack a unit or building. */
+  | { type: 'attack'; unitIds: EntityId[]; targetId: EntityId }
+  /** Walk to a point, fighting any enemy met on the way. */
+  | { type: 'attackMove'; unitIds: EntityId[]; target: Vec2 }
+  /** Drop current orders and stand still. */
+  | { type: 'stop'; unitIds: EntityId[] }
+  | { type: 'stance'; unitIds: EntityId[]; stance: Stance }
+  /** Give up: all the issuer's units and buildings are removed and they are defeated. */
+  | { type: 'resign' }
+  /** Set a building's rally point; units it trains walk there (or gather/attack `targetId`). */
+  | { type: 'rally'; buildingId: EntityId; pos: Vec2; targetId?: EntityId }
   /** Place a foundation (cost is paid now) and send the units to build it. */
   | { type: 'build'; unitIds: EntityId[]; kind: BuildingKind; pos: Vec2; rot: number }
   /** Send units to help construct an existing foundation (or repair later). */
@@ -182,7 +279,15 @@ export type Command =
   /** Cancel an unfinished foundation; refunds the cost. */
   | { type: 'cancelBuild'; buildingId: EntityId }
   /** Auto-explore: units head for the nearest reachable unexplored ground until told otherwise. */
-  | { type: 'explore'; unitIds: EntityId[] };
+  | { type: 'explore'; unitIds: EntityId[] }
+  /** Walk villagers into a completed Town Center or tower. */
+  | { type: 'garrison'; unitIds: EntityId[]; buildingId: EntityId }
+  /** Send everyone inside a shelter back outside. */
+  | { type: 'ungarrison'; buildingId: EntityId }
+  /** Panic: every villager of the issuer runs into the nearest shelter with room. */
+  | { type: 'townBell' }
+  /** Place a line of wall segments from `from` to `to` (palisade or stone wall). */
+  | { type: 'buildWall'; unitIds: EntityId[]; kind: BuildingKind; from: Vec2; to: Vec2 };
 
 export type RejectReason =
   | 'insufficient-food'
@@ -207,6 +312,18 @@ export type SimEvent =
   | { type: 'stockpile'; stock: Stockpile; pop: number; popCap: number }
   /** A foundation finished construction. */
   | { type: 'constructed'; id: EntityId }
+  /** An entity lost hit points (hp is the new value). */
+  | { type: 'damaged'; id: EntityId; hp: number; maxHp: number; by: EntityId | null }
+  /** A unit or building was destroyed (followed by 'removed'). */
+  | { type: 'died'; id: EntityId; kind: EntityKind; owner: PlayerId; pos: Vec2 }
+  /** A ranged attack was launched; renderers draw it flying for `flight` seconds. */
+  | { type: 'projectile'; kind: 'arrow' | 'stone' | 'javelin'; from: Vec2; to: Vec2; flight: number; targetId: EntityId }
+  /** A player lost everything (or resigned). */
+  | { type: 'defeated'; player: PlayerId; reason: 'conquest' | 'resign' }
+  /** The game is decided: every surviving player is on the winning team. */
+  | { type: 'gameOver'; winners: PlayerId[]; reason: 'conquest' | 'resign' }
+  /** One of `owner`'s units or buildings was hit by an enemy (for "under attack" alerts). */
+  | { type: 'attacked'; owner: PlayerId; id: EntityId; pos: Vec2 }
   /** A farm's remaining food changed (harvest or reseed); 0 = fallow. */
   | { type: 'farmFood'; id: EntityId; food: number }
   | { type: 'unitState'; id: EntityId; state: UnitState }

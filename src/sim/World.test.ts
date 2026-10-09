@@ -48,7 +48,7 @@ describe('World (contract smoke test)', () => {
     expect(world.pop).toBe(layout.villagers.length + layout.scouts.length);
     expect(world.villagerCount).toBe(layout.villagers.length);
     expect(world.nodes.size).toBe(layout.nodes.length);
-    expect(world.townCenter.kind).toBe('townCenter');
+    expect(world.townCenter!.kind).toBe('townCenter');
   });
 });
 
@@ -160,7 +160,7 @@ describe('training', () => {
   it('rejects at 49 food, accepts at 50 and spawns after trainTime', () => {
     const world = new World(flatField(), layout([{ x: 32, z: 28.5 }]));
     const log = record(world);
-    const tc = world.townCenter;
+    const tc = world.townCenter!;
     world.stock.food = 49;
     world.dispatch({ type: 'train', buildingId: tc.id });
     expect(log).toEqual([{ type: 'rejected', reason: 'insufficient-food' }]);
@@ -191,9 +191,9 @@ describe('training', () => {
     const world = new World(flatField(), layout(villagers));
     const log = record(world);
     world.stock.food = 500;
-    world.dispatch({ type: 'train', buildingId: world.townCenter.id });
-    world.dispatch({ type: 'train', buildingId: world.townCenter.id });
-    expect(world.townCenter.queue).toBe(1);
+    world.dispatch({ type: 'train', buildingId: world.townCenter!.id });
+    world.dispatch({ type: 'train', buildingId: world.townCenter!.id });
+    expect(world.townCenter!.queue).toBe(1);
     expect(world.stock.food).toBe(450);
     expect(log).toContainEqual({ type: 'rejected', reason: 'pop-cap' });
   });

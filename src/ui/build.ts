@@ -14,6 +14,13 @@ export const BUILD_HOTKEYS: Partial<Record<BuildingKind, string>> = {
   granary: 'KeyG',
   miningCamp: 'KeyM',
   farm: 'KeyP',
+  barracks: 'KeyB',
+  archeryRange: 'KeyY',
+  stable: 'KeyK',
+  watchTower: 'KeyO',
+  palisade: 'KeyL',
+  stoneWall: 'KeyN',
+  gate: 'KeyI',
 };
 
 /** Kinds shown in the villager build menu, in BUILDINGS order. */
@@ -93,8 +100,8 @@ export function constructionLabel(progress: number): string {
   return `Under construction ${pct}%`;
 }
 
-/** What a complete building does, for the building panel. */
-export function buildingRole(kind: BuildingKind, food?: number, farmFood?: number): string {
+/** What a complete building does, for the building panel. `occupants` is how many villagers are inside. */
+export function buildingRole(kind: BuildingKind, food?: number, farmFood?: number, occupants?: number): string {
   const spec = BUILDINGS[kind];
   if (kind === 'farm') {
     if (food === undefined) return 'Farm';
@@ -103,6 +110,10 @@ export function buildingRole(kind: BuildingKind, food?: number, farmFood?: numbe
   const parts: string[] = [];
   if (spec.popBonus) parts.push(`+${spec.popBonus} population`);
   if (spec.drop.length && kind !== 'townCenter') parts.push(`Drop site: ${spec.drop.join(', ')}`);
+  if (spec.garrison) parts.push(`Shelter ${occupants ?? 0}/${spec.garrison}`);
+  if (spec.attack) parts.push(spec.attack.arrows > 0 ? 'Ranged defence' : 'Fires when garrisoned');
+  if (spec.line) parts.push('Blocks movement');
+  if (spec.gate) parts.push('Opens for your units');
   return parts.join(' · ') || spec.name;
 }
 

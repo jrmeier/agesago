@@ -2,8 +2,9 @@ import type { Building, EntityId, ResourceNode, ResourceType, Unit, UnitState, V
 import { BALANCE } from '../balance';
 import { rectDistance } from '../nav';
 import type { World } from '../World';
+import { route } from './passage';
 import { cancelExplore, settleCancelled } from './explore';
-import { buildingRect, inReach, nearestDrop } from './sites';
+import { buildingRect, inReach, nearestDrop, nodeApproach, nodeInReach } from './sites';
 
 /** Per-unit gather bookkeeping kept off the frozen Unit shape. */
 export interface GatherState {
@@ -81,7 +82,8 @@ export function orderFarm(world: World, unitIds: EntityId[], farm: Building): vo
 
 /** Plain move to the edge of `node` (for units that can't gather). False if unreachable. */
 function walkToNode(world: World, u: Unit, node: ResourceNode): boolean {
-  const path = world.nav.findPath(u.pos, world.approachPoint(u.pos, node.pos, node.radius));
+  const spot = nodeApproach(world, u.pos, node);
+  const path = spot && route(world, u.owner, u.pos, spot);
   if (!path) return false;
   u.path = path;
   u.gatherNode = null;
@@ -93,8 +95,9 @@ function walkToNode(world: World, u: Unit, node: ResourceNode): boolean {
 
 /** Assign `node` to `u` and path to its edge (scouts just walk there). False (unit untouched) if unreachable. */
 export function sendToNode(world: World, u: Unit, node: ResourceNode): boolean {
-  if (u.kind === 'scout') return walkToNode(world, u, node);
-  const path = world.nav.findPath(u.pos, world.approachPoint(u.pos, node.pos, node.radius));
+  if (u.kind !== 'villager') return walkToNode(world, u, node);
+  const spot = nodeApproach(world, u.pos, node);
+  const path = spot && route(world, u.owner, u.pos, spot);
   if (!path) return false;
   assign(world, u, node.id, node.type, node.pos, path);
   return true;
@@ -103,7 +106,7 @@ export function sendToNode(world: World, u: Unit, node: ResourceNode): boolean {
 /** Claim `farm` for `u` and walk onto its near edge. False (unit untouched) if taken, fallow or unreachable. */
 export function sendToFarm(world: World, u: Unit, farm: Building): boolean {
   if (u.kind !== 'villager' || !isWorkableFarm(farm) || !farmFree(world, farm, u)) return false;
-  const path = world.nav.findPath(u.pos, farmSpot(u.pos, farm));
+  const path = route(world, u.owner, u.pos, farmSpot(u.pos, farm));
   if (!path) return false;
   assign(world, u, farm.id, 'food', farm.pos, path);
   world.farmers.set(farm.id, u.id);
@@ -148,7 +151,7 @@ export function nearestSources(world: World, type: ResourceType, from: Vec2, u: 
   }
   if (type === 'food') {
     for (const b of world.buildings.values()) {
-      if (!isWorkableFarm(b) || !farmFree(world, b, u)) continue;
+      if (b.owner !== u.owner || !isWorkableFarm(b) || !farmFree(world, b, u)) continue;
       const d = rectDistance(from, buildingRect(b));
       if (d <= r) out.push({ s: b, d });
     }
@@ -204,7 +207,7 @@ function arriveAtNode(world: World, u: Unit): void {
     retarget(world, u);
     return;
   }
-  if (dist(u.pos, node.pos) > node.radius + BALANCE.villagerRadius + BALANCE.reach) {
+  if (!nodeInReach(world, u, node)) {
     goIdle(world, u);
     return;
   }
@@ -257,7 +260,7 @@ function gatherTick(world: World, u: Unit, dt: number): void {
 
 /** Walk to the nearest complete drop site accepting what `u` carries; idle if there is none. */
 export function sendToDrop(world: World, u: Unit): void {
-  const drop = u.carry ? nearestDrop(world, u.pos, u.carry.type) : null;
+  const drop = u.carry ? nearestDrop(world, u.pos, u.carry.type, u.owner) : null;
   if (!drop) {
     goIdle(world, u);
     return;
@@ -284,9 +287,9 @@ function deposit(world: World, u: Unit): void {
   }
   if (gs) gs.drop = undefined;
   if (u.carry && u.carry.amount > 0) {
-    world.stock[u.carry.type] += u.carry.amount;
+    world.stockOf(u.owner)[u.carry.type] += u.carry.amount;
     u.carry = null;
-    world.emitStock();
+    if (u.owner === world.localPlayer) world.emitStock();
   }
   const node = u.gatherNode !== null ? world.nodes.get(u.gatherNode) : undefined;
   if (node && sendToNode(world, u, node)) return;

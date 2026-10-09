@@ -1,4 +1,4 @@
-import { type Heightfield, type MapLayout, type NodeKind, type PropKind, type Vec2 } from '../core/types';
+import { MAP_D, MAP_W, type Heightfield, type MapLayout, type NodeKind, type PropKind, type StartLayout, type Vec2 } from '../core/types';
 import { createSeededRandom, generateTerrain, terrainFeatures } from './terrain';
 
 function distance(a: Vec2, b: Vec2): number {
@@ -48,13 +48,14 @@ class PlacementGrid {
 }
 
 function connectedLand(hf: Heightfield, start: Vec2): (pos: Vec2) => boolean {
-  const columns = Math.floor(hf.width);
-  const rows = Math.floor(hf.depth);
+  const step = 0.5;
+  const columns = Math.ceil(hf.width / step);
+  const rows = Math.ceil(hf.depth / step);
   const walk = new Uint8Array(columns * rows);
   const visited = new Uint8Array(walk.length);
-  for (let i = 0; i < walk.length; i++) walk[i] = hf.isWalkable(i % columns + 0.5, Math.floor(i / columns) + 0.5) ? 1 : 0;
+  for (let i = 0; i < walk.length; i++) walk[i] = hf.isWalkable((i % columns + 0.5) * step, (Math.floor(i / columns) + 0.5) * step) ? 1 : 0;
   const queue = new Int32Array(walk.length);
-  const first = Math.floor(start.z) * columns + Math.floor(start.x);
+  const first = Math.floor(start.z / step) * columns + Math.floor(start.x / step);
   visited[first] = 1;
   queue[0] = first;
   let tail = 1;
@@ -70,17 +71,17 @@ function connectedLand(hf: Heightfield, start: Vec2): (pos: Vec2) => boolean {
       if (x < 0 || z < 0 || x >= columns || z >= rows) continue;
       const next = z * columns + x;
       if (visited[next] || !walk[next]) continue;
-      if (!hf.isWalkable(column + 0.5 + dx[d] / 2, row + 0.5 + dz[d] / 2)) continue;
+      if (!hf.isWalkable((column + 0.5 + dx[d] / 2) * step, (row + 0.5 + dz[d] / 2) * step)) continue;
       visited[next] = 1;
       queue[tail++] = next;
     }
   }
   return (pos) => {
-    const column = Math.floor(pos.x);
-    const row = Math.floor(pos.z);
+    const column = Math.floor(pos.x / step);
+    const row = Math.floor(pos.z / step);
     if (column < 0 || row < 0 || column >= columns || row >= rows || !visited[row * columns + column]) return false;
     for (let t = 0; t <= 1; t += 0.25) {
-      if (!hf.isWalkable(pos.x + (column + 0.5 - pos.x) * t, pos.z + (row + 0.5 - pos.z) * t)) return false;
+      if (!hf.isWalkable(pos.x + ((column + 0.5) * step - pos.x) * t, pos.z + ((row + 0.5) * step - pos.z) * t)) return false;
     }
     return true;
   };
@@ -92,15 +93,25 @@ const PROP_RADIUS: Record<PropKind, number> = {
   reeds: 0.4, bush: 0.55, log: 1.05,
 };
 
+/** Radius reserved exclusively for each player's identical starting resources. */
+export const START_RADIUS = 24;
+/** Open construction area around each TC, excluding resource footprints. */
+export const BUILD_RING_RADIUS = 12;
+
 /** Rich ancient countryside; spatial spacing and connected-land filtering keep placement cheap. */
-export function generateMap(seed: number): { hf: Heightfield; layout: MapLayout } {
-  const hf = generateTerrain(seed);
+export function generateMap(seed: number, players = 2): { hf: Heightfield; layout: MapLayout } {
+  if (!Number.isInteger(players) || players < 1 || players > 4) throw new RangeError('players must be 1, 2, 3 or 4');
   const features = terrainFeatures(seed);
-  const townCenter = { ...features.townCenter };
-  const random = createSeededRandom(seed ^ 0x1f83d9ab);
-  const reachable = connectedLand(hf, townCenter);
-  const occupied = new PlacementGrid(hf.width);
-  const layout: MapLayout = {
+  const startRandom = createSeededRandom(seed ^ 0x6a09e667);
+  const phase = Math.PI + (startRandom() - 0.5) * 0.06;
+  const centers = Array.from({ length: players }, (_, i) => {
+    const angle = phase + i * Math.PI * 2 / players;
+    return players === 1 ? { ...features.townCenter } : {
+      x: Math.round((MAP_W / 2 + Math.cos(angle) * 52) * 2) / 2,
+      z: Math.round((MAP_D / 2 + Math.sin(angle) * 52) * 2) / 2,
+    };
+  });
+  const starts: StartLayout[] = centers.map((townCenter) => ({
     townCenter,
     villagers: [
       { x: townCenter.x - 1.8, z: townCenter.z + 3.6 },
@@ -108,11 +119,16 @@ export function generateMap(seed: number): { hf: Heightfield; layout: MapLayout 
       { x: townCenter.x + 1.8, z: townCenter.z + 3.6 },
     ],
     scouts: [{ x: townCenter.x - 4.2, z: townCenter.z + 1.2 }],
-    nodes: [],
-    props: [],
-  };
-  const padClear = (pos: Vec2, radius: number): boolean =>
-    Math.max(Math.abs(pos.x - townCenter.x), Math.abs(pos.z - townCenter.z)) >= 5 + radius;
+  }));
+  const hf = generateTerrain(seed, undefined, undefined, centers);
+  const townCenter = centers[0];
+  const random = createSeededRandom(seed ^ 0x1f83d9ab);
+  const reachable = connectedLand(hf, townCenter);
+  const occupied = new PlacementGrid(hf.width);
+  const layout: MapLayout = { ...starts[0], extraStarts: starts.slice(1), nodes: [], props: [] };
+  // Neutral placements cannot add an accidental economic advantage or crowd a start.
+  const padClear = (pos: Vec2, radius: number): boolean => centers.every((center) =>
+    distance(pos, center) >= START_RADIUS + radius);
   const onMap = (pos: Vec2, radius: number): boolean => pos.x >= radius + 0.5 && pos.z >= radius + 0.5
     && pos.x <= hf.width - radius - 0.5 && pos.z <= hf.depth - radius - 0.5;
   const fordClear = (pos: Vec2, radius: number): boolean => features.river.fords.every((ford) =>
@@ -144,6 +160,32 @@ export function generateMap(seed: number): { hf: Heightfield; layout: MapLayout 
       }
     }
   };
+
+  // All kits use the same offsets and amounts; no random rejection can reduce one
+  // player's resources. The terrain levels this entire kit and its approaches.
+  for (const center of centers) {
+    const kitNode = (kind: NodeKind, x: number, z: number): void => {
+      const pos = { x: center.x + x, z: center.z + z };
+      const radius = kind === 'gold' || kind === 'stone' ? 0.8 : 0.5;
+      const fromStart = distance(pos, center);
+      if (!onMap(pos, radius) || fromStart < BUILD_RING_RADIUS + radius || fromStart > START_RADIUS
+        || !occupied.clear(pos, radius) || !reachable(pos)) throw new Error(`Invalid starting ${kind} for seed ${seed}`);
+      layout.nodes.push({ kind, pos, amount: kind === 'berry' ? 125 : kind === 'gold' ? 400 : kind === 'stone' ? 350 : 100 });
+      occupied.add(pos, radius);
+    };
+    for (const x of [-17, -15.5, -14, -12.5]) {
+      for (const z of [-5.5, -4, -2.5, -1, 0.5]) kitNode('tree', x, z);
+    }
+    kitNode('berry', -6.5, 14);
+    for (let i = 0; i < 6; i++) {
+      const angle = i / 6 * Math.PI * 2;
+      kitNode('berry', -6.5 + Math.cos(angle) * 1.7, 14 + Math.sin(angle) * 1.7);
+    }
+    kitNode('gold', 14, -5);
+    kitNode('gold', 9, -13);
+    kitNode('stone', 14, 6);
+    kitNode('stone', 5, -14);
+  }
 
   for (const ridge of features.ridges) {
     const center = ridge.center;
@@ -186,7 +228,7 @@ export function generateMap(seed: number): { hf: Heightfield; layout: MapLayout 
 
   const clearings = [features.hamlet, features.abandonedHamlet, features.stoneCircle, ...features.ridges.map((r) => r.center)];
   const canPlaceNode = (pos: Vec2, kind: NodeKind): boolean => {
-    const radius = kind === 'gold' ? 0.8 : 0.5;
+    const radius = kind === 'gold' || kind === 'stone' ? 0.8 : 0.5;
     if (!onMap(pos, radius) || !padClear(pos, radius) || !fordClear(pos, radius) || !reachable(pos) || !occupied.clear(pos, radius)) return false;
     const ground = hf.ground(pos.x, pos.z);
     if (ground.path > 0.04 || ground.sand > 0.24 || ground.rock > 0.32) return false;
@@ -204,31 +246,28 @@ export function generateMap(seed: number): { hf: Heightfield; layout: MapLayout 
     occupied.add(pos, kind === 'gold' ? 0.8 : 0.5);
     return true;
   };
-  const nodeNear = (kind: NodeKind, desired: Vec2, maxStartDistance = Infinity): void => {
-    for (let ring = 0; ring <= 16; ring++) {
+  const nodeNear = (kind: NodeKind, desired: Vec2): void => {
+    for (let ring = 0; ring <= 40; ring++) {
       const count = ring === 0 ? 1 : ring * 8;
       for (let i = 0; i < count; i++) {
         const angle = i / count * Math.PI * 2;
         const pos = { x: desired.x + Math.cos(angle) * ring * 0.65, z: desired.z + Math.sin(angle) * ring * 0.65 };
-        if (distance(pos, townCenter) <= maxStartDistance && addNode(kind, pos)) return;
+        if (addNode(kind, pos)) return;
       }
     }
     throw new Error(`No reachable ${kind} placement for seed ${seed}`);
   };
-  const berries = (center: Vec2, starting = false): void => {
+  const berries = (center: Vec2): void => {
     const phase = random() * Math.PI * 2;
-    nodeNear('berry', center, starting ? 10 : Infinity);
+    nodeNear('berry', center);
     for (let i = 0; i < 6; i++) {
       const angle = phase + i / 6 * Math.PI * 2;
-      nodeNear('berry', { x: center.x + Math.cos(angle) * 1.7, z: center.z + Math.sin(angle) * 1.7 }, starting ? 10 : Infinity);
+      nodeNear('berry', { x: center.x + Math.cos(angle) * 1.7, z: center.z + Math.sin(angle) * 1.7 });
     }
   };
-  berries({ x: townCenter.x - 6.5, z: townCenter.z + 5 }, true);
   for (const [x, z] of [[0.12, 0.16], [0.29, 0.40], [0.14, 0.73], [0.59, 0.21], [0.91, 0.47], [0.62, 0.84]]) {
     berries({ x: hf.width * x, z: hf.depth * z });
   }
-  nodeNear('gold', { x: townCenter.x - 9, z: townCenter.z - 10 }, 16);
-  nodeNear('gold', { x: townCenter.x + 12, z: townCenter.z - 4 }, 16);
   for (const pos of features.outcrops) nodeNear('gold', { x: pos.x + 4, z: pos.z + 3 });
   for (const [x, z] of [[0.10, 0.34], [0.48, 0.07], [0.93, 0.12], [0.96, 0.97], [0.42, 0.94]]) {
     nodeNear('gold', { x: hf.width * x, z: hf.depth * z });
@@ -236,20 +275,18 @@ export function generateMap(seed: number): { hf: Heightfield; layout: MapLayout 
   nodeNear('gold', { x: features.river.fords[1].x + 10, z: features.river.fords[1].z + 8 });
 
   const candidates: Vec2[] = [];
-  for (let z = 1.5; z < hf.depth - 1.5; z += 1.45) {
-    for (let x = 1.5; x < hf.width - 1.5; x += 1.45) {
-      const pos = { x: x + (random() - 0.5) * 0.6, z: z + (random() - 0.5) * 0.6 };
+  for (let z = 1.5; z < hf.depth - 1.5; z += 1.3) {
+    for (let x = 1.5; x < hf.width - 1.5; x += 1.3) {
+      const pos = { x: x + (random() - 0.5) * 0.2, z: z + (random() - 0.5) * 0.2 };
       if (hf.forestDensity(pos.x, pos.z) >= 0.43) candidates.push(pos);
     }
   }
-  const nearby = candidates.filter((pos) => distance(pos, townCenter) <= 12).sort((a, b) => distance(a, townCenter) - distance(b, townCenter));
-  if (!nearby.some((pos) => addNode('tree', pos))) throw new Error(`No nearby forest for seed ${seed}`);
   for (let i = candidates.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
     [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
   }
   const treeTarget = 3500 + Math.floor(random() * 600);
-  let trees = 1;
+  let trees = centers.length * 20;
   for (const pos of candidates) {
     if (trees >= treeTarget) break;
     if (addNode('tree', pos)) trees++;
@@ -282,8 +319,10 @@ export function generateMap(seed: number): { hf: Heightfield; layout: MapLayout 
     }
   }
 
-  const propTarget = 720 + Math.floor(random() * 180);
-  for (let attempt = 0; layout.props.length < propTarget && attempt < 80000; attempt++) {
+  // Reserved start areas and dense forest make rejection sampling less productive
+  // for larger rosters. Bound scenery work instead of chasing the last few props.
+  const propTarget = 650 + Math.floor(random() * 100);
+  for (let attempt = 0; layout.props.length < propTarget && attempt < 30000; attempt++) {
     const pos = { x: 2 + random() * (hf.width - 4), z: 2 + random() * (hf.depth - 4) };
     const ground = hf.ground(pos.x, pos.z);
     const height = hf.heightAt(pos.x, pos.z);
@@ -295,7 +334,7 @@ export function generateMap(seed: number): { hf: Heightfield; layout: MapLayout 
     } else if (density > 0.35) kind = random() < 0.30 ? 'log' : 'bush';
     else {
       // Open meadow stays open: the odd shrub, rare stones, and a clear start area.
-      const fromTc = distance(pos, townCenter);
+      const fromTc = Math.min(...centers.map((center) => distance(pos, center)));
       if (fromTc < 12 || random() < 0.45) continue;
       if (fromTc > 20 && random() < 0.12) kind = random() < 0.5 ? 'boulder' : 'rocks';
       else kind = 'bush';
@@ -304,26 +343,18 @@ export function generateMap(seed: number): { hf: Heightfield; layout: MapLayout 
   }
   if (layout.props.length < 500) throw new Error(`Insufficient scenery for seed ${seed}`);
 
-  // Trim after the legacy placement passes: changing their rejection rules or random
-  // draws would reshuffle forests and scenery across the entire map. Keep the first
-  // nearby tree as starting wood, plus the original berries and gold.
-  const startingTree = layout.nodes.find((node) => node.kind === 'tree');
-  layout.nodes = layout.nodes.filter((node) => node.kind !== 'tree' || node === startingTree
-    || distance(node.pos, townCenter) >= 12.5);
-  layout.props = layout.props.filter((prop) => distance(prop.pos, townCenter) >= 12 + PROP_RADIUS[prop.kind] * prop.scale);
-
-  // Quarries have their own stream and are appended so existing resource ordering
-  // stays stable. Only loose natural scenery may give way to a quarry.
+  // Neutral quarries use a separate stream and append after other resources.
+  // Only loose natural scenery may give way to a quarry.
   const quarryRandom = createSeededRandom(seed ^ 0x5a17c9e3);
   const quarrySpace = new PlacementGrid(hf.width);
-  for (const node of layout.nodes) quarrySpace.add(node.pos, node.kind === 'gold' ? 0.8 : 0.5);
+  for (const node of layout.nodes) quarrySpace.add(node.pos, node.kind === 'gold' || node.kind === 'stone' ? 0.8 : 0.5);
   const replaceable = (kind: PropKind): boolean => kind === 'boulder' || kind === 'rocks' || kind === 'bush' || kind === 'log';
   const protectedScenery = new PlacementGrid(hf.width);
   for (const prop of layout.props) {
     if (!replaceable(prop.kind)) protectedScenery.add(prop.pos, PROP_RADIUS[prop.kind] * prop.scale);
   }
-  const quarries: Vec2[] = [];
-  const quarryNear = (desired: Vec2, starting = false): void => {
+  const quarries: Vec2[] = layout.nodes.filter((node) => node.kind === 'stone').map((node) => node.pos);
+  const quarryNear = (desired: Vec2): void => {
     let best: Vec2 | undefined;
     let bestScore = -Infinity;
     const phase = quarryRandom() * Math.PI * 2;
@@ -332,8 +363,7 @@ export function generateMap(seed: number): { hf: Heightfield; layout: MapLayout 
       for (let i = 0; i < count; i++) {
         const angle = phase + i / count * Math.PI * 2;
         const pos = { x: desired.x + Math.cos(angle) * ring * 0.65, z: desired.z + Math.sin(angle) * ring * 0.65 };
-        const fromTc = distance(pos, townCenter);
-        if (starting ? fromTc < 12.8 || fromTc > 16 : fromTc <= 35) continue;
+        if (!padClear(pos, 1.3)) continue;
         const ground = hf.ground(pos.x, pos.z);
         // Rock matters more than small offsets from the landmark. Unlike trees and
         // gold, stone can occupy rocky ground if its footprint and approaches walk.
@@ -364,13 +394,47 @@ export function generateMap(seed: number): { hf: Heightfield; layout: MapLayout 
     quarries.push(best);
     quarrySpace.add(best, 0.8);
   };
-  quarryNear({ x: townCenter.x + 8, z: townCenter.z + 12 }, true);
-  quarryNear({ x: townCenter.x + 8, z: townCenter.z - 12 }, true);
   for (const outcrop of features.outcrops) quarryNear(outcrop);
   for (const ridge of features.ridges) quarryNear({ x: ridge.center.x, z: ridge.center.z + ridge.radiusZ * 0.5 });
   quarryNear({ x: features.river.fords[1].x + 15, z: features.river.fords[1].z - 15 });
   // Leave the 1.3-unit gathering approaches clear of inflated scenery obstacles.
   layout.props = layout.props.filter((prop) => !replaceable(prop.kind)
     || quarries.every((pos) => distance(prop.pos, pos) >= PROP_RADIUS[prop.kind] * prop.scale + 1.6));
+
+  // Append from a separate stream so existing resource kits/scenery keep their layout.
+  const wildlifeRandom = createSeededRandom(seed ^ 0x3c6ef372);
+  const wildlifeSpace = new PlacementGrid(hf.width);
+  for (const node of layout.nodes) wildlifeSpace.add(node.pos, node.kind === 'gold' || node.kind === 'stone' ? 0.8 : 0.5);
+  for (const prop of layout.props) wildlifeSpace.add(prop.pos, PROP_RADIUS[prop.kind] * prop.scale);
+  layout.animals = [];
+  for (const [kind, count] of [['deer', 6], ['sheep', 4], ['boar', 2]] as const) {
+    for (let attempt = 0, placed = 0; placed < count && attempt < 12000; attempt++) {
+      const pos = { x: 4 + wildlifeRandom() * (hf.width - 8), z: 4 + wildlifeRandom() * (hf.depth - 8) };
+      const density = hf.forestDensity(pos.x, pos.z);
+      if (!padClear(pos, 5) || !fordClear(pos, 1) || !reachable(pos) || !wildlifeSpace.clear(pos, 1)) continue;
+      if (kind === 'boar' ? density < 0.35 : density > 0.25) continue;
+      if (![[-1, 0], [1, 0], [0, -1], [0, 1]].every(([dx, dz]) => reachable({ x: pos.x + dx, z: pos.z + dz }))) continue;
+      layout.animals.push({ kind, pos });
+      wildlifeSpace.add(pos, 1);
+      placed++;
+    }
+  }
+  for (let attempt = 0, placed = 0; placed < 10 && attempt < 12000; attempt++) {
+    const pos = { x: 2 + wildlifeRandom() * (hf.width - 4), z: 2 + wildlifeRandom() * (hf.depth - 4) };
+    if (!hf.isWater(pos.x, pos.z) || !padClear(pos, 0.5) || !fordClear(pos, 0.5) || !wildlifeSpace.clear(pos, 0.5)) continue;
+    // Keep each fishing patch near a connected, unobstructed shore.
+    let shore = false;
+    for (let a = 0; a < 16 && !shore; a++) {
+      const angle = a * Math.PI / 8;
+      for (const radius of [1, 2, 3]) {
+        const p = { x: pos.x + Math.cos(angle) * radius, z: pos.z + Math.sin(angle) * radius };
+        if (reachable(p) && wildlifeSpace.clear(p, 0.4)) { shore = true; break; }
+      }
+    }
+    if (!shore) continue;
+    layout.nodes.push({ kind: 'fish', pos, amount: 200 });
+    wildlifeSpace.add(pos, 0.5);
+    placed++;
+  }
   return { hf, layout };
 }

@@ -2,13 +2,36 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import {
   berryBushGeometry, createScout, createVillager, farmCropsGeometry, goldPileGeometry, modelMaterial,
-  stoneQuarryGeometry, stumpGeometry, treeGeometries,
+  stoneQuarryGeometry, stumpGeometry, treeGeometries, createAnimal, carcassGeometry, fishGeometry,
 } from './models';
 import type { ScoutPose, VillagerPose } from './models';
 
 function triangles(geometry: THREE.BufferGeometry): number {
   return (geometry.index?.count ?? geometry.getAttribute('position').count) / 3;
 }
+
+describe('wildlife models', () => {
+  it.each(['deer', 'boar', 'sheep'] as const)('%s rests on the ground with a small readable silhouette', (kind) => {
+    const model = createAnimal(kind);
+    const box = new THREE.Box3().setFromObject(model.object);
+    expect(Math.abs(box.min.y)).toBeLessThan(0.001);
+    expect(box.max.y).toBeGreaterThan(0.6);
+    let count = 0;
+    model.object.traverse((object) => {
+      if (object instanceof THREE.Mesh) count += triangles(object.geometry);
+    });
+    expect(count).toBeLessThan(1500);
+    for (const pose of ['idle', 'walk', 'attack', 'die'] as const) {
+      model.setPose(pose, 0.5, { progress: 0.5 });
+      expect(new THREE.Box3().setFromObject(model.object).isEmpty()).toBe(false);
+    }
+  });
+
+  it('makes compact carcass and fish node geometry', () => {
+    checkGeometry(carcassGeometry(), 100);
+    checkGeometry(fishGeometry(), 100);
+  });
+});
 
 function checkGeometry(geometry: THREE.BufferGeometry, budget: number): THREE.Vector3 {
   expect(geometry.index).toBeNull();

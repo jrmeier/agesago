@@ -1,6 +1,8 @@
 import { BUILDINGS, FARM_FOOD } from '../core/buildings';
-import type { Building, BuildingKind, ResourceType, Stockpile, Unit } from '../core/types';
+import type { Building, BuildingKind, ResourceType, Stockpile, Unit, UnitKind } from '../core/types';
+import { UNITS } from '../core/units';
 import type { Selection } from '../game/Selection';
+import { shownSelection, sightFromState, stepLastSeen, type LastSeenBuilding } from '../render/lastSeen';
 import { BALANCE } from '../sim/balance';
 import type { World } from '../sim/World';
 import {
@@ -15,6 +17,19 @@ import {
   popLabel,
 } from './build';
 import { formatCount, groupStatus, portraitKind, selectionName, showExplore, trainLabel, trainProgress } from './format';
+import {
+  STANCES,
+  canTrainAt,
+  combatChips,
+  hpLabel,
+  isMilitary,
+  queueView,
+  sharedStance,
+  totalHp,
+  trainBatch,
+  trainEntries,
+} from './military';
+import { closeTouchMenus, toggleTouchMenu, touchMenuOpen, type TouchMenu } from './touchMenus';
 
 /** Length of the train ring's circle (its `pathLength`). */
 const RING = 100;
@@ -26,13 +41,20 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 /**
  * Binds the existing DOM in index.html: #res-food/#res-wood/#res-gold/#res-stone/#res-pop
  * (pop shows "pop/popCap"; #pop-plaque flashes and #pop-note says "Need more houses" when
- * training hits the cap), #selection-panel (+ .hidden), #unit-name, #unit-status,
- * .unit-portrait (its <use> swaps between unit and building icons), #explore-btn (shown when
- * the selection can explore; Controls handles the click), #build-grid (one [data-build]
- * button per buildable kind, shown when villagers are selected; Controls handles clicks),
- * #build-progress / #cancel-build-btn (building panel for a selected foundation; Controls
- * handles the click), #train-btn (.train-sub label, .train-ring-fill progress ring,
- * .training while queued). Updates from world.events and selection changes.
+ * training hits the cap), #selection-panel (+ .hidden, .building-mode, .enemy for a read-only
+ * enemy panel), #unit-name, #unit-status, #unit-hp (health bar), #unit-stats (attack /
+ * armour / range chips for soldiers), .unit-portrait (its <use> swaps between unit and building
+ * icons), #explore-btn (shown when the selection can explore; Controls handles the click),
+ * #build-grid (one [data-build] button per buildable kind, shown when villagers are selected;
+ * Controls handles clicks), #build-progress / #cancel-build-btn (building panel for a selected
+ * foundation; Controls handles the click), #train-grid (one [data-train] button per unit a
+ * selected complete building trains — click trains one, Shift-click five; dispatched here),
+ * #train-queue (queue strip; click an entry to cancel it), #command-card (attack-move / stop / stances; this
+ * class shows it and marks the current stance, Controls handles clicks). On a phone the build grid, training
+ * grid and command card stay behind #menu-tabs (Build / Train / Orders) until that tab is open, and
+ * #select-same-btn shows when the selection is one kind of own unit. #train-btn
+ * (.train-sub label, .train-ring-fill progress ring, .training while queued). Updates from
+ * world.events and selection changes.
  * Owned by the HUD lane. Public surface FROZEN: constructor, update.
  */
 export class Hud {
@@ -52,18 +74,43 @@ export class Hud {
     grid: byId('build-grid'),
     progress: byId('build-progress'),
     cancel: byId('cancel-build-btn'),
+    bell: byId('town-bell-btn'),
+    ungarrison: byId('ungarrison-btn'),
+    hp: byId('unit-hp'),
+    stats: byId('unit-stats'),
+    trainGrid: byId('train-grid'),
+    queue: byId('train-queue'),
+    commands: byId('command-card'),
+    menus: byId('menu-tabs'),
+    same: byId('select-same-btn'),
   };
   private readonly trainSub: HTMLElement | null;
   private readonly trainRing: SVGElement | null;
   private readonly portrait: HTMLElement | null;
   private readonly portraitUse: SVGUseElement | null;
   private readonly progressFill: HTMLElement | null;
+  private readonly hpFill: HTMLElement | null;
+  private readonly hpText: HTMLElement | null;
   private readonly buildButtons = new Map<BuildingKind, HTMLButtonElement>();
+  private readonly trainButtons = new Map<UnitKind, HTMLButtonElement>();
+  private readonly stanceButtons = new Map<string, HTMLElement>();
   private portraitShown = '#i-villager';
   private dimmed: boolean | null = null;
   private ringOffset = '';
   private affordKey = '';
   private popNoteTimer = 0;
+  /** Building kind the training grid was built for ('' = none). */
+  private trainKind: BuildingKind | '' = '';
+  /** Building the training grid dispatches to. */
+  private trainBuildingId: number | null = null;
+  private trainAffordKey = '';
+  private queueKey = '';
+  private queueHead = '';
+  private statsKey = '';
+  private hpKey = '';
+  private readonly menuTabs: Record<TouchMenu, HTMLElement | null>;
+  /** Enemy buildings the panel may describe while they are out of sight. */
+  private snaps = new Map<number, LastSeenBuilding>();
 
   constructor(
     readonly world: World,
@@ -75,17 +122,41 @@ export class Hud {
     this.portrait = this.el.panel?.querySelector<HTMLElement>('.unit-portrait') ?? null;
     this.portraitUse = this.portrait?.querySelector<SVGUseElement>('use') ?? null;
     this.progressFill = this.el.progress?.querySelector<HTMLElement>('.build-progress-fill') ?? null;
+    this.hpFill = this.el.hp?.querySelector<HTMLElement>('.unit-hp-fill') ?? null;
+    this.hpText = this.el.hp?.querySelector<HTMLElement>('.unit-hp-text') ?? null;
+    for (const btn of this.el.commands?.querySelectorAll<HTMLElement>('[data-stance]') ?? []) {
+      this.stanceButtons.set(btn.dataset.stance!, btn);
+    }
+    this.menuTabs = {
+      build: this.el.menus?.querySelector<HTMLElement>('[data-menu="build"]') ?? null,
+      train: this.el.menus?.querySelector<HTMLElement>('[data-menu="train"]') ?? null,
+      orders: this.el.menus?.querySelector<HTMLElement>('[data-menu="orders"]') ?? null,
+    };
+    this.el.menus?.addEventListener('click', (e) => {
+      const btn = (e.target as Element).closest<HTMLElement>('[data-menu]');
+      const menu = btn?.dataset.menu;
+      if (menu !== 'build' && menu !== 'train' && menu !== 'orders') return;
+      btn?.blur();
+      toggleTouchMenu(menu);
+    });
     this.buildGrid();
     this.setStock(world.stock, world.pop, world.popCap);
     world.events.on('stockpile', (e) => this.setStock(e.stock, e.pop, e.popCap));
     world.events.on('rejected', (e) => {
       if (e.reason === 'insufficient-food' || e.reason === 'pop-cap') this.flashTrain();
+      if (e.reason === 'insufficient-resources' || e.reason === 'pop-cap') this.flashTrainGrid();
       if (e.reason === 'pop-cap') this.flashPop();
     });
     selection.onChange(() => this.updateSelection());
     this.el.train?.addEventListener('click', (e) => {
       (e.currentTarget as HTMLElement).blur();
       this.onTrain();
+    });
+    this.el.trainGrid?.addEventListener('click', (e) => {
+      const btn = (e.target as Element).closest<HTMLElement>('[data-train]');
+      if (!btn) return;
+      btn.blur();
+      this.trainAt(btn.dataset.train as UnitKind, (e as MouseEvent).shiftKey);
     });
     this.update();
   }
@@ -94,6 +165,13 @@ export class Hud {
   update(): void {
     this.updateSelection();
     this.updateTrain();
+  }
+
+  /** Queue `kind` at the building whose training panel is open (five with Shift). */
+  private trainAt(kind: UnitKind, shift: boolean): void {
+    const id = this.trainBuildingId;
+    if (id === null) return;
+    for (let i = 0; i < trainBatch(shift); i++) this.world.dispatch({ type: 'train', buildingId: id, unit: kind });
   }
 
   private setStock(stock: Stockpile, pop: number, popCap: number): void {
@@ -112,76 +190,231 @@ export class Hud {
     grid.replaceChildren();
     for (const kind of buildableKinds()) {
       const spec = BUILDINGS[kind];
-      const key = keyLabel(BUILD_HOTKEYS[kind]);
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'build-btn';
+      const btn = tile(`#i-b-${kind}`, spec.name, spec.cost, BUILD_HOTKEYS[kind]);
       btn.dataset.build = kind;
-      btn.title = `${spec.name} — ${formatCost(spec.cost)}${key ? ` (${key})` : ''}`;
-      btn.setAttribute('aria-label', btn.title);
-      btn.append(icon(`#i-b-${kind}`, 'build-icon'));
-      const name = document.createElement('span');
-      name.className = 'build-name';
-      name.textContent = spec.name;
-      btn.append(name);
-      const cost = document.createElement('span');
-      cost.className = 'build-cost';
-      for (const e of costEntries(spec.cost)) {
-        const part = document.createElement('span');
-        part.className = 'build-cost-part';
-        part.append(icon(`#i-${e.type}`, 'cost-icon'), String(e.amount));
-        cost.append(part);
-      }
-      btn.append(cost);
-      if (key) {
-        const kbd = document.createElement('kbd');
-        kbd.textContent = key;
-        btn.append(kbd);
-      }
       grid.append(btn);
       this.buildButtons.set(kind, btn);
     }
   }
 
-  private updateSelection(): void {
-    const units: Unit[] = [];
-    let building: Building | undefined;
-    for (const id of this.selection.ids) {
-      const u = this.world.units.get(id);
-      if (u) units.push(u);
-      else building ??= this.world.buildings.get(id);
-    }
-    const target = units.length ? 'units' : building ? 'building' : null;
-    this.el.panel?.classList.toggle('hidden', target === null);
-    this.el.panel?.classList.toggle('building-mode', target === 'building');
-    this.updateExplore(units);
-    const villagers = units.some((u) => u.kind === 'villager');
-    if (this.el.grid && this.el.grid.hidden === villagers) this.el.grid.hidden = !villagers;
-    if (villagers) this.updateAffordable();
-    this.updateBuilding(target === 'building' ? building : undefined);
-    if (target === 'units') {
-      const kinds = units.map((u) => u.kind);
-      setText(this.el.name, selectionName(kinds));
-      setText(this.el.status, groupStatus(units, BALANCE.carryCap));
-      this.setPortrait(`#i-${portraitKind(kinds)}`, units.length > 1 ? String(units.length) : '');
+  /** Rebuild the training grid for a building kind ('' empties it). */
+  private buildTrainGrid(kind: BuildingKind | ''): void {
+    this.trainKind = kind;
+    this.trainAffordKey = '';
+    this.trainButtons.clear();
+    const grid = this.el.trainGrid;
+    if (!grid) return;
+    grid.replaceChildren();
+    if (!kind) return;
+    for (const e of trainEntries(kind, this.world.stock)) {
+      const btn = tile(`#i-${e.kind}`, e.name, e.cost, e.key, 'Shift-click: queue 5');
+      btn.classList.add('train-tile');
+      btn.dataset.train = e.kind;
+      grid.append(btn);
+      this.trainButtons.set(e.kind, btn);
     }
   }
 
-  private updateBuilding(b: Building | undefined): void {
-    const foundation = !!b && !b.complete;
-    if (this.el.progress && this.el.progress.hidden === foundation) this.el.progress.hidden = !foundation;
-    if (this.el.cancel && this.el.cancel.hidden === foundation) this.el.cancel.hidden = !foundation;
+  private updateSelection(): void {
+    const local = this.world.localPlayer;
+    const vis = this.world.visibility;
+    const sightAt = (x: number, z: number) => sightFromState(vis.stateAt(x, z));
+    // Fogged enemies come from `shown` only. Do not read the live building for hp or progress.
+    this.snaps = stepLastSeen(this.snaps, this.world.buildings.values(), local, sightAt).snaps;
+    const shown = shownSelection(
+      this.selection.ids,
+      local,
+      (id) => this.world.units.get(id),
+      (id) => this.world.buildings.get(id),
+      this.snaps,
+      sightAt,
+    );
+    const units: Unit[] = [];
+    for (const id of shown.unitIds) {
+      const u = this.world.units.get(id);
+      if (u) units.push(u);
+    }
+    const building = shown.liveBuildingId != null ? this.world.buildings.get(shown.liveBuildingId) : undefined;
+    const remembered = shown.remembered;
+    const target = units.length ? 'units' : building || remembered ? 'building' : null;
+    const owner = units.length ? units[0].owner : (building?.owner ?? remembered?.owner);
+    const foreign = target !== null && owner !== local;
+    const own = foreign ? [] : units;
+    const ownBuilding = foreign ? undefined : building;
+    this.el.panel?.classList.toggle('hidden', target === null);
+    this.el.panel?.classList.toggle('building-mode', target === 'building');
+    this.el.panel?.classList.toggle('enemy', foreign);
+    this.updateExplore(own);
+    const villagers = own.some((u) => u.kind === 'villager');
+    setHidden(this.el.grid, !villagers);
+    if (villagers) this.updateAffordable();
+    this.updateCommands(own);
+    this.updateBuilding(target === 'building' ? building : undefined, ownBuilding);
+    if (target === 'units') {
+      const kinds = units.map((u) => u.kind);
+      setText(this.el.name, selectionName(kinds));
+      setText(this.el.status, foreign ? this.ownerName(owner) : groupStatus(units, BALANCE.carryCap));
+      this.setPortrait(`#i-${portraitKind(kinds)}`, units.length > 1 ? String(units.length) : '');
+      const hp = totalHp(units);
+      this.setHp(hp.hp, hp.maxHp);
+      const single = kinds.every((k) => k === kinds[0]) ? kinds[0] : null;
+      this.setStats(single && (isMilitary(single) || foreign) ? single : null);
+    } else if (building) {
+      this.setHp(building.complete ? building.hp : -1, building.maxHp);
+      this.setStats(null);
+    } else if (remembered) {
+      setText(this.el.name, BUILDINGS[remembered.kind].name);
+      setText(this.el.status, this.ownerName(remembered.owner));
+      this.setPortrait(`#i-b-${remembered.kind}`, '');
+      this.setHp(remembered.complete ? remembered.hp : -1, remembered.maxHp);
+      this.setStats(null);
+    } else {
+      this.setHp(-1, 0);
+      this.setStats(null);
+    }
+    const showBuild = villagers;
+    const showTrain = !!this.el.trainGrid && !this.el.trainGrid.hidden;
+    const showOrders = !!this.el.commands && !this.el.commands.hidden;
+    this.syncTouchMenus(showBuild, showTrain, showOrders, own.length > 0 && own.every((u) => u.kind === own[0].kind));
+  }
+
+  /** Show only the tabs whose sheet has something in it, and the These button for a single kind. */
+  private syncTouchMenus(showBuild: boolean, showTrain: boolean, showOrders: boolean, sameKind: boolean): void {
+    setHidden(this.menuTabs.build, !showBuild);
+    setHidden(this.menuTabs.train, !showTrain);
+    setHidden(this.menuTabs.orders, !showOrders);
+    setHidden(this.el.menus, !(showBuild || showTrain || showOrders));
+    const open = touchMenuOpen();
+    if ((open === 'build' && !showBuild) || (open === 'train' && !showTrain) || (open === 'orders' && !showOrders)) {
+      closeTouchMenus();
+    }
+    setHidden(this.el.same, !sameKind);
+  }
+
+  private ownerName(owner: number | undefined): string {
+    if (owner === undefined || owner === 0) return 'Wild';
+    return this.world.players.get(owner)?.player.name ?? `Player ${owner}`;
+  }
+
+  /** Command card: attack-move / stop for any own units; stances only when soldiers or scouts are in it. */
+  private updateCommands(own: readonly Unit[]): void {
+    const card = this.el.commands;
+    if (!card) return;
+    setHidden(card, !own.length);
+    if (!own.length) return;
+    const fighters = own.filter((u) => u.kind !== 'villager');
+    card.classList.toggle('no-stances', !fighters.length);
+    const stance = sharedStance(fighters);
+    for (const { stance: s } of STANCES) {
+      const btn = this.stanceButtons.get(s);
+      const pressed = String(stance === s);
+      if (btn && btn.getAttribute('aria-pressed') !== pressed) btn.setAttribute('aria-pressed', pressed);
+    }
+  }
+
+  /** Building panel: foundation progress, training grid + queue for own trainers, role text. */
+  private updateBuilding(b: Building | undefined, own: Building | undefined): void {
+    const foundation = !!own && !own.complete;
+    const shelter = !!own && own.complete && (BUILDINGS[own.kind].garrison ?? 0) > 0;
+    setHidden(this.el.progress, !foundation);
+    setHidden(this.el.cancel, !foundation);
+    setHidden(this.el.bell, !shelter);
+    setHidden(this.el.ungarrison, !shelter || !(own?.occupants?.length));
+    const trainer = own && canTrainAt(own) ? own : undefined;
+    const kind = trainer?.kind ?? '';
+    if (kind !== this.trainKind) this.buildTrainGrid(kind);
+    this.trainBuildingId = trainer?.id ?? null;
+    setHidden(this.el.trainGrid, !trainer);
+    setHidden(this.el.queue, !trainer || trainer.queue <= 0);
+    if (trainer) {
+      this.updateTrainAffordable();
+      this.updateQueue(trainer);
+    }
     if (!b) return;
     setText(this.el.name, BUILDINGS[b.kind].name);
     this.setPortrait(`#i-b-${b.kind}`, '');
-    if (foundation) {
+    if (!own) {
+      setText(this.el.status, this.ownerName(b.owner));
+    } else if (foundation) {
       setText(this.el.status, constructionLabel(b.buildProgress));
       const w = `${(Math.min(1, Math.max(0, b.buildProgress)) * 100).toFixed(1)}%`;
       if (this.progressFill && this.progressFill.style.width !== w) this.progressFill.style.width = w;
-    } else if (b.kind === 'townCenter') {
-      setText(this.el.status, b.queue > 0 ? trainLabel(b.queue, b.progress, BALANCE.trainTime, BALANCE.trainCost.food, true) : buildingRole(b.kind));
+    } else if (trainer && b.queue > 0) {
+      const head = b.queueKinds?.[0];
+      const total = head ? UNITS[head].trainTime : BALANCE.trainTime;
+      setText(this.el.status, trainLabel(b.queue, b.progress, total, 0, true));
     } else {
-      setText(this.el.status, buildingRole(b.kind, b.food, FARM_FOOD));
+      setText(this.el.status, buildingRole(b.kind, b.food, FARM_FOOD, b.occupants?.length ?? 0));
+    }
+  }
+
+  /** Queue strip: one icon per queued unit, the head with a progress fill. Click an icon to cancel it (refund). */
+  private updateQueue(b: Building): void {
+    const q = this.el.queue;
+    if (!q) return;
+    const view = queueView(b);
+    const key = view.kinds.join(',');
+    if (key !== this.queueKey) {
+      this.queueKey = key;
+      this.queueHead = '';
+      q.replaceChildren();
+      view.kinds.forEach((k, i) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = i === 0 ? 'queue-item head' : 'queue-item';
+        item.title = `${UNITS[k].name}${i === 0 ? ' (training)' : ''} — click to cancel`;
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.world.dispatch({ type: 'cancelTrain', buildingId: b.id, index: i });
+        });
+        item.append(icon(`#i-${k}`, 'queue-icon'));
+        if (i === 0) {
+          const bar = document.createElement('span');
+          bar.className = 'queue-fill';
+          item.append(bar);
+        }
+        q.append(item);
+      });
+    }
+    const w = `${(view.head * 100).toFixed(0)}%`;
+    if (w !== this.queueHead) {
+      this.queueHead = w;
+      const fill = q.querySelector<HTMLElement>('.queue-fill');
+      if (fill) fill.style.width = w;
+    }
+  }
+
+  private setHp(hp: number, maxHp: number): void {
+    const show = hp >= 0 && maxHp > 0;
+    setHidden(this.el.hp, !show);
+    if (!show) return;
+    const key = `${Math.ceil(hp)}/${maxHp}`;
+    if (key === this.hpKey) return;
+    this.hpKey = key;
+    const f = Math.min(1, Math.max(0, hp / maxHp));
+    setText(this.hpText, hpLabel(hp, maxHp));
+    if (this.hpFill) {
+      this.hpFill.style.width = `${(f * 100).toFixed(1)}%`;
+      this.hpFill.classList.toggle('low', f < 0.35);
+    }
+  }
+
+  /** Attack / armour / range chips for a single unit kind (null hides them). */
+  private setStats(kind: UnitKind | null): void {
+    const el = this.el.stats;
+    if (!el) return;
+    setHidden(el, !kind);
+    const key = kind ?? '';
+    if (key === this.statsKey) return;
+    this.statsKey = key;
+    el.replaceChildren();
+    if (!kind) return;
+    for (const chip of combatChips(UNITS[kind])) {
+      const span = document.createElement('span');
+      span.className = 'stat-chip';
+      span.title = chip.title;
+      span.append(icon(chip.icon, 'stat-icon'), chip.text);
+      el.append(span);
     }
   }
 
@@ -195,29 +428,18 @@ export class Hud {
 
   /** Grey out build buttons the stockpile can't pay for (only touches the DOM when that changes). */
   private updateAffordable(): void {
-    const stock = this.world.stock;
-    let key = '';
-    for (const kind of this.buildButtons.keys()) key += canAfford(BUILDINGS[kind].cost, stock) ? '1' : '0';
-    if (key === this.affordKey) return;
-    this.affordKey = key;
-    let i = 0;
-    for (const [kind, btn] of this.buildButtons) {
-      const ok = key[i++] === '1';
-      btn.classList.toggle('unaffordable', !ok);
-      btn.setAttribute('aria-disabled', String(!ok));
-      for (const part of btn.querySelectorAll<HTMLElement>('.build-cost-part')) {
-        const type = part.querySelector('use')?.getAttribute('href')?.slice(3) as ResourceType | undefined;
-        const need = type ? (BUILDINGS[kind].cost[type] ?? 0) : 0;
-        part.classList.toggle('short', !!type && stock[type] < need);
-      }
-    }
+    this.affordKey = markAffordable(this.buildButtons, (k) => BUILDINGS[k].cost, this.world.stock, this.affordKey);
+  }
+
+  private updateTrainAffordable(): void {
+    this.trainAffordKey = markAffordable(this.trainButtons, (k) => UNITS[k].cost, this.world.stock, this.trainAffordKey);
   }
 
   private updateExplore(units: readonly Unit[]): void {
     const btn = this.el.explore;
     if (!btn) return;
     const show = showExplore(units);
-    if (btn.hidden === show) btn.hidden = !show;
+    setHidden(btn, !show);
     const pressed = String(show && units.every((u) => u.state === 'exploring'));
     if (btn.getAttribute('aria-pressed') !== pressed) btn.setAttribute('aria-pressed', pressed);
   }
@@ -226,6 +448,7 @@ export class Hud {
     const btn = this.el.train;
     if (!btn) return;
     const tc = this.world.townCenter;
+    if (!tc) return;
     const cost = BALANCE.trainCost.food;
     const touch = document.body.classList.contains('touch');
     setText(this.trainSub, trainLabel(tc.queue, tc.progress, BALANCE.trainTime, cost, touch));
@@ -244,10 +467,11 @@ export class Hud {
   }
 
   private flashTrain(): void {
-    this.el.train?.animate(
-      [{ transform: 'translateX(0)' }, { transform: 'translateX(-5px)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(0)' }],
-      { duration: 240, iterations: 1 }
-    );
+    this.el.train?.animate(shake, { duration: 240, iterations: 1 });
+  }
+
+  private flashTrainGrid(): void {
+    if (this.el.trainGrid && !this.el.trainGrid.hidden) this.el.trainGrid.animate(shake, { duration: 240, iterations: 1 });
   }
 
   /** Pop cap reached: pulse the pop plaque red and show "Need more houses" under it. */
@@ -269,12 +493,84 @@ export class Hud {
   }
 }
 
+const shake: Keyframe[] = [
+  { transform: 'translateX(0)' },
+  { transform: 'translateX(-5px)' },
+  { transform: 'translateX(5px)' },
+  { transform: 'translateX(0)' },
+];
+
+/** A build-menu style tile: icon, name, cost (with resource icons) and hotkey. */
+function tile(iconHref: string, name: string, cost: Partial<Stockpile>, code: string | undefined, extra = ''): HTMLButtonElement {
+  const key = keyLabel(code);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'build-btn';
+  btn.title = `${name} — ${formatCost(cost)}${key ? ` (${key})` : ''}${extra ? `. ${extra}` : ''}`;
+  btn.setAttribute('aria-label', btn.title);
+  btn.append(icon(iconHref, 'build-icon'));
+  const label = document.createElement('span');
+  label.className = 'build-name';
+  label.textContent = name;
+  btn.append(label);
+  const costEl = document.createElement('span');
+  costEl.className = 'build-cost';
+  for (const e of costEntries(cost)) {
+    const part = document.createElement('span');
+    part.className = 'build-cost-part';
+    part.dataset.res = e.type;
+    part.append(icon(`#i-${e.type}`, 'cost-icon'), String(e.amount));
+    costEl.append(part);
+  }
+  btn.append(costEl);
+  if (key) {
+    const kbd = document.createElement('kbd');
+    kbd.textContent = key;
+    btn.append(kbd);
+  }
+  return btn;
+}
+
+/**
+ * Grey out tiles the stockpile can't pay for and mark the short resources. Only touches the
+ * DOM when affordability changed; returns the new change key.
+ */
+function markAffordable<K>(
+  buttons: ReadonlyMap<K, HTMLButtonElement>,
+  costOf: (k: K) => Partial<Stockpile>,
+  stock: Stockpile,
+  prevKey: string
+): string {
+  let key = '';
+  for (const k of buttons.keys()) {
+    const cost = costOf(k);
+    key += canAfford(cost, stock) ? '1' : '0';
+    for (const e of costEntries(cost)) key += stock[e.type] < e.amount ? 's' : '';
+  }
+  if (key === prevKey) return key;
+  for (const [k, btn] of buttons) {
+    const cost = costOf(k);
+    const ok = canAfford(cost, stock);
+    btn.classList.toggle('unaffordable', !ok);
+    btn.setAttribute('aria-disabled', String(!ok));
+    for (const part of btn.querySelectorAll<HTMLElement>('.build-cost-part')) {
+      const type = part.dataset.res as ResourceType | undefined;
+      part.classList.toggle('short', !!type && stock[type] < (cost[type] ?? 0));
+    }
+  }
+  return key;
+}
+
 function byId(id: string): HTMLElement | null {
   return document.getElementById(id);
 }
 
 function setText(el: HTMLElement | null, text: string): void {
   if (el && el.textContent !== text) el.textContent = text;
+}
+
+function setHidden(el: HTMLElement | null, hidden: boolean): void {
+  if (el && el.hidden !== hidden) el.hidden = hidden;
 }
 
 function icon(href: string, className: string): SVGSVGElement {

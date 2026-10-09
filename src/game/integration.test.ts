@@ -5,7 +5,7 @@ import { generateMap } from '../sim/mapgen';
 import { World } from '../sim/World';
 
 function nearest(world: World, kind: NodeKind): ResourceNode {
-  const tc = world.townCenter.pos;
+  const tc = world.townCenter!.pos;
   return [...world.nodes.values()]
     .filter((n) => n.kind === kind)
     .sort((a, b) => Math.hypot(a.pos.x - tc.x, a.pos.z - tc.z) - Math.hypot(b.pos.x - tc.x, b.pos.z - tc.z))[0];
@@ -39,7 +39,7 @@ describe('generated map + sim', () => {
     expect(world.stock.food).toBeGreaterThanOrEqual(BALANCE.trainCost.food);
     expect(world.stock.gold).toBeGreaterThan(0);
 
-    world.dispatch({ type: 'train', buildingId: world.townCenter.id });
+    world.dispatch({ type: 'train', buildingId: world.townCenter!.id });
     run(world, BALANCE.trainTime + 1);
     expect(world.villagerCount).toBe(4);
   });
@@ -49,7 +49,7 @@ describe('fog of war on the generated map', () => {
   it('reveals the start area at once and the explored area grows as villagers walk out', () => {
     const { hf, layout } = generateMap(DEFAULT_SEED);
     const world = new World(hf, layout);
-    const tc = world.townCenter.pos;
+    const tc = world.townCenter!.pos;
     expect(world.visibility.isVisible(tc.x, tc.z)).toBe(true);
     expect(world.visibility.isExplored(2, 2)).toBe(false);
     const before = world.visibility.exploredFraction;

@@ -12,12 +12,46 @@ import { TerrainView } from '../render/TerrainView';
 import { BALANCE } from '../sim/balance';
 import { generateMap } from '../sim/mapgen';
 import { World } from '../sim/World';
+import { Endgame } from '../ui/Endgame';
+import { EndgameLog } from '../ui/endgameLog';
 import { Hud } from '../ui/Hud';
 import { Minimap } from '../ui/Minimap';
 import { Selection } from './Selection';
 
 const STEP = 1 / BALANCE.tickRate;
 const MAX_STEPS_PER_FRAME = 3;
+
+/** Milliseconds spent in each boot stage. `totalMs` ends when the first frame is scheduled. */
+export interface BootTimings {
+  mapMs: number;
+  terrainMs: number;
+  modelsMs: number;
+  totalMs: number;
+}
+
+export type BootReport = (label: string, fraction: number) => void;
+
+/** Let the browser paint the loading screen before the next blocking stage. */
+function afterPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
+interface BootParts {
+  layout: ReturnType<typeof generateMap>['layout'];
+  world: World;
+  quality: Quality;
+  renderer: Renderer;
+  input: Input;
+  rig: CameraRig;
+  terrain: TerrainView;
+  views: EntityViews;
+  props: PropsView;
+  grass: GrassField;
+  fog: FogOfWar;
+  boot: BootTimings;
+}
 
 /**
  * Composition root and main loop: fixed-step sim, interpolated rendering.
@@ -29,6 +63,7 @@ export class Game {
   readonly rig: CameraRig;
   readonly selection = new Selection();
   readonly quality: Quality;
+  readonly boot: BootTimings;
   private readonly input: Input;
   private readonly terrain: TerrainView;
   private readonly views: EntityViews;
@@ -38,26 +73,73 @@ export class Game {
   private readonly controls: Controls;
   private readonly hud: Hud;
   private readonly minimap: Minimap;
+  private readonly endgameLog = new EndgameLog();
+  private readonly endgame: Endgame;
+  /** Set when gameOver fires; the loop stops so the summary matches the last sample. */
+  private matchOver = false;
   private accumulator = 0;
-  private last = performance.now();
+  private last = 0;
   private elapsed = 0;
   private raf = 0;
   private readonly onResize = () => this.resize();
 
-  constructor(private readonly container: HTMLElement, seed = DEFAULT_SEED) {
+  /**
+   * Build the world in stages so a loading screen can paint between them.
+   * Map generation stays on the main thread: the heightfield is not worker-safe.
+   */
+  static async start(container: HTMLElement, report: BootReport = () => {}, seed = DEFAULT_SEED): Promise<Game> {
+    const t0 = performance.now();
+    report('Shaping the terrain', 0.16);
+    await afterPaint();
+
+    const tMap = performance.now();
     const { hf, layout } = generateMap(seed);
-    this.world = new World(hf, layout);
+    const world = new World(hf, layout);
+    const mapMs = performance.now() - tMap;
 
-    this.quality = detectQuality();
-    this.renderer = new Renderer(container, this.quality);
-    this.input = new Input(this.renderer.domElement);
-    this.rig = new CameraRig(hf, this.input, layout.townCenter);
+    report('Baking the ground', 0.46);
+    await afterPaint();
+    const tTerrain = performance.now();
+    const quality = detectQuality();
+    const renderer = new Renderer(container, quality);
+    const input = new Input(renderer.domElement);
+    const rig = new CameraRig(hf, input, layout.townCenter);
+    const terrain = new TerrainView(hf, quality);
+    const terrainMs = performance.now() - tTerrain;
 
-    this.terrain = new TerrainView(hf, this.quality);
-    this.views = new EntityViews(this.world);
-    this.props = new PropsView(hf, layout.props);
-    this.grass = new GrassField(hf, this.quality);
-    this.fog = new FogOfWar(this.world.visibility, this.quality);
+    report('Raising the models', 0.74);
+    await afterPaint();
+    const tModels = performance.now();
+    const views = new EntityViews(world);
+    const props = new PropsView(hf, layout.props);
+    const grass = new GrassField(hf, quality);
+    const fog = new FogOfWar(world.visibility, quality);
+    const modelsMs = performance.now() - tModels;
+
+    report('Opening the gates', 0.92);
+    await afterPaint();
+    const game = new Game(container, {
+      layout, world, quality, renderer, input, rig, terrain, views, props, grass, fog,
+      boot: { mapMs, terrainMs, modelsMs, totalMs: performance.now() - t0 },
+    });
+    report('The city stands', 1);
+    return game;
+  }
+
+  private constructor(private readonly container: HTMLElement, parts: BootParts) {
+    const { layout } = parts;
+    this.world = parts.world;
+    this.quality = parts.quality;
+    this.renderer = parts.renderer;
+    this.input = parts.input;
+    this.rig = parts.rig;
+    this.terrain = parts.terrain;
+    this.views = parts.views;
+    this.props = parts.props;
+    this.grass = parts.grass;
+    this.fog = parts.fog;
+    this.boot = parts.boot;
+
     this.terrain.setFog(this.fog);
     this.props.setFog(this.fog);
     this.grass.setFog(this.fog);
@@ -79,17 +161,23 @@ export class Game {
     });
     this.hud = new Hud(this.world, this.selection, () => this.train());
     this.minimap = new Minimap(document.getElementById('hud') ?? container, this.world, this.rig);
+    this.endgame = new Endgame(this.world, this.endgameLog, () => {
+      this.matchOver = true;
+    });
 
     window.addEventListener('resize', this.onResize);
     this.resize();
+    this.last = performance.now();
     this.raf = requestAnimationFrame(this.frame);
   }
 
   train(): void {
-    this.world.dispatch({ type: 'train', buildingId: this.world.townCenter.id });
+    const tc = this.world.townCenter;
+    if (tc) this.world.dispatch({ type: 'train', buildingId: tc.id });
   }
 
   private frame = (now: number) => {
+    if (this.matchOver) return;
     const dt = Math.min((now - this.last) / 1000, 0.25);
     this.last = now;
     this.elapsed += dt;
@@ -99,12 +187,15 @@ export class Game {
 
     this.accumulator += dt;
     let steps = 0;
-    while (this.accumulator >= STEP && steps < MAX_STEPS_PER_FRAME) {
+    while (this.accumulator >= STEP && steps < MAX_STEPS_PER_FRAME && !this.matchOver) {
       this.world.tick(STEP);
       this.accumulator -= STEP;
       steps++;
     }
     if (steps === MAX_STEPS_PER_FRAME) this.accumulator = 0;
+
+    // One economy sample about every 10 sim seconds. gameOver records the last one itself.
+    if (!this.matchOver && this.endgameLog.shouldSample(this.world.time)) this.endgame.sample();
 
     this.fog.update(dt);
     this.props.syncFog();
@@ -118,7 +209,7 @@ export class Game {
     this.minimap.update(this.elapsed);
     this.renderer.render(this.rig.camera);
     this.input.endFrame();
-    this.raf = requestAnimationFrame(this.frame);
+    if (!this.matchOver) this.raf = requestAnimationFrame(this.frame);
   };
 
   /** Ground point the player is looking at: shadows, grass and sky follow it. */
@@ -136,6 +227,7 @@ export class Game {
 
   dispose(): void {
     cancelAnimationFrame(this.raf);
+    this.endgame.dispose();
     window.removeEventListener('resize', this.onResize);
     this.input.dispose();
     this.minimap.dispose();

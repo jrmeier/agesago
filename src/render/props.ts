@@ -306,3 +306,32 @@ export function propGeometries(): Record<PropKind, THREE.BufferGeometry[]> {
     log: [logGeometry(1)],
   };
 }
+
+/** Collapsed masonry and snapped rafters, grounded inside a destroyed footprint.
+ * Accepts either a square width or BUILDINGS[kind].size. Ready for shared/instanced use.
+ */
+export function rubbleGeometry(size: number | { w: number; d: number }): THREE.BufferGeometry {
+  const valid = (n: number): number => Number.isFinite(n) && n > 0 ? n : 4;
+  const w = valid(typeof size === 'number' ? size : size.w);
+  const d = valid(typeof size === 'number' ? size : size.d);
+  const random = seededRandom(307);
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 18; i++) {
+    const a = i * 2.4;
+    const radius = 0.15 + random() * 0.58;
+    const x = Math.sin(a) * radius, z = Math.cos(a) * radius;
+    const h = 0.13 + (1 - radius) * 0.25;
+    parts.push(part(roughen(new THREE.BoxGeometry(0.27, h, 0.25), random), STONE[i % 4],
+      [x, h / 2 + (i > 12 ? 0.12 : 0), z], [1, 1, 1], [random() * 0.3, a, random() * 0.4]));
+  }
+  for (let i = 0; i < 6; i++) {
+    parts.push(block([0.09, 0.08, 0.8 + random() * 0.5], i % 2 ? 0x493d29 : WOOD,
+      [(random() - 0.5) * 0.9, 0.12 + i * 0.035, (random() - 0.5) * 0.9], [0.12, i * 1.8, 0.14]));
+  }
+  const geometry = grounded(parts, 'building-rubble');
+  const bounds = geometry.boundingBox!.getSize(new THREE.Vector3());
+  geometry.scale(w / bounds.x, Math.min(w, d) * 0.16 / bounds.y, d / bounds.z);
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  return geometry;
+}

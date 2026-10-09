@@ -208,6 +208,41 @@ body {
   }
 }
 
+/* Hotkey reference. The hint line hides on a narrow window; this button stays. */
+.help-btn {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  border-radius: 4px;
+  font-family: var(--title);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
+  background: var(--bronze-face);
+  border: 1px solid var(--bronze-lo);
+  box-shadow:
+    var(--trim),
+    0 2px 6px rgba(0, 0, 0, 0.4);
+  touch-action: manipulation;
+}
+
+.help-btn:hover {
+  filter: brightness(1.08);
+}
+
+.help-btn:active {
+  transform: translateY(1px);
+}
+
+.help-btn:focus-visible {
+  outline: 2px solid var(--gilt);
+  outline-offset: 2px;
+}
+
 /* ---- Bottom row ---- */
 
 .hud-bottom {
@@ -805,6 +840,12 @@ body.touch .hud-top {
     max(12px, env(safe-area-inset-left));
 }
 
+body.touch .help-btn {
+  width: 44px;
+  height: 44px;
+  font-size: 20px;
+}
+
 body.touch .resource-bar {
   gap: 4px;
 }
@@ -1288,6 +1329,24 @@ body.touch .place-help-touch {
   display: inline;
 }
 
+.place-help-line {
+  display: none;
+}
+
+body.placing-line .place-help-mouse,
+body.placing-line .place-help-touch,
+body.placing-line.touch .place-help-touch {
+  display: none;
+}
+
+body.placing-line .place-help-line {
+  display: inline;
+}
+
+body.placing-line #place-rotate {
+  display: none;
+}
+
 .place-btn {
   width: 40px;
   height: 40px;
@@ -1477,5 +1536,1172 @@ body.touch .build-icon {
 
   body.touch .toasts {
     max-width: calc(100% - 150px);
+  }
+}
+
+/* ---- Unit panel: health bar and combat stat chips ---- */
+
+.unit-hp {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+}
+
+.unit-hp[hidden],
+.unit-stats[hidden] {
+  display: none;
+}
+
+.unit-hp-bar {
+  width: 110px;
+  height: 7px;
+  flex: none;
+  border-radius: 4px;
+  background: rgba(58, 36, 12, 0.3);
+  box-shadow: inset 0 1px 2px rgba(40, 22, 6, 0.6);
+  overflow: hidden;
+}
+
+.unit-hp-fill {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(180deg, #8fd16a 0%, #4f9a35 100%);
+  transition: width 0.2s linear;
+}
+
+.unit-hp-fill.low {
+  background: linear-gradient(180deg, #f08a5c 0%, #b8362a 100%);
+}
+
+.unit-hp-text {
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.unit-stats {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.stat-icon {
+  width: 14px;
+  height: 14px;
+  color: #6e2416;
+}
+
+/* Inspecting an enemy: the same sheet, dyed red and read-only. */
+.selection-panel.enemy {
+  background: linear-gradient(180deg, rgba(178, 58, 50, 0.32), rgba(120, 30, 20, 0.38)), var(--papyrus);
+  box-shadow:
+    inset 0 0 18px rgba(120, 28, 18, 0.55),
+    0 0 0 3px #3a120c,
+    0 0 0 4px #b23a32,
+    0 10px 28px rgba(0, 0, 0, 0.5);
+}
+
+.selection-panel.enemy .unit-info h3 {
+  color: #7a1408;
+}
+
+.selection-panel.enemy .unit-portrait {
+  background: linear-gradient(180deg, #f0a090 0%, #b23a32 50%, #6e1a10 100%);
+}
+
+.selection-panel.enemy .explore-btn,
+.selection-panel.enemy .build-grid,
+.selection-panel.enemy .train-queue,
+.selection-panel.enemy .command-card {
+  display: none;
+}
+
+/* ---- Training panel and queue ---- */
+
+.train-grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.train-tile {
+  flex: 1 1 0;
+  min-width: 80px;
+  max-width: 120px;
+}
+
+.train-tile .build-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--bronze-lo);
+}
+
+.train-queue {
+  flex: 1 0 100%;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  min-height: 38px;
+  padding: 3px;
+  overflow: hidden;
+}
+
+.train-queue[hidden] {
+  display: none;
+}
+
+.queue-item {
+  position: relative;
+  /* Buttons (click to cancel) styled as round icons. */
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--bronze-lo);
+  opacity: 0.8;
+}
+
+.queue-item.head {
+  width: 32px;
+  height: 32px;
+  opacity: 1;
+  box-shadow:
+    0 0 0 2px var(--bronze),
+    0 0 0 3px var(--wood-dark);
+}
+
+.queue-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.queue-fill {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 4px;
+  width: 0;
+  background: var(--bronze-face);
+  box-shadow: 0 -1px 0 rgba(40, 22, 6, 0.6);
+}
+
+/* A queued unit is a cancel button. On a phone it has to be a thumb target. */
+body.touch .queue-item,
+body.touch .queue-item.head {
+  width: 44px;
+  height: 44px;
+}
+
+/* ---- Command card: attack-move, stop, stances ---- */
+
+.command-card {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(110, 70, 26, 0.35);
+}
+
+.command-card[hidden] {
+  display: none;
+}
+
+.command-card.no-stances .stance-btn,
+.command-card.no-stances .cmd-sep {
+  display: none;
+}
+
+.cmd-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 3px;
+  background: rgba(110, 70, 26, 0.4);
+}
+
+.cmd-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  color: #4a2f0c;
+  background: var(--grain), linear-gradient(180deg, rgba(255, 248, 228, 0.75) 0%, rgba(226, 202, 152, 0.75) 100%);
+  border: 1px solid var(--bronze-lo);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 250, 230, 0.8),
+    0 2px 4px rgba(60, 35, 10, 0.35);
+}
+
+.cmd-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+.cmd-btn kbd {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  font-family: var(--text);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.cmd-btn:hover {
+  filter: brightness(1.06);
+  border-color: var(--bronze);
+}
+
+.cmd-btn:active {
+  transform: translateY(1px);
+}
+
+.cmd-btn[aria-pressed='true'] {
+  color: var(--gilt);
+  background: var(--timber);
+  border-color: var(--bronze);
+}
+
+.cmd-btn[data-cmd='stop'] {
+  color: #8e2414;
+}
+
+body.targeting #game-container canvas {
+  cursor: crosshair;
+}
+
+/* ---- Rally flag ---- */
+
+.rally-flag {
+  display: none;
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 22px;
+  height: 30px;
+  margin: -29px 0 0 -5px;
+  pointer-events: none;
+  z-index: 9;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6));
+}
+
+body.fps-mode .rally-flag {
+  display: none !important;
+}
+
+/* ---- Side rail: idle villagers and control groups ---- */
+
+.side-rail {
+  position: absolute;
+  left: max(18px, env(safe-area-inset-left));
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+body.fps-mode .side-rail {
+  display: none;
+}
+
+.idle-btn {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  padding: 3px;
+  border-radius: 50%;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  background: var(--bronze-face);
+  border: 1px solid var(--bronze-lo);
+  box-shadow:
+    0 0 0 2px var(--wood-dark),
+    0 4px 10px rgba(0, 0, 0, 0.45);
+}
+
+.idle-btn svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+.idle-count {
+  position: absolute;
+  right: -7px;
+  bottom: -5px;
+  min-width: 22px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  background: #9b2f22;
+  border: 1px solid var(--bronze);
+  font-family: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--parch-hi);
+  text-align: center;
+}
+
+.idle-btn.none-idle {
+  filter: grayscale(0.7) brightness(0.85);
+  opacity: 0.75;
+}
+
+.idle-btn.none-idle .idle-count {
+  background: var(--wood);
+}
+
+.idle-btn:active {
+  transform: translateY(1px);
+}
+
+.group-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.group-btn {
+  position: relative;
+  width: 40px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: 4px;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  font-family: var(--title);
+  font-weight: 700;
+  color: var(--parch);
+  background: var(--timber);
+  border: 1px solid var(--bronze);
+  box-shadow:
+    var(--trim),
+    0 3px 8px rgba(0, 0, 0, 0.4);
+}
+
+.group-num {
+  font-size: 14px;
+  color: var(--gilt);
+}
+
+.group-count {
+  font-family: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.group-btn:active {
+  transform: translateY(1px);
+  filter: brightness(1.2);
+}
+
+/* Desktop: only assigned groups show (Ctrl+1–9 makes them). */
+.group-btn.empty {
+  display: none;
+}
+
+body.touch .group-btn.empty {
+  display: flex;
+  opacity: 0.55;
+}
+
+body.touch .group-btn.touch-spare {
+  display: none;
+}
+
+body.touch .side-rail {
+  left: max(8px, env(safe-area-inset-left));
+  gap: 6px;
+}
+
+body.touch .idle-btn {
+  width: 46px;
+  height: 46px;
+}
+
+body.touch .group-btn {
+  width: 44px;
+  height: 38px;
+}
+
+/* ---- Alert toasts (share the discovery stack) ---- */
+
+.toast-alert {
+  color: #f6ead0;
+  background: var(--grain), linear-gradient(180deg, #a8352a 0%, #6e1a10 100%);
+  border-color: #3a120c;
+  box-shadow:
+    0 0 0 2px #3a120c,
+    0 0 0 3px #e0866a,
+    0 8px 18px rgba(0, 0, 0, 0.5);
+  animation:
+    toast-in 0.35s ease-out,
+    alert-throb 0.9s ease-in-out 0.35s 2;
+}
+
+.toast-death {
+  font-size: 12px;
+  color: #5a1a10;
+}
+
+@keyframes alert-throb {
+  50% {
+    filter: brightness(1.35);
+  }
+}
+
+/* ---- Minimap pings ---- */
+
+.minimap-ping {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  border-radius: 50%;
+  border: 2.5px solid #ff4a32;
+  box-shadow: 0 0 6px rgba(255, 74, 50, 0.8);
+  pointer-events: none;
+  animation: minimap-ping 1.1s ease-out 3;
+}
+
+.minimap-ping.ping-death {
+  border-color: #f0d9a0;
+  box-shadow: none;
+  animation-iteration-count: 1;
+}
+
+@keyframes minimap-ping {
+  from {
+    transform: scale(0.2);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+}
+
+/* ---- Phones: keep the panel clear of the side rail ---- */
+
+body.touch .cmd-btn {
+  width: auto;
+  min-width: 40px;
+  flex: 1 1 0;
+  height: 44px;
+}
+
+/* ---- Boot: painted before the module runs, so the first frame is never a blank tab ---- */
+
+#loading {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  background:
+    radial-gradient(90% 70% at 50% 18%, #f3dfb0 0%, #c49255 42%, #6a4324 100%);
+  transition: opacity 0.4s ease;
+}
+
+#loading.is-done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading-card {
+  width: min(420px, 100%);
+  padding: 28px 26px 22px;
+  text-align: center;
+  color: var(--ink);
+  background: var(--papyrus);
+  border: 1px solid var(--bronze-lo);
+  box-shadow:
+    var(--trim),
+    0 18px 40px rgba(33, 20, 11, 0.45);
+}
+
+.loading-kicker {
+  font-family: var(--title);
+  font-size: 13px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--bronze-lo);
+}
+
+.loading-card h1 {
+  margin: 8px 0 14px;
+  font-family: var(--title);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+#loading-stage {
+  min-height: 1.4em;
+  font-size: 16px;
+  color: var(--ink-soft);
+}
+
+.loading-track {
+  margin-top: 16px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: rgba(43, 26, 15, 0.18);
+  box-shadow: inset 0 1px 2px rgba(43, 26, 15, 0.35);
+}
+
+#loading-bar {
+  width: 100%;
+  height: 100%;
+  transform: scaleX(0.08);
+  transform-origin: left center;
+  background: var(--bronze-face);
+  transition: transform 0.25s ease;
+}
+
+body.touch .cmd-btn kbd {
+  display: none;
+}
+
+body.touch .train-tile {
+  min-width: 64px;
+}
+
+@media (max-width: 719px) {
+  body.touch .selection-panel {
+    left: calc(50% + 26px);
+    max-width: calc(100% - 84px);
+  }
+
+  body.touch .selection-panel:has(.build-grid:not([hidden])),
+  body.touch .selection-panel:has(.command-card:not([hidden])) {
+    width: calc(100% - 84px);
+  }
+
+  body.touch .unit-hp-bar {
+    width: 72px;
+  }
+
+  body.touch .cmd-sep {
+    margin: 2px 0;
+  }
+
+  body.touch .command-card {
+    gap: 3px;
+  }
+}
+
+@media (max-width: 380px) {
+  body.touch .cmd-btn {
+    min-width: 34px;
+  }
+
+  body.touch .cmd-btn svg {
+    width: 19px;
+    height: 19px;
+  }
+}
+
+/* Short landscape phones: a tighter rail. */
+@media (max-height: 460px) {
+  body.touch .idle-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  body.touch .group-btn {
+    height: 32px;
+  }
+
+  body.touch .group-btn:nth-child(n + 4).empty {
+    display: none;
+  }
+}
+
+/* ---- Touch menus: Build / Train / Orders sheets, and the box-select hint ---- */
+
+.menu-tabs,
+#select-same-btn {
+  display: none;
+}
+
+.menu-tab {
+  flex: 1 1 0;
+  min-height: 44px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  font-family: var(--title);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #3a240c;
+  background: var(--grain), linear-gradient(180deg, rgba(255, 248, 228, 0.75) 0%, rgba(226, 202, 152, 0.75) 100%);
+  border: 1px solid var(--bronze-lo);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 250, 230, 0.8),
+    0 2px 4px rgba(60, 35, 10, 0.35);
+}
+
+.menu-tab[hidden] {
+  display: none;
+}
+
+.menu-tab[aria-pressed='true'] {
+  color: var(--ink);
+  background: var(--grain), var(--bronze-face);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 245, 210, 0.75),
+    0 0 0 1px var(--wood-dark);
+}
+
+body.touch .menu-tabs:not([hidden]) {
+  display: flex;
+  flex: 1 0 100%;
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(110, 70, 26, 0.35);
+}
+
+body.touch #select-same-btn:not([hidden]) {
+  display: flex;
+}
+
+/* Grids stay in the panel on desktop. On a phone they open from a tab, so the summary stays one row. */
+body.touch:not(.menu-build) #build-grid,
+body.touch:not(.menu-train) #train-grid,
+body.touch:not(.menu-train) #train-queue,
+body.touch:not(.menu-orders) #command-card {
+  display: none;
+}
+
+body.touch .selection-panel {
+  white-space: normal;
+}
+
+body.touch .touch-bar {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+body.touch .touch-btn {
+  width: auto;
+  max-width: 54px;
+  min-width: 44px;
+  flex: 0 1 54px;
+  padding: 0 2px;
+}
+
+.select-hint {
+  position: fixed;
+  z-index: 16;
+  left: 12px;
+  right: 12px;
+  bottom: calc(86px + env(safe-area-inset-bottom));
+  margin: 0 auto;
+  max-width: 320px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  text-align: center;
+  pointer-events: none;
+  font-family: var(--title);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+  background: var(--papyrus);
+  border: 1px solid var(--bronze);
+  box-shadow: var(--trim), 0 8px 18px rgba(0, 0, 0, 0.4);
+}
+
+.select-hint[hidden] {
+  display: none;
+}
+
+/* An open tab becomes a sheet: names visible, three columns, scroll instead of one cramped strip. */
+body.touch.menu-build .selection-panel,
+body.touch.menu-train .selection-panel,
+body.touch.menu-orders .selection-panel {
+  position: absolute;
+  left: 64px;
+  right: 8px;
+  bottom: 100%;
+  width: auto;
+  max-width: none;
+  max-height: min(42vh, 380px);
+  transform: none;
+  overflow-y: auto;
+  align-items: flex-start;
+  white-space: normal;
+}
+
+body.touch.menu-build .build-name,
+body.touch.menu-train .build-name {
+  display: block;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.15;
+}
+
+body.touch.menu-build #build-grid,
+body.touch.menu-train #train-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+}
+
+body.touch.menu-orders .command-card {
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+body.touch.menu-orders .cmd-btn {
+  width: 52px;
+  height: 52px;
+}
+
+body.touch.menu-orders .cmd-btn svg {
+  width: 26px;
+  height: 26px;
+}
+/* ---- Hotkey list. Below the end-of-match sheet so a finished game still covers it. ---- */
+
+.hotkey-help[hidden] {
+  display: none !important;
+}
+
+.hotkey-help {
+  position: absolute;
+  inset: 0;
+  z-index: 28;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  overflow: hidden;
+  background: rgba(18, 10, 4, 0.72);
+  pointer-events: auto;
+}
+
+.hotkey-sheet {
+  position: relative;
+  width: min(680px, 100%);
+  max-height: 100%;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 22px 18px 16px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--papyrus);
+  border: 1px solid #8a6230;
+  box-shadow:
+    inset 0 0 18px rgba(120, 76, 28, 0.45),
+    inset 0 0 2px rgba(80, 50, 15, 0.6),
+    0 0 0 3px var(--wood),
+    0 0 0 4px var(--bronze),
+    0 16px 40px rgba(0, 0, 0, 0.55);
+  color: var(--ink);
+}
+
+.hotkey-sheet::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 5px;
+  height: 8px;
+  background: var(--meander-ink) 0 0 / 8px 8px repeat-x;
+  opacity: 0.75;
+}
+
+.hotkey-title {
+  margin-top: 8px;
+  font-family: var(--title);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+  color: #6e2416;
+  text-shadow: 0 1px 0 rgba(255, 245, 215, 0.6);
+}
+
+.hotkey-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hotkey-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--ink-soft);
+}
+
+.hotkey-list kbd {
+  flex: none;
+  min-width: 1.6em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-align: center;
+  background: var(--bronze-face);
+  border: 1px solid var(--bronze-lo);
+  box-shadow: 0 1px 0 var(--wood-dark);
+  font-family: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.hotkey-list span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hotkey-close {
+  flex: none;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  font-family: var(--title);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--grain), var(--bronze-face);
+  border: 1px solid var(--bronze-lo);
+  box-shadow:
+    0 0 0 2px var(--wood-dark),
+    inset 0 1px 0 rgba(255, 245, 210, 0.75),
+    inset 0 -2px 3px rgba(80, 45, 10, 0.45);
+  touch-action: manipulation;
+}
+
+.hotkey-close:hover {
+  filter: brightness(1.08);
+}
+
+.hotkey-close:active {
+  transform: translateY(1px);
+}
+
+.hotkey-close:focus-visible {
+  outline: 2px solid var(--gilt);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .hotkey-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hotkey-sheet {
+    padding: 18px 12px 12px;
+  }
+
+  .hotkey-title {
+    font-size: 18px;
+    letter-spacing: 0.08em;
+  }
+}
+
+/* ---- End of match: resign, then the conquest/resign summary. Wonder and relic are not offered. ---- */
+
+.resign-btn {
+  position: absolute;
+  z-index: 13;
+  top: 64px;
+  right: max(12px, env(safe-area-inset-right));
+  min-height: 36px;
+  padding: 7px 12px;
+  pointer-events: auto;
+  cursor: pointer;
+  border-radius: 4px;
+  font-family: var(--title);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--parch-hi);
+  background: var(--timber);
+  border: 1px solid var(--bronze);
+  box-shadow:
+    var(--trim),
+    0 4px 12px rgba(0, 0, 0, 0.45);
+  touch-action: manipulation;
+}
+
+.resign-btn:hover {
+  filter: brightness(1.12);
+}
+
+.resign-btn:active {
+  transform: translateY(1px);
+}
+
+/* Touch: the minimap owns the top-right (about 64px down, ~150px tall), so resign sits just under it. */
+body.touch .resign-btn {
+  top: calc(max(6px, env(safe-area-inset-top)) + 230px);
+  right: max(10px, env(safe-area-inset-right));
+  min-height: 44px;
+  min-width: 44px;
+}
+
+@media (max-width: 420px) {
+  .resign-btn {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+}
+
+/* Short landscape: the minimap is shorter and the footer owns the bottom, so resign moves to the top-left. */
+@media (max-height: 460px) {
+  body.touch .resign-btn {
+    top: calc(max(6px, env(safe-area-inset-top)) + 52px);
+    right: auto;
+    left: max(10px, env(safe-area-inset-left));
+  }
+}
+
+.endgame[hidden] {
+  display: none !important;
+}
+
+.endgame {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+    max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  background: rgba(18, 10, 4, 0.72);
+  pointer-events: auto;
+}
+
+.endgame-sheet {
+  position: relative;
+  width: min(520px, 100%);
+  max-width: 100%;
+  margin: auto;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 22px 18px 16px;
+  border-radius: 3px;
+  overflow-x: hidden;
+  background: var(--papyrus);
+  border: 1px solid #8a6230;
+  box-shadow:
+    inset 0 0 18px rgba(120, 76, 28, 0.45),
+    inset 0 0 2px rgba(80, 50, 15, 0.6),
+    0 0 0 3px var(--wood),
+    0 0 0 4px var(--bronze),
+    0 16px 40px rgba(0, 0, 0, 0.55);
+  color: var(--ink);
+}
+
+.endgame-sheet::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 5px;
+  height: 8px;
+  background: var(--meander-ink) 0 0 / 8px 8px repeat-x;
+  opacity: 0.75;
+}
+
+.endgame-title {
+  margin-top: 8px;
+  font-family: var(--title);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+  color: #6e2416;
+  text-shadow: 0 1px 0 rgba(255, 245, 215, 0.6);
+}
+
+.endgame-line {
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.endgame-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin-top: 4px;
+  min-width: 0;
+}
+
+.endgame-chart {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.endgame-chart figcaption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-family: var(--title);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.endgame-chart figcaption span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.endgame-chart figcaption b {
+  margin-left: auto;
+  font-family: var(--text);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
+.endgame-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.endgame-plot {
+  display: block;
+  width: 100%;
+  height: 64px;
+  max-width: 100%;
+  border-radius: 2px;
+  background: rgba(90, 60, 24, 0.08);
+}
+
+.endgame-btn {
+  margin-top: 6px;
+  width: 100%;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  font-family: var(--title);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--grain), var(--bronze-face);
+  border: 1px solid var(--bronze-lo);
+  box-shadow:
+    0 0 0 2px var(--wood-dark),
+    inset 0 1px 0 rgba(255, 245, 210, 0.75),
+    inset 0 -2px 3px rgba(80, 45, 10, 0.45);
+  touch-action: manipulation;
+}
+
+.endgame-btn:hover,
+.resign-btn:focus-visible,
+.endgame-btn:focus-visible {
+  filter: brightness(1.08);
+}
+
+.endgame-btn:active {
+  transform: translateY(1px);
+}
+
+.resign-btn:focus-visible,
+.endgame-btn:focus-visible {
+  outline: 2px solid var(--gilt);
+  outline-offset: 2px;
+}
+
+@media (max-width: 520px) {
+  .endgame-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .endgame-sheet {
+    padding: 18px 12px 12px;
+  }
+
+  .endgame-title {
+    font-size: 22px;
+    letter-spacing: 0.08em;
   }
 }

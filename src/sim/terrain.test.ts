@@ -188,4 +188,30 @@ describe('generateTerrain', () => {
     expect(hf.isWalkable(40.01, 10)).toBe(false);
     expect(Object.values(hf.ground(40, 30)).reduce((sum, w) => sum + w, 0)).toBeCloseTo(1, 6);
   });
+
+  it('accepts multiple supplied pads, levels dry economy areas and preserves distant terrain', () => {
+    const pads = [{ x: 36, z: 88 }, { x: 140, z: 88 }];
+    const hf = generateTerrain(1, MAP_W, MAP_D, pads);
+    const legacy = generateTerrain(1);
+    for (const pad of pads) {
+      const height = hf.heightAt(pad.x, pad.z);
+      for (let a = 0; a < 16; a++) {
+        const angle = a * Math.PI / 8;
+        for (const radius of [0, 3, 8, 12, 16, 17]) {
+          const x = pad.x + Math.cos(angle) * radius;
+          const z = pad.z + Math.sin(angle) * radius;
+          expect(hf.heightAt(x, z)).toBeCloseTo(height, 12);
+          expect(hf.isWater(x, z)).toBe(false);
+          expect(hf.isWalkable(x, z)).toBe(true);
+          expect(hf.ground(x, z).path).toBe(0);
+        }
+      }
+      expect(hf.ground(pad.x, pad.z).dirt).toBeGreaterThan(0.8);
+      expect(hf.forestDensity(pad.x - 14, pad.z - 4)).toBeGreaterThan(0.9);
+    }
+    for (const [x, z] of [[10, 10], [160, 150], [50, 165]]) {
+      expect(hf.heightAt(x, z)).toBe(legacy.heightAt(x, z));
+      expect(hf.ground(x, z)).toEqual(legacy.ground(x, z));
+    }
+  });
 });

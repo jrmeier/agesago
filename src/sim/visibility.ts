@@ -1,3 +1,4 @@
+import { UNITS } from '../core/units';
 import type { UnitKind, Vec2 } from '../core/types';
 
 /** Fog-of-war cell states, AoE-style. */
@@ -14,7 +15,7 @@ export const SIGHT = {
 
 /** Sight radius of a unit kind. */
 export function sightOf(kind: UnitKind): number {
-  return SIGHT[kind];
+  return UNITS[kind].sight;
 }
 
 /** Something that reveals the map around it. */

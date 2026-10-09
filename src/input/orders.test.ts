@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Unit, Vec2 } from '../core/types';
-import { resolveBuildingOrder, resolveOrder } from './orders';
+import { resolveAttackMove, resolveBuildingOrder, resolveOrder, resolveTargetOrder } from './orders';
 import { focusNextScout, nextScout, onScoutFocus } from './scouts';
 
 describe('order resolution under fog', () => {
@@ -49,8 +49,22 @@ describe('orders onto buildings', () => {
     });
   });
 
-  it('is not a building order for finished non-farms or no villagers', () => {
-    expect(resolveBuildingOrder([1], { id: 1, kind: 'townCenter', complete: true })).toBeNull();
+  it('garrisons a finished shelter, and ignores a finished house', () => {
+    expect(resolveBuildingOrder([1], { id: 1, kind: 'townCenter', complete: true })).toEqual({
+      type: 'garrison',
+      unitIds: [1],
+      buildingId: 1,
+    });
+    expect(resolveBuildingOrder([1, 4], { id: 9, kind: 'watchTower', complete: true })).toEqual({
+      type: 'garrison',
+      unitIds: [1, 4],
+      buildingId: 9,
+    });
+    expect(resolveBuildingOrder([1], { id: 9, kind: 'watchTower', complete: false })).toEqual({
+      type: 'construct',
+      unitIds: [1],
+      buildingId: 9,
+    });
     expect(resolveBuildingOrder([1], { id: 3, kind: 'house', complete: true })).toBeNull();
     expect(resolveBuildingOrder([], { id: 3, kind: 'house', complete: false })).toBeNull();
   });
@@ -90,5 +104,57 @@ describe('find scout', () => {
     off();
     focusNextScout(world, { focusOn: () => {} });
     expect(picked).toEqual([2]);
+  });
+});
+
+describe('orders that depend on ownership', () => {
+  const enemyOf1 = (owner: number) => owner === 2;
+  const ground = { x: 10, z: 20 };
+  const enemy = { id: 50, owner: 2, pos: { x: 3, z: 4 }, visible: true };
+
+  it('hunts visible wildlife, including own sheep, while respecting fog', () => {
+    const selection = { unitIds: [1], rallyBuildingId: null };
+    for (const kind of ['deer', 'boar', 'sheep'] as const) {
+      const animal = { ...enemy, owner: kind === 'sheep' ? 1 : 0, kind };
+      expect(resolveTargetOrder(selection, animal, ground, enemyOf1)).toEqual({ type: 'attack', unitIds: [1], targetId: 50 });
+      expect(resolveTargetOrder(selection, { ...animal, visible: false }, ground, enemyOf1)).toBeNull();
+    }
+    expect(resolveTargetOrder(selection, { ...enemy, owner: 0 }, ground, enemyOf1)).toBeNull();
+  });
+
+  it('attacks a visible enemy unit or building with own units selected', () => {
+    expect(resolveTargetOrder({ unitIds: [1, 2], rallyBuildingId: null }, enemy, ground, enemyOf1)).toEqual({
+      type: 'attack',
+      unitIds: [1, 2],
+      targetId: 50,
+    });
+  });
+
+  it('does not attack fogged enemies, own things or gaia (falls back to the plain order)', () => {
+    const sel = { unitIds: [1], rallyBuildingId: null };
+    expect(resolveTargetOrder(sel, { ...enemy, visible: false }, ground, enemyOf1)).toBeNull();
+    expect(resolveTargetOrder(sel, { ...enemy, owner: 1 }, ground, enemyOf1)).toBeNull();
+    expect(resolveTargetOrder(sel, { ...enemy, owner: 0 }, ground, enemyOf1)).toBeNull();
+    expect(resolveTargetOrder(sel, null, ground, enemyOf1)).toBeNull();
+  });
+
+  it('sets a selected own building’s rally point on the ground or onto an entity', () => {
+    const sel = { unitIds: [], rallyBuildingId: 7 };
+    expect(resolveTargetOrder(sel, null, ground, enemyOf1)).toEqual({ type: 'rally', buildingId: 7, pos: ground });
+    const tree = { id: 90, owner: 0, pos: { x: 5, z: 5 }, visible: true };
+    expect(resolveTargetOrder(sel, tree, ground, enemyOf1)).toEqual({ type: 'rally', buildingId: 7, pos: { x: 5, z: 5 }, targetId: 90 });
+    // Clicking the building itself rallies to the ground under the pointer.
+    expect(resolveTargetOrder(sel, { ...tree, id: 7, owner: 1 }, ground, enemyOf1)).toEqual({ type: 'rally', buildingId: 7, pos: ground });
+    expect(resolveTargetOrder(sel, null, null, enemyOf1)).toBeNull();
+  });
+
+  it('gives no order with nothing of ours selected', () => {
+    expect(resolveTargetOrder({ unitIds: [], rallyBuildingId: null }, enemy, ground, enemyOf1)).toBeNull();
+  });
+
+  it('attack-moves the selection to a ground point', () => {
+    expect(resolveAttackMove([4, 5], ground)).toEqual({ type: 'attackMove', unitIds: [4, 5], target: ground });
+    expect(resolveAttackMove([], ground)).toBeNull();
+    expect(resolveAttackMove([4], null)).toBeNull();
   });
 });

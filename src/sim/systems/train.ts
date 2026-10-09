@@ -1,53 +1,89 @@
-import type { Building, EntityId, Vec2 } from '../../core/types';
+import type { Building, EntityId, UnitKind, Vec2 } from '../../core/types';
+import { UNITS, trainable } from '../../core/units';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
+import { affordable, pay } from './build';
+import { applyRally } from './combat';
 
 function emitProgress(world: World, b: Building): void {
+  if (b.owner !== world.localPlayer) return;
+  const head = b.queueKinds?.[0];
   world.events.emit({
     type: 'trainProgress',
     buildingId: b.id,
     queue: b.queue,
     progress: b.progress,
-    total: BALANCE.trainTime,
+    total: head ? UNITS[head].trainTime : BALANCE.trainTime,
   });
 }
 
+/** Units queued anywhere by `owner` (they count against the pop cap before they exist). */
+function queuedBy(world: World, owner: number): number {
+  let n = 0;
+  for (const b of world.buildings.values()) if (b.owner === owner) n += b.queue;
+  return n;
+}
+
 /**
- * 'train' command (Town Center only): needs food and a free pop slot under World.popCap
- * (houses + TC), counting villagers already queued; pays up front.
+ * 'train' command: the building must be complete and able to train `unit` (default: its first
+ * trainable kind). Needs the unit's cost and a free pop slot (counting queued units); pays up front.
  */
-export function orderTrain(world: World, buildingId: EntityId): void {
+export function orderTrain(world: World, buildingId: EntityId, unit?: UnitKind): void {
   const b = world.buildings.get(buildingId);
-  if (!b || b.kind !== 'townCenter' || !b.complete) {
+  const kinds = b ? trainable(b.kind) : [];
+  const kind = unit ?? kinds[0];
+  if (!b || !b.complete || !kind || !kinds.includes(kind)) {
     world.events.emit({ type: 'rejected', reason: 'invalid-target' });
     return;
   }
-  let queued = 0;
-  for (const other of world.buildings.values()) queued += other.queue;
-  if (world.pop + queued >= world.popCap) {
-    world.events.emit({ type: 'rejected', reason: 'pop-cap' });
+  if (world.popOf(b.owner) + queuedBy(world, b.owner) >= world.popCapOf(b.owner)) {
+    if (b.owner === world.localPlayer) world.events.emit({ type: 'rejected', reason: 'pop-cap' });
     return;
   }
-  if (world.stock.food < BALANCE.trainCost.food) {
-    world.events.emit({ type: 'rejected', reason: 'insufficient-food' });
+  const cost = UNITS[kind].cost;
+  if (!affordable(world, cost, b.owner)) {
+    if (b.owner === world.localPlayer) {
+      const onlyFood = Object.keys(cost).length === 1 && 'food' in cost;
+      world.events.emit({ type: 'rejected', reason: onlyFood ? 'insufficient-food' : 'insufficient-resources' });
+    }
     return;
   }
-  world.stock.food -= BALANCE.trainCost.food;
+  pay(world, cost, 1, b.owner);
   b.queue++;
-  world.emitStock();
+  (b.queueKinds ??= []).push(kind);
+  if (b.owner === world.localPlayer) world.emitStock();
   emitProgress(world, b);
 }
 
-/** Advance every training queue; spawn a villager beside the building when the head completes. */
+/** 'cancelTrain': drop queue entry `index` and refund its full cost (the head also loses its progress). */
+export function orderCancelTrain(world: World, buildingId: EntityId, index: number): void {
+  const b = world.buildings.get(buildingId);
+  const kinds = b?.queueKinds;
+  if (!b || !kinds || index < 0 || index >= kinds.length) {
+    world.events.emit({ type: 'rejected', reason: 'invalid-target' });
+    return;
+  }
+  const [kind] = kinds.splice(index, 1);
+  b.queue = kinds.length;
+  if (index === 0) b.progress = 0;
+  pay(world, UNITS[kind].cost, -1, b.owner);
+  if (b.owner === world.localPlayer) world.emitStock();
+  emitProgress(world, b);
+}
+
+/** Advance every training queue; spawn the head unit beside the building when it completes. */
 export function trainSystem(world: World, dt: number): void {
   for (const b of world.buildings.values()) {
     if (b.queue <= 0) continue;
+    const kind = b.queueKinds?.[0] ?? 'villager';
     b.progress += dt;
-    if (b.progress >= BALANCE.trainTime - 1e-9) {
+    if (b.progress >= UNITS[kind].trainTime - 1e-9) {
       b.queue--;
+      b.queueKinds?.shift();
       b.progress = 0;
-      world.spawnVillager(spawnPoint(world, b));
-      world.emitStock();
+      const u = world.spawnUnit(kind, spawnPoint(world, b), b.owner);
+      applyRally(world, b, u);
+      if (b.owner === world.localPlayer) world.emitStock();
     }
     emitProgress(world, b);
   }

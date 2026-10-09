@@ -55,7 +55,7 @@ describe('scouts', () => {
   it('spawn from the generated layout as fast, far-sighted units', () => {
     const { hf, layout: l } = generateMap(DEFAULT_SEED);
     const world = new World(hf, l);
-    const scouts = unitsOf(world, 'scout');
+    const scouts = unitsOf(world, 'scout').filter((u) => u.owner === world.localPlayer);
     expect(scouts.length).toBe(l.scouts.length);
     expect(scouts.length).toBeGreaterThan(0);
     expect(scouts[0].pos).toEqual(l.scouts[0]);

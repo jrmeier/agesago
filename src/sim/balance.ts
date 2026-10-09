@@ -48,4 +48,30 @@ export const BALANCE = {
   explorePathGreed: 1.5,
   /** Explore targeting: score = distance · (1 + forwardBias · (1 − cos angle to heading) / 2). */
   exploreForwardBias: 1,
+  /** A foundation starts at this fraction of its max hp; construction adds the rest. */
+  foundationHp: 0.1,
+
+  // ---- Combat ----
+  /** Chasers give up once this far from where they last had the target in range (or first acquired it). */
+  leash: 20,
+  /** Seconds between chase re-paths for one unit. */
+  repathInterval: 0.4,
+  /** Re-path a chase only if the target's approach point moved this far from the path's end. */
+  repathDistance: 1,
+  /** Idle units look for enemies every this many ticks (staggered by id). */
+  scanTicks: 5,
+  /** Projectile speed (world units / s): flight time = distance / projectileSpeed. */
+  projectileSpeed: 18,
+  /** A projectile hits if the target is still within this radius of the aim point when it lands. */
+  hitRadius: 0.8,
+  /** Ranged units step back when a melee attacker closes within this edge distance… */
+  kiteDistance: 1.5,
+  /** …by this far. */
+  kiteStep: 2.5,
+  /** Villagers hit while working run this far from the attacker, then resume. */
+  fleeDistance: 4,
+  /** At most one 'attacked' alert per player per this many seconds. */
+  alertInterval: 3,
+  /** Units keep after a target this long after losing sight of it (e.g. an archer shooting from the fog). */
+  lostSightGrace: 2,
 } as const;

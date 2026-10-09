@@ -2,6 +2,7 @@ import type { EntityId, Unit, Vec2 } from '../../core/types';
 import { BALANCE } from '../balance';
 import { UNEXPLORED, sightOf } from '../visibility';
 import type { World } from '../World';
+import { route } from './passage';
 
 /** Per-unit auto-explore bookkeeping kept off the frozen Unit shape. */
 export interface ExploreState {
@@ -96,7 +97,7 @@ const A_STAR_WEIGHT = 3;
 
 function planTarget(world: World, u: Unit, st: ExploreState): void {
   const target = findFrontier(world, u);
-  const path = target && world.nav.findPath(u.pos, target, BALANCE.explorePathGreed);
+  const path = target && route(world, u.owner, u.pos, target, BALANCE.explorePathGreed);
   if (!target || !path) {
     world.exploreState.delete(u.id);
     u.path = [];
