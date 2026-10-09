@@ -57,8 +57,8 @@ describe('research queue', () => {
   it('pays, takes time, then records the tech', () => {
     const w = world();
     const store = addBuilding(w, 'storehouse', 40, 40);
-    w.stock.food = 100;
-    w.stock.wood = 50;
+    w.stock.food = TECHS.bronzeAxe.cost.food!;
+    w.stock.wood = TECHS.bronzeAxe.cost.wood!;
     const events: SimEvent[] = [];
     w.events.on('researched', (e) => events.push(e));
     w.dispatch({ type: 'research', buildingId: store.id, tech: 'bronzeAxe' });
@@ -107,9 +107,8 @@ describe('research queue', () => {
   it('Empire Age needs only the Academy (the City Age has no second building)', () => {
     const w = world();
     w.players.get(1)!.age = 2;
-    Object.assign(w.stock, { food: 5000, gold: 5000, stone: 5000 });
-    expect(researchBlock(w, 1, 'empireAge')).toBe('requires');
+    expect(researchBlock(w, 1, 'empireAge', true)).toBe('requires');
     addBuilding(w, 'academy', 40, 40);
-    expect(researchBlock(w, 1, 'empireAge')).toBeNull();
+    expect(researchBlock(w, 1, 'empireAge', true)).toBeNull();
   });
 });
