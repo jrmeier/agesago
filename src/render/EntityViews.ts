@@ -1,10 +1,20 @@
 import * as THREE from 'three';
-import { SEA_LEVEL, type Building, type EntityId, type ResourceNode, type Unit, type Vec2 } from '../core/types';
+import { SEA_LEVEL, type Building, type EntityId, type NodeKind, type ResourceNode, type Unit, type Vec2 } from '../core/types';
 import type { World } from '../sim/World';
 import { buildTownCenter } from './buildings';
+import {
+  berryBushGeometry,
+  createVillager,
+  goldPileGeometry,
+  modelMaterial,
+  stumpGeometry,
+  treeGeometries,
+  type VillagerModel,
+  type VillagerPose,
+} from './models';
 import { MOVE_MARKER, SELECTION } from './palette';
 import { choosePick, ndcToCanvas, PICK_RANK, rectContains, type PickCandidate } from './picking';
-import { createSprites, type BillboardSprite, type SpriteSet } from './sprites';
+import { createShadowTexture } from './shadow';
 
 /** Screen-space rectangle in CSS pixels relative to the canvas. */
 export interface ScreenRect {
@@ -20,17 +30,22 @@ interface SpriteSize {
 }
 
 interface VillagerView {
-  mesh: THREE.Mesh;
+  model: VillagerModel;
   shadow: THREE.Mesh;
 }
 
 const MARKER_DURATION = 0.6;
 const TC_SIZE: SpriteSize = { width: 3.05, height: 3.85 };
+/** Units are drawn larger than life (as in classic RTS games) so they stay readable when zoomed out. */
+const VILLAGER_SCALE = 1.35;
+const VILLAGER_SIZE: SpriteSize = { width: 0.7 * VILLAGER_SCALE, height: 1.0 * VILLAGER_SCALE };
+const TUNICS = [0x8b4513, 0x3f6e9a, 0x4f7a3a];
+const GATHER_POSE: Record<string, VillagerPose> = { wood: 'chop', food: 'forage', gold: 'mine' };
 
 /**
- * Visuals for every sim entity: Y-axis billboard sprites (instanced where possible),
- * the Town Center mesh, selection rings and the move marker. Subscribes to world.events
- * for spawned/removed. Owned by the Render lane (T4).
+ * Visuals for every sim entity: low-poly 3D models (instanced for resources, animated
+ * for villagers), the Town Center, stumps left by felled trees, selection rings and the
+ * move marker. Subscribes to world.events for spawned/removed.
  * Public surface FROZEN: constructor, object, sync, pick, idsInRect, setSelected, flashMarker.
  *
  * The world constructor does not emit `spawned`, so existing entities are mounted here
@@ -38,10 +53,10 @@ const TC_SIZE: SpriteSize = { width: 3.05, height: 3.85 };
  */
 export class EntityViews {
   readonly object = new THREE.Group();
-  private readonly sprites: SpriteSet;
+  private readonly material = modelMaterial();
+  private readonly geometries: Record<NodeKind, THREE.BufferGeometry[]>;
+  private readonly stumps: InstancePool;
   private readonly villagers = new Map<EntityId, VillagerView>();
-  private readonly villagerGeo = new Map<number, THREE.BufferGeometry>();
-  private readonly villagerMat = new Map<number, THREE.Material>();
   private readonly pools = new Map<string, InstancePool>();
   private readonly nodePool = new Map<EntityId, InstancePool>();
   private readonly buildings = new Map<EntityId, THREE.Group>();
@@ -61,11 +76,16 @@ export class EntityViews {
   private markerPending = false;
 
   constructor(readonly world: World) {
-    this.sprites = createSprites();
-    this.shadowGeo = new THREE.PlaneGeometry(1.55, 1.55);
+    this.geometries = { tree: treeGeometries(), berry: [berryBushGeometry()], gold: [goldPileGeometry()] };
+    for (const list of Object.values(this.geometries)) for (const geo of list) geo.computeBoundingBox();
+    this.stumps = new InstancePool(stumpGeometry(), this.material, 64);
+    this.stumps.mesh.name = 'stumps';
+    this.object.add(this.stumps.mesh);
+
+    this.shadowGeo = new THREE.PlaneGeometry(1.4, 1.4);
     this.shadowGeo.rotateX(-Math.PI / 2);
     this.shadowMat = new THREE.MeshBasicMaterial({
-      map: this.sprites.shadow,
+      map: createShadowTexture(),
       transparent: true,
       depthWrite: false,
     });
@@ -113,7 +133,6 @@ export class EntityViews {
   sync(alpha: number, time: number, camera: THREE.Camera): void {
     const t = clamp01(alpha);
     this.syncVillagers(t, time, camera);
-    this.syncNodes(camera);
     this.syncRings(t);
     this.syncMarker(time);
   }
@@ -147,8 +166,7 @@ export class EntityViews {
     if (viewport.width <= 0 || viewport.height <= 0) return ids;
     this.prepareCamera(camera);
     for (const unit of this.world.units.values()) {
-      const size = this.sizeOf.get(unit.id);
-      const height = size?.height ?? 1.7;
+      const height = VILLAGER_SIZE.height;
       const x = unit.pos.x;
       const z = unit.pos.z;
       const footY = this.groundY(x, z);
@@ -172,48 +190,35 @@ export class EntityViews {
 
   private mountVillager(unit: Unit): void {
     if (this.villagers.has(unit.id)) return;
-    const variant = unit.id % this.sprites.villagers.length;
-    const frame = this.sprites.villagers[variant];
-    let geo = this.villagerGeo.get(variant);
-    if (!geo) {
-      geo = billboardGeometry(frame.width, frame.height);
-      this.villagerGeo.set(variant, geo);
-    }
-    let mat = this.villagerMat.get(variant);
-    if (!mat) {
-      mat = spriteMaterial(frame.texture);
-      this.villagerMat.set(variant, mat);
-    }
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.castShadow = false;
-    mesh.receiveShadow = false;
+    const model = createVillager({ tunic: TUNICS[unit.id % TUNICS.length], seed: unit.id });
+    model.object.scale.setScalar(VILLAGER_SCALE);
     const shadow = new THREE.Mesh(this.shadowGeo, this.shadowMat);
     shadow.renderOrder = 2;
-    this.object.add(mesh, shadow);
-    this.villagers.set(unit.id, { mesh, shadow });
-    this.sizeOf.set(unit.id, { width: frame.width, height: frame.height });
-    this.placeVillager(unit, 1, 0, null);
+    this.object.add(model.object, shadow);
+    this.villagers.set(unit.id, { model, shadow });
+    this.sizeOf.set(unit.id, VILLAGER_SIZE);
+    this.placeVillager(unit, 1, 0);
   }
 
   private mountNode(node: ResourceNode): void {
     if (this.nodePool.has(node.id)) return;
-    const frames =
-      node.kind === 'tree' ? this.sprites.trees : node.kind === 'berry' ? [this.sprites.berry] : [this.sprites.gold];
-    const variant = node.id % frames.length;
-    const frame = frames[variant];
+    const variants = this.geometries[node.kind];
+    const variant = node.id % variants.length;
+    const geometry = variants[variant];
     const capacity = node.kind === 'tree' ? 512 : node.kind === 'berry' ? 256 : 128;
-    const pool = this.poolFor(`${node.kind}:${variant}`, frame, capacity);
+    const pool = this.poolFor(`${node.kind}:${variant}`, geometry, capacity);
     if (pool.ids.length >= pool.mesh.instanceMatrix.count) this.grow(pool);
     const scale = 0.9 + frac(node.id * 12.9898) * 0.2;
     pool.add(node.id, scale);
     this.nodePool.set(node.id, pool);
-    this.sizeOf.set(node.id, { width: frame.width * scale, height: frame.height * scale });
-    const index = pool.ids.length - 1;
+    const box = geometry.boundingBox as THREE.Box3;
+    const width = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * scale;
+    this.sizeOf.set(node.id, { width, height: box.max.y * scale });
     this.dummy.position.set(node.pos.x, this.groundY(node.pos.x, node.pos.z), node.pos.z);
-    this.dummy.rotation.set(0, 0, 0);
+    this.dummy.rotation.set(0, frac(node.id * 78.233) * Math.PI * 2, 0);
     this.dummy.scale.set(scale, scale, scale);
     this.dummy.updateMatrix();
-    pool.mesh.setMatrixAt(index, this.dummy.matrix);
+    pool.mesh.setMatrixAt(pool.ids.length - 1, this.dummy.matrix);
     pool.mesh.instanceMatrix.needsUpdate = true;
   }
 
@@ -229,11 +234,12 @@ export class EntityViews {
   private unmount(id: EntityId): void {
     const villager = this.villagers.get(id);
     if (villager) {
-      this.object.remove(villager.mesh, villager.shadow);
+      this.object.remove(villager.model.object, villager.shadow);
       this.villagers.delete(id);
     }
     const pool = this.nodePool.get(id);
     if (pool) {
+      if (pool.mesh.name.startsWith('tree:')) this.leaveStump(pool, id);
       pool.remove(id);
       this.nodePool.delete(id);
     }
@@ -245,10 +251,22 @@ export class EntityViews {
     this.sizeOf.delete(id);
   }
 
-  private poolFor(key: string, frame: BillboardSprite, capacity: number): InstancePool {
+  /** A felled tree leaves a stump where it stood (same position, yaw and scale). */
+  private leaveStump(pool: InstancePool, id: EntityId): void {
+    const index = pool.indexOf.get(id);
+    if (index === undefined) return;
+    if (this.stumps.ids.length >= this.stumps.mesh.instanceMatrix.count) this.grow(this.stumps);
+    pool.mesh.getMatrixAt(index, this.dummy.matrix);
+    this.stumps.add(id, 1);
+    this.stumps.mesh.setMatrixAt(this.stumps.ids.length - 1, this.dummy.matrix);
+    this.stumps.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  private poolFor(key: string, geometry: THREE.BufferGeometry, capacity: number): InstancePool {
     let pool = this.pools.get(key);
     if (!pool) {
-      pool = new InstancePool(frame, capacity);
+      pool = new InstancePool(geometry, this.material, capacity);
+      pool.mesh.name = key;
       this.object.add(pool.mesh);
       this.pools.set(key, pool);
     }
@@ -258,6 +276,7 @@ export class EntityViews {
   private grow(pool: InstancePool): void {
     const src = pool.mesh;
     const next = new THREE.InstancedMesh(src.geometry, src.material, src.instanceMatrix.count * 2);
+    next.name = src.name;
     next.frustumCulled = false;
     next.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     next.count = pool.ids.length;
@@ -271,44 +290,20 @@ export class EntityViews {
     pool.mesh = next;
   }
 
-  private syncVillagers(alpha: number, time: number, camera: THREE.Camera): void {
-    for (const unit of this.world.units.values()) this.placeVillager(unit, alpha, time, camera);
+  private syncVillagers(alpha: number, time: number, _camera: THREE.Camera): void {
+    for (const unit of this.world.units.values()) this.placeVillager(unit, alpha, time);
   }
 
-  private placeVillager(unit: Unit, alpha: number, time: number, camera: THREE.Camera | null): void {
+  private placeVillager(unit: Unit, alpha: number, time: number): void {
     const view = this.villagers.get(unit.id);
     if (!view) return;
     const x = unit.prevPos.x + (unit.pos.x - unit.prevPos.x) * alpha;
     const z = unit.prevPos.z + (unit.pos.z - unit.prevPos.z) * alpha;
     const ground = this.groundY(x, z);
-    const moving = unit.state === 'moving' || unit.state === 'toNode' || unit.state === 'toDrop';
-    const bob = moving ? Math.sin(time * 9 + unit.id * 1.7) * 0.045 : 0;
-    view.mesh.position.set(x, ground + bob, z);
-    view.mesh.rotation.set(0, camera ? yaw(camera, x, z) : 0, 0);
+    view.model.object.position.set(x, ground, z);
+    view.model.object.rotation.set(0, unit.facing, 0);
+    view.model.setPose(poseOf(unit), time, unit.carry?.type ?? null);
     view.shadow.position.set(x, ground + 0.04, z);
-  }
-
-  private syncNodes(camera: THREE.Camera): void {
-    for (const pool of this.pools.values()) {
-      for (let i = 0; i < pool.ids.length; i++) {
-        const node = this.world.nodes.get(pool.ids[i]);
-        if (!node) {
-          this.dummy.position.set(0, 0, 0);
-          this.dummy.rotation.set(0, 0, 0);
-          this.dummy.scale.set(0, 0, 0);
-        } else {
-          const x = node.pos.x;
-          const z = node.pos.z;
-          const s = pool.scales[i];
-          this.dummy.position.set(x, this.groundY(x, z), z);
-          this.dummy.rotation.set(0, yaw(camera, x, z), 0);
-          this.dummy.scale.set(s, s, s);
-        }
-        this.dummy.updateMatrix();
-        pool.mesh.setMatrixAt(i, this.dummy.matrix);
-      }
-      pool.mesh.instanceMatrix.needsUpdate = pool.ids.length > 0;
-    }
   }
 
   private syncRings(alpha: number): void {
@@ -434,8 +429,8 @@ class InstancePool {
   readonly indexOf = new Map<EntityId, number>();
   mesh: THREE.InstancedMesh;
 
-  constructor(frame: BillboardSprite, capacity: number) {
-    this.mesh = new THREE.InstancedMesh(billboardGeometry(frame.width, frame.height), spriteMaterial(frame.texture), capacity);
+  constructor(geometry: THREE.BufferGeometry, material: THREE.Material, capacity: number) {
+    this.mesh = new THREE.InstancedMesh(geometry, material, capacity);
     this.mesh.count = 0;
     this.mesh.frustumCulled = false;
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -471,22 +466,17 @@ class InstancePool {
 
 const swapMatrix = new THREE.Matrix4();
 
-function billboardGeometry(width: number, height: number): THREE.PlaneGeometry {
-  const geo = new THREE.PlaneGeometry(width, height);
-  geo.translate(0, height / 2, 0);
-  return geo;
-}
-
-function spriteMaterial(texture: THREE.Texture): THREE.MeshBasicMaterial {
-  return new THREE.MeshBasicMaterial({
-    map: texture,
-    alphaTest: 0.4,
-    side: THREE.FrontSide,
-  });
-}
-
-function yaw(camera: THREE.Camera, x: number, z: number): number {
-  return Math.atan2(camera.position.x - x, camera.position.z - z);
+function poseOf(unit: Unit): VillagerPose {
+  switch (unit.state) {
+    case 'moving':
+    case 'toNode':
+    case 'toDrop':
+      return 'walk';
+    case 'gathering':
+      return GATHER_POSE[unit.gatherType ?? 'food'];
+    default:
+      return 'idle';
+  }
 }
 
 function frac(n: number): number {

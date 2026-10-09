@@ -96,18 +96,17 @@ describe('EntityViews', () => {
     let n = 0;
     views.object.traverse((obj) => {
       const mesh = obj as THREE.InstancedMesh;
-      if (mesh.isInstancedMesh) n += mesh.count;
+      if (mesh.isInstancedMesh && mesh.name !== 'stumps') n += mesh.count;
     });
     return n;
   }
 
   it('mounts the starting villagers, nodes and town center', () => {
     expect(instanceCount()).toBe(world.nodes.size);
-    let buildings = 0;
-    views.object.traverse((obj) => {
-      if (obj !== views.object && (obj as THREE.Group).children.length > 3) buildings += 1;
-    });
-    expect(buildings).toBe(1);
+    const top = views.object.children;
+    expect(top.filter((obj) => obj.name === 'villager')).toHaveLength(world.units.size);
+    const buildings = top.filter((obj) => obj.name !== 'villager' && (obj as THREE.Group).children.length > 3);
+    expect(buildings).toHaveLength(1);
   });
 
   it('picks the villager under the cursor and box-selects by foot or centre', () => {
@@ -125,25 +124,17 @@ describe('EntityViews', () => {
     expect(miss).not.toContain(unit.id);
   });
 
-  it('faces billboards around Y and anchors feet on the ground', () => {
+  it('places villager models on the ground, turned to their heading', () => {
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 400);
-    camera.position.set(unit.pos.x + 4, 8, unit.pos.z + 6);
-    camera.lookAt(unit.pos.x, 1, unit.pos.z);
+    unit.facing = 1.2;
     views.sync(1, 0, camera);
-    const expectedYaw = Math.atan2(camera.position.x - unit.pos.x, camera.position.z - unit.pos.z);
     const ground = Math.max(hf.heightAt(unit.pos.x, unit.pos.z), 0);
-    let matched = false;
-    views.object.traverse((obj) => {
-      const mesh = obj as THREE.Mesh;
-      if (!mesh.isMesh || mesh.geometry.type !== 'PlaneGeometry') return;
-      if (Math.abs(mesh.position.x - unit.pos.x) > 0.01 || Math.abs(mesh.position.z - unit.pos.z) > 0.01) return;
-      if (Math.abs(mesh.position.y - ground) < 0.02) {
-        expect(mesh.rotation.y).toBeCloseTo(expectedYaw, 4);
-        expect(mesh.rotation.x).toBe(0);
-        matched = true;
-      }
-    });
-    expect(matched).toBe(true);
+    const villager = views.object.children.find(
+      (obj) => obj.name === 'villager' && Math.abs(obj.position.x - unit.pos.x) < 0.01 && Math.abs(obj.position.z - unit.pos.z) < 0.01
+    );
+    expect(villager).toBeDefined();
+    expect(villager!.position.y).toBeCloseTo(ground, 4);
+    expect(villager!.rotation.y).toBeCloseTo(1.2, 4);
   });
 
   it('shows a selection ring and a fading move marker', () => {
@@ -172,10 +163,12 @@ describe('EntityViews', () => {
     expect(ring.visible).toBe(false);
   });
 
-  it('hides a resource instance when it is removed', () => {
-    const id = world.nodes.keys().next().value as number;
+  it('hides a resource instance when it is removed, leaving a stump for trees', () => {
+    const tree = [...world.nodes.values()].find((n) => n.kind === 'tree')!;
+    const stumps = views.object.children.find((obj) => obj.name === 'stumps') as THREE.InstancedMesh;
     const before = instanceCount();
-    world.events.emit({ type: 'removed', id });
+    world.events.emit({ type: 'removed', id: tree.id });
     expect(instanceCount()).toBe(before - 1);
+    expect(stumps.count).toBe(1);
   });
 });

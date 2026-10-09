@@ -3,6 +3,9 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { TREE_FOLIAGE, TREE_TRUNK, VILLAGER } from './palette';
 
 type Triple = [number, number, number];
+
+/** Lighter, yellower greens than tree canopies so berry bushes read as food at a glance. */
+const BUSH_FOLIAGE = [0x7fae4e, 0x6f9e44, 0x8cbc58];
 type Random = () => number;
 
 /** Create one vertex-colour material to share across model meshes and instances. */
@@ -150,13 +153,14 @@ export function berryBushGeometry(): THREE.BufferGeometry {
   const berries: Triple[] = [
     [-0.38, 0.37, 0.31], [-0.19, 0.59, 0.36], [0.06, 0.32, 0.4], [0.3, 0.53, 0.34],
     [0.5, 0.34, 0.07], [-0.5, 0.43, -0.05], [-0.16, 0.56, -0.4], [0.25, 0.37, -0.35],
+    [0.02, 0.66, 0.12], [-0.3, 0.6, -0.12], [0.33, 0.6, -0.06],
   ];
   return grounded([
     part(new THREE.CylinderGeometry(0.035, 0.07, 0.52, 4), TREE_TRUNK, [0, 0.26, 0]),
-    crown(random, TREE_FOLIAGE[1], [-0.28, 0.38, 0], [0.46, 0.36, 0.46]),
-    crown(random, TREE_FOLIAGE[0], [0.28, 0.38, 0], [0.46, 0.36, 0.46]),
-    crown(random, TREE_FOLIAGE[2], [0, 0.48, -0.08], [0.5, 0.36, 0.48]),
-    ...berries.map((position, i) => part(new THREE.OctahedronGeometry(0.06), i % 2 ? 0xc74432 : 0x9e3b26, position)),
+    crown(random, BUSH_FOLIAGE[1], [-0.28, 0.38, 0], [0.46, 0.36, 0.46]),
+    crown(random, BUSH_FOLIAGE[0], [0.28, 0.38, 0], [0.46, 0.36, 0.46]),
+    crown(random, BUSH_FOLIAGE[2], [0, 0.48, -0.08], [0.5, 0.36, 0.48]),
+    ...berries.map((position, i) => part(new THREE.OctahedronGeometry(0.095), i % 2 ? 0xc74432 : 0x9e3b26, position)),
   ], 'berry-bush');
 }
 
@@ -166,13 +170,15 @@ export function goldPileGeometry(): THREE.BufferGeometry {
   return grounded([
     crown(random, 0x888579, [0, 0.29, -0.02], [0.43, 0.4, 0.38]),
     crown(random, 0x787569, [-0.36, 0.18, 0.08], [0.32, 0.25, 0.3]),
-    crown(random, 0x9b9687, [0.36, 0.2, 0.04], [0.32, 0.27, 0.3]),
+    crown(random, 0xc9a640, [0.36, 0.2, 0.04], [0.32, 0.27, 0.3]),
     crown(random, 0x787569, [-0.18, 0.15, -0.27], [0.28, 0.22, 0.25]),
-    crown(random, 0x9b9687, [0.17, 0.12, 0.28], [0.3, 0.2, 0.24]),
-    part(new THREE.OctahedronGeometry(0.12), 0xd4a843, [-0.33, 0.29, 0.31], [1, 0.8, 0.8]),
-    part(new THREE.OctahedronGeometry(0.1), 0xe4c98a, [0.33, 0.34, 0.28]),
-    part(new THREE.OctahedronGeometry(0.09), 0xd4a843, [0.05, 0.57, 0.13]),
-    part(new THREE.OctahedronGeometry(0.085), 0xe4c98a, [0.1, 0.18, 0.46]),
+    crown(random, 0xc9a640, [0.17, 0.12, 0.28], [0.3, 0.2, 0.24]),
+    part(new THREE.OctahedronGeometry(0.18), 0xd4a843, [-0.33, 0.3, 0.3], [1, 0.8, 0.8]),
+    part(new THREE.OctahedronGeometry(0.16), 0xf0c84a, [0.33, 0.36, 0.26]),
+    part(new THREE.OctahedronGeometry(0.15), 0xd4a843, [0.05, 0.55, 0.1]),
+    part(new THREE.OctahedronGeometry(0.13), 0xf0c84a, [0.1, 0.2, 0.44]),
+    part(new THREE.OctahedronGeometry(0.12), 0xd4a843, [-0.22, 0.45, -0.2]),
+    part(new THREE.OctahedronGeometry(0.11), 0xf0c84a, [0.3, 0.3, -0.24]),
     part(new THREE.BoxGeometry(0.045, 0.2, 0.025), 0xd4a843, [-0.06, 0.34, 0.31], [1, 1, 1], [0, 0, -0.45]),
     part(new THREE.BoxGeometry(0.15, 0.035, 0.025), 0xe4c98a, [0.07, 0.41, 0.27], [1, 1, 1], [0, 0, -0.3]),
   ], 'gold-pile');

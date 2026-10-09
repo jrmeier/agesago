@@ -3,7 +3,7 @@
 A browser-based, Age of Empires–style RTS prototype rendered in 3D with **Three.js**.
 
 - Rolling rectangular heightmap landscape (hills, lake, river, forests) with textured ground
-- Semi-realistic sprite units and resources billboarded on the 3D terrain
+- Low-poly 3D villagers, trees, berry bushes and gold built in code (no image assets)
 - Economy loop: villagers gather **wood / food / gold** and drop them at the Town Center; train more villagers
 - Overhead RTS camera (zoom-to-cursor, pan, edge-scroll) **and** a first-person mode
 
@@ -28,6 +28,18 @@ Then open http://localhost:5173
 | Right / Space+drag | Pan (screen edges pan too) |
 | T | Train villager (50 food) |
 | F | Toggle first-person (WASD move, arrows/drag look) |
+
+### Touch (phones & tablets)
+
+| Gesture | Action |
+|---------|--------|
+| Tap villager | Select |
+| Tap resource / ground (with selection) | Gather / move |
+| One-finger drag | Pan |
+| Pinch / two-finger drag | Zoom / pan |
+| Long-press, then drag | Box-select |
+| **All** / **None** / **View** buttons | Select all / deselect / first-person |
+| First-person | Left thumb joystick moves, right side drag looks |
 
 ## Build & deploy
 
