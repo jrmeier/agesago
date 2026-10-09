@@ -400,5 +400,41 @@ export function generateMap(seed: number, players = 2): { hf: Heightfield; layou
   // Leave the 1.3-unit gathering approaches clear of inflated scenery obstacles.
   layout.props = layout.props.filter((prop) => !replaceable(prop.kind)
     || quarries.every((pos) => distance(prop.pos, pos) >= PROP_RADIUS[prop.kind] * prop.scale + 1.6));
+
+  // Append from a separate stream so existing resource kits/scenery keep their layout.
+  const wildlifeRandom = createSeededRandom(seed ^ 0x3c6ef372);
+  const wildlifeSpace = new PlacementGrid(hf.width);
+  for (const node of layout.nodes) wildlifeSpace.add(node.pos, node.kind === 'gold' || node.kind === 'stone' ? 0.8 : 0.5);
+  for (const prop of layout.props) wildlifeSpace.add(prop.pos, PROP_RADIUS[prop.kind] * prop.scale);
+  layout.animals = [];
+  for (const [kind, count] of [['deer', 6], ['sheep', 4], ['boar', 2]] as const) {
+    for (let attempt = 0, placed = 0; placed < count && attempt < 12000; attempt++) {
+      const pos = { x: 4 + wildlifeRandom() * (hf.width - 8), z: 4 + wildlifeRandom() * (hf.depth - 8) };
+      const density = hf.forestDensity(pos.x, pos.z);
+      if (!padClear(pos, 5) || !fordClear(pos, 1) || !reachable(pos) || !wildlifeSpace.clear(pos, 1)) continue;
+      if (kind === 'boar' ? density < 0.35 : density > 0.25) continue;
+      if (![[-1, 0], [1, 0], [0, -1], [0, 1]].every(([dx, dz]) => reachable({ x: pos.x + dx, z: pos.z + dz }))) continue;
+      layout.animals.push({ kind, pos });
+      wildlifeSpace.add(pos, 1);
+      placed++;
+    }
+  }
+  for (let attempt = 0, placed = 0; placed < 10 && attempt < 12000; attempt++) {
+    const pos = { x: 2 + wildlifeRandom() * (hf.width - 4), z: 2 + wildlifeRandom() * (hf.depth - 4) };
+    if (!hf.isWater(pos.x, pos.z) || !padClear(pos, 0.5) || !fordClear(pos, 0.5) || !wildlifeSpace.clear(pos, 0.5)) continue;
+    // Keep each fishing patch near a connected, unobstructed shore.
+    let shore = false;
+    for (let a = 0; a < 16 && !shore; a++) {
+      const angle = a * Math.PI / 8;
+      for (const radius of [1, 2, 3]) {
+        const p = { x: pos.x + Math.cos(angle) * radius, z: pos.z + Math.sin(angle) * radius };
+        if (reachable(p) && wildlifeSpace.clear(p, 0.4)) { shore = true; break; }
+      }
+    }
+    if (!shore) continue;
+    layout.nodes.push({ kind: 'fish', pos, amount: 200 });
+    wildlifeSpace.add(pos, 0.5);
+    placed++;
+  }
   return { hf, layout };
 }

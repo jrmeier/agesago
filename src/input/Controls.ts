@@ -449,7 +449,7 @@ export class Controls {
     const { world } = this.deps;
     const vis = world.visibility;
     const u = world.units.get(id);
-    if (u) return { id, owner: u.owner, pos: u.pos, visible: u.owner === world.localPlayer || vis.isVisible(u.pos.x, u.pos.z) };
+    if (u) return { id, kind: u.kind, owner: u.owner, pos: u.pos, visible: u.owner === world.localPlayer || vis.isVisible(u.pos.x, u.pos.z) };
     const b = world.buildings.get(id);
     if (b) return { id, owner: b.owner, pos: b.pos, visible: b.owner === world.localPlayer || vis.isVisible(b.pos.x, b.pos.z) };
     const n = world.nodes.get(id);

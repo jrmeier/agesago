@@ -1,5 +1,6 @@
 import { BUILDINGS } from '../core/buildings';
-import type { Building, Command, EntityId, PlayerId, Vec2 } from '../core/types';
+import type { Building, Command, EntityId, PlayerId, UnitKind, Vec2 } from '../core/types';
+import { isAnimal } from '../core/units';
 
 /** What lies under a right-click / tap, already resolved against the scene and the fog. */
 export interface OrderTarget {
@@ -29,6 +30,7 @@ export interface HitEntity {
   pos: Vec2;
   /** The local player can currently see it (fogged enemies can't be targeted). */
   visible: boolean;
+  kind?: UnitKind;
 }
 
 /**
@@ -45,7 +47,7 @@ export function resolveTargetOrder(
   isEnemy: (owner: PlayerId) => boolean
 ): Command | null {
   if (sel.unitIds.length) {
-    if (hit && hit.visible && isEnemy(hit.owner)) return { type: 'attack', unitIds: [...sel.unitIds], targetId: hit.id };
+    if (hit && hit.visible && (isEnemy(hit.owner) || (hit.kind && isAnimal(hit.kind)))) return { type: 'attack', unitIds: [...sel.unitIds], targetId: hit.id };
     return null;
   }
   if (sel.rallyBuildingId === null) return null;

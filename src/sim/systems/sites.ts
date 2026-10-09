@@ -1,7 +1,7 @@
 import { BUILDINGS, footprint } from '../../core/buildings';
-import type { Building, BuildingKind, ResourceType, Unit, Vec2, PlayerId } from '../../core/types';
+import type { Building, BuildingKind, ResourceNode, ResourceType, Unit, Vec2, PlayerId } from '../../core/types';
 import { BALANCE } from '../balance';
-import { rectApproach, rectDistance, type Rect } from '../nav';
+import { NAV_CELL, rectApproach, rectDistance, type Rect } from '../nav';
 import type { World } from '../World';
 import { route } from './passage';
 
@@ -29,6 +29,23 @@ export function inReach(u: Unit, b: Building): boolean {
 /** Where a unit coming from `from` should stand to reach `b`: just outside the nearest footprint edge. */
 export function siteApproach(from: Vec2, b: Building): Vec2 {
   return rectApproach(from, buildingRect(b), BALANCE.villagerRadius + BALANCE.approachGap);
+}
+
+/** Fish are worked from the closest reachable shore cell to the node. */
+export function nodeApproach(world: World, from: Vec2, node: ResourceNode): Vec2 | null {
+  if (node.kind !== 'fish') return world.approachPoint(from, node.pos, node.radius);
+  if (!world.hf.isWater(node.pos.x, node.pos.z)) return null;
+  return world.nav.nearestFreeCell(node.pos, world.nav.regionAt(from), (p) =>
+    world.nav.isFree(p) && [[-NAV_CELL, 0], [NAV_CELL, 0], [0, -NAV_CELL], [0, NAV_CELL]]
+      .some(([dx, dz]) => world.hf.isWater(p.x + dx, p.z + dz)));
+}
+
+export function nodeInReach(world: World, u: Unit, node: ResourceNode): boolean {
+  const spot = node.kind === 'fish' ? nodeApproach(world, u.pos, node) : node.pos;
+  if (!spot) return false;
+  const reach = node.kind === 'fish' ? BALANCE.reach + BALANCE.villagerRadius
+    : node.radius + BALANCE.villagerRadius + BALANCE.reach;
+  return world.nav.isFree(u.pos) && Math.hypot(u.pos.x - spot.x, u.pos.z - spot.z) <= reach;
 }
 
 /**

@@ -18,6 +18,9 @@ const UNIT_NAMES: Record<UnitKind, [string, string]> = {
   slinger: ['Slinger', 'Slingers'],
   archer: ['Archer', 'Archers'],
   horseman: ['Horseman', 'Horsemen'],
+  deer: ['Deer', 'Deer'],
+  boar: ['Boar', 'Boars'],
+  sheep: ['Sheep', 'Sheep'],
 };
 
 /** Unit kinds the Explore command (button, E) applies to. */

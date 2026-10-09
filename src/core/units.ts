@@ -4,7 +4,7 @@ import type { BuildingKind, Stockpile, UnitKind } from './types';
  * Unit data table — stats, costs and counters for every unit kind. Single source of truth
  * for sim, AI, render sizing and HUD. FROZEN contract (integrator-owned).
  */
-export type UnitClass = 'villager' | 'infantry' | 'archer' | 'cavalry';
+export type UnitClass = 'villager' | 'infantry' | 'archer' | 'cavalry' | 'wildlife';
 
 export interface UnitSpec {
   name: string;
@@ -27,13 +27,28 @@ export interface UnitSpec {
   cost: Partial<Stockpile>;
   /** Seconds to train. */
   trainTime: number;
-  /** Where it is trained; null = not trainable (starting units only). */
+  /** Where it is trained; null = not trainable (e.g. wildlife). */
   trainedAt: BuildingKind | null;
   /** Collision/selection radius. */
   radius: number;
 }
 
 export const UNITS: Record<UnitKind, UnitSpec> = {
+  deer: {
+    name: 'Deer', unitClass: 'wildlife', hp: 12, speed: 4, sight: 0,
+    attack: { melee: 0, pierce: 0 }, armor: { melee: 0, pierce: 0 },
+    range: 0, reload: 2, bonus: {}, cost: {}, trainTime: 0, trainedAt: null, radius: 0.4,
+  },
+  boar: {
+    name: 'Boar', unitClass: 'wildlife', hp: 60, speed: 3, sight: 0,
+    attack: { melee: 7, pierce: 0 }, armor: { melee: 0, pierce: 0 },
+    range: 0.5, reload: 1.5, bonus: {}, cost: {}, trainTime: 0, trainedAt: null, radius: 0.5,
+  },
+  sheep: {
+    name: 'Sheep', unitClass: 'wildlife', hp: 8, speed: 1.2, sight: 0,
+    attack: { melee: 0, pierce: 0 }, armor: { melee: 0, pierce: 0 },
+    range: 0, reload: 2, bonus: {}, cost: {}, trainTime: 0, trainedAt: null, radius: 0.35,
+  },
   villager: {
     name: 'Villager',
     unitClass: 'villager',
@@ -149,6 +164,10 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     radius: 0.55,
   },
 };
+
+export function isAnimal(kind: UnitKind): kind is 'deer' | 'boar' | 'sheep' {
+  return kind === 'deer' || kind === 'boar' || kind === 'sheep';
+}
 
 /** Units a building can train, in menu order. */
 export function trainable(building: BuildingKind): UnitKind[] {

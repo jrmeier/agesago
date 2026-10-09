@@ -4,7 +4,7 @@ import { rectDistance } from '../nav';
 import type { World } from '../World';
 import { route } from './passage';
 import { cancelExplore, settleCancelled } from './explore';
-import { buildingRect, inReach, nearestDrop } from './sites';
+import { buildingRect, inReach, nearestDrop, nodeApproach, nodeInReach } from './sites';
 
 /** Per-unit gather bookkeeping kept off the frozen Unit shape. */
 export interface GatherState {
@@ -82,7 +82,8 @@ export function orderFarm(world: World, unitIds: EntityId[], farm: Building): vo
 
 /** Plain move to the edge of `node` (for units that can't gather). False if unreachable. */
 function walkToNode(world: World, u: Unit, node: ResourceNode): boolean {
-  const path = route(world, u.owner, u.pos, world.approachPoint(u.pos, node.pos, node.radius));
+  const spot = nodeApproach(world, u.pos, node);
+  const path = spot && route(world, u.owner, u.pos, spot);
   if (!path) return false;
   u.path = path;
   u.gatherNode = null;
@@ -94,8 +95,9 @@ function walkToNode(world: World, u: Unit, node: ResourceNode): boolean {
 
 /** Assign `node` to `u` and path to its edge (scouts just walk there). False (unit untouched) if unreachable. */
 export function sendToNode(world: World, u: Unit, node: ResourceNode): boolean {
-  if (u.kind === 'scout') return walkToNode(world, u, node);
-  const path = route(world, u.owner, u.pos, world.approachPoint(u.pos, node.pos, node.radius));
+  if (u.kind !== 'villager') return walkToNode(world, u, node);
+  const spot = nodeApproach(world, u.pos, node);
+  const path = spot && route(world, u.owner, u.pos, spot);
   if (!path) return false;
   assign(world, u, node.id, node.type, node.pos, path);
   return true;
@@ -205,7 +207,7 @@ function arriveAtNode(world: World, u: Unit): void {
     retarget(world, u);
     return;
   }
-  if (dist(u.pos, node.pos) > node.radius + BALANCE.villagerRadius + BALANCE.reach) {
+  if (!nodeInReach(world, u, node)) {
     goIdle(world, u);
     return;
   }

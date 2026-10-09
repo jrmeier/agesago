@@ -19,6 +19,8 @@ const NODE_COLOR: Record<NodeKind, string> = {
   berry: '#c8323c',
   gold: '#f4c638',
   stone: '#c9c3b4',
+  carcass: '#a77b55',
+  fish: '#92b6bb',
 };
 const PLAYER = '#3fa0ff';
 const PLAYER_EDGE = '#0b2340';
@@ -215,7 +217,7 @@ export class Minimap {
 
     const r = Math.max(1, s * 0.55);
     const vis = this.world.visibility;
-    for (const kind of ['tree', 'berry', 'gold', 'stone'] as const) {
+    for (const kind of ['tree', 'berry', 'gold', 'stone', 'carcass', 'fish'] as const) {
       ctx.fillStyle = NODE_COLOR[kind];
       const size = kind === 'tree' ? r * 1.6 : r * 2.4;
       for (const n of this.world.nodes.values()) {
@@ -295,7 +297,7 @@ export class Minimap {
   /** Player ids, the local player last so its dots draw on top. */
   private owners(): number[] {
     const local = this.world.localPlayer;
-    return [...this.world.players.keys()].filter((id) => id !== local).concat(local);
+    return [0, ...this.world.players.keys()].filter((id) => id !== local).concat(local);
   }
 
   /** Fill and edge colours for a player's dots (the local player keeps the bright map blue). */

@@ -1,6 +1,7 @@
 import { BUILDINGS } from '../../core/buildings';
 import type { Building, EntityId, PlayerId, ResourceType, Stance, Unit, UnitKind, UnitState, Vec2 } from '../../core/types';
-import { UNITS } from '../../core/units';
+import { isAnimal, UNITS } from '../../core/units';
+import { GAIA } from '../../core/types';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
 import { removeBuilding, sendBuilders } from './build';
@@ -55,6 +56,13 @@ type Target = Unit | Building;
 
 const isUnit = (e: Target): e is Unit => 'stance' in e;
 const dist = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.z - b.z);
+
+/** Explicit hunting and a boar's retaliation do not make Gaia a hostile player. */
+function canAttack(world: World, owner: PlayerId, t: Target, attacker?: Unit): boolean {
+  return world.areEnemies(owner, t.owner)
+    || (owner !== GAIA && isUnit(t) && isAnimal(t.kind))
+    || (attacker?.kind === 'boar' && isUnit(t) && t.owner !== GAIA);
+}
 
 /** Work states a passive villager drops to run away when hit. */
 const FLEEING_FROM: ReadonlySet<UnitState> = new Set(['idle', 'toNode', 'gathering', 'toDrop', 'toBuild', 'building']);
@@ -148,7 +156,7 @@ function stanceRadius(u: Unit, stance: Stance): number {
  * first; enemy buildings only if no unit qualifies.
  */
 export function findEnemy(world: World, u: Unit, radius: number): Target | null {
-  if (radius < 0) return null;
+  if (radius < 0 || u.owner === GAIA || isAnimal(u.kind)) return null;
   const vis = world.visibilityOf(u.owner);
   const grid = bucketsOf(world);
   const reach = radius + unitRadius(u) + 1;
@@ -240,13 +248,14 @@ function units(world: World, ids: EntityId[]): Unit[] {
 /** 'attack': chase and strike an enemy unit or building (explicit orders override stance). */
 export function orderAttack(world: World, unitIds: EntityId[], targetId: EntityId, by: PlayerId): void {
   const t = targetOf(world, targetId);
-  if (!t || !world.areEnemies(by, t.owner)) {
+  if (!t || !canAttack(world, by, t, world.units.get(unitIds[0]))) {
     world.events.emit({ type: 'rejected', reason: 'invalid-target' });
     return;
   }
   const list = units(world, unitIds);
   const cancelled = clearWork(world, list);
   for (const u of list) {
+    if (isAnimal(u.kind) && u.kind !== 'boar') continue;
     stateOf(world, u).order = 'attack';
     engage(world, u, t, true);
   }
@@ -399,12 +408,12 @@ function attackTick(world: World, u: Unit, cs: CombatState, threat: Unit | undef
   const t = targetOf(world, u.target);
   const explicit = cs.order === 'attack';
   // Unit targets must stay in sight; a short grace lets units close on an unseen shooter or round a fog edge.
-  if (t && (!isUnit(t) || world.visibilityOf(u.owner).isVisible(t.pos.x, t.pos.z))) cs.seen = world.time;
+  if (t && (u.kind === 'boar' || !isUnit(t) || world.visibilityOf(u.owner).isVisible(t.pos.x, t.pos.z))) cs.seen = world.time;
   if (
     !t ||
     t.hp <= 0 ||
     (isUnit(t) && t.state === 'garrisoned') ||
-    !world.areEnemies(u.owner, t.owner) ||
+    !canAttack(world, u.owner, t, u) ||
     (u.stance === 'passive' && !explicit) ||
     world.time - cs.seen > BALANCE.lostSightGrace
   ) {
@@ -544,6 +553,13 @@ export function applyDamage(world: World, t: Target, amount: number, by: EntityI
 
 /** A unit was hit: passive villagers at work run off; idle units with a fighting stance hit back. */
 function react(world: World, v: Unit, by: EntityId | null, byOwner: PlayerId, from: Vec2): void {
+  if (isAnimal(v.kind)) {
+    const attacker = by !== null ? world.units.get(by) : undefined;
+    if (v.kind === 'boar' && attacker && attacker.owner !== GAIA && !isAnimal(attacker.kind)) {
+      orderAttack(world, [v.id], attacker.id, v.owner);
+    }
+    return;
+  }
   if (v.kind === 'villager' && v.stance === 'passive') {
     if (FLEEING_FROM.has(v.state) && !world.fleeState.has(v.id)) flee(world, v, from);
     return;
@@ -638,6 +654,14 @@ export function killUnit(world: World, u: Unit): void {
   for (const [farm, id] of world.farmers) if (id === u.id) world.farmers.delete(farm);
   clearTargets(world, u.id);
   world.events.emit({ type: 'removed', id: u.id });
+  if (isAnimal(u.kind)) {
+    const id = world.allocId();
+    world.nodes.set(id, {
+      id, kind: 'carcass', type: 'food', pos: { ...u.pos }, radius: 0.5,
+      amount: u.kind === 'boar' ? 300 : u.kind === 'deer' ? 140 : 100,
+    });
+    world.events.emit({ type: 'spawned', id, kind: 'carcass' });
+  }
   if (u.owner === world.localPlayer) world.emitStock();
 }
 

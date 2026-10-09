@@ -1,4 +1,5 @@
 import type { PlayerId } from '../../core/types';
+import { isAnimal } from '../../core/units';
 import type { World } from '../World';
 import { destroyBuilding, killUnit } from './combat';
 
@@ -20,7 +21,7 @@ export function victorySystem(world: World, dt: number, reason: GameResult['reas
   if (world.victoryClock > 0) return;
   world.victoryClock = 1;
   const present = new Set<PlayerId>();
-  for (const u of world.units.values()) present.add(u.owner);
+  for (const u of world.units.values()) if (!isAnimal(u.kind)) present.add(u.owner);
   for (const b of world.buildings.values()) present.add(b.owner);
   for (const id of world.players.keys()) if (!present.has(id)) defeat(world, id, 'conquest');
 

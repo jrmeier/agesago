@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { UnitKind } from '../core/types';
 import {
   createScout,
+  createAnimal,
   createVillager,
   type ScoutPose,
   type VillagerCarry,
@@ -72,6 +73,9 @@ const PENNANT_Y: Record<UnitKind, number> = {
   slinger: 1.12,
   archer: 1.15,
   horseman: 1.7,
+  deer: 1.3,
+  boar: 0.8,
+  sheep: 0.8,
 };
 
 function soldierFactory(): SoldierFactory | undefined {
@@ -303,6 +307,19 @@ function placeholder(kind: UnitKind, color: number, seed: number): UnitAvatar {
 
 /** Mount one unit. Military kinds use `createSoldier` when the Models lane has exported it. */
 export function createUnitAvatar(kind: UnitKind, color: number, seed: number): UnitAvatar {
+  if (kind === 'deer' || kind === 'boar' || kind === 'sheep') {
+    const model = createAnimal(kind);
+    model.object.userData.unitKind = kind;
+    return {
+      object: model.object,
+      setPose(pose, time): void {
+        model.object.userData.pose = pose;
+        model.setPose(pose === 'walk' || pose === 'attack' || pose === 'die' ? pose : 'idle', time,
+          { progress: Math.min(1, time / DIE_SECONDS) });
+      },
+      setOpacity: (opacity) => setTreeOpacity(model.object, opacity),
+    };
+  }
   if (kind === 'villager') return fromVillager(color, seed);
   if (kind === 'scout') return fromScout(color, seed);
   const factory = soldierFactory();
