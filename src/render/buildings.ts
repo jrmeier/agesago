@@ -116,18 +116,17 @@ export function buildTownCenter(baseHeight: number, opts?: { color?: number; tie
   return object;
 }
 
-/** Stone corner bastions and a crenellated front parapet (Fortified Town Center). */
+/** Crenellated stone corner bastions (Fortified Town Center). */
 function fortifiedTownCenterParts(): THREE.BufferGeometry[] {
   const parts: THREE.BufferGeometry[] = [];
-  const masonry = 0xb7ad92;
+  const masonry = 0x9f9580;
+  // Bastions rise clear of the eaves so their crenels read from the RTS camera.
   for (const x of [-1.4, 1.4]) for (const z of [-1.4, 1.4]) {
-    parts.push(block([0.4, 2.62, 0.4], masonry, [x, 1.6, z]));
-    parts.push(block([0.44, 0.1, 0.44], 0xd4ccb4, [x, 2.96, z]));
-    for (const dx of [-1, 1]) for (const dz of [-1, 1]) parts.push(block([0.12, 0.16, 0.12], masonry, [x + dx * 0.15, 3.09, z + dz * 0.15]));
+    parts.push(block([0.42, 3.2, 0.42], masonry, [x, 1.9, z]));
+    parts.push(block([0.46, 0.08, 0.46], 0xb7ad92, [x, 1.2, z]));
+    parts.push(block([0.48, 0.12, 0.48], 0xb7ad92, [x, 3.54, z]));
+    for (const dx of [-1, 1]) for (const dz of [-1, 1]) parts.push(block([0.14, 0.2, 0.14], masonry, [x + dx * 0.16, 3.7, z + dz * 0.16]));
   }
-  // Crenellated stone parapet along the portico cornice.
-  parts.push(block([2.5, 0.12, 0.12], masonry, [0, 2.86, 1.52]));
-  for (let i = 0; i < 7; i++) parts.push(block([0.17, 0.17, 0.12], masonry, [-1.08 + i * 0.36, 3.0, 1.52]));
   return parts;
 }
 
