@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { TREE_FOLIAGE, TREE_TRUNK, VILLAGER } from './palette';
 
-type Triple = [number, number, number];
+export type Triple = [number, number, number];
 
 /** Lighter, yellower greens than tree canopies so berry bushes read as food at a glance. */
 const BUSH_FOLIAGE = [0x7fae4e, 0x6f9e44, 0x8cbc58];
@@ -21,7 +21,8 @@ export interface VillagerModel {
   setPose(state: VillagerPose, t: number, carry?: 'wood' | 'food' | 'gold' | null): void;
 }
 
-function seededRandom(seed: number): Random {
+/** Stable local randomness for procedural model variants. */
+export function seededRandom(seed: number): Random {
   let value = seed >>> 0;
   return () => {
     value += 0x6d2b79f5;
@@ -31,7 +32,8 @@ function seededRandom(seed: number): Random {
   };
 }
 
-function part(
+/** Bake a transformed part with weathering, face highlights and vertex colour variation. */
+export function part(
   source: THREE.BufferGeometry,
   hex: number,
   position: Triple = [0, 0, 0],
@@ -46,19 +48,29 @@ function part(
   geometry.rotateY(rotation[1]);
   geometry.rotateZ(rotation[2]);
   geometry.translate(...position);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  const bounds = geometry.boundingBox!;
+  const vertices = geometry.getAttribute('position');
+  const normals = geometry.getAttribute('normal');
   const color = new THREE.Color(hex);
-  const colors = new Float32Array(geometry.getAttribute('position').count * 3);
-  for (let i = 0; i < colors.length; i += 3) {
-    colors[i] = color.r;
-    colors[i + 1] = color.g;
-    colors[i + 2] = color.b;
+  const colors = new Float32Array(vertices.count * 3);
+  for (let i = 0; i < vertices.count; i++) {
+    const x = vertices.getX(i), y = vertices.getY(i), z = vertices.getZ(i);
+    const height = (y - bounds.min.y) / Math.max(0.01, bounds.max.y - bounds.min.y);
+    const noise = Math.sin(x * 37.1 + y * 57.7 + z * 91.3 + hex) * 0.035;
+    const shade = 0.9 + height * 0.075 + Math.max(0, normals.getY(i)) * 0.07 + noise;
+    colors[i * 3] = Math.min(1, color.r * shade);
+    colors[i * 3 + 1] = Math.min(1, color.g * shade);
+    colors[i * 3 + 2] = Math.min(1, color.b * shade);
   }
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geometry.computeVertexNormals();
   return geometry;
 }
 
-function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
+/** Merge coloured parts, disposing their temporary geometries. */
+export function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
   const geometry = mergeGeometries(parts, false);
   for (const piece of parts) piece.dispose();
   if (!geometry) throw new Error('Model parts have incompatible geometry attributes');
@@ -67,7 +79,8 @@ function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
   return geometry;
 }
 
-function grounded(parts: THREE.BufferGeometry[], name: string): THREE.BufferGeometry {
+/** Centre a merged static model and seat its lowest vertex at zero. */
+export function grounded(parts: THREE.BufferGeometry[], name: string): THREE.BufferGeometry {
   const geometry = merge(parts);
   const bounds = geometry.boundingBox!;
   geometry.translate(-(bounds.min.x + bounds.max.x) / 2, -bounds.min.y, -(bounds.min.z + bounds.max.z) / 2);
@@ -77,7 +90,8 @@ function grounded(parts: THREE.BufferGeometry[], name: string): THREE.BufferGeom
   return geometry;
 }
 
-function roughen(geometry: THREE.BufferGeometry, random: Random): THREE.BufferGeometry {
+/** Roughen shared vertices consistently so faceted surfaces remain watertight. */
+export function roughen(geometry: THREE.BufferGeometry, random: Random): THREE.BufferGeometry {
   const vertices = geometry.getAttribute('position');
   const radii = new Map<string, number>();
   for (let i = 0; i < vertices.count; i++) {
@@ -95,15 +109,19 @@ function roughen(geometry: THREE.BufferGeometry, random: Random): THREE.BufferGe
   return geometry;
 }
 
-function crown(random: Random, color: number, position: Triple, scale: Triple): THREE.BufferGeometry {
+/** A compact irregular foliage or stone cluster. */
+export function crown(random: Random, color: number, position: Triple, scale: Triple): THREE.BufferGeometry {
   return part(roughen(new THREE.IcosahedronGeometry(1, 0), random), color, position, scale);
 }
 
-/** Three deterministic, faceted tree variants, each below 220 triangles. */
+/** Six temperate and Mediterranean tree silhouettes, each below 260 triangles. */
 export function treeGeometries(): THREE.BufferGeometry[] {
   const broadleaf = seededRandom(11);
   const pine = seededRandom(29);
   const birch = seededRandom(47);
+  const cypress = seededRandom(53);
+  const olive = seededRandom(59);
+  const umbrella = seededRandom(61);
   return [
     grounded([
       part(new THREE.CylinderGeometry(0.12, 0.21, 1.95, 6), TREE_TRUNK, [0, 0.975, 0]),
@@ -132,6 +150,31 @@ export function treeGeometries(): THREE.BufferGeometry[] {
       crown(birch, 0x6aa84f, [0.45, 2.65, -0.02], [0.69, 0.86, 0.97]),
       crown(birch, TREE_FOLIAGE[2], [0, 2.95, 0], [0.73, 1.02, 1.02]),
     ], 'tree-birch'),
+    grounded([
+      part(new THREE.CylinderGeometry(0.065, 0.17, 1.3, 6), TREE_TRUNK, [0, 0.65, 0]),
+      crown(cypress, 0x284c32, [0, 1.75, 0], [0.43, 1.25, 0.44]),
+      crown(cypress, 0x365d36, [0.02, 2.7, 0], [0.34, 1.14, 0.34]),
+      part(roughen(new THREE.ConeGeometry(0.24, 0.95, 7), cypress), 0x456c3c, [0, 3.57, 0]),
+    ], 'tree-cypress'),
+    grounded([
+      part(new THREE.CylinderGeometry(0.13, 0.25, 1.05, 6), 0x777360, [0.07, 0.52, 0], [1, 1, 1], [0, 0, -0.16]),
+      part(new THREE.CylinderGeometry(0.1, 0.15, 0.95, 5), 0x6e6b58, [-0.03, 1.44, 0], [1, 1, 1], [0.12, 0.6, 0.36]),
+      ...[-1, 1].map(side => part(new THREE.CylinderGeometry(0.04, 0.11, 1.1, 5), 0x85816c,
+        [side * 0.33, 1.7, 0.04], [1, 1, 1], [0.18, 0, side * -0.68])),
+      crown(olive, 0x7c9268, [-0.6, 2.18, 0], [0.73, 0.57, 0.78]),
+      crown(olive, 0x94a781, [0.57, 2.25, 0.02], [0.76, 0.6, 0.77]),
+      crown(olive, 0x647b58, [0, 2.23, -0.5], [0.75, 0.65, 0.67]),
+      crown(olive, 0xa2b18b, [0.03, 2.48, 0.43], [0.79, 0.57, 0.69]),
+    ], 'tree-olive'),
+    grounded([
+      part(new THREE.CylinderGeometry(0.11, 0.2, 2.9, 6), TREE_TRUNK, [0, 1.45, 0]),
+      ...[-1, 1].map(side => part(new THREE.CylinderGeometry(0.04, 0.1, 1.18, 5), TREE_TRUNK,
+        [side * 0.35, 2.47, 0], [1, 1, 1], [0, 0, side * -0.65])),
+      crown(umbrella, 0x3d673a, [-0.68, 2.97, 0.03], [0.91, 0.48, 0.94]),
+      crown(umbrella, 0x577d43, [0.64, 3.06, 0.02], [0.91, 0.46, 0.95]),
+      crown(umbrella, 0x466d3a, [0, 3.13, -0.6], [1.03, 0.46, 0.8]),
+      crown(umbrella, 0x64884a, [0, 3.22, 0.49], [1.06, 0.43, 0.82]),
+    ], 'tree-stone-pine'),
   ];
 }
 
@@ -140,6 +183,8 @@ export function stumpGeometry(): THREE.BufferGeometry {
   return grounded([
     part(new THREE.CylinderGeometry(0.2, 0.26, 0.32, 7), TREE_TRUNK, [0, 0.16, 0]),
     part(new THREE.CylinderGeometry(0.174, 0.174, 0.018, 7), 0xc4956a, [0, 0.323, 0]),
+    part(new THREE.RingGeometry(0.085, 0.093, 7), 0x9c7a3c, [0, 0.333, 0], [1, 1, 1], [-Math.PI / 2, 0, 0]),
+    part(new THREE.BoxGeometry(0.015, 0.008, 0.2), TREE_TRUNK, [0.02, 0.334, 0.04]),
     ...[0, 2 * Math.PI / 3, 4 * Math.PI / 3].map(angle =>
       part(new THREE.BoxGeometry(0.14, 0.1, 0.34), TREE_TRUNK,
         [Math.sin(angle) * 0.22, 0.05, Math.cos(angle) * 0.22], [1, 1, 1], [0, angle, 0])
@@ -161,6 +206,7 @@ export function berryBushGeometry(): THREE.BufferGeometry {
     crown(random, BUSH_FOLIAGE[0], [0.28, 0.38, 0], [0.46, 0.36, 0.46]),
     crown(random, BUSH_FOLIAGE[2], [0, 0.48, -0.08], [0.5, 0.36, 0.48]),
     ...berries.map((position, i) => part(new THREE.OctahedronGeometry(0.095), i % 2 ? 0xc74432 : 0x9e3b26, position)),
+    ...berries.slice(0, 3).map(([x, y, z]) => part(new THREE.ConeGeometry(0.035, 0.03, 4), BUSH_FOLIAGE[1], [x, y + 0.079, z])),
   ], 'berry-bush');
 }
 
@@ -181,6 +227,8 @@ export function goldPileGeometry(): THREE.BufferGeometry {
     part(new THREE.OctahedronGeometry(0.11), 0xf0c84a, [0.3, 0.3, -0.24]),
     part(new THREE.BoxGeometry(0.045, 0.2, 0.025), 0xd4a843, [-0.06, 0.34, 0.31], [1, 1, 1], [0, 0, -0.45]),
     part(new THREE.BoxGeometry(0.15, 0.035, 0.025), 0xe4c98a, [0.07, 0.41, 0.27], [1, 1, 1], [0, 0, -0.3]),
+    part(new THREE.BoxGeometry(0.035, 0.16, 0.025), 0xf0c84a, [0.26, 0.28, -0.32], [1, 1, 1], [0, 0, 0.65]),
+    part(new THREE.BoxGeometry(0.14, 0.025, 0.02), 0xd4a843, [-0.2, 0.25, -0.38], [1, 1, 1], [0, 0, -0.2]),
   ], 'gold-pile');
 }
 
@@ -191,6 +239,8 @@ export function createVillager(opts?: { tunic?: number; skin?: number; seed?: nu
   const random = seededRandom(opts?.seed ?? 1);
   const phase = random() * Math.PI * 2;
   const hair = [0x493623, TREE_TRUNK, 0x8a6c34][Math.floor(random() * 3)];
+  const dress = Math.abs(Math.trunc(opts?.seed ?? 1)) % 3;
+  const trim = [0x9e3b26, 0x446b81, 0x9c7a3c][dress];
   const material = modelMaterial();
   const object = new THREE.Group();
   object.name = 'villager';
@@ -217,19 +267,33 @@ export function createVillager(opts?: { tunic?: number; skin?: number; seed?: nu
 
   const body = pivot(rig, 'body', [0, 0.38, 0]);
   mesh(merge([
-    part(new THREE.CylinderGeometry(0.115, 0.145, 0.31, 5), tunic, [0, 0.155, 0]),
-    part(new THREE.BoxGeometry(0.275, 0.035, 0.2), TREE_TRUNK, [0, 0.085, 0]),
+    part(new THREE.CylinderGeometry(0.115, 0.15, 0.34, 6), tunic, [0, 0.14, 0]),
+    part(new THREE.CylinderGeometry(0.145, 0.155, 0.035, 6), trim, [0, -0.014, 0]),
+    part(new THREE.BoxGeometry(0.25, 0.025, 0.21), TREE_TRUNK, [0, 0.11, 0]),
+    part(new THREE.BoxGeometry(0.035, 0.034, 0.014), 0xb89b53, [0, 0.11, 0.11]),
+    part(new THREE.BoxGeometry(0.038, 0.31, 0.012), 0xd8c5a0, [-0.065, 0.15, 0.125], [1, 1, 1], [0, 0, -0.05]),
     part(new THREE.BoxGeometry(0.06, 0.06, 0.06), skin, [0, 0.335, 0]),
     part(new THREE.BoxGeometry(0.17, 0.18, 0.16), skin, [0, 0.44, 0]),
     part(new THREE.BoxGeometry(0.184, 0.07, 0.176), hair, [0, 0.535, -0.005]),
     part(new THREE.BoxGeometry(0.035, 0.04, 0.028), skin, [0, 0.438, 0.091]),
     part(new THREE.BoxGeometry(0.019, 0.017, 0.008), 0x493623, [-0.039, 0.472, 0.083]),
     part(new THREE.BoxGeometry(0.019, 0.017, 0.008), 0x493623, [0.039, 0.472, 0.083]),
+    ...(dress === 0 ? [
+      part(new THREE.BoxGeometry(0.26, 0.32, 0.024), trim, [0, 0.16, -0.118], [1, 1, 1], [-0.12, 0, 0]),
+    ] : dress === 1 ? [
+      part(new THREE.CylinderGeometry(0.17, 0.17, 0.014, 7), 0xd9bb78, [0, 0.542, -0.005]),
+      part(new THREE.CylinderGeometry(0.055, 0.09, 0.043, 7), 0xc3a369, [0, 0.564, -0.005]),
+    ] : [
+      part(new THREE.BoxGeometry(0.19, 0.056, 0.18), 0xe4d9bd, [0, 0.528, -0.005]),
+      part(new THREE.BoxGeometry(0.08, 0.15, 0.025), 0xd8c5a0, [0.07, 0.46, -0.09]),
+    ]),
   ]), body, 'torso-head');
 
   const legGeometry = merge([
-    part(new THREE.BoxGeometry(0.08, 0.28, 0.085), 0x5a3d24, [0, -0.14, 0]),
-    part(new THREE.BoxGeometry(0.105, 0.1, 0.145), 0x493623, [0, -0.33, 0.024]),
+    part(new THREE.BoxGeometry(0.08, 0.28, 0.085), skin, [0, -0.14, 0]),
+    part(new THREE.BoxGeometry(0.086, 0.095, 0.091), 0xd8c5a0, [0, -0.23, 0]),
+    part(new THREE.BoxGeometry(0.105, 0.03, 0.145), 0x493623, [0, -0.365, 0.024]),
+    part(new THREE.BoxGeometry(0.085, 0.026, 0.017), TREE_TRUNK, [0, -0.343, 0.049]),
   ]);
   const leftLeg = pivot(rig, 'leftLeg', [-0.075, 0.38, 0]);
   const rightLeg = pivot(rig, 'rightLeg', [0.075, 0.38, 0]);

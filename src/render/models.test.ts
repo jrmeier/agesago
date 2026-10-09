@@ -41,11 +41,17 @@ function hasColor(geometry: THREE.BufferGeometry, hex: number): boolean {
   const expected = new THREE.Color(hex);
   const colors = geometry.getAttribute('color');
   for (let i = 0; i < colors.count; i++) {
-    if (Math.abs(colors.getX(i) - expected.r) < 1e-6 &&
-        Math.abs(colors.getY(i) - expected.g) < 1e-6 &&
-        Math.abs(colors.getZ(i) - expected.b) < 1e-6) return true;
+    if (matchesShade(colors, i, expected)) return true;
   }
   return false;
+}
+
+function matchesShade(colors: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, i: number, expected: THREE.Color): boolean {
+  const source = [expected.r, expected.g, expected.b];
+  const actual = [colors.getX(i), colors.getY(i), colors.getZ(i)];
+  const dominant = source.indexOf(Math.max(...source));
+  const shade = source[dominant] === 0 ? 1 : actual[dominant] / source[dominant];
+  return shade >= 0.85 && shade <= 1.15 && actual.every((value, channel) => Math.abs(value - source[channel] * shade) < 1e-6);
 }
 
 function colorVisibleFrom(geometry: THREE.BufferGeometry, hex: number, eye: THREE.Vector3): boolean {
@@ -59,9 +65,7 @@ function colorVisibleFrom(geometry: THREE.BufferGeometry, hex: number, eye: THRE
   const vertex = new THREE.Vector3();
   let visible = false;
   for (let i = 0; i < position.count; i += 3) {
-    if (Math.abs(colors.getX(i) - expected.r) > 1e-6 ||
-        Math.abs(colors.getY(i) - expected.g) > 1e-6 ||
-        Math.abs(colors.getZ(i) - expected.b) > 1e-6) continue;
+    if (!matchesShade(colors, i, expected)) continue;
     point.set(0, 0, 0);
     for (let j = 0; j < 3; j++) point.add(vertex.fromBufferAttribute(position, i + j));
     point.divideScalar(3);
@@ -99,18 +103,23 @@ describe('static models', () => {
   it('provides distinct, deterministic tree silhouettes within the scale and triangle limits', () => {
     const trees = treeGeometries();
     const repeated = treeGeometries();
-    expect(trees.length).toBeGreaterThanOrEqual(3);
+    expect(trees.length).toBeGreaterThanOrEqual(6);
+    expect(trees.map(tree => tree.name)).toEqual(expect.arrayContaining(['tree-broadleaf', 'tree-pine', 'tree-cypress', 'tree-olive', 'tree-stone-pine']));
     const signatures = new Set<string>();
     trees.forEach((geometry, i) => {
-      const size = checkGeometry(geometry, 220);
+      const size = checkGeometry(geometry, 260);
       expect(size.y).toBeGreaterThanOrEqual(2.6);
       expect(size.y).toBeLessThanOrEqual(4.2);
-      expect(size.x / 2).toBeGreaterThanOrEqual(0.8);
-      expect(size.x / 2).toBeLessThanOrEqual(1.3);
-      expect(size.z / 2).toBeGreaterThanOrEqual(0.8);
-      expect(size.z / 2).toBeLessThanOrEqual(1.3);
+      expect(size.x / 2).toBeGreaterThanOrEqual(0.3);
+      expect(size.x / 2).toBeLessThanOrEqual(1.7);
+      expect(size.z / 2).toBeGreaterThanOrEqual(0.3);
+      expect(size.z / 2).toBeLessThanOrEqual(1.7);
+      if (geometry.name === 'tree-cypress') expect(size.y / size.x).toBeGreaterThan(4);
+      if (geometry.name === 'tree-stone-pine') expect(size.x).toBeGreaterThan(2.5);
       const positions = Array.from(geometry.getAttribute('position').array);
       expect(positions).toEqual(Array.from(repeated[i].getAttribute('position').array));
+      expect(Array.from(geometry.getAttribute('color').array)).toEqual(Array.from(repeated[i].getAttribute('color').array));
+      expect(new Set(Array.from(geometry.getAttribute('color').array)).size).toBeGreaterThan(30);
       expect(geometry).not.toBe(repeated[i]);
       signatures.add(JSON.stringify(positions));
     });
@@ -173,11 +182,12 @@ describe('villager', () => {
   const poses: VillagerPose[] = ['idle', 'walk', 'chop', 'forage', 'mine'];
   const carries = [undefined, null, 'wood', 'food', 'gold'] as const;
 
-  it('stands on the ground near 0.95 m, faces +z, and stays below 500 triangles including hidden goods', () => {
-    const model = createVillager();
+  it.each([0, 1, 2])('stands near 0.95 m facing +z with dress variant %s under 600 triangles including hidden goods', seed => {
+    const model = createVillager({ seed });
     const bounds = new THREE.Box3().setFromObject(model.object);
     expect(bounds.min.y).toBeCloseTo(0, 5);
-    expect(bounds.max.y).toBeCloseTo(0.95, 2);
+    expect(bounds.max.y).toBeGreaterThan(0.92);
+    expect(bounds.max.y).toBeLessThan(1.01);
     expect(Math.abs(bounds.getCenter(new THREE.Vector3()).x)).toBeLessThan(0.12);
     expect(Math.abs(bounds.getCenter(new THREE.Vector3()).z)).toBeLessThan(0.12);
     expect(model.object.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
@@ -191,23 +201,25 @@ describe('villager', () => {
       expect(child.geometry.index).toBeNull();
       materials.add(child.material as THREE.Material);
     });
-    expect(total).toBeLessThanOrEqual(500);
+    expect(total).toBeLessThanOrEqual(600);
     expect(materials.size).toBe(1);
   });
 
   it.each(poses)('poses %s with every carried resource, keeping finite transforms and grounded feet', pose => {
-    const model = createVillager();
-    for (const carry of carries) {
-      for (const time of [0, 0.125, 0.5, 1, 4, 25.25]) {
-        expect(() => model.setPose(pose, time, carry)).not.toThrow();
-        expect(transforms(model.object).every(Number.isFinite)).toBe(true);
-        const bounds = visibleBounds(model.object);
-        expect(bounds.min.y).toBeGreaterThanOrEqual(-0.0001);
-        expect(bounds.min.y).toBeLessThanOrEqual(0.021);
-        expect(model.object.getObjectByName('axe')!.visible).toBe(pose === 'chop');
-        expect(model.object.getObjectByName('pick')!.visible).toBe(pose === 'mine');
-        for (const resource of ['wood', 'food', 'gold']) {
-          expect(model.object.getObjectByName(`carry-${resource}`)!.visible).toBe(carry === resource);
+    for (const seed of [0, 1, 2]) {
+      const model = createVillager({ seed });
+      for (const carry of carries) {
+        for (const time of [0, 0.125, 0.5, 1, 4, 25.25]) {
+          expect(() => model.setPose(pose, time, carry)).not.toThrow();
+          expect(transforms(model.object).every(Number.isFinite)).toBe(true);
+          const bounds = visibleBounds(model.object);
+          expect(bounds.min.y).toBeGreaterThanOrEqual(-0.0001);
+          expect(bounds.min.y).toBeLessThanOrEqual(0.021);
+          expect(model.object.getObjectByName('axe')!.visible).toBe(pose === 'chop');
+          expect(model.object.getObjectByName('pick')!.visible).toBe(pose === 'mine');
+          for (const resource of ['wood', 'food', 'gold']) {
+            expect(model.object.getObjectByName(`carry-${resource}`)!.visible).toBe(carry === resource);
+          }
         }
       }
     }
