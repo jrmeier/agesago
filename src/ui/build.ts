@@ -7,6 +7,8 @@ export const RESOURCE_ORDER: readonly ResourceType[] = ['food', 'wood', 'gold', 
 /**
  * Build-menu hotkeys (KeyboardEvent.code). Chosen not to clash with the RTS keys
  * (A all, T train, E explore, F first person, R rotate while placing, "." scout).
+ * The alphabet is full, so the M8 buildings use J and Shift chords: "Shift+KeyM" means
+ * Shift+M (Market next to the Mining Camp's M; the Academy pairs with the Forge's J).
  */
 export const BUILD_HOTKEYS: Partial<Record<BuildingKind, string>> = {
   house: 'KeyH',
@@ -21,22 +23,44 @@ export const BUILD_HOTKEYS: Partial<Record<BuildingKind, string>> = {
   palisade: 'KeyL',
   stoneWall: 'KeyN',
   gate: 'KeyI',
+  forge: 'KeyJ',
+  market: 'Shift+KeyM',
+  academy: 'Shift+KeyJ',
 };
+
+const SHIFT = 'Shift+';
+
+/** Split a hotkey into its KeyboardEvent.code and whether it needs Shift. */
+export function parseHotkey(key: string): { code: string; shift: boolean } {
+  return key.startsWith(SHIFT) ? { code: key.slice(SHIFT.length), shift: true } : { code: key, shift: false };
+}
+
+/** Distinct KeyboardEvent.codes the build menu listens to. */
+export function buildHotkeyCodes(): string[] {
+  return [...new Set(Object.values(BUILD_HOTKEYS).map((k) => parseHotkey(k!).code))];
+}
 
 /** Kinds shown in the villager build menu, in BUILDINGS order. */
 export function buildableKinds(table: Record<BuildingKind, Pick<BuildingSpec, 'buildable'>> = BUILDINGS): BuildingKind[] {
   return (Object.keys(table) as BuildingKind[]).filter((k) => table[k].buildable);
 }
 
-/** The building a key code builds, if any. */
-export function kindForKey(code: string): BuildingKind | null {
-  for (const [kind, key] of Object.entries(BUILD_HOTKEYS) as [BuildingKind, string][]) if (key === code) return kind;
+/**
+ * The building a key builds, if any. With Shift held a Shift chord wins; otherwise Shift+key
+ * still builds the plain key's kind (as it always has).
+ */
+export function kindForKey(code: string, shift = false): BuildingKind | null {
+  const entries = Object.entries(BUILD_HOTKEYS) as [BuildingKind, string][];
+  if (shift) for (const [kind, key] of entries) if (key === SHIFT + code) return kind;
+  for (const [kind, key] of entries) if (key === code) return kind;
   return null;
 }
 
-/** Label for a key code: 'KeyH' → 'H'. */
+/** Label for a key code: 'KeyH' → 'H', 'Shift+KeyM' → '⇧M'. */
 export function keyLabel(code: string | undefined): string {
-  return code ? code.replace(/^Key|^Digit/, '') : '';
+  if (!code) return '';
+  const { code: c, shift } = parseHotkey(code);
+  return `${shift ? '⇧' : ''}${c.replace(/^Key|^Digit/, '')}`;
 }
 
 /** Non-zero cost entries in display order. */

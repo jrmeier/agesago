@@ -3,6 +3,7 @@ import { BUILDINGS } from '../core/buildings';
 import type { Stockpile } from '../core/types';
 import {
   BUILD_HOTKEYS,
+  buildHotkeyCodes,
   buildableKinds,
   buildingRole,
   canAfford,
@@ -12,6 +13,7 @@ import {
   keyLabel,
   kindForKey,
   missingResources,
+  parseHotkey,
   placementVerdict,
   popLabel,
   shortfallText,
@@ -63,11 +65,25 @@ describe('build hotkeys', () => {
       'market',
       'academy',
     ]);
-    // M8 buildings get keys from the UI lane (M8-14); until then only the older kinds need one.
-    const keys = kinds.filter((k) => BUILD_HOTKEYS[k] || !['forge', 'market', 'academy'].includes(k)).map((k) => BUILD_HOTKEYS[k]);
+    const keys = kinds.map((k) => BUILD_HOTKEYS[k]);
     expect(keys.every(Boolean)).toBe(true);
     expect(new Set(keys).size).toBe(keys.length);
     for (const k of keys) expect(reserved).not.toContain(k);
+    for (const k of keys) expect(reserved).not.toContain(parseHotkey(k!).code);
+  });
+
+  it('gives the M8 buildings J and Shift chords', () => {
+    expect(BUILD_HOTKEYS.forge).toBe('KeyJ');
+    expect(kindForKey('KeyJ')).toBe('forge');
+    expect(kindForKey('KeyJ', true)).toBe('academy');
+    expect(kindForKey('KeyM', true)).toBe('market');
+    expect(kindForKey('KeyM')).toBe('miningCamp');
+    // Shift with a key that has no chord still builds the plain kind.
+    expect(kindForKey('KeyH', true)).toBe('house');
+    expect(keyLabel('Shift+KeyM')).toBe('⇧M');
+    expect(parseHotkey('Shift+KeyJ')).toEqual({ code: 'KeyJ', shift: true });
+    expect(buildHotkeyCodes()).toContain('KeyJ');
+    expect(buildHotkeyCodes().filter((c) => c === 'KeyJ')).toHaveLength(1);
   });
 
   it('maps keys back to kinds and labels them', () => {

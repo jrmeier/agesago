@@ -1,3 +1,4 @@
+import { devHook } from './game/devHook';
 import { Game } from './game/Game';
 
 const container = document.getElementById('game-container');
@@ -23,6 +24,8 @@ if (loading) {
 // Dev builds, and production builds opened with ?e2e (browser smoke tests), expose the game for inspection.
 if (import.meta.env.DEV || new URLSearchParams(location.search).has('e2e')) {
   (window as unknown as { game: Game }).game = game;
+  // Dev-only cheats for e2e tests (resources, finished buildings, fast-forward, statOf).
+  (window as unknown as { dev: ReturnType<typeof devHook> }).dev = devHook(game.world);
 }
 if (import.meta.env.DEV) {
   console.info('[agesago] boot ms', game.boot);

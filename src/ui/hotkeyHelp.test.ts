@@ -10,6 +10,7 @@ describe('hotkey reference', () => {
     expect(hotkeyGlyph('Period')).toBe('.');
     expect(hotkeyGlyph('Escape')).toBe('Esc');
     expect(hotkeyGlyph('Slash')).toBe('?');
+    expect(hotkeyGlyph('Shift+KeyM')).toBe('Shift+M');
   });
 
   it('lists every bound key once, with a readable label', () => {
