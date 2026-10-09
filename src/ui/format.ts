@@ -37,10 +37,15 @@ export function selectionName(kinds: readonly UnitKind[]): string {
   return groups.map(([k, n]) => `${n} ${UNIT_NAMES[k][n === 1 ? 0 : 1]}`).join(', ');
 }
 
-/** Which portrait to show: the most common kind, villagers winning ties. */
+/** Which portrait to show: the most common kind, earlier kinds (villagers first) winning ties. */
 export function portraitKind(kinds: readonly UnitKind[]): UnitKind {
-  const scouts = kinds.filter((k) => k === 'scout').length;
-  return scouts > kinds.length - scouts ? 'scout' : 'villager';
+  let best: UnitKind = 'villager';
+  let bestN = 0;
+  for (const k of Object.keys(UNIT_NAMES) as UnitKind[]) {
+    const n = kinds.filter((x) => x === k).length;
+    if (n > bestN) [best, bestN] = [k, n];
+  }
+  return best;
 }
 
 /** Ids of the units the Explore command should send. */

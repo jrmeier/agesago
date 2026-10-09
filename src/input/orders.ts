@@ -1,4 +1,4 @@
-import type { Building, Command, EntityId, Vec2 } from '../core/types';
+import type { Building, Command, EntityId, PlayerId, Vec2 } from '../core/types';
 
 /** What lies under a right-click / tap, already resolved against the scene and the fog. */
 export interface OrderTarget {
@@ -19,6 +19,49 @@ export function resolveOrder(unitIds: readonly EntityId[], t: OrderTarget): Comm
   if (t.nodeId !== null && t.nodeExplored) return { type: 'gather', unitIds: [...unitIds], nodeId: t.nodeId };
   if (!t.ground) return null;
   return { type: 'move', unitIds: [...unitIds], target: { ...t.ground } };
+}
+
+/** A unit or building under the pointer, as far as targeting cares. */
+export interface HitEntity {
+  id: EntityId;
+  owner: PlayerId;
+  pos: Vec2;
+  /** The local player can currently see it (fogged enemies can't be targeted). */
+  visible: boolean;
+}
+
+/**
+ * Orders that depend on who owns the thing under the pointer:
+ * - own units selected + a visible enemy unit / building → 'attack';
+ * - no own units, but an own building that can train is selected → 'rally' to the entity
+ *   (gather / follow it: `targetId`) or the ground point.
+ * Anything else → null, and the caller falls back to resolveBuildingOrder / resolveOrder.
+ */
+export function resolveTargetOrder(
+  sel: { unitIds: readonly EntityId[]; rallyBuildingId: EntityId | null },
+  hit: HitEntity | null,
+  ground: Vec2 | null,
+  isEnemy: (owner: PlayerId) => boolean
+): Command | null {
+  if (sel.unitIds.length) {
+    if (hit && hit.visible && isEnemy(hit.owner)) return { type: 'attack', unitIds: [...sel.unitIds], targetId: hit.id };
+    return null;
+  }
+  if (sel.rallyBuildingId === null) return null;
+  if (hit && hit.id !== sel.rallyBuildingId) {
+    return { type: 'rally', buildingId: sel.rallyBuildingId, pos: { ...hit.pos }, targetId: hit.id };
+  }
+  if (!ground) return null;
+  return { type: 'rally', buildingId: sel.rallyBuildingId, pos: { ...ground } };
+}
+
+/** Attack-move for the selection to a ground point (null with nothing to send or nowhere to go). */
+export function resolveAttackMove(
+  unitIds: readonly EntityId[],
+  ground: Vec2 | null
+): Extract<Command, { type: 'attackMove' }> | null {
+  if (!unitIds.length || !ground) return null;
+  return { type: 'attackMove', unitIds: [...unitIds], target: { ...ground } };
 }
 
 /** The parts of a building that decide what villagers do when ordered onto it. */

@@ -5,6 +5,7 @@ import type { World } from '../sim/World';
 import { nodeAlpha, paintFog } from './fog';
 import { exploredLabel } from './format';
 import { footprintKey, mapToWorld, renderTerrain, worldToMap, type MapBox } from './minimapMath';
+import { takePings } from './pings';
 
 /** Terrain raster resolution in pixels per world unit. */
 const TERRAIN_PX_PER_UNIT = 2;
@@ -27,7 +28,8 @@ const VIEW = 'rgba(255, 246, 214, 0.95)';
 /**
  * Framed minimap: terrain painted once from the Heightfield, a fog-of-war layer (one pixel
  * per visibility cell, repainted only when world.visibility.version changes), resources /
- * villagers / scouts / Town Center redrawn at ~5 Hz, and the RTS view footprint whenever it
+ * units / buildings in owner colours redrawn at ~5 Hz (enemy units only where visible, enemy
+ * buildings once seen), alert pings (ui/pings.ts) as CSS rings, and the RTS view footprint whenever it
  * moves. Below the chart: an "Explored NN%" readout (~2 Hz) and a find-scout button.
  * Click, tap or drag to move the camera; input never reaches the game canvas. Hidden in
  * first person. Owned by the HUD lane.
@@ -55,6 +57,9 @@ export class Minimap {
   private dragId: number | null = null;
   private collapsed = false;
   private mode: CameraMode;
+  /** Enemy buildings the local player has seen at least once. */
+  private readonly seenBuildings = new Set<number>();
+  private readonly colorCache = new Map<number, [string, string]>();
 
   constructor(
     container: HTMLElement,
@@ -136,6 +141,7 @@ export class Minimap {
 
   /** Call every frame with elapsed seconds; redraws layers as needed. */
   update(time: number): void {
+    this.drawPings();
     if (this.mode !== 'rts' || this.collapsed) return;
     const version = this.world.visibility.version;
     if (version !== this.fogVersion) {
@@ -223,43 +229,99 @@ export class Minimap {
     }
     ctx.globalAlpha = 1;
 
-    ctx.lineWidth = Math.max(1, s * 0.3);
-    ctx.strokeStyle = PLAYER_EDGE;
-    ctx.fillStyle = PLAYER;
+    const local = this.world.localPlayer;
+    // Enemy buildings appear once seen and stay (as last seen) while they stand.
     for (const b of this.world.buildings.values()) {
+      if (b.owner !== local && !this.seenBuildings.has(b.id) && vis.isVisible(b.pos.x, b.pos.z)) this.seenBuildings.add(b.id);
+    }
+    const shown = (owner: number, x: number, z: number) => owner === local || vis.isVisible(x, z);
+
+    ctx.lineWidth = Math.max(1, s * 0.3);
+    for (const b of this.world.buildings.values()) {
+      if (b.owner !== local && !this.seenBuildings.has(b.id)) continue;
+      const [fill, edge] = this.colors(b.owner);
+      ctx.fillStyle = fill;
+      ctx.strokeStyle = edge;
       const p = worldToMap(b.pos, this.box);
       const half = Math.max(s * b.radius * 1.4, 4 * (w / 220));
       ctx.fillRect(p.u - half, p.v - half, half * 2, half * 2);
       ctx.strokeRect(p.u - half, p.v - half, half * 2, half * 2);
     }
     const ur = Math.max(1.6, s * 0.9);
-    ctx.beginPath();
-    for (const u of this.world.units.values()) {
-      if (u.kind === 'scout') continue;
-      const p = worldToMap(u.pos, this.box);
-      ctx.moveTo(p.u + ur, p.v);
-      ctx.arc(p.u, p.v, ur, 0, Math.PI * 2);
-    }
-    ctx.fill();
-    ctx.stroke();
+    // One path per owner, so a few hundred dots cost a handful of fills.
+    for (const owner of this.owners()) {
+      const [fill, edge] = this.colors(owner);
+      ctx.fillStyle = fill;
+      ctx.strokeStyle = edge;
+      ctx.lineWidth = Math.max(1, s * 0.3);
+      ctx.beginPath();
+      let any = false;
+      for (const u of this.world.units.values()) {
+        if (u.owner !== owner || u.kind === 'scout' || !shown(owner, u.pos.x, u.pos.z)) continue;
+        const p = worldToMap(u.pos, this.box);
+        ctx.moveTo(p.u + ur, p.v);
+        ctx.arc(p.u, p.v, ur, 0, Math.PI * 2);
+        any = true;
+      }
+      if (any) {
+        ctx.fill();
+        ctx.stroke();
+      }
 
-    // Scouts: a larger diamond with a pale rim, so they stand out on a big map.
-    const d = ur * 2;
-    ctx.beginPath();
-    for (const u of this.world.units.values()) {
-      if (u.kind !== 'scout') continue;
-      const p = worldToMap(u.pos, this.box);
-      ctx.moveTo(p.u, p.v - d);
-      ctx.lineTo(p.u + d * 0.75, p.v);
-      ctx.lineTo(p.u, p.v + d);
-      ctx.lineTo(p.u - d * 0.75, p.v);
-      ctx.closePath();
+      // Scouts: a larger diamond with a pale rim, so they stand out on a big map.
+      const d = ur * 2;
+      ctx.beginPath();
+      any = false;
+      for (const u of this.world.units.values()) {
+        if (u.owner !== owner || u.kind !== 'scout' || !shown(owner, u.pos.x, u.pos.z)) continue;
+        const p = worldToMap(u.pos, this.box);
+        ctx.moveTo(p.u, p.v - d);
+        ctx.lineTo(p.u + d * 0.75, p.v);
+        ctx.lineTo(p.u, p.v + d);
+        ctx.lineTo(p.u - d * 0.75, p.v);
+        ctx.closePath();
+        any = true;
+      }
+      if (any) {
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = Math.max(1.5, s * 0.5);
+        ctx.strokeStyle = SCOUT_RIM;
+        ctx.stroke();
+        ctx.fill();
+      }
     }
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = Math.max(1.5, s * 0.5);
-    ctx.strokeStyle = SCOUT_RIM;
-    ctx.stroke();
-    ctx.fill();
+  }
+
+  /** Player ids, the local player last so its dots draw on top. */
+  private owners(): number[] {
+    const local = this.world.localPlayer;
+    return [...this.world.players.keys()].filter((id) => id !== local).concat(local);
+  }
+
+  /** Fill and edge colours for a player's dots (the local player keeps the bright map blue). */
+  private colors(owner: number): [string, string] {
+    if (owner === this.world.localPlayer) return [PLAYER, PLAYER_EDGE];
+    let c = this.colorCache.get(owner);
+    if (!c) {
+      const hex = this.world.players.get(owner)?.player.color ?? 0x999999;
+      c = [cssHex(hex), '#1a0c06'];
+      this.colorCache.set(owner, c);
+    }
+    return c;
+  }
+
+  /** Flash rings for alerts raised since the last frame (CSS-animated, removed when done). */
+  private drawPings(): void {
+    for (const ping of takePings(this.world)) {
+      if (this.mode !== 'rts' || this.collapsed) continue;
+      const el = document.createElement('span');
+      el.className = `minimap-ping ping-${ping.kind}`;
+      el.style.left = `${(ping.pos.x / this.box.mapW) * 100}%`;
+      el.style.top = `${(ping.pos.z / this.box.mapD) * 100}%`;
+      el.addEventListener('animationend', () => el.remove());
+      this.frame.append(el);
+      while (this.frame.querySelectorAll('.minimap-ping').length > 6) this.frame.querySelector('.minimap-ping')?.remove();
+    }
   }
 
   /** Repaint the fog layer: one pixel per visibility cell, smoothed by the browser when scaled up. */
@@ -327,6 +389,10 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string): H
   const e = document.createElement(tag);
   e.className = className;
   return e;
+}
+
+function cssHex(n: number): string {
+  return `#${(n & 0xffffff).toString(16).padStart(6, '0')}`;
 }
 
 function stop(e: Event): void {

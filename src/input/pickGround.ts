@@ -85,6 +85,22 @@ export function screenRay(
   return out;
 }
 
+const projected = new THREE.Vector3();
+
+/** World point → canvas CSS px, or null when behind the camera or off-screen. */
+export function projectToCanvas(
+  camera: THREE.Camera,
+  x: number,
+  y: number,
+  z: number,
+  width: number,
+  height: number
+): { x: number; y: number } | null {
+  projected.set(x, y, z).project(camera);
+  if (projected.z > 1 || projected.z < -1 || Math.abs(projected.x) > 1.05 || Math.abs(projected.y) > 1.05) return null;
+  return { x: ((projected.x + 1) / 2) * width, y: ((1 - projected.y) / 2) * height };
+}
+
 function pointAt(ray: THREE.Ray, t: number): THREE.Vector3 {
   return ray.at(t, new THREE.Vector3());
 }
