@@ -1,6 +1,7 @@
 import type { EntityId, ResourceNode, ResourceType, Unit, Vec2 } from '../../core/types';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
+import { cancelExplore, settleCancelled } from './explore';
 
 /** Per-unit gather bookkeeping kept off the frozen Unit shape. */
 export interface GatherState {
@@ -12,23 +13,38 @@ export interface GatherState {
 
 const dist = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.z - b.z);
 
-/** 'gather' command: send every unit to the node. */
+/** 'gather' command: send every villager to work the node; scouts can't gather and just walk up to it. */
 export function orderGather(world: World, unitIds: EntityId[], nodeId: EntityId): void {
   const node = world.nodes.get(nodeId);
   if (!node) {
     world.events.emit({ type: 'rejected', reason: 'invalid-target' });
     return;
   }
+  const units = unitIds.map((id) => world.units.get(id)).filter((u): u is Unit => !!u);
+  const cancelled = cancelExplore(world, units);
   let sent = 0;
-  for (const id of unitIds) {
-    const u = world.units.get(id);
-    if (u && sendToNode(world, u, node)) sent++;
+  for (const u of units) {
+    if (sendToNode(world, u, node)) sent++;
   }
+  settleCancelled(world, cancelled);
   if (unitIds.length && !sent) world.events.emit({ type: 'rejected', reason: 'unreachable' });
 }
 
-/** Assign `node` to `u` and path to its edge. False (unit untouched) if unreachable. */
+/** Plain move to the edge of `node` (for units that can't gather). False if unreachable. */
+function walkToNode(world: World, u: Unit, node: ResourceNode): boolean {
+  const path = world.nav.findPath(u.pos, world.approachPoint(u.pos, node.pos, node.radius));
+  if (!path) return false;
+  u.path = path;
+  u.gatherNode = null;
+  u.gatherType = null;
+  world.gatherState.delete(u.id);
+  world.setState(u, 'moving');
+  return true;
+}
+
+/** Assign `node` to `u` and path to its edge (scouts just walk there). False (unit untouched) if unreachable. */
 export function sendToNode(world: World, u: Unit, node: ResourceNode): boolean {
+  if (u.kind === 'scout') return walkToNode(world, u, node);
   const path = world.nav.findPath(u.pos, world.approachPoint(u.pos, node.pos, node.radius));
   if (!path) return false;
   u.gatherNode = node.id;

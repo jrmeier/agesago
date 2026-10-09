@@ -1,6 +1,7 @@
 import type { EntityId, Unit, Vec2 } from '../../core/types';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
+import { cancelExplore, settleCancelled } from './explore';
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
@@ -12,10 +13,17 @@ export function formationOffset(i: number): Vec2 {
   return { x: Math.sin(a) * r, z: Math.cos(a) * r };
 }
 
-/** 'move' command: path every unit to its formation slot, dropping gather work. */
+/** Walking speed of `u` right now. */
+export function speedOf(u: Unit): number {
+  if (u.kind === 'scout') return BALANCE.scoutSpeed;
+  return u.carry && u.carry.amount > 0 ? BALANCE.villagerSpeedLoaded : BALANCE.villagerSpeed;
+}
+
+/** 'move' command: path every unit to its formation slot, dropping gather and explore work. */
 export function orderMove(world: World, unitIds: EntityId[], target: Vec2): void {
   const units = unitIds.map((id) => world.units.get(id)).filter((u): u is Unit => !!u);
   if (!units.length) return;
+  const cancelled = cancelExplore(world, units);
   let moved = 0;
   units.forEach((u, i) => {
     const o = formationOffset(i);
@@ -29,6 +37,7 @@ export function orderMove(world: World, unitIds: EntityId[], target: Vec2): void
     world.gatherState.delete(u.id);
     world.setState(u, 'moving');
   });
+  settleCancelled(world, cancelled);
   if (!moved) world.events.emit({ type: 'rejected', reason: 'unreachable' });
 }
 
@@ -37,7 +46,7 @@ export function movementSystem(world: World, dt: number): Unit[] {
   const arrived: Unit[] = [];
   for (const u of world.units.values()) {
     if (!u.path.length) continue;
-    let budget = (u.carry && u.carry.amount > 0 ? BALANCE.villagerSpeedLoaded : BALANCE.villagerSpeed) * dt;
+    let budget = speedOf(u) * dt;
     while (budget > 0 && u.path.length) {
       const wp = u.path[0];
       const dx = wp.x - u.pos.x;

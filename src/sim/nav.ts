@@ -34,6 +34,8 @@ export class NavGrid {
   private readonly seen: Uint32Array;
   private readonly closed: Uint32Array;
   private gen = 0;
+  /** Running total of A* cell expansions — a deterministic cost meter for callers that budget work. */
+  expanded = 0;
   private heapCell: number[] = [];
   private heapF: number[] = [];
 
@@ -82,8 +84,12 @@ export class NavGrid {
     return ia >= 0 && ib >= 0 && this.region[ia] !== 0 && this.region[ia] === this.region[ib];
   }
 
-  /** Waypoints from `from` to `to` (excluding `from`), or null if unreachable. */
-  findPath(from: Vec2, to: Vec2): Vec2[] | null {
+  /**
+   * Waypoints from `from` to `to` (excluding `from`), or null if unreachable.
+   * `greed` > 1 inflates the A* heuristic: far fewer cells searched on long routes, paths at
+   * most `greed`× longer than optimal (smoothing recovers most of that).
+   */
+  findPath(from: Vec2, to: Vec2, greed = 1): Vec2[] | null {
     let start = this.cellOf(from);
     const startFree = start >= 0 && this.walk[start] === 1;
     if (!startFree) {
@@ -103,7 +109,7 @@ export class NavGrid {
 
     if (startFree && goalExact && this.lineOfSight(from, to)) return [{ x: to.x, z: to.z }];
 
-    const cells = this.search(start, goal);
+    const cells = this.search(start, goal, greed);
     if (!cells) return null;
 
     const pts = cells.map((i) => this.center(i));
@@ -157,6 +163,19 @@ export class NavGrid {
       }
     }
     return true;
+  }
+
+  /** Connected-region label of the walkable cell at (or nearest to) `p`; 0 if there is none. */
+  regionAt(p: Vec2): number {
+    let i = this.cellOf(p);
+    if (i < 0 || this.walk[i] !== 1) i = this.nearestCell(p, 0);
+    return i < 0 ? 0 : this.region[i];
+  }
+
+  /** Region label of the cell containing `p` (0 if blocked or off the grid) — no nearest-cell fallback. */
+  regionOfCell(p: Vec2): number {
+    const i = this.cellOf(p);
+    return i < 0 ? 0 : this.region[i];
   }
 
   private walkAt(ix: number, iz: number): boolean {
@@ -232,7 +251,8 @@ export class NavGrid {
   }
 
   /** A* from cell to cell; returns the cell chain start→goal, or null. */
-  private search(start: number, goal: number): number[] | null {
+  private search(start: number, goal: number, greed: number): number[] | null {
+    const w = 1.0001 * Math.max(1, greed);
     const { cols, rows, walk, g, parent, seen, closed } = this;
     const gen = ++this.gen;
     const gx = goal % cols;
@@ -241,7 +261,7 @@ export class NavGrid {
       const x = i % cols;
       const ax = Math.abs(x - gx);
       const az = Math.abs((i - x) / cols - gz);
-      return (ax + az + (Math.SQRT2 - 2) * Math.min(ax, az)) * 1.0001;
+      return (ax + az + (Math.SQRT2 - 2) * Math.min(ax, az)) * w;
     };
     this.heapCell.length = 0;
     this.heapF.length = 0;
@@ -254,6 +274,7 @@ export class NavGrid {
       const cur = this.pop();
       if (closed[cur] === gen) continue;
       closed[cur] = gen;
+      this.expanded++;
       if (cur === goal) {
         found = true;
         break;
