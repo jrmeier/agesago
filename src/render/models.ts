@@ -277,14 +277,14 @@ export function farmCropsGeometry(): THREE.BufferGeometry {
 }
 
 /** Build a 0.95 m villager with looping limb poses, tools and optional carried goods. */
-export function createVillager(opts?: { tunic?: number; skin?: number; seed?: number }): VillagerModel {
+export function createVillager(opts?: { color?: number; tunic?: number; skin?: number; seed?: number }): VillagerModel {
   const tunic = opts?.tunic ?? VILLAGER.tunic;
   const skin = opts?.skin ?? VILLAGER.head;
   const random = seededRandom(opts?.seed ?? 1);
   const phase = random() * Math.PI * 2;
   const hair = [0x493623, TREE_TRUNK, 0x8a6c34][Math.floor(random() * 3)];
   const dress = Math.abs(Math.trunc(opts?.seed ?? 1)) % 3;
-  const trim = [0x9e3b26, 0x446b81, 0x9c7a3c][dress];
+  const trim = opts?.color ?? [0x9e3b26, 0x446b81, 0x9c7a3c][dress];
   const material = modelMaterial();
   const object = new THREE.Group();
   object.name = 'villager';
@@ -462,11 +462,11 @@ export function createVillager(opts?: { tunic?: number; skin?: number; seed?: nu
  * bronze helmet, and a javelin. One material, shared leg geometry, no textures.
  * `cloak` colours both the cloak and saddle cloth; `t` is elapsed seconds.
  */
-export function createScout(opts?: { cloak?: number; seed?: number }): ScoutModel {
+export function createScout(opts?: { color?: number; cloak?: number; seed?: number }): ScoutModel {
   const seed = Math.abs(Math.trunc(opts?.seed ?? 1));
   const random = seededRandom(seed);
   const phase = random() * Math.PI * 2;
-  const cloakColor = opts?.cloak ?? VILLAGER.tunic;
+  const cloakColor = opts?.color ?? opts?.cloak ?? VILLAGER.tunic;
   const coat = [0x985032, 0x65402b, 0xb1b0a6][seed % 3];
   const hair = [0x623b26, 0x28221d, 0x62625b][seed % 3];
   const stocking = seed % 3 === 1 ? hair : 0xd8cbb3;
@@ -669,6 +669,316 @@ export function createScout(opts?: { cloak?: number; seed?: number }): ScoutMode
     rig.position.y = -sole + (galloping ? 0.06 * stride * stride : 0);
   }
 
+  setPose('idle', 0);
+  return { object, setPose };
+}
+
+export type SoldierKind = 'hoplite' | 'swordsman' | 'slinger' | 'archer' | 'horseman';
+export type SoldierPose = 'idle' | 'walk' | 'attack' | 'die';
+/** Die uses progress 0..1, supplied either directly or as { progress }. */
+export type SoldierPoseExtra = number | { progress?: number };
+export interface SoldierModel {
+  object: THREE.Group;
+  /** t is seconds; foot attacks loop at 1 Hz, mounted attacks use the scout gallop. */
+  setPose(pose: SoldierPose, t: number, extra?: SoldierPoseExtra): void;
+}
+
+function coloredRod(hex: number, from: Triple, to: Triple, radius: number): THREE.BufferGeometry {
+  const a = new THREE.Vector3(...from), b = new THREE.Vector3(...to);
+  const direction = b.clone().sub(a);
+  const geometry = new THREE.CylinderGeometry(radius, radius, direction.length(), 4);
+  geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize()));
+  return part(geometry, hex, a.add(b).multiplyScalar(0.5).toArray() as Triple);
+}
+
+/** A small recurved bow in the yz plane, gripped at the origin and aimed along +z. */
+export function bowParts(): THREE.BufferGeometry[] {
+  const points: Triple[] = [[0, -0.24, 0.02], [0, -0.16, 0.1], [0, 0, 0.14], [0, 0.16, 0.1], [0, 0.24, 0.02]];
+  return [
+    ...points.slice(1).map((point, i) => coloredRod(0x94714a, points[i], point, 0.014)),
+    coloredRod(0xd8c5a0, points[0], points[4], 0.004),
+  ];
+}
+
+/** Tiny coloured projectiles centred on the origin, with their tip along +z. */
+export function projectileGeometry(kind: 'arrow' | 'stone' | 'javelin'): THREE.BufferGeometry {
+  let pieces: THREE.BufferGeometry[];
+  if (kind === 'stone') {
+    pieces = [part(new THREE.IcosahedronGeometry(0.055, 0), 0x96998e)];
+  } else {
+    const length = kind === 'arrow' ? 0.42 : 0.85;
+    const radius = kind === 'arrow' ? 0.007 : 0.012;
+    pieces = [
+      coloredRod(TREE_TRUNK, [0, 0, -length / 2], [0, 0, length / 2 - 0.06], radius),
+      part(new THREE.ConeGeometry(radius * 2.8, 0.09, 4), 0xb8ad8d,
+        [0, 0, length / 2 - 0.015], [1, 1, 0.6], [Math.PI / 2, 0, 0]),
+    ];
+    if (kind === 'arrow') for (const yaw of [0, Math.PI / 2]) {
+      pieces.push(part(new THREE.BoxGeometry(0.047, 0.004, 0.09), 0xe4d9bd,
+        [0, 0, -length / 2 + 0.05], [1, 1, 1], [0, 0, yaw]));
+    }
+  }
+  const geometry = merge(pieces);
+  geometry.name = `projectile-${kind}`;
+  return geometry;
+}
+
+/** Cache neutral local bounds once; falling poses do no scene traversal or allocation. */
+function fallingPose(object: THREE.Group, rig: THREE.Group): (progress: number) => void {
+  object.updateMatrixWorld(true);
+  const corners: THREE.Vector3[] = [];
+  object.traverse(child => {
+    if (!(child instanceof THREE.Mesh)) return;
+    const bounds = child.geometry.boundingBox!;
+    for (const x of [bounds.min.x, bounds.max.x]) for (const y of [bounds.min.y, bounds.max.y]) {
+      for (const z of [bounds.min.z, bounds.max.z]) corners.push(new THREE.Vector3(x, y, z).applyMatrix4(child.matrixWorld));
+    }
+  });
+  const point = new THREE.Vector3();
+  return progress => {
+    const p = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0;
+    rig.rotation.set(0, 0, -Math.PI / 2 * p * p * (3 - 2 * p));
+    rig.position.set(0, 0, 0);
+    rig.updateMatrix();
+    let lowest = Infinity;
+    for (const corner of corners) lowest = Math.min(lowest, point.copy(corner).applyMatrix4(rig.matrix).y);
+    rig.position.y = -lowest;
+  };
+}
+
+/** Ancient soldiers facing +z, one shared material and no geometry work in setPose. */
+export function createSoldier(kind: SoldierKind, opts?: { color?: number; seed?: number }): SoldierModel {
+  const seed = Math.abs(Math.trunc(opts?.seed ?? 1));
+  const color = opts?.color ?? 0x9e3b26;
+  if (kind === 'horseman') {
+    // Odd scout variants wear a bronze helmet; retain its horse and four-beat gait.
+    const scout = createScout({ color, seed: seed * 2 + 1 });
+    const object = scout.object;
+    object.name = kind;
+    const rig = new THREE.Group();
+    rig.name = 'soldierRig';
+    rig.add(...object.children);
+    object.add(rig);
+    const rider = object.getObjectByName('rider')!;
+    const spear = object.getObjectByName('javelin') as THREE.Mesh;
+    // A longer cavalry spear reaches past the muzzle, pivoting at the gripping hand.
+    spear.geometry.dispose();
+    spear.geometry = merge([
+      coloredRod(TREE_TRUNK, [0, -0.2, -0.5], [0, 0.42, 1.05], 0.013),
+      part(new THREE.ConeGeometry(0.03, 0.14, 4), 0xb89b53, [0, 0.446, 1.115],
+        [1, 1, 0.6], [Math.atan2(1.55, 0.62), 0, 0]),
+    ]);
+    spear.position.set(0.13, 0.18, 0.22);
+    const fall = fallingPose(object, rig);
+    function setPose(pose: SoldierPose, t: number, extra?: SoldierPoseExtra): void {
+      const time = Number.isFinite(t) ? t : 0;
+      rig.rotation.set(0, 0, 0);
+      rig.position.set(0, 0, 0);
+      spear.rotation.set(0, 0, 0);
+      scout.setPose(pose === 'attack' ? 'gallop' : pose === 'walk' ? 'walk' : 'idle', pose === 'die' ? 0 : time);
+      if (pose === 'attack') {
+        spear.rotation.x = Math.atan2(0.62, 1.55) + Math.sin(time * Math.PI * 2) * 0.05;
+        rider.rotation.x += 0.18;
+      } else if (pose === 'die') fall(typeof extra === 'number' ? extra : extra?.progress ?? 0);
+    }
+    setPose('idle', 0);
+    return { object, setPose };
+  }
+
+  const material = modelMaterial();
+  const skin = VILLAGER.head, bronze = 0xb89b53, leather = 0x493623, linen = 0xe4d9bd;
+  const random = seededRandom(seed);
+  const hair = [leather, 0x28221d, 0x8a6c34][Math.floor(random() * 3)];
+  const phase = random() * Math.PI * 2;
+  const object = new THREE.Group();
+  object.name = kind;
+  const rig = new THREE.Group();
+  rig.name = 'soldierRig';
+  object.add(rig);
+  function pivot(parent: THREE.Object3D, name: string, pos: Triple): THREE.Group {
+    const group = new THREE.Group();
+    group.name = name;
+    group.position.set(...pos);
+    parent.add(group);
+    return group;
+  }
+  function mesh(pieces: THREE.BufferGeometry[], parent: THREE.Object3D, name: string): THREE.Mesh {
+    const result = new THREE.Mesh(merge(pieces), material);
+    result.name = name;
+    result.castShadow = result.receiveShadow = true;
+    parent.add(result);
+    return result;
+  }
+  const body = pivot(rig, 'body', [0, 0.38, 0]);
+  const armored = kind === 'hoplite' || kind === 'swordsman';
+  const torso = [
+    part(new THREE.CylinderGeometry(0.115, 0.15, 0.31, 6), armored ? linen : color, [0, 0.155, 0]),
+    part(new THREE.CylinderGeometry(0.15, 0.155, 0.04, 6), color, [0, 0.012, 0]),
+    part(new THREE.BoxGeometry(0.25, 0.025, 0.21), leather, [0, 0.11, 0]),
+    part(new THREE.BoxGeometry(0.07, 0.055, 0.07), skin, [0, 0.332, 0]),
+    part(new THREE.BoxGeometry(0.17, 0.18, 0.16), skin, [0, 0.43, 0]),
+    part(new THREE.BoxGeometry(0.035, 0.035, 0.025), skin, [0, 0.43, 0.09]),
+    ...[-1, 1].map(side => part(new THREE.BoxGeometry(0.018, 0.018, 0.009), leather, [side * 0.038, 0.46, 0.083])),
+  ];
+  if (armored) {
+    torso.push(part(new THREE.IcosahedronGeometry(1, 0), bronze, [0, 0.525, -0.008], [0.115, 0.065, 0.11]));
+    torso.push(part(new THREE.BoxGeometry(0.21, 0.027, 0.185), bronze, [0, 0.512, -0.008]));
+    for (const side of [-1, 1]) torso.push(part(new THREE.BoxGeometry(0.037, 0.13, 0.065), bronze, [side * 0.082, 0.444, 0.044], [0, 0, side * 0.15]));
+    if (kind === 'hoplite') {
+      torso.push(part(new THREE.BoxGeometry(0.023, 0.108, 0.025), bronze, [0, 0.462, 0.092]));
+      torso.push(part(new THREE.BoxGeometry(0.27, 0.18, 0.215), linen, [0, 0.24, -0.01]));
+      for (const side of [-1, 1]) torso.push(part(new THREE.BoxGeometry(0.045, 0.22, 0.23), 0xc9c2a9, [side * 0.085, 0.23, 0]));
+    } else {
+      torso.push(part(new THREE.BoxGeometry(0.04, 0.07, 0.21), color, [0, 0.579, -0.008]));
+      torso.push(part(new THREE.BoxGeometry(0.245, 0.24, 0.19), 0xa99a78, [0, 0.205, 0]));
+    }
+  } else {
+    torso.push(part(new THREE.BoxGeometry(0.185, kind === 'slinger' ? 0.06 : 0.052, 0.175), hair,
+      [0, kind === 'slinger' ? 0.54 : 0.52, -0.004]));
+    if (kind === 'archer') {
+      torso.push(part(new THREE.ConeGeometry(0.112, 0.14, 5), color, [0, 0.535, -0.015], [1, 1, 0.88], [-0.25, 0, 0]));
+      torso.push(part(new THREE.CylinderGeometry(0.058, 0.045, 0.28, 5), leather, [0.11, 0.18, -0.145], [1, 1, 1], [0, 0, -0.2]));
+      for (const x of [0.08, 0.12, 0.16]) torso.push(coloredRod(0xc8b58c, [x, 0.28, -0.15], [x - 0.015, 0.42, -0.15], 0.007));
+    } else torso.push(part(new THREE.IcosahedronGeometry(0.085, 0), leather, [-0.12, 0.07, 0.08], [0.8, 1, 0.65]));
+  }
+  mesh(torso, body, 'tunic-head-armor');
+  const legs = [-1, 1].map(side => {
+    const leg = pivot(rig, side < 0 ? 'leftLeg' : 'rightLeg', [side * 0.075, 0.38, 0]);
+    mesh([
+      part(new THREE.BoxGeometry(0.08, 0.34, 0.085), skin, [0, -0.17, 0]),
+      part(new THREE.BoxGeometry(0.086, 0.18, 0.091), armored ? bronze : linen, [0, -0.24, 0]),
+      part(new THREE.BoxGeometry(0.105, 0.03, 0.14), leather, [0, -0.365, 0.024]),
+    ], leg, 'leg-sandal');
+    return leg;
+  });
+  const leftArm = pivot(body, 'leftArm', [-0.155, 0.26, 0]);
+  const rightArm = pivot(body, 'rightArm', [0.155, 0.26, 0]);
+  for (const arm of [leftArm, rightArm]) mesh([
+    part(new THREE.BoxGeometry(0.088, 0.1, 0.1), color, [0, -0.045, 0]),
+    coloredRod(skin, [0, -0.085, 0], [0, -0.205, 0.06], 0.032),
+    part(new THREE.BoxGeometry(0.07, 0.065, 0.08), skin, [0, -0.22, 0.065]),
+  ], arm, 'sleeve-hand');
+
+  const weapon = pivot(rightArm, 'weapon', [0, -0.22, 0.065]);
+  let slingStone: THREE.Mesh | undefined;
+  let nockedArrow: THREE.Mesh | undefined;
+  let bow: THREE.Group | undefined;
+  let bowStrings: THREE.Mesh[] | undefined;
+  if (kind === 'hoplite') {
+    mesh([
+      coloredRod(TREE_TRUNK, [0, 0, -0.55], [0, 0, 0.83], 0.014),
+      part(new THREE.ConeGeometry(0.03, 0.14, 4), bronze, [0, 0, 0.9], [1, 1, 0.6], [Math.PI / 2, 0, 0]),
+    ], weapon, 'long-spear');
+  } else if (kind === 'swordsman') {
+    mesh([
+      part(new THREE.BoxGeometry(0.026, 0.09, 0.028), leather, [0, -0.023, 0]),
+      part(new THREE.BoxGeometry(0.1, 0.025, 0.035), bronze, [0, -0.072, 0]),
+      part(new THREE.BoxGeometry(0.04, 0.23, 0.018), 0xc2c4b8, [0, -0.2, 0]),
+      part(new THREE.ConeGeometry(0.026, 0.07, 4), 0xc2c4b8, [0, -0.345, 0], [1, 1, 0.45], [Math.PI, 0, 0]),
+    ], weapon, 'short-sword');
+  } else if (kind === 'slinger') {
+    mesh([
+      coloredRod(leather, [-0.014, 0, 0], [-0.018, 0, 0.24], 0.006),
+      coloredRod(leather, [0.014, 0, 0], [0.018, 0, 0.24], 0.006),
+      part(new THREE.BoxGeometry(0.055, 0.015, 0.07), leather, [0, 0, 0.25]),
+    ], weapon, 'sling');
+    slingStone = mesh([part(new THREE.IcosahedronGeometry(0.025, 0), 0x96998e, [0, 0.022, 0.25])], weapon, 'loaded-stone');
+  } else {
+    bow = pivot(leftArm, 'bow', [0, -0.22, 0.065]);
+    const pieces = bowParts();
+    mesh(pieces.slice(0, -1), bow, 'recurved-bow');
+    // Two string halves pivot at the nock so draw/loose moves the nock backward.
+    bowStrings = [-1, 1].map(side => {
+      const string = mesh([coloredRod(linen, [0, 0, 0], [0, -side * 0.24, 0], 0.004)], bow!, 'bow-string');
+      string.position.set(0, side * 0.24, 0.02);
+      return string;
+    });
+    pieces[pieces.length - 1].dispose();
+    nockedArrow = new THREE.Mesh(projectileGeometry('arrow'), material);
+    nockedArrow.name = 'nocked-arrow';
+    nockedArrow.position.z = 0.06;
+    bow.add(nockedArrow);
+  }
+  if (armored) mesh([
+    part(new THREE.CylinderGeometry(0.235, 0.235, 0.045, 10), bronze, [0, -0.17, 0.11],
+      [kind === 'swordsman' ? 0.77 : 1, 1, kind === 'swordsman' ? 1.32 : 1], [Math.PI / 2, 0, 0]),
+    part(new THREE.CylinderGeometry(0.208, 0.208, 0.015, 10), color, [0, -0.17, 0.142],
+      [kind === 'swordsman' ? 0.77 : 1, 1, kind === 'swordsman' ? 1.32 : 1], [Math.PI / 2, 0, 0]),
+    part(new THREE.IcosahedronGeometry(0.06, 0), bronze, [0, -0.17, 0.158], [1, 1, 0.45]),
+  ], leftArm, kind === 'hoplite' ? 'aspis' : 'oval-shield');
+
+  const legBounds = (legs[0].children[0] as THREE.Mesh).geometry.boundingBox!;
+  const footCorners: THREE.Vector3[] = [];
+  for (const x of [legBounds.min.x, legBounds.max.x]) for (const y of [legBounds.min.y, legBounds.max.y]) {
+    for (const z of [legBounds.min.z, legBounds.max.z]) footCorners.push(new THREE.Vector3(x, y, z));
+  }
+  const point = new THREE.Vector3();
+  let fall: ((progress: number) => void) | undefined;
+  function setPose(pose: SoldierPose, t: number, extra?: SoldierPoseExtra): void {
+    const time = Number.isFinite(t) ? t : 0;
+    const cycle = time * Math.PI * 2;
+    const stride = Math.sin(cycle * 1.6 + phase);
+    const strike = 0.5 - 0.5 * Math.cos(cycle);
+    const beat = ((time % 1) + 1) % 1;
+    rig.rotation.set(0, 0, 0);
+    rig.position.set(0, 0, 0);
+    body.rotation.set(0, 0, 0);
+    leftArm.rotation.set(0, 0, 0.05);
+    rightArm.rotation.set(0, 0, -0.05);
+    rightArm.position.set(0.155, 0.26, 0);
+    weapon.rotation.set(0, 0, 0);
+    legs[0].rotation.set(0, 0, 0);
+    legs[1].rotation.set(0, 0, 0);
+    if (bow) bow.rotation.set(0, 0, 0);
+    if (bowStrings) for (const string of bowStrings) { string.rotation.x = 0; string.scale.y = 1; }
+    if (slingStone) slingStone.visible = true;
+    if (nockedArrow) { nockedArrow.visible = true; nockedArrow.position.z = 0.06; }
+    if (pose === 'walk') {
+      legs[0].rotation.x = stride * 0.45;
+      legs[1].rotation.x = -stride * 0.45;
+      rightArm.rotation.x = stride * 0.25;
+      leftArm.rotation.x = -stride * 0.18;
+    } else if (pose === 'attack') {
+      if (kind === 'hoplite') {
+        rightArm.position.z = strike * 0.26;
+        rightArm.position.y = 0.26 + strike * 0.14;
+        body.rotation.y = -strike * 0.12;
+        leftArm.rotation.x = -0.22;
+      } else if (kind === 'swordsman') {
+        rightArm.rotation.set(-0.6 - strike * 1.8, -strike * 0.6, -0.3);
+        body.rotation.y = Math.sin(cycle) * 0.28;
+        leftArm.rotation.x = -0.2;
+      } else if (kind === 'slinger') {
+        rightArm.rotation.x = -2.3;
+        weapon.rotation.y = cycle * 2;
+        weapon.rotation.x = -0.3;
+        slingStone!.visible = beat < 0.72;
+        if (beat >= 0.72) rightArm.rotation.x += Math.sin((beat - 0.72) / 0.28 * Math.PI) * 1.4;
+      } else {
+        const draw = beat < 0.7 ? Math.sin(beat / 0.7 * Math.PI / 2) : Math.max(0, 1 - (beat - 0.7) / 0.1);
+        leftArm.rotation.x = -Math.PI / 2;
+        rightArm.rotation.set(-Math.PI / 2, -draw * 0.7, 0.4);
+        rightArm.position.z = -draw * 0.12;
+        bow!.rotation.x = Math.PI / 2;
+        for (let i = 0; i < bowStrings!.length; i++) {
+          bowStrings![i].rotation.x = (i === 0 ? -1 : 1) * Math.atan2(draw * 0.1, 0.24);
+          bowStrings![i].scale.y = Math.hypot(0.24, draw * 0.1) / 0.24;
+        }
+        nockedArrow!.position.z = 0.06 - draw * 0.1;
+        nockedArrow!.visible = beat < 0.7;
+        body.rotation.y = -0.28;
+      }
+    } else if (pose === 'idle') body.rotation.x = Math.sin(cycle * 0.25 + phase) * 0.01;
+    let sole = Infinity;
+    for (const leg of legs) {
+      leg.updateMatrix();
+      for (const corner of footCorners) sole = Math.min(sole, point.copy(corner).applyMatrix4(leg.matrix).y);
+    }
+    rig.position.y = -sole;
+    if (pose === 'die') fall?.(typeof extra === 'number' ? extra : extra?.progress ?? 0);
+  }
+  setPose('die', 0, 0);
+  fall = fallingPose(object, rig);
   setPose('idle', 0);
   return { object, setPose };
 }
