@@ -301,6 +301,9 @@ export class World {
       case 'stance':
         orderStance(this, cmd.unitIds, cmd.stance);
         break;
+      case 'resign':
+        // Victory/defeat lands in the game-flow lane (systems/victory.ts).
+        break;
       case 'rally': {
         const b = this.buildings.get(cmd.buildingId);
         if (b?.owner === by) orderRally(this, b, cmd.pos, cmd.targetId);

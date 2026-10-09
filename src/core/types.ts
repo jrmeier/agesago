@@ -245,6 +245,8 @@ export type Command =
   /** Drop current orders and stand still. */
   | { type: 'stop'; unitIds: EntityId[] }
   | { type: 'stance'; unitIds: EntityId[]; stance: Stance }
+  /** Give up: all the issuer's units and buildings are removed and they are defeated. */
+  | { type: 'resign' }
   /** Set a building's rally point; units it trains walk there (or gather/attack `targetId`). */
   | { type: 'rally'; buildingId: EntityId; pos: Vec2; targetId?: EntityId }
   /** Place a foundation (cost is paid now) and send the units to build it. */
@@ -285,6 +287,10 @@ export type SimEvent =
   | { type: 'died'; id: EntityId; kind: EntityKind; owner: PlayerId; pos: Vec2 }
   /** A ranged attack was launched; renderers draw it flying for `flight` seconds. */
   | { type: 'projectile'; kind: 'arrow' | 'stone' | 'javelin'; from: Vec2; to: Vec2; flight: number; targetId: EntityId }
+  /** A player lost everything (or resigned). */
+  | { type: 'defeated'; player: PlayerId; reason: 'conquest' | 'resign' }
+  /** The game is decided: every surviving player is on the winning team. */
+  | { type: 'gameOver'; winners: PlayerId[]; reason: 'conquest' | 'resign' }
   /** One of `owner`'s units or buildings was hit by an enemy (for "under attack" alerts). */
   | { type: 'attacked'; owner: PlayerId; id: EntityId; pos: Vec2 }
   /** A farm's remaining food changed (harvest or reseed); 0 = fallow. */
