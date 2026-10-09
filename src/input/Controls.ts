@@ -18,7 +18,7 @@ import type { GestureEvent } from './gestures';
 import { GROUP_KEYS, HOTKEYS, TRAIN_SLOT_KEYS, groupForKey } from './hotkeys';
 import { IdleCycler, idleVillagers } from './idle';
 import { LMB, RMB, type DragState, type Input } from './Input';
-import { resolveAttackMove, resolveBuildingOrder, resolveOrder, resolveTargetOrder, type HitEntity } from './orders';
+import { resolveAttackMove, resolveBuildingOrder, resolveOrder, resolveTargetOrder, resolveTradeOrder, type HitEntity } from './orders';
 import { pickGround, projectToCanvas, screenRay, toNdc } from './pickGround';
 import { Placement } from './Placement';
 import { focusNextScout, onScoutFocus } from './scouts';
@@ -661,10 +661,18 @@ export class Controls {
     const ownBuilding = building && building.owner === world.localPlayer ? building : undefined;
     const buildCmd = ownBuilding ? resolveBuildingOrder(this.villagerIds(), ownBuilding) : null;
     let movers = unitIds;
+    // Trade carts onto an own or allied market trade with it (M8-12); everyone else carries on.
+    const carts = unitIds.filter((u) => world.units.get(u)?.kind === 'tradeCart');
+    const tradeCmd = resolveTradeOrder(carts, building, (o) => world.areEnemies(world.localPlayer, o));
+    if (tradeCmd) {
+      world.dispatch(tradeCmd);
+      movers = movers.filter((u) => !carts.includes(u));
+      if (!movers.length) return;
+    }
     if (buildCmd) {
       world.dispatch(buildCmd);
       // Scouts and soldiers (which can't build or farm) just walk over.
-      movers = unitIds.filter((u) => world.units.get(u)?.kind !== 'villager');
+      movers = movers.filter((u) => world.units.get(u)?.kind !== 'villager');
       if (!movers.length) return;
     }
     const node = id !== null ? world.nodes.get(id) : undefined;

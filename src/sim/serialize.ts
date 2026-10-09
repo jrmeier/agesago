@@ -1,5 +1,5 @@
 import { BUILDINGS } from '../core/buildings';
-import type { Building, EntityId, Heightfield, Player, PlayerId, ResourceNode, Stockpile, Unit } from '../core/types';
+import type { Building, EntityId, Heightfield, MarketResource, Player, PlayerId, ResourceNode, Stockpile, Unit } from '../core/types';
 import { generateMap } from './mapgen';
 import { World } from './World';
 import type { CombatState, FleeState, PendingHit } from './systems/combat';
@@ -22,6 +22,8 @@ export interface SaveData {
     stock: Stockpile;
     visibility: { version: number; runs: number[] };
   }[];
+  /** Market prices per player, same order as `players` (M8-12; missing in older saves). */
+  prices?: Record<MarketResource, number>[];
   units: Unit[];
   nodes: ResourceNode[];
   buildings: Building[];
@@ -96,6 +98,7 @@ export function serializeWorld(world: World): SaveData {
     players: [...world.players.values()].map(({ player, stock, visibility }) => ({
       player, stock, visibility: { version: visibility.version, runs: encode(visibility.state) },
     })),
+    prices: [...world.players.values()].map((p) => p.prices),
     units: [...world.units.values()],
     nodes: [...world.nodes.values()],
     buildings: [...world.buildings.values()],
@@ -163,6 +166,7 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
     decode(p.visibility.runs, state.visibility.state);
     state.visibility.version = p.visibility.version;
   }
+  saved.prices?.forEach((prices, i) => Object.assign(world.players.get(saved.players[i].player.id)!.prices, prices));
   world.time = saved.time;
   world.restoreClocks(saved.clocks);
   const s = saved.systems;

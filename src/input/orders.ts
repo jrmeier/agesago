@@ -88,3 +88,16 @@ export function resolveBuildingOrder(villagerIds: readonly EntityId[], b: OrderB
   if (BUILDINGS[b.kind].garrison) return { type: 'garrison', unitIds, buildingId: b.id };
   return null;
 }
+
+/**
+ * Trade carts ordered onto a finished market that isn't an enemy's → 'trade' (M8-12). Returns
+ * null otherwise; the caller sends the rest of the selection on as usual.
+ */
+export function resolveTradeOrder(
+  cartIds: readonly EntityId[],
+  b: Pick<Building, 'id' | 'kind' | 'complete' | 'owner'> | undefined,
+  isEnemy: (owner: PlayerId) => boolean
+): Extract<Command, { type: 'trade' }> | null {
+  if (!cartIds.length || !b || b.kind !== 'market' || !b.complete || isEnemy(b.owner)) return null;
+  return { type: 'trade', unitIds: [...cartIds], marketId: b.id };
+}
