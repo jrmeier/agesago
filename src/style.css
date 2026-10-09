@@ -2831,6 +2831,51 @@ body.touch .resign-btn {
   pointer-events: auto;
   font-family: var(--text);
   font-size: 12.5px;
+  color: var(--ink);
+  background: rgba(255, 248, 228, 0.85);
+  border: 1px solid var(--bronze-lo);
+}
+
+.market-send {
+  flex: 1 1 80px;
+}
+
+.market-note {
+  flex: 1 0 100%;
+}
+
+/* Phones: the market lives in the Train sheet, with thumb-sized buttons. */
+body.touch:not(.menu-train) #market-panel {
+  display: none;
+}
+
+body.touch .market-btn {
+  min-height: 48px;
+}
+
+body.touch .market-head {
+  flex: 1 0 100%;
+}
+
+body.touch .market-select,
+body.touch .market-send {
+  flex: 1 1 40%;
+}
+
+body.touch .market-select {
+  min-height: 44px;
+  font-size: 15px;
+}
+
+body.touch .market-rows {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+
+body.touch.menu-train #market-panel {
+  width: 100%;
+  min-width: 0;
+}
+
 /* ---- Research and ages (M8-14 / M8-6) ---- */
 
 /* Age plaque: the age name, with a slim bronze bar along its foot while an age-up runs. */
@@ -3040,44 +3085,6 @@ body.touch .res-age .ricon {
   border: 1px solid var(--bronze-lo);
 }
 
-.market-send {
-  flex: 1 1 80px;
-}
-
-.market-note {
-  flex: 1 0 100%;
-}
-
-/* Phones: the market lives in the Train sheet, with thumb-sized buttons. */
-body.touch:not(.menu-train) #market-panel {
-  display: none;
-}
-
-body.touch .market-btn {
-  min-height: 48px;
-}
-
-body.touch .market-head {
-  flex: 1 0 100%;
-}
-
-body.touch .market-select,
-body.touch .market-send {
-  flex: 1 1 40%;
-}
-
-body.touch .market-select {
-  min-height: 44px;
-  font-size: 15px;
-}
-
-body.touch .market-rows {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
-}
-
-body.touch.menu-train #market-panel {
-  width: 100%;
-  min-width: 0;
 .tech-tip[hidden] {
   display: none;
 }
