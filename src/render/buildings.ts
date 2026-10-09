@@ -1,7 +1,34 @@
 import * as THREE from 'three';
+import { BUILDINGS } from '../core/buildings';
+import type { BuildingKind } from '../core/types';
 import { TREE_TRUNK, SELECTION } from './palette';
 import { merge, modelMaterial, part } from './models';
-import { amphoraParts, bevelBox, block, crateParts, gableParts, roofParts } from './props';
+import { amphoraParts, bevelBox, block, cartGeometry, crateParts, gableParts, roofParts } from './props';
+
+const STONE = 0xc5bea6;
+const WOOD = 0x82603b;
+
+/** Bake footprint fitting into geometry, leaving the group's transform to the renderer. */
+function fitFootprint(object: THREE.Group, kind: BuildingKind): void {
+  const bounds = new THREE.Box3().setFromObject(object);
+  const size = bounds.getSize(new THREE.Vector3());
+  const center = bounds.getCenter(new THREE.Vector3());
+  const spec = BUILDINGS[kind].size;
+  object.traverse(child => {
+    if (!(child instanceof THREE.Mesh)) return;
+    child.geometry.translate(-center.x, -bounds.min.y, -center.z);
+    child.geometry.scale(spec.w / size.x, 1, spec.d / size.z);
+    child.geometry.computeBoundingBox();
+    child.geometry.computeBoundingSphere();
+  });
+}
+
+function section(object: THREE.Group, name: string, pieces: THREE.BufferGeometry[], material: THREE.Material): void {
+  const mesh = new THREE.Mesh(merge(pieces), material);
+  mesh.name = name;
+  mesh.castShadow = mesh.receiveShadow = true;
+  object.add(mesh);
+}
 
 /** Ancient civic centre, ground-anchored with its portico facing +z. */
 export function buildTownCenter(baseHeight: number): THREE.Group {
@@ -57,6 +84,150 @@ export function buildTownCenter(baseHeight: number): THREE.Group {
     mesh.castShadow = mesh.receiveShadow = true;
     object.add(mesh);
   }
+  fitFootprint(object, 'townCenter');
   object.position.y = baseHeight;
   return object;
+}
+
+/** Grounded, centred ancient economy buildings; the renderer supplies world position and yaw. */
+export function buildingModel(kind: BuildingKind, opts?: { seed?: number }): THREE.Group {
+  if (kind === 'townCenter') return buildTownCenter(0);
+  const { w, d } = BUILDINGS[kind].size;
+  const seed = Math.abs(Math.trunc(opts?.seed ?? 1));
+  const object = new THREE.Group();
+  object.name = kind;
+  const parts = [block([w, 0.06, d], kind === 'farm' ? 0x73533a : 0xaaa18a, [0, 0.03, 0])];
+  if (kind === 'house') {
+    parts.push(part(bevelBox(2.15, 1.48, 2.07), 0xe2dbc3, [0, 0.8, -0.09]));
+    parts.push(block([2.19, 0.22, 2.11], STONE, [0, 0.17, -0.09]));
+    parts.push(...gableParts(2.15, 2.07, 1.54, 0.65, 0xe2dbc3));
+    parts.push(...roofParts(2.48, 2.42, 1.54, 0.7, seed % 2 === 0));
+    parts.push(block([0.54, 1.02, 0.06], TREE_TRUNK, [-0.43, 0.57, 0.98]));
+    parts.push(block([0.46, 0.43, 0.035], 0x423c2e, [0.49, 1.02, 0.966]));
+    for (const x of [0.24, 0.74]) parts.push(block([0.08, 0.51, 0.06], WOOD, [x, 1.02, 1.005]));
+    parts.push(...amphoraParts(0.96, 0.06, 1.04, 0.75));
+  } else if (kind === 'storehouse') {
+    parts.push(block([1.9, 1.38, 0.12], WOOD, [-0.38, 0.75, -1.13]));
+    for (const x of [-1.28, 0.52]) {
+      parts.push(block([0.12, 1.48, 1.9], WOOD, [x, 0.8, -0.24]));
+      for (const z of [-1.16, 0.68]) parts.push(block([0.15, 1.72, 0.15], TREE_TRUNK, [x, 0.92, z]));
+    }
+    const roof = roofParts(2.1, 2.24, 1.68, 0.59, false, 3);
+    for (const piece of roof) piece.translate(-0.38, 0, -0.2);
+    parts.push(...roof);
+    for (let row = 0; row < 2; row++) for (let i = 0; i < 3 - row; i++) {
+      const x = -0.98 + i * 0.28 + row * 0.14;
+      parts.push(part(new THREE.CylinderGeometry(0.13, 0.14, 0.67, 6), TREE_TRUNK,
+        [x, 0.2 + row * 0.23, 1.04], [1, 1, 1], [Math.PI / 2, 0, 0]));
+      parts.push(part(new THREE.CircleGeometry(0.115, 6), 0xc4956a, [x, 0.2 + row * 0.23, 1.38]));
+    }
+    parts.push(block([0.17, 2.62, 0.17], TREE_TRUNK, [1.03, 1.37, -0.22]));
+    parts.push(block([0.17, 0.17, 1.62], WOOD, [1.03, 2.56, 0.41]));
+    parts.push(block([0.12, 1.02, 0.12], WOOD, [1.03, 2.18, 0.07], [-0.66, 0, 0]));
+    parts.push(block([0.023, 1.18, 0.023], 0xc8b58c, [1.03, 1.92, 1.15]));
+    parts.push(...crateParts([1.03, 0.72, 1.15], 0.42));
+  } else if (kind === 'miningCamp') {
+    parts.push(part(bevelBox(2.12, 1.22, 1.65), STONE, [-0.3, 0.67, -0.43]));
+    parts.push(...gableParts(2.12, 1.65, 1.28, 0.44, STONE).map(piece => piece.translate(-0.3, 0, -0.43)));
+    parts.push(...roofParts(2.38, 1.94, 1.28, 0.49, false, 3).map(piece => piece.translate(-0.3, 0, -0.43)));
+    parts.push(block([0.64, 0.97, 0.045], TREE_TRUNK, [-0.3, 0.545, 0.42]));
+    const cart = cartGeometry();
+    cart.scale(0.49, 0.49, 0.49).translate(-0.69, 0.06, 0.9);
+    parts.push(cart);
+    for (let i = 0; i < 3; i++) {
+      parts.push(part(new THREE.IcosahedronGeometry(0.17, 0), 0x96998e, [-0.9 + i * 0.2, 0.41, 0.72]));
+      parts.push(block([0.035, 0.75, 0.035], WOOD, [0.81 + i * 0.2, 0.46, 0.26]));
+      parts.push(block([0.2, 0.035, 0.05], 0x8c8978, [0.81 + i * 0.2, 0.83, 0.26]));
+      parts.push(part(bevelBox(0.32, 0.27, 0.36), 0xd4cfb9, [0.84 + i % 2 * 0.35, 0.195 + Math.floor(i / 2) * 0.28, 0.97]));
+    }
+    parts.push(block([0.64, 0.055, 0.07], TREE_TRUNK, [1.01, 0.51, 0.23]));
+  } else if (kind === 'granary') {
+    for (const x of [-1, 1]) for (const z of [-0.99, 0.7]) {
+      parts.push(part(bevelBox(0.35, 0.55, 0.35), STONE, [x, 0.335, z]));
+      parts.push(block([0.51, 0.1, 0.51], 0xe0d8bf, [x, 0.64, z]));
+    }
+    parts.push(block([2.38, 0.15, 2.11], WOOD, [0, 0.745, -0.14]));
+    parts.push(block([2.17, 1.2, 1.82], 0xc0a875, [0, 1.42, -0.24]));
+    for (const x of [-1.09, 0, 1.09]) parts.push(block([0.1, 1.22, 0.09], TREE_TRUNK, [x, 1.43, 0.72]));
+    for (const y of [1.08, 1.42, 1.78]) parts.push(block([2.12, 0.025, 0.024], WOOD, [0, y, 0.684]));
+    parts.push(...gableParts(2.17, 1.82, 2.02, 0.65, 0xc0a875).map(piece => piece.translate(0, 0, -0.24)));
+    parts.push(...roofParts(2.54, 2.2, 2.02, 0.69, true, 3).map(piece => piece.translate(0, 0, -0.24)));
+    for (let i = 0; i < 3; i++) parts.push(block([0.65, 0.18, 0.23], STONE, [-0.53, 0.15 + i * 0.18, 1.18 - i * 0.2]));
+    for (let i = 0; i < 3; i++) {
+      parts.push(...amphoraParts(0.33 + i * 0.33, 0.06, 1.05, 0.75));
+      parts.push(part(new THREE.IcosahedronGeometry(0.2, 0), 0xcab783, [-1.13 + i * 0.33, 0.23, -1.16], [1, 1.2, 0.85]));
+    }
+  } else {
+    for (let i = 0; i < 6; i++) {
+      parts.push(block([0.27, 0.045, 3.66], 0x8f6944, [-1.61 + i * 0.64, 0.075, 0]));
+      parts.push(block([0.055, 0.014, 3.66], 0x4c3928, [-1.39 + i * 0.64, 0.067, 0]));
+    }
+    // Two low wattle sides leave the front and right open for gathering villagers.
+    for (let i = 0; i < 9; i++) {
+      const a = -1.9 + i * 0.475;
+      parts.push(block([0.045, 0.43, 0.045], TREE_TRUNK, [a, 0.275, -1.92]));
+      parts.push(block([0.045, 0.43, 0.045], TREE_TRUNK, [-1.92, 0.275, a]));
+    }
+    for (let i = 0; i < 4; i++) {
+      parts.push(block([3.87, 0.03, 0.038], WOOD, [0, 0.16 + i * 0.085, -1.92 + i % 2 * 0.03]));
+      parts.push(block([0.038, 0.03, 3.87], WOOD, [-1.92 + i % 2 * 0.03, 0.16 + i * 0.085, 0]));
+    }
+  }
+  section(object, kind, parts, modelMaterial());
+  fitFootprint(object, kind);
+  return object;
+}
+
+/** Four additive, prebuilt stages. setProgress only flips visibility, including on rewind. */
+export function foundationModel(kind: BuildingKind): { object: THREE.Group; setProgress(p: number): void } {
+  const { w, d } = BUILDINGS[kind].size;
+  const object = new THREE.Group();
+  object.name = `${kind}-foundation`;
+  const material = modelMaterial();
+  const cleared = [block([w, 0.025, d], 0x9c835c, [0, 0.0125, 0])];
+  const plinth: THREE.BufferGeometry[] = [];
+  const frame: THREE.BufferGeometry[] = [];
+  for (const side of [-1, 1]) {
+    cleared.push(block([w - 0.18, 0.08, 0.1], STONE, [0, 0.065, side * (d / 2 - 0.09)]));
+    cleared.push(block([0.1, 0.08, d - 0.18], STONE, [side * (w / 2 - 0.09), 0.065, 0]));
+    plinth.push(block([w * 0.74, kind === 'farm' ? 0.04 : 0.3, 0.17], STONE,
+      [0, kind === 'farm' ? 0.08 : 0.19, side * d * 0.36]));
+    plinth.push(block([0.17, kind === 'farm' ? 0.04 : 0.3, d * 0.74], STONE,
+      [side * w * 0.36, kind === 'farm' ? 0.08 : 0.19, 0]));
+    for (const end of [-1, 1]) {
+      cleared.push(block([0.065, 0.35, 0.065], TREE_TRUNK, [side * (w / 2 - 0.06), 0.2, end * (d / 2 - 0.06)]));
+      frame.push(block([0.09, kind === 'farm' ? 0.44 : 1.85, 0.09], TREE_TRUNK,
+        [side * w * 0.43, kind === 'farm' ? 0.28 : 0.965, end * d * 0.43]));
+    }
+    frame.push(block([w * 0.89, 0.08, 0.09], WOOD, [0, kind === 'farm' ? 0.38 : 1.78, side * d * 0.43]));
+  }
+  if (kind !== 'farm') {
+    frame.push(block([w * 0.87, 0.06, 0.33], WOOD, [0, 1.02, -d * 0.42]));
+    for (const x of [-0.22, 0.22]) frame.push(block([0.05, 1.45, 0.06], WOOD, [x, 0.75, d * 0.42], [-0.2, 0, 0]));
+    for (let i = 0; i < 6; i++) frame.push(block([0.48, 0.05, 0.05], WOOD, [0, 0.16 + i * 0.22, d * 0.42 + 0.12 - i * 0.044]));
+  }
+  section(object, 'cleared-site', cleared, material);
+  section(object, 'low-plinth', plinth, material);
+  section(object, 'scaffolding', frame, material);
+  const finished = buildingModel(kind);
+  finished.name = 'nearly-finished';
+  // Share the foundation material, retaining the factory's normal ownership convention.
+  const oldMaterials = new Set<THREE.Material>();
+  finished.traverse(child => {
+    if (!(child instanceof THREE.Mesh)) return;
+    oldMaterials.add(child.material as THREE.Material);
+    child.material = material;
+  });
+  for (const old of oldMaterials) old.dispose();
+  object.add(finished);
+  const stages = object.children;
+  function setProgress(p: number): void {
+    const progress = Number.isFinite(p) ? Math.max(0, Math.min(1, p)) : 0;
+    stages[0].visible = true;
+    stages[1].visible = progress >= 0.3;
+    stages[2].visible = progress >= 0.6;
+    stages[3].visible = progress >= 0.9;
+  }
+  setProgress(0);
+  return { object, setProgress };
 }
