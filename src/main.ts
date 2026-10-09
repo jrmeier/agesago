@@ -5,7 +5,8 @@ if (!container) throw new Error('#game-container not found');
 
 const game = new Game(container);
 
-if (import.meta.env.DEV) {
+// Dev builds, and production builds opened with ?e2e (browser smoke tests), expose the game for inspection.
+if (import.meta.env.DEV || new URLSearchParams(location.search).has('e2e')) {
   (window as unknown as { game: Game }).game = game;
-  import.meta.hot?.dispose(() => game.dispose());
 }
+if (import.meta.env.DEV) import.meta.hot?.dispose(() => game.dispose());
