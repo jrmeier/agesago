@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import {
-  berryBushGeometry, createVillager, goldPileGeometry, modelMaterial, stumpGeometry, treeGeometries,
+  berryBushGeometry, createScout, createVillager, goldPileGeometry, modelMaterial, stumpGeometry, treeGeometries,
 } from './models';
-import type { VillagerPose } from './models';
+import type { ScoutPose, VillagerPose } from './models';
 
 function triangles(geometry: THREE.BufferGeometry): number {
   return (geometry.index?.count ?? geometry.getAttribute('position').count) / 3;
@@ -80,7 +80,7 @@ function colorVisibleFrom(geometry: THREE.BufferGeometry, hex: number, eye: THRE
 }
 
 function visibleBounds(object: THREE.Object3D): THREE.Box3 {
-  object.updateMatrixWorld(true);
+  object.updateWorldMatrix(true, true);
   const bounds = new THREE.Box3();
   object.traverseVisible(child => {
     if (!(child instanceof THREE.Mesh)) return;
@@ -267,5 +267,192 @@ describe('villager', () => {
     const torso = model.object.getObjectByName('torso-head') as THREE.Mesh<THREE.BufferGeometry>;
     expect(hasColor(torso.geometry, 0)).toBe(true);
     expect(hasColor(torso.geometry, 0xd4a843)).toBe(true);
+  });
+});
+
+describe('mounted scout', () => {
+  const poses: ScoutPose[] = ['idle', 'walk', 'gallop'];
+  const legNames = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'];
+
+  it.each([0, 1, 2, 3, 4, 5])('grounds and centres seed %s at cavalry scale within 1400 flat-shaded triangles', seed => {
+    const model = createScout({ seed });
+    const bounds = visibleBounds(model.object);
+    const size = bounds.getSize(new THREE.Vector3());
+    expect(bounds.min.y).toBeCloseTo(0, 5);
+    expect(bounds.max.y).toBeGreaterThan(1.8);
+    expect(bounds.max.y).toBeLessThan(2.05);
+    expect(size.z).toBeGreaterThan(1.7);
+    expect(size.z).toBeLessThan(2.1);
+    expect(size.x).toBeGreaterThan(0.5);
+    expect(size.x).toBeLessThan(0.8);
+    expect(Math.abs(bounds.getCenter(new THREE.Vector3()).x)).toBeLessThan(0.08);
+    expect(Math.abs(bounds.getCenter(new THREE.Vector3()).z)).toBeLessThan(0.12);
+    const body = model.object.getObjectByName('horse-body-tack') as THREE.Mesh<THREE.BufferGeometry>;
+    const withers = new THREE.Box3();
+    const coat = new THREE.Color([0x985032, 0x65402b, 0xb1b0a6][seed % 3]);
+    const positions = body.geometry.getAttribute('position');
+    const colors = body.geometry.getAttribute('color');
+    for (let i = 0; i < positions.count; i++) {
+      if (matchesShade(colors, i, coat)) withers.expandByPoint(new THREE.Vector3().fromBufferAttribute(positions, i).applyMatrix4(body.matrixWorld));
+    }
+    expect(withers.max.y).toBeGreaterThan(1.2);
+    expect(withers.max.y).toBeLessThan(1.32);
+    let total = 0;
+    let meshes = 0;
+    const materials = new Set<THREE.Material>();
+    model.object.traverse(child => {
+      if (!(child instanceof THREE.Mesh)) return;
+      meshes++;
+      const geometry = child.geometry as THREE.BufferGeometry;
+      total += triangles(geometry);
+      expect(geometry.index).toBeNull();
+      expect(geometry.groups).toHaveLength(0);
+      const position = geometry.getAttribute('position');
+      const color = geometry.getAttribute('color');
+      const normal = geometry.getAttribute('normal');
+      for (const attribute of [position, color, normal]) {
+        expect(attribute.itemSize).toBe(3);
+        expect(attribute.count).toBe(position.count);
+        expect(Array.from(attribute.array).every(Number.isFinite)).toBe(true);
+      }
+      expect(Array.from(color.array).every(value => value >= 0 && value <= 1)).toBe(true);
+      for (let i = 0; i < normal.count; i += 3) {
+        expect([normal.getX(i), normal.getY(i), normal.getZ(i)]).toEqual([normal.getX(i + 1), normal.getY(i + 1), normal.getZ(i + 1)]);
+        expect([normal.getX(i), normal.getY(i), normal.getZ(i)]).toEqual([normal.getX(i + 2), normal.getY(i + 2), normal.getZ(i + 2)]);
+      }
+      materials.add(child.material as THREE.Material);
+    });
+    expect(total).toBeGreaterThan(0);
+    expect(total).toBeLessThanOrEqual(1400);
+    expect(meshes).toBeLessThanOrEqual(16);
+    expect(materials.size).toBe(1);
+    const material = [...materials][0] as THREE.MeshLambertMaterial;
+    expect(material.vertexColors).toBe(true);
+    expect(material.flatShading).toBe(true);
+    expect(material.map).toBeNull();
+  });
+
+  it('faces +z with the muzzle ahead of the neck and the tail behind the rider', () => {
+    const model = createScout({ seed: 0 });
+    const head = visibleBounds(model.object.getObjectByName('horse-head-bridle')!);
+    const neck = visibleBounds(model.object.getObjectByName('horse-neck')!);
+    const tail = visibleBounds(model.object.getObjectByName('horse-tail')!);
+    const rider = visibleBounds(model.object.getObjectByName('rider-tunic-head')!);
+    expect(head.max.z).toBeGreaterThan(0.9);
+    expect(head.getCenter(new THREE.Vector3()).z).toBeGreaterThan(neck.getCenter(new THREE.Vector3()).z);
+    expect(tail.max.z).toBeLessThan(rider.min.z);
+    expect(model.object.position.toArray()).toEqual([0, 0, 0]);
+    expect(model.object.rotation.toArray().slice(0, 3)).toEqual([0, 0, 0]);
+  });
+
+  it.each(poses)('animates all four legs in %s without ground penetration or nonfinite transforms', pose => {
+    for (const seed of [0, 1, 2]) {
+      const model = createScout({ seed });
+      const swings = legNames.map(() => [] as number[]);
+      const knees = legNames.map(() => [] as number[]);
+      for (let step = 0; step <= 24; step++) {
+        const time = step / 12;
+        expect(() => model.setPose(pose, time)).not.toThrow();
+        expect(transforms(model.object).every(Number.isFinite)).toBe(true);
+        const bounds = visibleBounds(model.object);
+        expect(bounds.min.y).toBeGreaterThanOrEqual(-0.00001);
+        expect(bounds.min.y).toBeLessThanOrEqual(pose === 'gallop' ? 0.061 : 0.00001);
+        legNames.forEach((name, i) => {
+          swings[i].push(model.object.getObjectByName(`${name}Leg`)!.rotation.x);
+          knees[i].push(model.object.getObjectByName(`${name}Knee`)!.rotation.x);
+        });
+      }
+      for (const samples of swings) expect(Math.max(...samples) - Math.min(...samples)).toBeGreaterThan(pose === 'idle' ? 0.015 : 0.4);
+      for (const samples of knees) expect(Math.max(...samples) - Math.min(...samples)).toBeGreaterThan(pose === 'idle' ? 0.01 : 0.15);
+    }
+  });
+
+  it('walks with four distinct footfall phases instead of a diagonal trot', () => {
+    const model = createScout();
+    const traces = legNames.map(() => [] as number[]);
+    const peaks: number[] = [];
+    for (let step = 0; step < 40; step++) {
+      model.setPose('walk', step / 56);
+      legNames.forEach((name, i) => traces[i].push(model.object.getObjectByName(`${name}Knee`)!.rotation.x));
+    }
+    for (const trace of traces) peaks.push(trace.indexOf(Math.max(...trace)));
+    peaks.sort((a, b) => a - b);
+    const gaps = peaks.map((peak, i) => (peaks[(i + 1) % 4] - peak + 40) % 40);
+    expect(gaps).toEqual([10, 10, 10, 10]);
+  });
+
+  it('gallops faster than walking and animates body pitch, rider, mane and tail', () => {
+    const model = createScout({ seed: 7 });
+    const sample = (pose: ScoutPose): { leg: number[]; body: number[]; rider: number[]; mane: number[]; tail: number[]; height: number[] } => {
+      const values = { leg: [] as number[], body: [] as number[], rider: [] as number[], mane: [] as number[], tail: [] as number[], height: [] as number[] };
+      for (let step = 0; step < 100; step++) {
+        model.setPose(pose, step / 100);
+        values.leg.push(model.object.getObjectByName('frontLeftLeg')!.rotation.x);
+        values.body.push(model.object.getObjectByName('horse')!.rotation.x);
+        values.rider.push(model.object.getObjectByName('rider')!.position.y);
+        values.mane.push(model.object.getObjectByName('horseMane')!.rotation.x);
+        values.tail.push(model.object.getObjectByName('horseTail')!.rotation.x);
+        values.height.push(model.object.getObjectByName('rig')!.position.y);
+      }
+      return values;
+    };
+    const walk = sample('walk');
+    const gallop = sample('gallop');
+    const crossings = (trace: number[]): number => trace.slice(1).filter((value, i) => value * trace[i] < 0).length;
+    expect(crossings(gallop.leg)).toBeGreaterThan(crossings(walk.leg));
+    for (const trace of [gallop.body, gallop.rider, gallop.mane, gallop.tail, gallop.height]) {
+      expect(Math.max(...trace) - Math.min(...trace)).toBeGreaterThan(0.025);
+    }
+    const idle = sample('idle');
+    expect(Math.max(...idle.tail) - Math.min(...idle.tail)).toBeGreaterThan(0.01);
+  });
+
+  it.each([
+    ['idle', 4], ['walk', 1 / 1.4], ['gallop', 1 / 2.8],
+  ] as const)('loops %s smoothly and resets after other orders', (pose, period) => {
+    const model = createScout({ seed: 19 });
+    model.setPose(pose, 0.173);
+    const start = transforms(model.object);
+    model.setPose(pose, 0.173 + period);
+    transforms(model.object).forEach((value, i) => expect(value).toBeCloseTo(start[i], 6));
+    model.setPose(pose, period - 0.00001);
+    const beforeWrap = transforms(model.object);
+    model.setPose(pose, period + 0.00001);
+    transforms(model.object).forEach((value, i) => expect(Math.abs(value - beforeWrap[i])).toBeLessThan(0.001));
+    for (const other of poses) model.setPose(other, 17.8);
+    model.setPose('idle', 0);
+    expect(transforms(model.object)).toEqual(transforms(createScout({ seed: 19 }).object));
+  });
+
+  it('deterministically varies horse coats and headgear by seed', () => {
+    const signatures = (seed: number, name: string, attribute: string): number[] => {
+      const mesh = createScout({ seed }).object.getObjectByName(name) as THREE.Mesh<THREE.BufferGeometry>;
+      return Array.from(mesh.geometry.getAttribute(attribute).array);
+    };
+    const coats = [0, 1, 2].map(seed => signatures(seed, 'horse-body-tack', 'color'));
+    expect(new Set(coats.map(colors => JSON.stringify(colors))).size).toBe(3);
+    expect(signatures(0, 'rider-tunic-head', 'position')).not.toEqual(signatures(1, 'rider-tunic-head', 'position'));
+    for (const name of ['horse-body-tack', 'rider-tunic-head']) {
+      for (const attribute of ['position', 'color']) {
+        expect(signatures(7, name, attribute)).toEqual(signatures(7, name, attribute));
+      }
+    }
+    expect(transforms(createScout({ seed: 7 }).object)).toEqual(transforms(createScout({ seed: 7 }).object));
+  });
+
+  it('uses the player colour for both cloths, accepts black, and preserves the world transform', () => {
+    for (const color of [0, 0x446b81]) {
+      const model = createScout({ cloak: color, seed: 2 });
+      model.object.position.set(13, 2, 9);
+      model.object.rotation.set(0.1, 1.2, -0.2);
+      model.object.scale.setScalar(1.1);
+      const original = [...model.object.position.toArray(), ...model.object.quaternion.toArray(), ...model.object.scale.toArray()];
+      for (const pose of poses) model.setPose(pose, 3.4);
+      expect([...model.object.position.toArray(), ...model.object.quaternion.toArray(), ...model.object.scale.toArray()]).toEqual(original);
+      for (const name of ['horse-body-tack', 'rider-cloak']) {
+        const mesh = model.object.getObjectByName(name) as THREE.Mesh<THREE.BufferGeometry>;
+        expect(hasColor(mesh.geometry, color)).toBe(true);
+      }
+    }
   });
 });

@@ -21,6 +21,14 @@ export interface VillagerModel {
   setPose(state: VillagerPose, t: number, carry?: 'wood' | 'food' | 'gold' | null): void;
 }
 
+export type ScoutPose = 'idle' | 'walk' | 'gallop';
+
+/** A mounted scout facing +z, with animation confined to its local rig. */
+export interface ScoutModel {
+  object: THREE.Group;
+  setPose(state: ScoutPose, t: number): void;
+}
+
 /** Stable local randomness for procedural model variants. */
 export function seededRandom(seed: number): Random {
   let value = seed >>> 0;
@@ -393,6 +401,222 @@ export function createVillager(opts?: { tunic?: number; skin?: number; seed?: nu
       for (const corner of corners) sole = Math.min(sole, point.copy(corner).applyMatrix4(leg.matrix).y);
     }
     rig.position.y = -sole + bob;
+  }
+
+  setPose('idle', 0);
+  return { object, setPose };
+}
+
+/**
+ * Ancient light cavalry: a 1.25 m horse with a rider near 1.9 m, a petasos or
+ * bronze helmet, and a javelin. One material, shared leg geometry, no textures.
+ * `cloak` colours both the cloak and saddle cloth; `t` is elapsed seconds.
+ */
+export function createScout(opts?: { cloak?: number; seed?: number }): ScoutModel {
+  const seed = Math.abs(Math.trunc(opts?.seed ?? 1));
+  const random = seededRandom(seed);
+  const phase = random() * Math.PI * 2;
+  const cloakColor = opts?.cloak ?? VILLAGER.tunic;
+  const coat = [0x985032, 0x65402b, 0xb1b0a6][seed % 3];
+  const hair = [0x623b26, 0x28221d, 0x62625b][seed % 3];
+  const stocking = seed % 3 === 1 ? hair : 0xd8cbb3;
+  const skin = VILLAGER.head;
+  const leather = 0x493623;
+  const bronze = 0xb89b53;
+  const material = modelMaterial();
+  const object = new THREE.Group();
+  object.name = 'scout';
+
+  function pivot(parent: THREE.Object3D, name: string, position: Triple): THREE.Group {
+    const group = new THREE.Group();
+    group.name = name;
+    group.position.set(...position);
+    parent.add(group);
+    return group;
+  }
+
+  function mesh(geometry: THREE.BufferGeometry, parent: THREE.Object3D, name: string): THREE.Mesh {
+    const result = new THREE.Mesh(geometry, material);
+    result.name = name;
+    result.castShadow = true;
+    result.receiveShadow = true;
+    parent.add(result);
+    return result;
+  }
+
+  function rod(hex: number, from: Triple, to: Triple, radius: number): THREE.BufferGeometry {
+    const start = new THREE.Vector3(...from);
+    const end = new THREE.Vector3(...to);
+    const direction = end.clone().sub(start);
+    const geometry = new THREE.CylinderGeometry(radius, radius, direction.length(), 4);
+    geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize()));
+    return part(geometry, hex, start.add(end).multiplyScalar(0.5).toArray() as Triple);
+  }
+
+  const rig = pivot(object, 'rig', [0, 0, 0]);
+  // Pitch around the horse's chest, then ground the rig using the animated hooves.
+  const horse = pivot(rig, 'horse', [0, 0.98, -0.1]);
+  mesh(merge([
+    part(new THREE.IcosahedronGeometry(1, 0), coat, [0, 0.02, -0.03], [0.3, 0.27, 0.62]),
+    part(new THREE.IcosahedronGeometry(1, 0), coat, [0, 0.06, 0.37], [0.26, 0.24, 0.25]),
+    part(new THREE.IcosahedronGeometry(1, 0), coat, [0, 0.02, -0.38], [0.29, 0.24, 0.29]),
+    part(new THREE.BoxGeometry(0.56, 0.026, 0.52), cloakColor, [0, 0.255, -0.04]),
+    ...[-1, 1].flatMap(side => [
+      part(new THREE.BoxGeometry(0.024, 0.27, 0.52), cloakColor, [side * 0.282, 0.11, -0.04]),
+      part(new THREE.BoxGeometry(0.028, 0.025, 0.53), 0xd8c5a0, [side * 0.285, -0.018, -0.04]),
+      rod(leather, [side * 0.13, 0.46, 0.18], [side * 0.12, 0.365, 0.95], 0.009),
+    ]),
+    part(new THREE.BoxGeometry(0.33, 0.035, 0.38), leather, [0, 0.279, -0.04]),
+    // A simple girth and cloth saddle, without modern stirrups or a saddle horn.
+    part(new THREE.BoxGeometry(0.59, 0.03, 0.035), leather, [0, -0.06, -0.04]),
+  ]), horse, 'horse-body-tack');
+
+  const upperLegGeometry = merge([
+    part(new THREE.CylinderGeometry(0.074, 0.048, 0.36, 5), coat, [0, -0.175, 0]),
+    part(new THREE.IcosahedronGeometry(0.06, 0), coat, [0, -0.35, 0], [1, 0.8, 1]),
+  ]);
+  const lowerLegGeometry = merge([
+    part(new THREE.CylinderGeometry(0.033, 0.025, 0.39, 5), coat, [0, -0.195, 0]),
+    part(new THREE.CylinderGeometry(0.027, 0.03, 0.11, 5), stocking, [0, -0.355, 0]),
+    part(new THREE.BoxGeometry(0.1, 0.08, 0.14), 0x302b27, [0, -0.44, 0.018]),
+  ]);
+  const legNames = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'];
+  const legs = legNames.map((name, i) => {
+    const upper = pivot(horse, `${name}Leg`, [i % 2 === 0 ? -0.18 : 0.18, -0.15, i < 2 ? 0.4 : -0.39]);
+    mesh(upperLegGeometry, upper, `${name}-upper-leg`);
+    const lower = pivot(upper, `${name}Knee`, [0, -0.35, 0]);
+    mesh(lowerLegGeometry, lower, `${name}-hoof-leg`);
+    return { upper, lower };
+  });
+
+  const neck = pivot(horse, 'horseNeck', [0, 0.15, 0.46]);
+  mesh(merge([
+    part(new THREE.CylinderGeometry(0.11, 0.18, 0.52, 6), coat, [0, 0.12, 0.11], [1, 1, 1], [0.45, 0, 0]),
+    part(new THREE.IcosahedronGeometry(1, 0), coat, [0, 0.03, 0.02], [0.18, 0.2, 0.2]),
+  ]), neck, 'horse-neck');
+  const head = pivot(neck, 'horseHead', [0, 0.27, 0.25]);
+  mesh(merge([
+    part(new THREE.IcosahedronGeometry(1, 0), coat, [0, 0.015, 0.055], [0.12, 0.16, 0.2], [-0.35, 0, 0]),
+    part(new THREE.BoxGeometry(0.18, 0.14, 0.23), coat, [0, -0.06, 0.245]),
+    part(new THREE.BoxGeometry(0.15, 0.09, 0.045), 0x57443a, [0, -0.078, 0.351]),
+    ...[-1, 1].flatMap(side => [
+      part(new THREE.ConeGeometry(0.045, 0.17, 4), coat, [side * 0.073, 0.19, -0.015], [1, 1, 0.55], [-0.18, 0, side * -0.12]),
+      part(new THREE.BoxGeometry(0.01, 0.028, 0.029), 0x211e1a, [side * 0.115, 0.052, 0.11]),
+      part(new THREE.BoxGeometry(0.008, 0.021, 0.025), 0x302b27, [side * 0.093, -0.044, 0.32]),
+      rod(leather, [side * 0.12, 0.1, 0.018], [side * 0.105, -0.055, 0.24], 0.009),
+      part(new THREE.BoxGeometry(0.025, 0.028, 0.028), bronze, [side * 0.115, -0.055, 0.24]),
+    ]),
+    part(new THREE.BoxGeometry(0.197, 0.02, 0.035), leather, [0, -0.023, 0.29]),
+    part(new THREE.BoxGeometry(0.23, 0.022, 0.022), leather, [0, 0.1, 0.017]),
+    part(new THREE.BoxGeometry(0.065, 0.14, 0.045), hair, [0, 0.16, 0.025], [1, 1, 1], [-0.25, 0, 0]),
+  ]), head, 'horse-head-bridle');
+
+  const mane = pivot(neck, 'horseMane', [0, 0.04, -0.075]);
+  mesh(merge([0, 1, 2].map(i =>
+    part(new THREE.BoxGeometry(0.065, 0.17, 0.08), hair, [0, i * 0.105, i * 0.05], [1, 1, 1], [0.45, 0, 0])
+  )), mane, 'horse-mane');
+  const tail = pivot(horse, 'horseTail', [0, 0.09, -0.58]);
+  mesh(merge([
+    part(new THREE.CylinderGeometry(0.04, 0.065, 0.42, 5), hair, [0, -0.2, -0.12], [1, 1, 1], [0.55, 0, 0]),
+    part(new THREE.ConeGeometry(0.07, 0.17, 5), hair, [0, -0.39, -0.24], [1, 1, 1], [Math.PI + 0.3, 0, 0]),
+  ]), tail, 'horse-tail');
+
+  const rider = pivot(horse, 'rider', [0, 0.28, -0.04]);
+  mesh(merge([
+    part(new THREE.CylinderGeometry(0.115, 0.16, 0.31, 6), 0xe4d9bd, [0, 0.155, 0]),
+    part(new THREE.CylinderGeometry(0.16, 0.165, 0.025, 6), cloakColor, [0, 0.007, 0]),
+    part(new THREE.BoxGeometry(0.26, 0.026, 0.21), leather, [0, 0.12, 0]),
+    part(new THREE.BoxGeometry(0.038, 0.03, 0.015), bronze, [0, 0.12, 0.11]),
+    part(new THREE.BoxGeometry(0.07, 0.06, 0.07), skin, [0, 0.346, 0]),
+    part(new THREE.BoxGeometry(0.17, 0.18, 0.16), skin, [0, 0.46, 0]),
+    part(new THREE.BoxGeometry(0.18, 0.045, 0.168), leather, [0, 0.544, -0.004]),
+    part(new THREE.BoxGeometry(0.035, 0.043, 0.025), skin, [0, 0.462, 0.092]),
+    ...[-1, 1].flatMap(side => [
+      part(new THREE.BoxGeometry(0.015, 0.016, 0.008), 0x302b27, [side * 0.037, 0.493, 0.082]),
+      rod(0xe4d9bd, [side * 0.13, 0.27, 0], [side * 0.18, 0.16, 0.1], 0.045),
+      rod(skin, [side * 0.18, 0.16, 0.1], [side * 0.13, 0.18, 0.22], 0.032),
+      part(new THREE.BoxGeometry(0.068, 0.065, 0.07), skin, [side * 0.13, 0.18, 0.22]),
+      rod(0xe4d9bd, [side * 0.095, 0.018, 0.04], [side * 0.25, -0.19, 0.08], 0.061),
+      rod(skin, [side * 0.25, -0.19, 0.08], [side * 0.27, -0.43, -0.02], 0.036),
+      part(new THREE.BoxGeometry(0.09, 0.05, 0.15), leather, [side * 0.27, -0.45, 0.015]),
+    ]),
+    ...(seed % 2 === 0 ? [
+      // Wide-brim Thessalian travelling hat (petasos).
+      part(new THREE.CylinderGeometry(0.19, 0.19, 0.018, 8), 0xd9bb78, [0, 0.572, -0.008]),
+      part(new THREE.CylinderGeometry(0.065, 0.105, 0.065, 8), 0xc3a369, [0, 0.602, -0.008]),
+      part(new THREE.BoxGeometry(0.015, 0.12, 0.012), leather, [-0.088, 0.51, 0.004]),
+      part(new THREE.BoxGeometry(0.015, 0.12, 0.012), leather, [0.088, 0.51, 0.004]),
+    ] : [
+      part(new THREE.IcosahedronGeometry(1, 0), bronze, [0, 0.574, -0.008], [0.115, 0.08, 0.11]),
+      part(new THREE.BoxGeometry(0.22, 0.025, 0.185), bronze, [0, 0.559, -0.008]),
+      ...[-1, 1].map(side => part(new THREE.BoxGeometry(0.024, 0.115, 0.065), bronze, [side * 0.098, 0.486, -0.018])),
+      part(new THREE.BoxGeometry(0.18, 0.08, 0.026), bronze, [0, 0.504, -0.09]),
+    ]),
+  ]), rider, 'rider-tunic-head');
+
+  const cloak = pivot(rider, 'riderCloak', [0, 0.29, -0.115]);
+  const cloakGeometry = new THREE.BoxGeometry(0.36, 0.41, 0.025);
+  const cloakVertices = cloakGeometry.getAttribute('position');
+  for (let i = 0; i < cloakVertices.count; i++) {
+    if (cloakVertices.getY(i) > 0) cloakVertices.setX(i, cloakVertices.getX(i) * 0.68);
+  }
+  mesh(merge([
+    part(cloakGeometry, cloakColor, [0, -0.18, -0.06], [1, 1, 1], [0.28, 0, 0]),
+    part(new THREE.BoxGeometry(0.11, 0.033, 0.025), bronze, [-0.1, 0.012, 0.012]),
+  ]), cloak, 'rider-cloak');
+  mesh(merge([
+    rod(TREE_TRUNK, [0.13, -0.25, 0.15], [0.13, 0.61, 0.29], 0.013),
+    part(new THREE.ConeGeometry(0.028, 0.12, 4), bronze, [0.13, 0.665, 0.3], [1, 1, 0.5], [0.16, 0, 0]),
+  ]), rider, 'javelin');
+
+  // Precompute hoof bounds once. The pose loop allocates no geometry or objects.
+  const hoofCorners: THREE.Vector3[] = [];
+  const bounds = lowerLegGeometry.boundingBox!;
+  for (const x of [bounds.min.x, bounds.max.x]) {
+    for (const y of [bounds.min.y, bounds.max.y]) {
+      for (const z of [bounds.min.z, bounds.max.z]) hoofCorners.push(new THREE.Vector3(x, y, z));
+    }
+  }
+  const hoofMatrix = new THREE.Matrix4();
+  const point = new THREE.Vector3();
+  // Hind-left → fore-left → hind-right → fore-right: four distinct walk beats.
+  const walkOffsets = [Math.PI * 1.5, Math.PI * 0.5, 0, Math.PI];
+  const gallopOffsets = [0, 0.3, Math.PI, Math.PI + 0.3];
+
+  function setPose(state: ScoutPose, t: number): void {
+    const rate = state === 'idle' ? 0.25 : state === 'walk' ? 1.4 : 2.8;
+    const cycle = t * Math.PI * 2 * rate + phase;
+    const stride = Math.sin(cycle);
+    const galloping = state === 'gallop';
+    const moving = state !== 'idle';
+    horse.rotation.set(stride * (galloping ? 0.055 : 0.012), 0, Math.sin(cycle * 2) * (moving ? 0.012 : 0.006));
+    neck.rotation.set(stride * (moving ? 0.025 : 0.015), 0, 0);
+    head.rotation.set(Math.sin(cycle * 2) * (galloping ? 0.055 : 0.025), 0, 0);
+    mane.rotation.set(Math.sin(cycle * 4) * (galloping ? 0.12 : 0.012), 0, Math.sin(cycle * 3) * (galloping ? 0.09 : 0.015));
+    tail.rotation.set(galloping ? -0.25 + stride * 0.14 : stride * 0.025, stride * (moving ? 0.15 : 0.3), Math.sin(cycle * 3) * (galloping ? 0.12 : 0.035));
+    rider.position.y = 0.28 + (moving ? Math.sin(cycle * 2) * (galloping ? 0.02 : 0.007) : 0);
+    rider.rotation.set(galloping ? 0.1 - stride * 0.035 : -stride * 0.012, 0, -horse.rotation.z * 0.6);
+    cloak.rotation.set(Math.sin(cycle * 3) * (galloping ? 0.16 : 0.025) - (galloping ? 0.18 : 0), 0, Math.sin(cycle * 2) * 0.025);
+
+    for (let i = 0; i < legs.length; i++) {
+      const leg = legs[i];
+      const legCycle = cycle + (galloping ? gallopOffsets[i] : walkOffsets[i]);
+      const swing = Math.sin(legCycle);
+      const fold = (0.5 + 0.5 * swing) ** 2;
+      leg.upper.rotation.set(swing * (galloping ? 0.7 : moving ? 0.34 : 0.018), 0, 0);
+      leg.lower.rotation.set(moving ? 0.035 + fold * (galloping ? 0.58 : 0.24) : swing * 0.012, 0, 0);
+    }
+
+    horse.updateMatrix();
+    let sole = Infinity;
+    for (const leg of legs) {
+      leg.upper.updateMatrix();
+      leg.lower.updateMatrix();
+      hoofMatrix.multiplyMatrices(horse.matrix, leg.upper.matrix).multiply(leg.lower.matrix);
+      for (const corner of hoofCorners) sole = Math.min(sole, point.copy(corner).applyMatrix4(hoofMatrix).y);
+    }
+    // Gallop has a small airborne interval; all other poses keep a hoof at ground.
+    rig.position.y = -sole + (galloping ? 0.06 * stride * stride : 0);
   }
 
   setPose('idle', 0);
