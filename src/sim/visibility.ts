@@ -1,4 +1,4 @@
-import type { Vec2 } from '../core/types';
+import type { UnitKind, Vec2 } from '../core/types';
 
 /** Fog-of-war cell states, AoE-style. */
 export const UNEXPLORED = 0;
@@ -8,8 +8,14 @@ export const VISIBLE = 2;
 /** Sight radii in world units. */
 export const SIGHT = {
   villager: 7,
+  scout: 15,
   townCenter: 11,
 } as const;
+
+/** Sight radius of a unit kind. */
+export function sightOf(kind: UnitKind): number {
+  return SIGHT[kind];
+}
 
 /** Something that reveals the map around it. */
 export interface Viewer {

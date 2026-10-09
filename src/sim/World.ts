@@ -11,12 +11,14 @@ import {
   type SimEvent,
   type Stockpile,
   type Unit,
+  type UnitKind,
   type UnitState,
   type Vec2,
 } from '../core/types';
 import { BALANCE } from './balance';
 import { NavGrid } from './nav';
-import { SIGHT, Visibility, type Viewer } from './visibility';
+import { SIGHT, Visibility, sightOf, type Viewer } from './visibility';
+import { exploreSystem, orderExplore, type ExploreState } from './systems/explore';
 import { gatherSystem, orderGather, type GatherState } from './systems/gather';
 import { movementSystem, orderMove } from './systems/movement';
 import { orderTrain, trainSystem } from './systems/train';
@@ -47,6 +49,10 @@ export class World {
   private fogClock = 0;
   /** Per-unit gather timer and retarget anchor (system bookkeeping, not rendered). */
   readonly gatherState = new Map<EntityId, GatherState>();
+  /** Per-unit auto-explore target (system bookkeeping, not rendered). */
+  readonly exploreState = new Map<EntityId, ExploreState>();
+  /** Explorers waiting for a frontier search, oldest first (searches are staggered across ticks). */
+  readonly exploreQueue = new Set<EntityId>();
   private nextId = 1;
 
   constructor(
@@ -67,7 +73,7 @@ export class World {
       .map((p) => ({ pos: { ...p.pos }, radius: p.blockRadius }));
     this.nav = new NavGrid(hf, [tc, ...scenery]);
     this.visibility = new Visibility(hf.width, hf.depth);
-    for (const p of layout.villagers) this.addVillager(p);
+    for (const p of layout.villagers) this.addUnit('villager', p);
     for (const n of layout.nodes) {
       const node: ResourceNode = {
         id: this.nextId++,
@@ -79,11 +85,21 @@ export class World {
       };
       this.nodes.set(node.id, node);
     }
+    // After the nodes, so node ids stay what they were before scouts existed.
+    for (const p of layout.scouts) this.addUnit('scout', p);
     this.updateFog();
   }
 
+  /** Every unit (villagers and scouts) — the pop cap applies to all of them. */
   get pop(): number {
     return this.units.size;
+  }
+
+  /** Units of kind 'villager'. */
+  get villagerCount(): number {
+    let n = 0;
+    for (const u of this.units.values()) if (u.kind === 'villager') n++;
+    return n;
   }
 
   /** The player's Town Center (drop site and trainer). */
@@ -120,6 +136,9 @@ export class World {
       case 'train':
         orderTrain(this, cmd.buildingId);
         break;
+      case 'explore':
+        orderExplore(this, cmd.unitIds);
+        break;
     }
   }
 
@@ -128,6 +147,7 @@ export class World {
     for (const u of this.units.values()) u.prevPos = { ...u.pos };
     const arrived = movementSystem(this, dt);
     gatherSystem(this, dt, arrived);
+    exploreSystem(this);
     trainSystem(this, dt);
     this.time += dt;
     this.fogClock -= dt;
@@ -140,7 +160,7 @@ export class World {
   /** Recompute fog of war from every unit and building's sight radius. */
   updateFog(): void {
     const viewers: Viewer[] = [];
-    for (const u of this.units.values()) viewers.push({ pos: u.pos, sight: SIGHT.villager });
+    for (const u of this.units.values()) viewers.push({ pos: u.pos, sight: sightOf(u.kind) });
     for (const b of this.buildings.values()) viewers.push({ pos: b.pos, sight: SIGHT.townCenter });
     this.visibility.update(viewers);
   }
@@ -159,8 +179,13 @@ export class World {
 
   /** Create a villager at `p` and emit 'spawned'. */
   spawnVillager(p: Vec2): Unit {
-    const u = this.addVillager(p);
-    this.events.emit({ type: 'spawned', id: u.id, kind: 'villager' });
+    return this.spawnUnit('villager', p);
+  }
+
+  /** Create a unit of `kind` at `p` and emit 'spawned'. */
+  spawnUnit(kind: UnitKind, p: Vec2): Unit {
+    const u = this.addUnit(kind, p);
+    this.events.emit({ type: 'spawned', id: u.id, kind });
     return u;
   }
 
@@ -174,10 +199,10 @@ export class World {
     return { x: center.x + (dx / d) * r, z: center.z + (dz / d) * r };
   }
 
-  private addVillager(p: Vec2): Unit {
+  private addUnit(kind: UnitKind, p: Vec2): Unit {
     const u: Unit = {
       id: this.nextId++,
-      kind: 'villager',
+      kind,
       pos: { ...p },
       prevPos: { ...p },
       facing: 0,
