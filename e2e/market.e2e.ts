@@ -22,6 +22,8 @@ async function placeMarket(page: Page): Promise<number> {
     const w = g.world;
     w.stock.wood = 1000;
     w.stock.gold = 0;
+    // The market is a Town Age building.
+    (window as any).dev.setAge(1);
     const tc = w.townCenter.pos;
     const villagers = [...w.units.values()].filter((u: any) => u.kind === 'villager' && u.owner === w.localPlayer).map((u: any) => u.id);
     let spot: { x: number; z: number } | null = null;

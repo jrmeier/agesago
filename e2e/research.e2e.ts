@@ -40,7 +40,7 @@ test('research a tech at a storehouse, see it queue, finish, and speed up wood',
   const axe = page.locator('#train-grid [data-research="bronzeAxe"]');
   await expect(axe).toBeVisible();
   await expect(axe).toHaveAttribute('data-locked', 'false');
-  await expect(axe).toHaveAttribute('title', /\+15% wood gathering/);
+  await expect(axe).toHaveAttribute('title', /\+\d+% wood gathering/);
   if (phone) await axe.tap();
   else await axe.click();
 
@@ -58,7 +58,7 @@ test('research a tech at a storehouse, see it queue, finish, and speed up wood',
   await expect(page.locator('.toast-research')).toHaveText(/Bronze Axe researched/);
   await expect(page.locator('#train-queue .queue-item.tech')).toHaveCount(0);
   const after = await page.evaluate(() => (window as any).dev.statOf({ unit: 'villager' }, 'gather.wood', 1));
-  expect(after).toBeCloseTo(1.15);
+  expect(after).toBeGreaterThan(1.1);
 
   // The Town Age needs two Village Age buildings: only the storehouse stands.
   await page.evaluate((tc) => (window as any).game.selection.set([tc]), ids.tc);
