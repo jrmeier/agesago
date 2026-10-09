@@ -139,6 +139,16 @@ body {
   transform: translateY(1px);
 }
 
+.train-btn.disabled {
+  opacity: 0.55;
+  filter: grayscale(0.7);
+  cursor: not-allowed;
+}
+
+.train-btn.disabled:active {
+  transform: none;
+}
+
 .select-box {
   position: fixed;
   display: none;

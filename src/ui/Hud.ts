@@ -4,8 +4,6 @@ import { BALANCE } from '../sim/balance';
 import type { World } from '../sim/World';
 import { groupStatus, trainLabel, unitName } from './format';
 
-const DIMMED: Partial<CSSStyleDeclaration> = { opacity: '0.55', filter: 'grayscale(0.7)', cursor: 'not-allowed' };
-const NORMAL: Partial<CSSStyleDeclaration> = { opacity: '', filter: '', cursor: '' };
 
 /**
  * Binds the existing DOM in index.html: #res-food/#res-wood/#res-gold/#res-pop,
@@ -82,7 +80,6 @@ export class Hud {
     this.dimmed = dim;
     btn.classList.toggle('disabled', dim);
     btn.setAttribute('aria-disabled', String(dim));
-    Object.assign(btn.style, dim ? DIMMED : NORMAL);
   }
 
   private flashTrain(): void {
