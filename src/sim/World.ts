@@ -43,6 +43,7 @@ import { gatherSystem, orderFarm, orderGather, type GatherState } from './system
 import { buildingRect } from './systems/sites';
 import { movementSystem, orderMove } from './systems/movement';
 import { orderTrain, trainSystem } from './systems/train';
+import { resign, victorySystem, type GameResult } from './systems/victory';
 
 /**
  * The simulation. Plain data; mutate only through dispatch(); advance with tick(dt).
@@ -86,6 +87,13 @@ export class World {
   readonly localPlayer: PlayerId = 1;
   /** Simulated seconds elapsed. */
   time = 0;
+  /** Terminal conquest result; consumers decide when to pause the game loop. */
+  gameOver: GameResult | null = null;
+  readonly defeatedPlayers = new Set<PlayerId>();
+  /** Seconds until the next conquest check (serialized with the sim clocks). */
+  victoryClock = 0;
+  /** Map identity for saves. Set to the seed passed to generateMap before saving. */
+  seed: number | null = null;
   /** Navigation grid over the terrain with building footprints blocked. */
   readonly nav: NavGrid;
   private fogClock = 0;
@@ -302,7 +310,7 @@ export class World {
         orderStance(this, cmd.unitIds, cmd.stance);
         break;
       case 'resign':
-        // Victory/defeat lands in the game-flow lane (systems/victory.ts).
+        resign(this, by);
         break;
       case 'rally': {
         const b = this.buildings.get(cmd.buildingId);
@@ -336,6 +344,22 @@ export class World {
       this.fogClock = FOG_INTERVAL;
       this.updateFog();
     }
+    victorySystem(this, dt);
+  }
+
+  isDefeated(player: PlayerId): boolean {
+    return this.defeatedPlayers.has(player);
+  }
+
+  /** Private clocks/id allocator exposed as a value for serialization only. */
+  get saveClocks(): { fogClock: number; nextId: number } {
+    return { fogClock: this.fogClock, nextId: this.nextId };
+  }
+
+  /** Restore clocks without recomputing fog or consuming an entity id. */
+  restoreClocks(clocks: { fogClock: number; nextId: number }): void {
+    this.fogClock = clocks.fogClock;
+    this.nextId = clocks.nextId;
   }
 
   /** Recompute every player's fog from their units' and complete buildings' sight (foundations see nothing). */
