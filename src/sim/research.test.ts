@@ -103,4 +103,13 @@ describe('research queue', () => {
     run(w, 9);
     expect(tc.queue).toBe(0);
   });
+
+  it('Empire Age needs only the Academy (the City Age has no second building)', () => {
+    const w = world();
+    w.players.get(1)!.age = 2;
+    Object.assign(w.stock, { food: 5000, gold: 5000, stone: 5000 });
+    expect(researchBlock(w, 1, 'empireAge')).toBe('requires');
+    addBuilding(w, 'academy', 40, 40);
+    expect(researchBlock(w, 1, 'empireAge')).toBeNull();
+  });
 });

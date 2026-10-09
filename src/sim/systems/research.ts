@@ -34,6 +34,17 @@ export function ageBuildings(world: World, owner: PlayerId, age: Age): BuildingK
 /** Buildings from the current age needed before aging up. */
 export const AGE_BUILDINGS_NEEDED = 2;
 
+/**
+ * Distinct current-age buildings needed to leave `age`: AGE_BUILDINGS_NEEDED, or every kind that
+ * age has if it has fewer (the City Age has only the Academy, so Empire needs just that).
+ */
+export function ageBuildingsNeeded(age: Age): number {
+  const kinds = (Object.keys(BUILDINGS) as BuildingKind[]).filter(
+    (k) => BUILDINGS[k].buildable && !NOT_AGE_BUILDINGS.has(k) && (BUILDINGS[k].age ?? 0) === age
+  );
+  return Math.min(AGE_BUILDINGS_NEEDED, kinds.length);
+}
+
 /** True when `owner` has `tech` queued at any of their buildings. */
 export function isQueued(world: World, owner: PlayerId, tech: TechId): boolean {
   for (const b of world.buildings.values()) if (b.owner === owner && b.research?.includes(tech)) return true;
@@ -58,7 +69,7 @@ export function researchBlock(
   if (spec.requires?.some((t) => !p.researched.has(t))) return 'requires';
   if (spec.ageUp !== undefined) {
     if (spec.ageUp !== p.age + 1) return 'age';
-    if (ageBuildings(world, owner, p.age).length < AGE_BUILDINGS_NEEDED) return 'requires';
+    if (ageBuildings(world, owner, p.age).length < ageBuildingsNeeded(p.age)) return 'requires';
   }
   if (!ignoreCost && !affordable(world, spec.cost, owner)) return 'insufficient-resources';
   return null;
