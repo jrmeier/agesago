@@ -1,6 +1,6 @@
 import { BUILDINGS, MARKET, MAX_POP, footprintRadius } from '../core/buildings';
 import { EventBus } from '../core/events';
-import { isAnimal, UNITS } from '../core/units';
+import { isAnimal } from '../core/units';
 import {
   NODE_RESOURCE,
   GAIA,
@@ -28,7 +28,7 @@ import {
 } from '../core/types';
 import { BALANCE } from './balance';
 import { NavGrid } from './nav';
-import { Visibility, sightOf, type Viewer } from './visibility';
+import { Visibility, type Viewer } from './visibility';
 import { buildSystem, canPlace, orderBuild, orderBuildWall, orderCancelBuild, orderConstruct } from './systems/build';
 import { garrisonSystem, orderGarrison, orderTownBell, orderUngarrison } from './systems/defence';
 import {
@@ -49,6 +49,7 @@ import { buildingRect } from './systems/sites';
 import { movementSystem, orderMove } from './systems/movement';
 import { orderCancelTrain, orderTrain, trainSystem } from './systems/train';
 import { orderCancelResearch, orderResearch, researchSystem } from './systems/research';
+import { buildingMaxHp, buildingSight, unitMaxHp, unitSight } from './systems/stats';
 import { resign, victorySystem, type GameResult } from './systems/victory';
 import { wildlifeSystem } from './systems/wildlife';
 
@@ -419,9 +420,9 @@ export class World {
   updateFog(): void {
     const viewers = new Map<PlayerId, Viewer[]>();
     for (const id of this.players.keys()) viewers.set(id, []);
-    for (const u of this.units.values()) if (!isAnimal(u.kind)) viewers.get(u.owner)?.push({ pos: u.pos, sight: sightOf(u.kind) });
+    for (const u of this.units.values()) if (!isAnimal(u.kind)) viewers.get(u.owner)?.push({ pos: u.pos, sight: unitSight(this, u.owner, u.kind) });
     for (const b of this.buildings.values()) {
-      if (b.complete) viewers.get(b.owner)?.push({ pos: b.pos, sight: BUILDINGS[b.kind].sight });
+      if (b.complete) viewers.get(b.owner)?.push({ pos: b.pos, sight: buildingSight(this, b.owner, b.kind) });
     }
     for (const [id, list] of viewers) this.visibilityOf(id).update(list);
   }
@@ -471,13 +472,13 @@ export class World {
   }
 
   private addTownCenter(pos: Vec2, owner: PlayerId): Building {
-    const spec = BUILDINGS.townCenter;
+    const hp = buildingMaxHp(this, owner, 'townCenter');
     const tc: Building = {
       id: this.nextId++,
       kind: 'townCenter',
       owner,
-      hp: spec.hp,
-      maxHp: spec.hp,
+      hp,
+      maxHp: hp,
       pos: { ...pos },
       rot: 0,
       radius: footprintRadius('townCenter'),
@@ -491,7 +492,7 @@ export class World {
   }
 
   private addUnit(kind: UnitKind, p: Vec2, owner: PlayerId): Unit {
-    const hp = UNITS[kind].hp;
+    const hp = unitMaxHp(this, owner, kind);
     const u: Unit = {
       id: this.nextId++,
       kind,

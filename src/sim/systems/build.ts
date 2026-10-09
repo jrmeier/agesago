@@ -20,8 +20,20 @@ import { isWorkableFarm, nearestSources, orderFarm, sendToFarm, sendToSource } f
 import { route } from './passage';
 import { buildingRect, footprintRect, inReach, snapRot } from './sites';
 import { wallSegments } from './walls';
+import { ageOf, buildingStat } from './research';
+import { buildingMaxHp } from './stats';
 
 const reject = (world: World, reason: RejectReason) => world.events.emit({ type: 'rejected', reason });
+
+/** `kind` needs a later age than `by` has reached. */
+export function ageLocked(world: World, kind: BuildingKind, by: PlayerId): boolean {
+  return (BUILDINGS[kind].age ?? 0) > ageOf(world, by);
+}
+
+/** Food a new or reseeded farm of `owner` holds (FARM_FOOD plus research). */
+export function farmFood(world: World, owner: PlayerId): number {
+  return Math.round(buildingStat(world, owner, 'farm', 'farmFood', FARM_FOOD));
+}
 
 export function affordable(world: World, cost: Partial<Stockpile>, by: PlayerId): boolean {
   const stock = world.stockOf(by);
@@ -93,6 +105,10 @@ export function orderBuild(world: World, unitIds: EntityId[], kind: BuildingKind
     reject(world, 'invalid-target');
     return;
   }
+  if (ageLocked(world, kind, by)) {
+    reject(world, 'age');
+    return;
+  }
   const check = canPlace(world, kind, pos, rot, by);
   if (!check.ok) {
     reject(world, check.reason === 'insufficient-resources' ? 'insufficient-resources' : 'blocked-site');
@@ -106,7 +122,7 @@ export function orderBuild(world: World, unitIds: EntityId[], kind: BuildingKind
 
 /** Create an unfinished building and emit 'spawned'; non-walkable footprints block nav at once. */
 export function layFoundation(world: World, kind: BuildingKind, pos: Vec2, rot: number, owner: PlayerId): Building {
-  const maxHp = BUILDINGS[kind].hp;
+  const maxHp = buildingMaxHp(world, owner, kind);
   const b: Building = {
     id: world.allocId(),
     kind,
@@ -266,7 +282,7 @@ export function orderConstruct(world: World, unitIds: EntityId[], buildingId: En
       return;
     }
     pay(world, cost, 1, b.owner);
-    b.food = FARM_FOOD;
+    b.food = farmFood(world, b.owner);
     world.events.emit({ type: 'farmFood', id: b.id, food: b.food });
     world.emitStock();
   }
@@ -281,6 +297,10 @@ export function orderBuildWall(world: World, unitIds: EntityId[], kind: Building
   const spec = BUILDINGS[kind];
   if (!spec.buildable || !spec.line) {
     reject(world, 'invalid-target');
+    return;
+  }
+  if (ageLocked(world, kind, by)) {
+    reject(world, 'age');
     return;
   }
   const placed: Building[] = [];
@@ -369,7 +389,7 @@ export function buildSystem(world: World, dt: number, arrived: Unit[]): void {
     const b = world.buildings.get(bid);
     if (!b || b.complete) continue;
     const before = b.buildProgress;
-    b.buildProgress = Math.min(1, b.buildProgress + (Math.pow(n, BALANCE.buildExponent) / BUILDINGS[b.kind].buildTime) * dt);
+    b.buildProgress = Math.min(1, b.buildProgress + (Math.pow(n, BALANCE.buildExponent) * buildingStat(world, b.owner, b.kind, 'buildRate', 1) / BUILDINGS[b.kind].buildTime) * dt);
     // Hit points rise with construction (damage taken meanwhile is kept).
     b.hp = Math.min(b.maxHp, b.hp + (b.buildProgress - before) * b.maxHp * (1 - BALANCE.foundationHp));
     if (b.buildProgress >= 1 - 1e-9) completeBuilding(world, b);
@@ -399,7 +419,7 @@ export function completeBuilding(world: World, b: Building): void {
   b.complete = true;
   b.buildProgress = 1;
   if (BUILDINGS[b.kind].gate) world.nav.removeRect(b.id);
-  if (b.kind === 'farm') b.food = FARM_FOOD;
+  if (b.kind === 'farm') b.food = farmFood(world, b.owner);
   world.events.emit({ type: 'constructed', id: b.id });
   world.emitStock();
   world.refreshFog();

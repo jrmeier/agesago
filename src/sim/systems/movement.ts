@@ -23,9 +23,9 @@ export function formationOffset(i: number): Vec2 {
   return { x: Math.sin(a) * r, z: Math.cos(a) * r };
 }
 
-/** Walking speed of `u` right now (UNITS speed; loaded villagers are slower). */
-export function speedOf(u: Unit): number {
-  return unitSpeed(u);
+/** Walking speed of `u` right now (researched UNITS speed; loaded villagers are slower). */
+export function speedOf(u: Unit, world?: World): number {
+  return unitSpeed(u, world);
 }
 
 function radiusOf(u: Unit): number {
@@ -125,7 +125,7 @@ export function orderMove(world: World, unitIds: EntityId[], target: Vec2): void
   const st = steeringOf(world);
   const cancelled = cancelExplore(world, units);
   const slots = formationSlots(world.nav, units, target);
-  const speed = Math.min(...units.map(speedOf));
+  const speed = Math.min(...units.map((u) => speedOf(u, world)));
   const forward = direction(units, target);
   let moved = 0;
   units.forEach((u, i) => {
@@ -240,10 +240,10 @@ export function movementSystem(world: World, dt: number): Unit[] {
         const dz = rest ? rest.slot.z - u.pos.z : 0;
         const d = Math.hypot(dx, dz);
         // An arrived formation unit yields temporarily, then returns without a second arrival event.
-        const rate = Math.min(speedOf(u), d * 4);
+        const rate = Math.min(speedOf(u, world), d * 4);
         const vx = body.pushX + (d > 1e-6 ? dx / d * rate : 0);
         const vz = body.pushZ + (d > 1e-6 ? dz / d * rate : 0);
-        const scale = Math.min(1, speedOf(u) / (Math.hypot(vx, vz) || 1));
+        const scale = Math.min(1, speedOf(u, world) / (Math.hypot(vx, vz) || 1));
         const next = rest && d <= 0.001 && !body.pushX && !body.pushZ ? rest.slot
           : { x: u.pos.x + vx * scale * dt, z: u.pos.z + vz * scale * dt };
         u.pos = safeStep(world.nav, u.pos, next, maskFor(u.owner));
@@ -254,7 +254,7 @@ export function movementSystem(world: World, dt: number): Unit[] {
     let member = st.members.get(u);
     // Other systems replace path arrays when issuing orders; stale formation caps expire automatically.
     if (member && member.path !== u.path) { st.members.delete(u); member = undefined; }
-    const speed = Math.min(speedOf(u), member?.speed ?? Infinity);
+    const speed = Math.min(speedOf(u, world), member?.speed ?? Infinity);
     const pushScale = Math.min(1, speed * 0.75 / (Math.hypot(body.pushX, body.pushZ) || 1));
     let remaining = dt;
     while (remaining > 1e-8 && u.path.length) {

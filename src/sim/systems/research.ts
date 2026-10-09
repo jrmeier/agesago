@@ -1,6 +1,6 @@
 import { BUILDINGS } from '../../core/buildings';
-import { TECHS, applyStat, type Stat, type Subject, type TechId } from '../../core/techs';
-import type { Age, Building, BuildingKind, EntityId, PlayerId, RejectReason } from '../../core/types';
+import { TECHS, hasFlag, statMods, type Stat, type Subject, type TechFlag, type TechId } from '../../core/techs';
+import type { Age, Building, BuildingKind, EntityId, PlayerId, RejectReason, UnitKind } from '../../core/types';
 import type { World } from '../World';
 import { affordable, pay } from './build';
 import { applyResearch } from './upgrades';
@@ -171,29 +171,84 @@ export function completeResearch(world: World, owner: PlayerId, tech: TechId): v
 
 // ---- statOf: base value with the owner's research applied ----
 
-const statCache = new WeakMap<World, Map<PlayerId, Map<string, number>>>();
+/** Σadd and Πmul of one stat for one subject. */
+interface Mods {
+  add: number;
+  mul: number;
+}
+
+/** Per-player modifier cache, keyed without building strings (hot loops call this per unit per tick). */
+interface PlayerMods {
+  units: Map<UnitKind, Map<Stat, Mods>>;
+  buildings: Map<BuildingKind, Map<Stat, Mods>>;
+  player: Map<Stat, Mods>;
+  /** `researched.size` when this cache was built: a mismatch means it is stale. */
+  size: number;
+}
+
+const statCache = new WeakMap<World, Map<PlayerId, PlayerMods>>();
 
 /** Forget cached stats (after loading a save or editing `researched` directly in tests). */
 export function clearStatCache(world: World): void {
   statCache.delete(world);
 }
 
-/**
- * `base` with `owner`'s researched modifiers applied: (base + Σadd) × Πmul. Cached per
- * player, subject, stat and base; invalidated whenever that player completes research.
- */
-export function statOf(world: World, owner: PlayerId, subject: Subject, stat: Stat, base: number): number {
-  const p = world.players.get(owner);
-  if (!p || p.researched.size === 0) return base;
+function playerMods(world: World, owner: PlayerId, researchedSize: number): PlayerMods {
   let perWorld = statCache.get(world);
   if (!perWorld) statCache.set(world, (perWorld = new Map()));
-  let cache = perWorld.get(owner);
-  if (!cache) perWorld.set(owner, (cache = new Map()));
-  const key = `${subject === 'player' ? 'p' : 'unit' in subject ? `u:${subject.unit}` : `b:${subject.building}`}|${stat}|${base}`;
-  let v = cache.get(key);
-  if (v === undefined) {
-    v = applyStat(p.researched, subject, stat, base);
-    cache.set(key, v);
+  let c = perWorld.get(owner);
+  // A size change catches tests (and loads) that edit `researched` without clearing the cache.
+  if (!c || c.size !== researchedSize) {
+    c = { units: new Map(), buildings: new Map(), player: new Map(), size: researchedSize };
+    perWorld.set(owner, c);
   }
-  return v;
+  return c;
+}
+
+/** `base` with `owner`'s modifiers for unit kind `kind` applied. Cheap: a few map lookups, no allocation once warm. */
+export function unitStat(world: World, owner: PlayerId, kind: UnitKind, stat: Stat, base: number): number {
+  const p = world.players.get(owner);
+  if (!p || p.researched.size === 0) return base;
+  const c = playerMods(world, owner, p.researched.size);
+  let byStat = c.units.get(kind);
+  if (!byStat) c.units.set(kind, (byStat = new Map()));
+  let m = byStat.get(stat);
+  if (!m) byStat.set(stat, (m = statMods(p.researched, { unit: kind }, stat)));
+  return (base + m.add) * m.mul;
+}
+
+/** `base` with `owner`'s modifiers for building kind `kind` applied. */
+export function buildingStat(world: World, owner: PlayerId, kind: BuildingKind, stat: Stat, base: number): number {
+  const p = world.players.get(owner);
+  if (!p || p.researched.size === 0) return base;
+  const c = playerMods(world, owner, p.researched.size);
+  let byStat = c.buildings.get(kind);
+  if (!byStat) c.buildings.set(kind, (byStat = new Map()));
+  let m = byStat.get(stat);
+  if (!m) byStat.set(stat, (m = statMods(p.researched, { building: kind }, stat)));
+  return (base + m.add) * m.mul;
+}
+
+/**
+ * `base` with `owner`'s researched modifiers applied: (base + Σadd) × Πmul. Cached per
+ * player, subject and stat; invalidated whenever that player completes research.
+ */
+export function statOf(world: World, owner: PlayerId, subject: Subject, stat: Stat, base: number): number {
+  if (subject === 'player') {
+    const p = world.players.get(owner);
+    if (!p || p.researched.size === 0) return base;
+    const c = playerMods(world, owner, p.researched.size);
+    let m = c.player.get(stat);
+    if (!m) c.player.set(stat, (m = statMods(p.researched, 'player', stat)));
+    return (base + m.add) * m.mul;
+  }
+  return 'unit' in subject
+    ? unitStat(world, owner, subject.unit, stat, base)
+    : buildingStat(world, owner, subject.building, stat, base);
+}
+
+/** Does `owner` have a tech with this flag (ballistics, machicolations)? */
+export function playerHasFlag(world: World, owner: PlayerId, flag: TechFlag): boolean {
+  const p = world.players.get(owner);
+  return !!p && p.researched.size > 0 && hasFlag(p.researched, flag);
 }

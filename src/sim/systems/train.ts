@@ -4,6 +4,7 @@ import { BALANCE } from '../balance';
 import type { World } from '../World';
 import { affordable, pay } from './build';
 import { applyRally } from './combat';
+import { ageOf, unitStat } from './research';
 
 function emitProgress(world: World, b: Building): void {
   if (b.owner !== world.localPlayer) return;
@@ -13,8 +14,13 @@ function emitProgress(world: World, b: Building): void {
     buildingId: b.id,
     queue: b.queue,
     progress: b.progress,
-    total: head ? UNITS[head].trainTime : BALANCE.trainTime,
+    total: head ? trainTime(world, b, head) : BALANCE.trainTime,
   });
+}
+
+/** Seconds for `b` to train one `kind` (its owner's research applied). */
+export function trainTime(world: World, b: Building, kind: UnitKind): number {
+  return unitStat(world, b.owner, kind, 'trainTime', UNITS[kind].trainTime);
 }
 
 /** Units queued anywhere by `owner` (they count against the pop cap before they exist). */
@@ -34,6 +40,10 @@ export function orderTrain(world: World, buildingId: EntityId, unit?: UnitKind):
   const kind = unit ?? kinds[0];
   if (!b || !b.complete || !kind || !kinds.includes(kind)) {
     world.events.emit({ type: 'rejected', reason: 'invalid-target' });
+    return;
+  }
+  if ((UNITS[kind].age ?? 0) > ageOf(world, b.owner)) {
+    if (b.owner === world.localPlayer) world.events.emit({ type: 'rejected', reason: 'age' });
     return;
   }
   if (world.popOf(b.owner) + queuedBy(world, b.owner) >= world.popCapOf(b.owner)) {
@@ -78,7 +88,7 @@ export function trainSystem(world: World, dt: number): void {
     if (b.queue <= 0 || b.research?.length) continue;
     const kind = b.queueKinds?.[0] ?? 'villager';
     b.progress += dt;
-    if (b.progress >= UNITS[kind].trainTime - 1e-9) {
+    if (b.progress >= trainTime(world, b, kind) - 1e-9) {
       b.queue--;
       b.queueKinds?.shift();
       b.progress = 0;
