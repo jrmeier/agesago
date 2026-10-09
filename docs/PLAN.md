@@ -49,13 +49,13 @@ src/
 
 | Question | Default |
 |---|---|
-| Sprite art | Procedural canvas sprites for M1; real art is an M2 item once a source/licence is chosen |
+| Unit/resource art | **Low-poly 3D models built in code** (owner decision) — billboards look like cardboard in first person |
 | Pathfinding | Grid A* in M1 so villagers don't walk on the lake/river; the river gets one ford |
 | `A` key | Select-all in RTS mode, strafe in first person |
 | First person | Observer only — no selection or orders |
 | Training | 50 food, 8 s, pop cap 25 |
 | Economy | Carry 10, 1 unit per 0.8 s, starting stock 0 food / 0 wood / 0 gold |
-| Billboards | Y-axis billboards, not `THREE.Sprite` (spherical sprites look wrong in both cameras) |
+| Platforms | **Desktop, phones and tablets** (owner decision) — touch gestures + responsive HUD in M1 |
 | Shadows | Off through M1 (hundreds of trees); blob shadows under units |
 
 ## M1 — Smallest playable slice (builds, deploys, does what the README says)
@@ -68,11 +68,13 @@ src/
 | T4 | Rendering | Render | M | Terrain mesh matches `heightAt`; water plane; Y-billboard sprites anchored at feet; ~400 trees via instancing at ≥55 fps; selection rings; move marker; `pick` / `idsInRect` |
 | T5 | Cameras | Controls | M | Zoom keeps the terrain point under the cursor; RMB-drag & Space-drag pan; 18 px edge scroll (ignores HUD buttons); clamps; F toggles a terrain-following observer and restores the RTS pose |
 | T6 | Input, selection, HUD | Controls | M | Click / 5 px box / A select; RMB on node = gather, on ground = move, drag = pan (no order); T and button share `train`; counters + selection panel update from events; button dims below 50 food |
+| T8 | Low-poly 3D models | Models | M | `render/models.ts`: 3+ tree variants, stump, berry bush, gold pile (instanced), animated villager (walk/chop/forage/mine, carried bundle); swapped into EntityViews |
+| T9 | Touch + mobile HUD | Touch | M | Tap select/order, one-finger pan, pinch zoom, long-press box select; FPS joystick; on-screen buttons; 360 px+ layout with safe areas; desktop unchanged |
 | T7 | Integration + deploy | Integrator | S | Real wiring in `Game.ts`; `npm ci && npm run build` clean; live at https://agesago.jedm.dev; README controls table checked row by row |
 
 ## M2 — Feels like an RTS
 
-Group formations, walk/chop animation, carried-resource indicator, stump on depleted trees, minimap, real sprite art + `ASSETS.md`, multi-seed validation (seeds 1–20 valid), pause/speed.
+Group formations, walk/chop animation, carried-resource indicator, stump on depleted trees, minimap, multi-seed validation (seeds 1–20 valid), pause/speed.
 
 ## M3 — Content
 
