@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { BUILDINGS, FARM_FOOD, footprint } from '../core/buildings';
 import { SEA_LEVEL, type BuildingKind, type Heightfield, type Vec2 } from '../core/types';
-import { buildingModel, foundationModel } from './buildings';
+import { buildingModel, foundationModel, modelTier } from './buildings';
+import { prefersReducedMotion } from './tiers';
 
 /** Placement ghost tints. Outline uses these directly; the model lerps toward them. */
 export const GHOST_VALID = 0x3cba6a;
@@ -15,6 +16,10 @@ export const CROP_THIN = 0xc6a24a;
 
 const boxCache = new Map<string, THREE.BoxGeometry>();
 const BANNER_POLE = new THREE.CylinderGeometry(0.04, 0.05, 1, 5);
+const HEARTH_GLOW = new THREE.BoxGeometry(0.5, 0.26, 0.05);
+const SMOKE_PUFF = new THREE.IcosahedronGeometry(0.16, 0);
+HEARTH_GLOW.userData.shared = 1;
+SMOKE_PUFF.userData.shared = 1;
 const BANNER_CLOTH = new THREE.BoxGeometry(0.62, 0.34, 0.05);
 BANNER_POLE.userData.shared = 1;
 BANNER_CLOTH.userData.shared = 1;
@@ -27,6 +32,12 @@ export interface BuildingVisual {
   setFarmFood(food: number): void;
   /** Billboard progress bar. Shown while the building is selected or still under construction. */
   setBar(show: boolean, progress: number, camera: THREE.Camera): void;
+  /**
+   * Swap to the model for an upgrade tier (watch tower 0..2, town centre 0..1) in place.
+   * Returns true when meshes were replaced, so the caller can re-apply fog and shadows.
+   */
+  setTier(tier: number): boolean;
+  readonly tier: number;
 }
 
 /** Lowest terrain sample under the rotated footprint, clamped to sea level. */
@@ -48,19 +59,22 @@ export function footprintMinY(hf: Heightfield, kind: BuildingKind, pos: Vec2, ro
   return min === Infinity ? SEA_LEVEL : min;
 }
 
-export function createBuildingVisual(kind: BuildingKind, color?: number): BuildingVisual {
+export function createBuildingVisual(kind: BuildingKind, color?: number, tier = 0): BuildingVisual {
   const root = new THREE.Group();
   root.name = kind === 'townCenter' ? 'town-center' : `building:${kind}`;
-  const stages = foundationModel(kind);
-  const foundation = stages.object;
+  let currentTier = modelTier(kind, tier);
+  let stages = foundationModel(kind, { tier: currentTier });
+  let foundation = stages.object;
   foundation.name = 'foundation';
   ownMaterials(foundation);
-  const finished = finishedFor(kind, color);
+  let finished = finishedFor(kind, color, currentTier);
   const bar = progressBar();
   const top = modelTop(finished);
   bar.position.y = top + 0.55;
   root.add(foundation, finished, bar);
   if (color !== undefined) addBanner(root, kind, color);
+  let lastProgress = 1;
+  let lastComplete = true;
 
   const crops = finished.getObjectByName('crops');
   const cropMat = (crops?.userData.cropMat as THREE.MeshLambertMaterial | undefined) ?? null;
@@ -69,7 +83,29 @@ export function createBuildingVisual(kind: BuildingKind, color?: number): Buildi
 
   const visual: BuildingVisual = {
     object: root,
+    get tier(): number {
+      return currentTier;
+    },
+    setTier(next: number): boolean {
+      const t = modelTier(kind, next);
+      if (t === currentTier) return false;
+      currentTier = t;
+      root.remove(foundation, finished);
+      disposeTree(foundation);
+      disposeTree(finished);
+      stages = foundationModel(kind, { tier: t });
+      foundation = stages.object;
+      foundation.name = 'foundation';
+      ownMaterials(foundation);
+      finished = finishedFor(kind, color, t);
+      root.add(foundation, finished);
+      bar.position.y = modelTop(finished) + 0.55;
+      visual.setProgress(lastProgress, lastComplete);
+      return true;
+    },
     setProgress(progress: number, complete: boolean): void {
+      lastProgress = progress;
+      lastComplete = complete;
       const p = complete ? 1 : clamp01(progress);
       const done = complete || p >= 0.999;
       // Staked footprint → plinth → timber frame/scaffold → nearly finished, then the finished model.
@@ -149,14 +185,63 @@ export function tintGhost(ghost: THREE.Group, valid: boolean): void {
   });
 }
 
-function finishedFor(kind: BuildingKind, color?: number): THREE.Object3D {
+function finishedFor(kind: BuildingKind, color?: number, tier = 0): THREE.Object3D {
   const group = new THREE.Group();
   group.name = 'finished';
   // Farms keep the animated tilled field (crops track food); other kinds use the ancient-world models.
-  const model = kind === 'farm' ? farmField() : buildingModel(kind, { seed: 1, color } as { seed?: number });
+  const model = kind === 'farm' ? farmField() : buildingModel(kind, { seed: 1, color, tier });
   if (kind !== 'farm') ownMaterials(model);
   group.add(model);
+  if (kind === 'forge') addForgeEffects(group, model.userData.anchors as Record<string, [number, number, number]> | undefined);
   return group;
+}
+
+/**
+ * Hearth glow (unlit, so it reads at dusk) and one looping chimney puff. Both animate in
+ * onBeforeRender, so an off-screen forge costs nothing; reduced motion holds them still.
+ */
+function addForgeEffects(group: THREE.Group, anchors?: Record<string, [number, number, number]>): void {
+  if (!anchors?.hearth || !anchors.chimney) return;
+  const still = prefersReducedMotion();
+  const glowMat = new THREE.MeshBasicMaterial({ color: 0xff8a2a });
+  const glow = new THREE.Mesh(HEARTH_GLOW, glowMat);
+  glow.name = 'hearth-glow';
+  glow.position.set(...anchors.hearth);
+  glow.castShadow = false;
+  const hot = new THREE.Color(0xffb04a);
+  const warm = new THREE.Color(0xe8611c);
+  glow.onBeforeRender = () => {
+    if (still) return;
+    const t = performance.now() / 1000;
+    glowMat.color.copy(warm).lerp(hot, 0.5 + 0.3 * Math.sin(t * 7.3) + 0.2 * Math.sin(t * 13.1));
+  };
+  const smokeMat = new THREE.MeshLambertMaterial({ color: 0xd9d5cc, transparent: true, opacity: 0.45, depthWrite: false });
+  const smoke = new THREE.Mesh(SMOKE_PUFF, smokeMat);
+  smoke.name = 'chimney-smoke';
+  smoke.userData.noShadow = 1;
+  smoke.castShadow = smoke.receiveShadow = false;
+  const [sx, sy, sz] = anchors.chimney;
+  const place = (k: number): void => {
+    smoke.position.set(sx + k * 0.25, sy + 0.12 + k * 0.95, sz - k * 0.1);
+    smoke.scale.setScalar(0.7 + k * 1.1);
+    smokeMat.opacity = 0.5 * (1 - k);
+  };
+  place(0.3);
+  smoke.onBeforeRender = () => {
+    if (still) return;
+    place(((performance.now() / 1000) / 2.6) % 1);
+  };
+  group.add(glow, smoke);
+}
+
+function disposeTree(root: THREE.Object3D): void {
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    if (mesh.geometry && !mesh.geometry.userData.shared) mesh.geometry.dispose();
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const mat of mats) mat.dispose();
+  });
 }
 
 /** Cloth banner in the owner's colour. Placement ghosts omit it (no colour passed). */

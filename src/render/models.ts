@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { TREE_FOLIAGE, TREE_TRUNK, VILLAGER } from './palette';
+import { applyRole, mergeTagged, tag } from './tiers';
 
 export type Triple = [number, number, number];
 
@@ -13,7 +14,7 @@ export const modelMaterial = (): THREE.MeshLambertMaterial =>
   new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
 
 /** Procedural villager animation states. */
-export type VillagerPose = 'idle' | 'walk' | 'chop' | 'forage' | 'mine' | 'build';
+export type VillagerPose = 'idle' | 'walk' | 'chop' | 'forage' | 'mine' | 'build' | 'farm';
 export type VillagerCarry = 'wood' | 'food' | 'gold' | 'stone' | null;
 
 /** A ground-anchored villager facing +z; animate without changing its world transform. */
@@ -411,17 +412,24 @@ export function createVillager(opts?: { color?: number; tunic?: number; skin?: n
   mesh(armGeometry, leftArm, 'left-sleeve-hand');
   mesh(armGeometry, rightArm, 'right-sleeve-hand');
 
-  const axe = mesh(merge([
+  // Tool heads are tagged so research can retint them in place (flint → bronze → iron).
+  const axe = mesh(mergeTagged([
     part(new THREE.CylinderGeometry(0.013, 0.016, 0.29, 4), TREE_TRUNK, [0, -0.355, 0]),
-    part(new THREE.BoxGeometry(0.13, 0.085, 0.03), 0x888579, [0.043, -0.47, 0]),
-    part(new THREE.BoxGeometry(0.035, 0.105, 0.04), 0xbfae8e, [0.108, -0.47, 0]),
+    tag(part(new THREE.BoxGeometry(0.13, 0.085, 0.03), 0x888579, [0.043, -0.47, 0]), 'axe', 0x888579),
+    tag(part(new THREE.BoxGeometry(0.035, 0.105, 0.04), 0xbfae8e, [0.108, -0.47, 0]), 'axe', 0x888579),
   ]), rightArm, 'axe');
-  const pick = mesh(merge([
+  const pick = mesh(mergeTagged([
     part(new THREE.CylinderGeometry(0.013, 0.016, 0.3, 4), TREE_TRUNK, [0, -0.355, 0]),
-    part(new THREE.BoxGeometry(0.16, 0.035, 0.035), 0x888579, [0, -0.49, 0]),
-    part(new THREE.ConeGeometry(0.025, 0.1, 4), 0xbfae8e, [-0.1, -0.51, 0], [1, 1, 1], [0, 0, 1.1]),
-    part(new THREE.ConeGeometry(0.025, 0.1, 4), 0xbfae8e, [0.1, -0.51, 0], [1, 1, 1], [0, 0, -1.1]),
+    tag(part(new THREE.BoxGeometry(0.16, 0.035, 0.035), 0x888579, [0, -0.49, 0]), 'pick', 0x888579),
+    tag(part(new THREE.ConeGeometry(0.025, 0.1, 4), 0xbfae8e, [-0.1, -0.51, 0], [1, 1, 1], [0, 0, 1.1]), 'pick', 0x888579),
+    tag(part(new THREE.ConeGeometry(0.025, 0.1, 4), 0xbfae8e, [0.1, -0.51, 0], [1, 1, 1], [0, 0, -1.1]), 'pick', 0x888579),
   ]), rightArm, 'pick');
+  // A short-handled sickle for field work; the crescent blade follows the farming chain.
+  const sickle = mesh(mergeTagged([
+    part(new THREE.BoxGeometry(0.026, 0.16, 0.026), TREE_TRUNK, [0, -0.3, 0.02]),
+    tag(part(new THREE.TorusGeometry(0.075, 0.012, 3, 4, Math.PI * 1.1), 0x888579,
+      [0.0, -0.43, 0.06], [1, 1, 0.6], [0, Math.PI / 2, 0.3]), 'sickle', 0x888579),
+  ]), rightArm, 'sickle');
   const mallet = mesh(merge([
     part(new THREE.BoxGeometry(0.028, 0.25, 0.028), TREE_TRUNK, [0, -0.34, 0]),
     part(new THREE.BoxGeometry(0.17, 0.09, 0.09), 0x94714a, [0, -0.45, 0]),
@@ -483,6 +491,11 @@ export function createVillager(opts?: { color?: number; tunic?: number; skin?: n
       rightArm.rotation.x = -0.65 - work * 1.55;
       leftArm.rotation.x = -0.8;
       body.rotation.x = 0.13 + (1 - work) * 0.07;
+    } else if (state === 'farm') {
+      // Stooped reaping: the sickle sweeps low across the crop.
+      body.rotation.x = 0.3 + (1 - work) * 0.08;
+      leftArm.rotation.x = -0.75;
+      rightArm.rotation.set(-0.55 - work * 0.75, 0, -0.08 - work * 0.35);
     } else if (state === 'forage') {
       leftLeg.rotation.set(0.95, 0, 0.12);
       rightLeg.rotation.set(0.95, 0, -0.12);
@@ -496,6 +509,7 @@ export function createVillager(opts?: { color?: number; tunic?: number; skin?: n
     axe.visible = state === 'chop';
     pick.visible = state === 'mine';
     mallet.visible = state === 'build';
+    sickle.visible = state === 'farm';
     wood.visible = carry === 'wood';
     food.visible = carry === 'food';
     gold.visible = carry === 'gold';
@@ -563,7 +577,9 @@ export function createScout(opts?: { color?: number; cloak?: number; seed?: numb
   const rig = pivot(object, 'rig', [0, 0, 0]);
   // Pitch around the horse's chest, then ground the rig using the animated hooves.
   const horse = pivot(rig, 'horse', [0, 0.98, -0.1]);
-  mesh(merge([
+  mesh(mergeTagged([
+    // Bronze peytral over the chest, hidden until the first cavalry-armour tech.
+    tag(part(new THREE.BoxGeometry(0.36, 0.2, 0.05), 0xe4d9bd, [0, -0.02, 0.6], [1, 1, 1], [-0.35, 0, 0]), 'jerkin', 0xe4d9bd),
     part(new THREE.IcosahedronGeometry(1, 0), coat, [0, 0.02, -0.03], [0.3, 0.27, 0.62]),
     part(new THREE.IcosahedronGeometry(1, 0), coat, [0, 0.06, 0.37], [0.26, 0.24, 0.25]),
     part(new THREE.IcosahedronGeometry(1, 0), coat, [0, 0.02, -0.38], [0.29, 0.24, 0.29]),
@@ -629,10 +645,10 @@ export function createScout(opts?: { color?: number; cloak?: number; seed?: numb
   ]), tail, 'horse-tail');
 
   const rider = pivot(horse, 'rider', [0, 0.28, -0.04]);
-  mesh(merge([
-    part(new THREE.CylinderGeometry(0.115, 0.16, 0.31, 6), 0xe4d9bd, [0, 0.155, 0]),
+  mesh(mergeTagged([
+    tag(part(new THREE.CylinderGeometry(0.115, 0.16, 0.31, 6), 0xe4d9bd, [0, 0.155, 0]), 'armor', 0xe4d9bd),
     part(new THREE.CylinderGeometry(0.16, 0.165, 0.025, 6), cloakColor, [0, 0.007, 0]),
-    part(new THREE.BoxGeometry(0.26, 0.026, 0.21), leather, [0, 0.12, 0]),
+    tag(part(new THREE.BoxGeometry(0.26, 0.026, 0.21), leather, [0, 0.12, 0]), 'trim', leather),
     part(new THREE.BoxGeometry(0.038, 0.03, 0.015), bronze, [0, 0.12, 0.11]),
     part(new THREE.BoxGeometry(0.07, 0.06, 0.07), skin, [0, 0.346, 0]),
     part(new THREE.BoxGeometry(0.17, 0.18, 0.16), skin, [0, 0.46, 0]),
@@ -658,6 +674,7 @@ export function createScout(opts?: { color?: number; cloak?: number; seed?: numb
       part(new THREE.BoxGeometry(0.22, 0.025, 0.185), bronze, [0, 0.559, -0.008]),
       ...[-1, 1].map(side => part(new THREE.BoxGeometry(0.024, 0.115, 0.065), bronze, [side * 0.098, 0.486, -0.018])),
       part(new THREE.BoxGeometry(0.18, 0.08, 0.026), bronze, [0, 0.504, -0.09]),
+      tag(part(new THREE.BoxGeometry(0.03, 0.06, 0.2), 0x8a2a1c, [0, 0.66, -0.01]), 'crest', 0x8a2a1c),
     ]),
   ]), rider, 'rider-tunic-head');
 
@@ -676,6 +693,7 @@ export function createScout(opts?: { color?: number; cloak?: number; seed?: numb
     part(new THREE.ConeGeometry(0.028, 0.12, 4), bronze, [0.13, 0.665, 0.3], [1, 1, 0.5], [0.16, 0, 0]),
   ]), rider, 'javelin');
 
+  hideOptional(object);
   // Precompute hoof bounds once. The pose loop allocates no geometry or objects.
   const hoofCorners: THREE.Vector3[] = [];
   const bounds = lowerLegGeometry.boundingBox!;
@@ -780,6 +798,12 @@ export function projectileGeometry(kind: 'arrow' | 'stone' | 'javelin'): THREE.B
   return geometry;
 }
 
+/** Tier 0 look: crests and jerkins/barding stay collapsed until research shows them. */
+function hideOptional(object: THREE.Object3D): void {
+  applyRole(object, 'crest', null, false);
+  applyRole(object, 'jerkin', null, false);
+}
+
 /** Cache neutral local bounds once; falling poses do no scene traversal or allocation. */
 function fallingPose(object: THREE.Group, rig: THREE.Group): (progress: number) => void {
   object.updateMatrixWorld(true);
@@ -860,7 +884,7 @@ export function createSoldier(kind: SoldierKind, opts?: { color?: number; seed?:
     return group;
   }
   function mesh(pieces: THREE.BufferGeometry[], parent: THREE.Object3D, name: string): THREE.Mesh {
-    const result = new THREE.Mesh(merge(pieces), material);
+    const result = new THREE.Mesh(mergeTagged(pieces), material);
     result.name = name;
     result.castShadow = result.receiveShadow = true;
     parent.add(result);
@@ -868,10 +892,12 @@ export function createSoldier(kind: SoldierKind, opts?: { color?: number; seed?:
   }
   const body = pivot(rig, 'body', [0, 0.38, 0]);
   const armored = kind === 'hoplite' || kind === 'swordsman';
+  const torsoBase = part(new THREE.CylinderGeometry(0.115, 0.15, 0.31, 6), armored ? linen : color, [0, 0.155, 0]);
   const torso = [
-    part(new THREE.CylinderGeometry(0.115, 0.15, 0.31, 6), armored ? linen : color, [0, 0.155, 0]),
+    armored ? tag(torsoBase, 'armor', linen) : torsoBase,
     part(new THREE.CylinderGeometry(0.15, 0.155, 0.04, 6), color, [0, 0.012, 0]),
-    part(new THREE.BoxGeometry(0.25, 0.025, 0.21), leather, [0, 0.11, 0]),
+    // The belt takes the unit-line trim colour (bronze, then gold).
+    tag(part(new THREE.BoxGeometry(0.25, 0.025, 0.21), leather, [0, 0.11, 0]), 'trim', leather),
     part(new THREE.BoxGeometry(0.07, 0.055, 0.07), skin, [0, 0.332, 0]),
     part(new THREE.BoxGeometry(0.17, 0.18, 0.16), skin, [0, 0.43, 0]),
     part(new THREE.BoxGeometry(0.035, 0.035, 0.025), skin, [0, 0.43, 0.09]),
@@ -883,15 +909,25 @@ export function createSoldier(kind: SoldierKind, opts?: { color?: number; seed?:
     for (const side of [-1, 1]) torso.push(part(new THREE.BoxGeometry(0.037, 0.13, 0.065), bronze, [side * 0.082, 0.444, 0.044], [0, 0, side * 0.15]));
     if (kind === 'hoplite') {
       torso.push(part(new THREE.BoxGeometry(0.023, 0.108, 0.025), bronze, [0, 0.462, 0.092]));
-      torso.push(part(new THREE.BoxGeometry(0.27, 0.18, 0.215), linen, [0, 0.24, -0.01]));
-      for (const side of [-1, 1]) torso.push(part(new THREE.BoxGeometry(0.045, 0.22, 0.23), 0xc9c2a9, [side * 0.085, 0.23, 0]));
+      torso.push(tag(part(new THREE.BoxGeometry(0.27, 0.18, 0.215), linen, [0, 0.24, -0.01]), 'armor', linen));
+      for (const side of [-1, 1]) torso.push(tag(part(new THREE.BoxGeometry(0.045, 0.22, 0.23), 0xc9c2a9, [side * 0.085, 0.23, 0]), 'armor', linen));
+      // Transverse horsehair crest, shown from the first line upgrade.
+      torso.push(tag(part(new THREE.BoxGeometry(0.03, 0.05, 0.2), 0x8a2a1c, [0, 0.578, -0.012]), 'crest', 0x8a2a1c));
     } else {
       torso.push(part(new THREE.BoxGeometry(0.04, 0.07, 0.21), color, [0, 0.579, -0.008]));
-      torso.push(part(new THREE.BoxGeometry(0.245, 0.24, 0.19), 0xa99a78, [0, 0.205, 0]));
+      torso.push(tag(part(new THREE.BoxGeometry(0.245, 0.24, 0.19), 0xa99a78, [0, 0.205, 0]), 'armor', 0xa99a78));
+      // Side plumes either side of the team crest, shown from the first line upgrade.
+      for (const side of [-1, 1]) {
+        torso.push(tag(part(new THREE.BoxGeometry(0.018, 0.06, 0.03), 0x8a2a1c, [side * 0.1, 0.565, -0.01], [1, 1, 1], [0, 0, side * -0.3]), 'crest', 0x8a2a1c));
+      }
     }
   } else {
     torso.push(part(new THREE.BoxGeometry(0.185, kind === 'slinger' ? 0.06 : 0.052, 0.175), hair,
       [0, kind === 'slinger' ? 0.54 : 0.52, -0.004]));
+    // A padded jerkin over the tunic, hidden until the first archer-armour tech.
+    torso.push(tag(part(new THREE.BoxGeometry(0.255, 0.15, 0.215), linen, [0, 0.215, 0]), 'jerkin', linen));
+    // A feather in the cap or headband for the line upgrade.
+    torso.push(tag(part(new THREE.BoxGeometry(0.016, 0.11, 0.04), 0x8a2a1c, [0.07, 0.6, -0.04], [1, 1, 1], [-0.35, 0, -0.3]), 'crest', 0x8a2a1c));
     if (kind === 'archer') {
       torso.push(part(new THREE.ConeGeometry(0.112, 0.14, 5), color, [0, 0.535, -0.015], [1, 1, 0.88], [-0.25, 0, 0]));
       torso.push(part(new THREE.CylinderGeometry(0.058, 0.045, 0.28, 5), leather, [0.11, 0.18, -0.145], [1, 1, 1], [0, 0, -0.2]));
@@ -957,13 +993,14 @@ export function createSoldier(kind: SoldierKind, opts?: { color?: number; seed?:
     bow.add(nockedArrow);
   }
   if (armored) mesh([
-    part(new THREE.CylinderGeometry(0.235, 0.235, 0.045, 10), bronze, [0, -0.17, 0.11],
-      [kind === 'swordsman' ? 0.77 : 1, 1, kind === 'swordsman' ? 1.32 : 1], [Math.PI / 2, 0, 0]),
+    tag(part(new THREE.CylinderGeometry(0.235, 0.235, 0.045, 10), bronze, [0, -0.17, 0.11],
+      [kind === 'swordsman' ? 0.77 : 1, 1, kind === 'swordsman' ? 1.32 : 1], [Math.PI / 2, 0, 0]), 'rim', bronze),
     part(new THREE.CylinderGeometry(0.208, 0.208, 0.015, 10), color, [0, -0.17, 0.142],
       [kind === 'swordsman' ? 0.77 : 1, 1, kind === 'swordsman' ? 1.32 : 1], [Math.PI / 2, 0, 0]),
     part(new THREE.IcosahedronGeometry(0.06, 0), bronze, [0, -0.17, 0.158], [1, 1, 0.45]),
   ], leftArm, kind === 'hoplite' ? 'aspis' : 'oval-shield');
 
+  hideOptional(object);
   const legBounds = (legs[0].children[0] as THREE.Mesh).geometry.boundingBox!;
   const footCorners: THREE.Vector3[] = [];
   for (const x of [legBounds.min.x, legBounds.max.x]) for (const y of [legBounds.min.y, legBounds.max.y]) {
@@ -1035,6 +1072,148 @@ export function createSoldier(kind: SoldierKind, opts?: { color?: number; seed?:
     if (pose === 'die') fall?.(typeof extra === 'number' ? extra : extra?.progress ?? 0);
   }
   setPose('die', 0, 0);
+  fall = fallingPose(object, rig);
+  setPose('idle', 0);
+  return { object, setPose };
+}
+
+/**
+ * Two-wheeled donkey cart for market trade, facing +z: the donkey leads, the cart
+ * follows with a load of amphorae under a team-colour cloth. One material, as the
+ * soldiers; walking swings the legs and turns the wheels, and 'die' tips it over.
+ */
+export function createTradeCart(opts?: { color?: number; seed?: number }): SoldierModel {
+  const seed = Math.abs(Math.trunc(opts?.seed ?? 1));
+  const color = opts?.color ?? 0x9e3b26;
+  const random = seededRandom(seed + 307);
+  const phase = random() * Math.PI * 2;
+  const coat = [0x8d8273, 0x6f6458, 0xa39887][seed % 3];
+  const leather = 0x493623, wood = 0x82603b, clay = [0xa95136, 0xbe6944];
+  const material = modelMaterial();
+  const object = new THREE.Group();
+  object.name = 'tradeCart';
+  const rig = new THREE.Group();
+  rig.name = 'soldierRig';
+  object.add(rig);
+  function pivot(parent: THREE.Object3D, name: string, pos: Triple): THREE.Group {
+    const group = new THREE.Group();
+    group.name = name;
+    group.position.set(...pos);
+    parent.add(group);
+    return group;
+  }
+  function mesh(pieces: THREE.BufferGeometry[], parent: THREE.Object3D, name: string): THREE.Mesh {
+    const result = new THREE.Mesh(merge(pieces), material);
+    result.name = name;
+    result.castShadow = result.receiveShadow = true;
+    parent.add(result);
+    return result;
+  }
+
+  // Donkey: a squat barrel body, big ears and a dark mane stripe.
+  const donkey = pivot(rig, 'donkey', [0, 0.51, 0.36]);
+  mesh([
+    part(new THREE.IcosahedronGeometry(1, 0), coat, [0, 0, 0], [0.19, 0.18, 0.36]),
+    part(new THREE.BoxGeometry(0.12, 0.26, 0.14), coat, [0, 0.14, 0.3], [1, 1, 1], [0.5, 0, 0]),
+    part(new THREE.BoxGeometry(0.13, 0.12, 0.26), coat, [0, 0.27, 0.45], [1, 1, 1], [0.25, 0, 0]),
+    part(new THREE.BoxGeometry(0.11, 0.08, 0.06), 0xd8cbb3, [0, 0.22, 0.58]),
+    part(new THREE.BoxGeometry(0.04, 0.1, 0.24), 0x302b27, [0, 0.27, 0.27], [1, 1, 1], [0.5, 0, 0]),
+    ...[-1, 1].map(side => part(new THREE.ConeGeometry(0.035, 0.17, 4), coat,
+      [side * 0.05, 0.4, 0.38], [1, 1, 0.5], [-0.25, 0, side * -0.3])),
+    part(new THREE.BoxGeometry(0.03, 0.2, 0.03), 0x302b27, [0, -0.05, -0.38], [1, 1, 1], [0.35, 0, 0]),
+    // Collar and harness strap in team colour.
+    part(new THREE.BoxGeometry(0.2, 0.05, 0.08), color, [0, 0.1, 0.22], [1, 1, 1], [0.5, 0, 0]),
+    part(new THREE.BoxGeometry(0.4, 0.035, 0.06), leather, [0, 0.0, 0.12]),
+  ], donkey, 'donkey-body');
+  const legGeometry = merge([
+    part(new THREE.BoxGeometry(0.06, 0.38, 0.06), coat, [0, -0.19, 0]),
+    part(new THREE.BoxGeometry(0.07, 0.05, 0.08), 0x302b27, [0, -0.385, 0.01]),
+  ]);
+  const legs = [[-0.09, 0.2], [0.09, 0.2], [-0.09, -0.22], [0.09, -0.22]].map(([x, z], i) => {
+    const leg = pivot(donkey, `donkeyLeg${i}`, [x, -0.1, z]);
+    const m = new THREE.Mesh(legGeometry, material);
+    m.name = 'donkey-leg';
+    m.castShadow = m.receiveShadow = true;
+    leg.add(m);
+    return leg;
+  });
+
+  // Cart: plank bed with side boards, shafts to the harness, axle under the load.
+  const cart = pivot(rig, 'cart', [0, 0, -0.56]);
+  const load: THREE.BufferGeometry[] = [
+    part(new THREE.BoxGeometry(0.66, 0.05, 0.78), wood, [0, 0.42, 0]),
+    ...[-1, 1].flatMap(side => [
+      part(new THREE.BoxGeometry(0.035, 0.16, 0.78), TREE_TRUNK, [side * 0.33, 0.52, 0]),
+      // Shafts run forward to the donkey's flanks.
+      coloredRod(TREE_TRUNK, [side * 0.24, 0.43, 0.38], [side * 0.15, 0.6, 1.0], 0.018),
+    ]),
+    part(new THREE.BoxGeometry(0.66, 0.16, 0.035), TREE_TRUNK, [0, 0.52, -0.38]),
+    part(new THREE.BoxGeometry(0.84, 0.04, 0.04), leather, [0, 0.3, 0]),
+    part(new THREE.BoxGeometry(0.035, 0.32, 0.035), TREE_TRUNK, [0, 0.21, -0.33]),
+  ];
+  // Upright amphorae packed in straw, a sack and a team cloth thrown over the rear load.
+  for (const [x, z, s] of [[-0.17, 0.2, 1], [0.15, 0.22, 0.9], [0.0, -0.02, 1.05]] as const) {
+    load.push(part(new THREE.CylinderGeometry(0.07 * s, 0.04 * s, 0.1 * s, 6), clay[0], [x, 0.5 * 1, z]));
+    load.push(part(new THREE.CylinderGeometry(0.055 * s, 0.1 * s, 0.2 * s, 6), clay[1], [x, 0.5 + 0.15 * s, z]));
+    load.push(part(new THREE.CylinderGeometry(0.035 * s, 0.05 * s, 0.1 * s, 5), clay[0], [x, 0.5 + 0.3 * s, z]));
+  }
+  load.push(part(new THREE.IcosahedronGeometry(0.13, 0), 0xc8b58c, [0.16, 0.55, -0.05], [1, 0.75, 1]));
+  load.push(part(new THREE.BoxGeometry(0.62, 0.17, 0.32), color, [0, 0.58, -0.22]));
+  for (const side of [-1, 1]) {
+    load.push(part(new THREE.BoxGeometry(0.02, 0.2, 0.3), color, [side * 0.35, 0.5, -0.22], [1, 1, 1], [0, 0, side * 0.12]));
+  }
+  load.push(part(new THREE.BoxGeometry(0.64, 0.02, 0.04), 0xd8c5a0, [0, 0.67, -0.1]));
+  mesh(load, cart, 'cart-load');
+  const wheelGeometry = merge([
+    part(new THREE.CylinderGeometry(0.27, 0.27, 0.05, 10), wood, [0, 0, 0], [1, 1, 1], [0, 0, Math.PI / 2]),
+    part(new THREE.CylinderGeometry(0.06, 0.06, 0.09, 6), TREE_TRUNK, [0, 0, 0], [1, 1, 1], [0, 0, Math.PI / 2]),
+    part(new THREE.BoxGeometry(0.055, 0.5, 0.04), TREE_TRUNK, [0, 0, 0]),
+    part(new THREE.BoxGeometry(0.055, 0.04, 0.5), TREE_TRUNK, [0, 0, 0]),
+  ]);
+  const wheels = [-1, 1].map(side => {
+    const wheel = pivot(cart, side < 0 ? 'leftWheel' : 'rightWheel', [side * 0.43, 0.27, 0]);
+    const m = new THREE.Mesh(wheelGeometry, material);
+    m.name = 'wheel';
+    m.castShadow = m.receiveShadow = true;
+    wheel.add(m);
+    return wheel;
+  });
+
+  const legBounds = legGeometry.boundingBox!;
+  const hoofCorners: THREE.Vector3[] = [];
+  for (const x of [legBounds.min.x, legBounds.max.x]) for (const y of [legBounds.min.y, legBounds.max.y]) {
+    for (const z of [legBounds.min.z, legBounds.max.z]) hoofCorners.push(new THREE.Vector3(x, y, z));
+  }
+  const point = new THREE.Vector3();
+  const hoof = new THREE.Matrix4();
+  let fall: ((progress: number) => void) | undefined;
+  function setPose(pose: SoldierPose, t: number, extra?: SoldierPoseExtra): void {
+    const time = Number.isFinite(t) ? t : 0;
+    const walking = pose === 'walk';
+    const cycle = time * Math.PI * 2 * 1.4 + phase;
+    rig.rotation.set(0, 0, 0);
+    rig.position.set(0, 0, 0);
+    donkey.rotation.set(walking ? Math.sin(cycle * 2) * 0.02 : 0, 0, 0);
+    legs.forEach((leg, i) => {
+      const offset = i === 0 || i === 3 ? 0 : Math.PI;
+      leg.rotation.set(walking ? Math.sin(cycle + offset) * 0.42 : 0, 0, 0);
+    });
+    // Rolling without slip at about 1.1 m/s for the walk cycle.
+    const roll = walking ? -(time * 1.1) / 0.27 : 0;
+    for (const wheel of wheels) wheel.rotation.set(roll, 0, 0);
+    cart.rotation.set(walking ? Math.sin(cycle * 2) * 0.008 : 0, 0, 0);
+    donkey.updateMatrix();
+    let sole = Infinity;
+    for (const leg of legs) {
+      leg.updateMatrix();
+      hoof.multiplyMatrices(donkey.matrix, leg.matrix);
+      for (const corner of hoofCorners) sole = Math.min(sole, point.copy(corner).applyMatrix4(hoof).y);
+    }
+    // Wheels (radius 0.27 at axle height 0.27) and hooves both meet the ground.
+    rig.position.y = Math.max(0, -sole);
+    if (pose === 'die') fall?.(typeof extra === 'number' ? extra : extra?.progress ?? 0);
+  }
+  setPose('idle', 0);
   fall = fallingPose(object, rig);
   setPose('idle', 0);
   return { object, setPose };
