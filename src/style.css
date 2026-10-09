@@ -2703,6 +2703,9 @@ body.touch .resign-btn {
 
 .market-panel {
   flex: 1 0 100%;
+  /* Fill the panel's row without widening it; the other contents set the width. */
+  contain: inline-size;
+  min-width: 360px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2850,8 +2853,16 @@ body.touch .market-btn {
   min-height: 48px;
 }
 
+body.touch .market-head {
+  flex: 1 0 100%;
+}
+
+body.touch .market-select,
+body.touch .market-send {
+  flex: 1 1 40%;
+}
+
 body.touch .market-select {
-  flex: 1 1 110px;
   min-height: 44px;
   font-size: 15px;
 }
@@ -2862,4 +2873,5 @@ body.touch .market-rows {
 
 body.touch.menu-train #market-panel {
   width: 100%;
+  min-width: 0;
 }

@@ -62,7 +62,7 @@ test('desktop: selling wood at a market raises gold', async ({ page }, testInfo)
   await sell.click();
   await expect.poll(() => gold(page)).toBeGreaterThan(0);
   await expect(panel.locator('.market-row[data-res="wood"] .market-prices')).toContainText('buy 97');
-  await expect(buy).toBeEnabled();
+  await expect(buy).toBeDisabled(); // 70 gold is short of the new 97 price
   expect(errors).toEqual([]);
 });
 
@@ -73,13 +73,14 @@ test('phone: the market sits in the Train sheet without horizontal scroll', asyn
   await expect(page.locator('body')).toHaveClass(/touch/);
   expect(await placeMarket(page)).toBeGreaterThan(0);
   await expect(page.locator('#market-panel')).toBeHidden();
-  await page.locator('#menu-tabs [data-menu="train"]').click();
+  await page.locator('#menu-tabs [data-menu="train"]').tap();
+  await expect(page.locator('body')).toHaveClass(/menu-train/);
   const panel = page.locator('#market-panel');
   await expect(panel).toBeVisible();
   const sell = panel.locator('[data-market="sell"][data-res="wood"]');
   const box = await sell.boundingBox();
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
-  await sell.click();
+  await sell.tap();
   await expect.poll(() => gold(page)).toBeGreaterThan(0);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
