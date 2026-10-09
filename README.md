@@ -4,6 +4,7 @@ A browser-based, Age of Empires–style RTS prototype rendered in 3D with **Thre
 
 - Rolling rectangular heightmap landscape (hills, lake, river, forests) with textured ground
 - Low-poly 3D villagers, trees, berry bushes and gold built in code (no image assets)
+- Fog of war: the 176×176 map starts black; send your mounted scout to explore it
 - Economy loop: villagers gather **wood / food / gold** and drop them at the Town Center; train more villagers
 - Overhead RTS camera (zoom-to-cursor, pan, edge-scroll) **and** a first-person mode
 
@@ -27,6 +28,8 @@ Then open http://localhost:5173
 | Scroll | Zoom to cursor |
 | Right / Space+drag | Pan (screen edges pan too) |
 | T | Train villager (50 food) |
+| E | Explore (send selected units, e.g. the scout, to auto-explore) |
+| . / Home | Jump to your scout (cycles if several) |
 | F | Toggle first-person (WASD move, arrows/drag look) |
 
 ### Touch (phones & tablets)
@@ -39,6 +42,7 @@ Then open http://localhost:5173
 | Pinch / two-finger drag | Zoom / pan |
 | Long-press, then drag | Box-select |
 | **All** / **None** / **View** buttons | Select all / deselect / first-person |
+| **Explore** button / horse button | Auto-explore / jump to scout |
 | First-person | Left thumb joystick moves, right side drag looks |
 
 ## Build & deploy
