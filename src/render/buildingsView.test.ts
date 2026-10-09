@@ -130,6 +130,34 @@ describe('buildings, ghost and picking', () => {
     expect(fill.scale.x).toBeCloseTo(1, 5);
   });
 
+  it('swaps towers to their upgrade and retints units when research completes (M8-15)', () => {
+    const world = makeWorld(field(() => 1));
+    const views = new EntityViews(world);
+    const tower = place(world, 'watchTower', { x: 60, z: 60 }, 0, true);
+    const forge = place(world, 'forge', { x: 50, z: 66 }, 0, true);
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
+    camera.position.set(60, 30, 90);
+    camera.lookAt(60, 0, 60);
+    views.sync(0, 0, camera);
+    const group = views.object.getObjectByName('building:watchTower')!;
+    const height = (): number => new THREE.Box3().setFromObject(group.getObjectByName('finished')!).max.y;
+    const before = height();
+    expect(views.object.getObjectByName('building:forge')!.getObjectByName('hearth-glow')).toBeDefined();
+    const villager = [...world.units.values()].find((u) => u.kind === 'villager')!;
+    const unitObject = views.object.children.find((c) => c.userData.entityId === villager.id)!;
+    const axe = unitObject.getObjectByName('axe') as THREE.Mesh;
+    const axeColors = Array.from(axe.geometry.getAttribute('color').array);
+
+    world.players.get(1)!.researched.add('guardTower');
+    world.players.get(1)!.researched.add('bronzeAxe');
+    world.events.emit({ type: 'researched', owner: 1, tech: 'guardTower' });
+    views.sync(0, 0.1, camera);
+    expect(views.object.getObjectByName('building:watchTower')).toBe(group);
+    expect(height()).toBeGreaterThan(before + 0.5);
+    expect(Array.from(axe.geometry.getAttribute('color').array)).not.toEqual(axeColors);
+    expect(tower.id).not.toBe(forge.id);
+  });
+
   it('tracks farm crops with food remaining and goes fallow at zero', () => {
     const world = makeWorld(field(() => 1));
     const views = new EntityViews(world);

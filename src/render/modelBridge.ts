@@ -9,7 +9,8 @@ import {
   type VillagerCarry,
   type VillagerPose,
 } from './models';
-import { createSoldier, projectileGeometry as modelProjectile } from './models';
+import { createSoldier, createTradeCart, projectileGeometry as modelProjectile } from './models';
+import { applyUnitTiers, BASE_TIERS, ownedLambert, sameTiers, Shimmer, type UnitTiers } from './tiers';
 import { rubbleGeometry as propsRubble } from './props';
 
 /**
@@ -24,6 +25,37 @@ export interface UnitAvatar {
   object: THREE.Object3D;
   setPose(pose: string, time: number, carry?: VillagerCarry | null): void;
   setOpacity(opacity: number): void;
+  /**
+   * Show research tiers (tool metal, armour tint, line trim/crest) by rewriting vertex
+   * colours in place: no new materials, meshes or draw calls. Returns true if anything changed.
+   */
+  setTiers(tiers: UnitTiers): boolean;
+  /** Brief golden shimmer, played on the avatar's pose clock. No-op under reduced motion. */
+  shimmer(): void;
+}
+
+/** Wrap an avatar's pose with tier and shimmer support. Built once per unit. */
+function withUpgrades(base: Omit<UnitAvatar, 'setTiers' | 'shimmer'>): UnitAvatar {
+  let tiers: UnitTiers = BASE_TIERS;
+  let glow: Shimmer | null = null;
+  return {
+    object: base.object,
+    setOpacity: base.setOpacity,
+    setPose(pose, time, carry): void {
+      base.setPose(pose, time, carry);
+      glow?.update(time);
+    },
+    setTiers(next: UnitTiers): boolean {
+      if (sameTiers(tiers, next)) return false;
+      tiers = next;
+      applyUnitTiers(base.object, next);
+      return true;
+    },
+    shimmer(): void {
+      glow ??= new Shimmer(ownedLambert(base.object));
+      glow.start();
+    },
+  };
 }
 
 interface SoldierModel {
@@ -73,7 +105,7 @@ const PENNANT_Y: Record<UnitKind, number> = {
   slinger: 1.12,
   archer: 1.15,
   horseman: 1.7,
-  tradeCart: 1.4,
+  tradeCart: 1.12,
   deer: 1.3,
   boar: 0.8,
   sheep: 0.8,
@@ -169,7 +201,7 @@ function setTreeOpacity(root: THREE.Object3D, opacity: number): void {
   });
 }
 
-function fromVillager(color: number, seed: number): UnitAvatar {
+function fromVillager(color: number, seed: number): Omit<UnitAvatar, 'setTiers' | 'shimmer'> {
   const model = createVillager({ tunic: color, seed, color } as { tunic?: number; seed?: number });
   tag(model.object, 'villager', color);
   ownTree(model.object);
@@ -200,7 +232,7 @@ function fromVillager(color: number, seed: number): UnitAvatar {
         return;
       }
       clearRig(model.object);
-      const known: VillagerPose[] = ['idle', 'walk', 'chop', 'forage', 'mine', 'build'];
+      const known: VillagerPose[] = ['idle', 'walk', 'chop', 'forage', 'mine', 'build', 'farm'];
       const next = (known as string[]).includes(pose) ? (pose as VillagerPose) : 'idle';
       model.setPose(next, time, carry ?? null);
     },
@@ -208,7 +240,7 @@ function fromVillager(color: number, seed: number): UnitAvatar {
   };
 }
 
-function fromScout(color: number, seed: number): UnitAvatar {
+function fromScout(color: number, seed: number): Omit<UnitAvatar, 'setTiers' | 'shimmer'> {
   const model = createScout({ cloak: color, seed, color } as { cloak?: number; seed?: number });
   tag(model.object, 'scout', color);
   ownTree(model.object);
@@ -246,10 +278,12 @@ function fromScout(color: number, seed: number): UnitAvatar {
   };
 }
 
-function fromSoldier(kind: UnitKind, color: number, seed: number, factory: SoldierFactory): UnitAvatar {
+function fromSoldier(kind: UnitKind, color: number, seed: number, factory: SoldierFactory): Omit<UnitAvatar, 'setTiers' | 'shimmer'> {
   const model = factory(kind, { color, seed });
   if (!model.object.name) model.object.name = kind;
   tag(model.object, kind, color);
+  ownTree(model.object);
+  markDisposableGeos(model.object);
   return {
     object: model.object,
     setPose(pose: string, time: number): void {
@@ -263,7 +297,7 @@ function fromSoldier(kind: UnitKind, color: number, seed: number, factory: Soldi
   };
 }
 
-function placeholder(kind: UnitKind, color: number, seed: number): UnitAvatar {
+function placeholder(kind: UnitKind, color: number, seed: number): Omit<UnitAvatar, 'setTiers' | 'shimmer'> {
   const object = new THREE.Group();
   object.name = kind;
   const cloth = markOwned(new THREE.MeshLambertMaterial({ color })) as THREE.MeshLambertMaterial;
@@ -306,8 +340,13 @@ function placeholder(kind: UnitKind, color: number, seed: number): UnitAvatar {
   };
 }
 
-/** Mount one unit. Military kinds use `createSoldier` when the Models lane has exported it. */
+/** Mount one unit. Military kinds use `createSoldier`; trade carts their own donkey cart. */
 export function createUnitAvatar(kind: UnitKind, color: number, seed: number): UnitAvatar {
+  return withUpgrades(createBaseAvatar(kind, color, seed));
+}
+
+function createBaseAvatar(kind: UnitKind, color: number, seed: number): Omit<UnitAvatar, 'setTiers' | 'shimmer'> {
+  if (kind === 'tradeCart') return fromSoldier(kind, color, seed, createTradeCart as unknown as SoldierFactory);
   if (kind === 'deer' || kind === 'boar' || kind === 'sheep') {
     const model = createAnimal(kind);
     model.object.userData.unitKind = kind;

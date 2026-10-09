@@ -33,7 +33,8 @@ import {
 import { HealthBars } from './hpBars';
 import { SpatialInstances } from './instanceChunks';
 import { berryLodGeometry, goldLodGeometry, stoneLodGeometry, stoneNodeGeometry, treeLodGeometry } from './lod';
-import { createUnitAvatar } from './modelBridge';
+import { createUnitAvatar, type UnitAvatar } from './modelBridge';
+import { buildingRenderTier, unitTiers } from './tiers';
 import {
   berryBushGeometry,
   carcassGeometry,
@@ -65,6 +66,8 @@ interface SpriteSize {
 /** A unit's model plus its blob shadow; `pose` animates it from the unit's sim state. */
 interface UnitView {
   object: THREE.Object3D;
+  /** Research tiers and the completion shimmer (M8-15). */
+  avatar?: UnitAvatar;
   pose(unit: Unit, time: number): void;
   die(age: number): void;
   setOpacity(opacity: number): void;
@@ -86,7 +89,7 @@ const UNIT_SCALE: Record<UnitKind, number> = {
   slinger: 1.25,
   archer: 1.25,
   horseman: 1.15,
-  tradeCart: 1.2,
+  tradeCart: 1.15,
   deer: 1.3,
   boar: 1.3,
   sheep: 1.3,
@@ -100,7 +103,7 @@ const BAR_Y: Record<UnitKind, number> = {
   slinger: 1.75,
   archer: 1.8,
   horseman: 2.4,
-  tradeCart: 2,
+  tradeCart: 1.6,
   deer: 2,
   boar: 1.3,
   sheep: 1.3,
@@ -119,10 +122,12 @@ const BUILDING_HEIGHT: Record<BuildingKind, number> = {
   palisade: 1.6,
   stoneWall: 2.2,
   gate: 2.4,
-  forge: 3,
-  market: 3,
-  academy: 3.8,
+  forge: 2.9,
+  market: 2.2,
+  academy: 3.7,
 };
+/** Extra height of upgraded watch towers (Guard 1, Fortress 2) over BUILDING_HEIGHT. */
+const TOWER_TIER_EXTRA = [0, 1.1, 1.6];
 
 /**
  * Visuals for every sim entity: chunked instanced resources (near mesh + far LOD),
@@ -145,6 +150,8 @@ export class EntityViews {
   private readonly pools = new Map<string, SpatialInstances>();
   private readonly nodePool = new Map<EntityId, SpatialInstances>();
   private readonly buildingViews = new Map<EntityId, BuildingVisual>();
+  /** Buildings whose owner finished a tech since they were last shown live. */
+  private readonly tierDirty = new Set<EntityId>();
   /** Enemy buildings kept on screen after they die in fog, until the site is seen again. */
   private readonly memoryViews = new Map<EntityId, BuildingVisual>();
   private lastSeen = new Map<EntityId, LastSeenBuilding>();
@@ -251,6 +258,7 @@ export class EntityViews {
       this.projectiles.launch(e.kind, e.from, e.to, e.flight, (x, z) => this.groundY(x, z));
     });
     this.world.events.on('removed', (e) => this.unmount(e.id));
+    this.world.events.on('researched', (e) => this.onResearched(e.owner));
     this.world.events.on('constructed', (e) => {
       const building = this.world.buildings.get(e.id);
       const view = this.buildingViews.get(e.id);
@@ -458,6 +466,7 @@ export class EntityViews {
     if (this.villagers.has(unit.id)) return;
     const color = this.ownerColor(unit.owner);
     const avatar = createUnitAvatar(unit.kind, color, unit.id);
+    avatar.setTiers(unitTiers(this.researchedBy(unit.owner), unit.kind));
     avatar.object.scale.setScalar(UNIT_SCALE[unit.kind]);
     avatar.object.userData.entityId = unit.id;
     avatar.object.traverse((obj) => {
@@ -470,6 +479,7 @@ export class EntityViews {
     shadow.scale.setScalar(unit.kind === 'scout' || unit.kind === 'horseman' ? 1.7 : 1);
     const view: UnitView = {
       object: avatar.object,
+      avatar,
       shadow,
       pose: (u, t) => avatar.setPose(this.visualPose(u), t, u.kind === 'villager' ? (u.carry?.type ?? null) : null),
       die: (age) => avatar.setPose('die', age),
@@ -504,7 +514,8 @@ export class EntityViews {
 
   private mountBuilding(building: Building): void {
     if (this.buildingViews.has(building.id)) return;
-    const visual = createBuildingVisual(building.kind, this.ownerColor(building.owner));
+    const visual = createBuildingVisual(building.kind, this.ownerColor(building.owner),
+      buildingRenderTier(this.researchedBy(building.owner), building.kind));
     visual.object.userData.entityId = building.id;
     this.poseBuilding(visual, building.kind, building.pos, building.rot);
     visual.setProgress(building.buildProgress, building.complete);
@@ -517,6 +528,42 @@ export class EntityViews {
       this.fogBuilding(visual.object);
       this.refreshConcealment();
     }
+  }
+
+  private researchedBy(owner: PlayerId) {
+    return this.world.players.get(owner)?.researched;
+  }
+
+  /**
+   * A tech finished: retint that player's units in place (with a short shimmer on the ones
+   * that changed) and swap upgraded buildings to their new model.
+   */
+  private onResearched(owner: PlayerId): void {
+    const researched = this.researchedBy(owner);
+    if (!researched) return;
+    for (const [id, view] of this.villagers) {
+      const unit = this.world.units.get(id);
+      if (!unit || unit.owner !== owner || !view.avatar) continue;
+      if (view.avatar.setTiers(unitTiers(researched, unit.kind))) view.avatar.shimmer();
+    }
+    // Buildings swap on their next live frame, so a fogged enemy tower keeps its last-seen look.
+    for (const id of this.buildingViews.keys()) {
+      if (this.world.buildings.get(id)?.owner === owner) this.tierDirty.add(id);
+    }
+  }
+
+  private refreshTier(building: Building, view: BuildingVisual): void {
+    if (!this.tierDirty.delete(building.id)) return;
+    if (!view.setTier(buildingRenderTier(this.researchedBy(building.owner), building.kind))) return;
+    this.applyBuildingShadows(view.object);
+    if (this.fog) this.fogBuilding(view.object);
+  }
+
+  private buildingHeight(kind: BuildingKind, id: EntityId): number {
+    const base = BUILDING_HEIGHT[kind];
+    if (kind !== 'watchTower') return base;
+    const tier = (this.buildingViews.get(id) ?? this.memoryViews.get(id))?.tier ?? 0;
+    return base + (TOWER_TIER_EXTRA[tier] ?? 0);
   }
 
   private onDied(e: { id: EntityId; kind: EntityKind; owner: PlayerId; pos: Vec2 }): void {
@@ -621,6 +668,7 @@ export class EntityViews {
         view.object.visible = true;
         continue;
       }
+      this.refreshTier(building, view);
       this.poseBuilding(view, building.kind, building.pos, building.rot);
       view.setProgress(building.buildProgress, building.complete);
       if (building.kind === 'farm') {
@@ -765,7 +813,7 @@ export class EntityViews {
     const cos = Math.cos(building.rot);
     const sin = Math.sin(building.rot);
     const y0 = this.groundY(building.pos.x, building.pos.z);
-    const y1 = y0 + BUILDING_HEIGHT[building.kind];
+    const y1 = y0 + this.buildingHeight(building.kind, building.id);
     this.v.set(building.pos.x, (y0 + y1) * 0.5, building.pos.z).applyMatrix4(camera.matrixWorldInverse);
     if (this.v.z >= 0) return;
     let minX = Infinity;
@@ -935,7 +983,7 @@ export class EntityViews {
     if (!this.wantsHealth(hp, maxHp, id)) return;
     const { w } = BUILDINGS[kind].size;
     const width = Math.min(2.2, Math.max(0.8, w * 0.55));
-    const y = this.groundY(pos.x, pos.z) + BUILDING_HEIGHT[kind] + 0.95;
+    const y = this.groundY(pos.x, pos.z) + this.buildingHeight(kind, id) + 0.95;
     this.bars.push(pos.x, y, pos.z, fraction(hp, maxHp), width);
   }
 
@@ -957,6 +1005,7 @@ export class EntityViews {
 
   private parkBuilding(id: EntityId, visual: BuildingVisual): void {
     this.buildingViews.delete(id);
+    this.tierDirty.delete(id);
     this.memoryViews.set(id, visual);
     visual.object.visible = true;
   }
@@ -968,6 +1017,7 @@ export class EntityViews {
     disposeMaterials(visual.object);
     this.memoryViews.delete(id);
     this.buildingViews.delete(id);
+    this.tierDirty.delete(id);
   }
 
   private addBuildingRubble(kind: BuildingKind, owner: PlayerId, pos: Vec2): void {
@@ -1012,7 +1062,11 @@ export class EntityViews {
   /** Walk (gallop for the mounted scout) while moving or chasing; attack only in range. */
   private visualPose(unit: Unit): string {
     if (unit.state === 'attacking') return this.inRange(unit) ? 'attack' : movingPose(unit.kind);
-    if (unit.kind === 'villager') return poseOf(unit);
+    if (unit.kind === 'villager') {
+      const pose = poseOf(unit);
+      // Farm work swings a sickle (tinted by the farming chain) instead of foraging by hand.
+      return pose === 'forage' && unit.gatherNode != null && this.world.buildings.has(unit.gatherNode) ? 'farm' : pose;
+    }
     if (isTravelling(unit)) return movingPose(unit.kind);
     return 'idle';
   }

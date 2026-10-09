@@ -232,7 +232,7 @@ describe('villager', () => {
   const poses: VillagerPose[] = ['idle', 'walk', 'chop', 'forage', 'mine', 'build'];
   const carries = [undefined, null, 'wood', 'food', 'gold', 'stone'] as const;
 
-  it.each([0, 1, 2])('stands near 0.95 m facing +z with dress variant %s under 600 triangles including hidden goods', seed => {
+  it.each([0, 1, 2])('stands near 0.95 m facing +z with dress variant %s under 640 triangles including hidden goods and tools', seed => {
     const model = createVillager({ seed });
     const bounds = new THREE.Box3().setFromObject(model.object);
     expect(bounds.min.y).toBeCloseTo(0, 5);
@@ -251,7 +251,8 @@ describe('villager', () => {
       expect(child.geometry.index).toBeNull();
       materials.add(child.material as THREE.Material);
     });
-    expect(total).toBeLessThanOrEqual(600);
+    // 600 before M8-15 added the farming sickle.
+    expect(total).toBeLessThanOrEqual(640);
     expect(materials.size).toBe(1);
   });
 
