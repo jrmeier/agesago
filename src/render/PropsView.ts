@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SEA_LEVEL, type Heightfield, type PropKind, type PropPlacement } from '../core/types';
+import { applyFog, createFogDepthMaterial, isConcealed, matrixForConcealment, type FogOfWar } from './fog';
 import { modelMaterial } from './models';
 import { propGeometries } from './props';
 
@@ -12,11 +13,22 @@ function variantAt(prop: PropPlacement, count: number): number {
   return (hash >>> 0) % count;
 }
 
+interface PropBatch {
+  mesh: THREE.InstancedMesh;
+  /** Instance matrices as built, before fog zeroes concealed props. */
+  base: Float32Array;
+}
+
 /** Static scenery batched by kind and stable position-based variant. */
 export class PropsView {
   readonly object = new THREE.Group();
   private readonly material = modelMaterial();
   private readonly meshes: THREE.InstancedMesh[] = [];
+  private readonly batches: PropBatch[] = [];
+  private readonly scratch = new THREE.Matrix4();
+  private fog: FogOfWar | null = null;
+  private fogVersion = -1;
+  private depthMaterial: THREE.Material | null = null;
 
   constructor(hf: Heightfield, props: PropPlacement[]) {
     this.object.name = 'props';
@@ -67,8 +79,44 @@ export class PropsView {
       mesh.instanceMatrix.needsUpdate = true;
       mesh.computeBoundingBox();
       mesh.computeBoundingSphere();
+      const base = new Float32Array(mesh.instanceMatrix.array.length);
+      base.set(mesh.instanceMatrix.array as ArrayLike<number>);
+      this.batches.push({ mesh, base });
       this.meshes.push(mesh);
       this.object.add(mesh);
+    }
+  }
+
+  /**
+   * Fog scenery and collapse props on unexplored cells to zero scale.
+   * Call `syncFog()` after `FogOfWar.update` and before render. onBeforeRender repeats it,
+   * but instance matrices are uploaded earlier in the frame, so the explicit call is the one that lands the same frame.
+   */
+  setFog(fog: FogOfWar): void {
+    this.fog = fog;
+    if (!this.depthMaterial) {
+      applyFog(this.material, fog, { hideUnexplored: true });
+      this.depthMaterial = createFogDepthMaterial(fog);
+    }
+    for (const mesh of this.meshes) this.hook(mesh);
+    this.fogVersion = -1;
+    this.syncFog();
+  }
+
+  /** Rewrite instance scales from the latest visibility grid. No-op until the version changes. */
+  syncFog(): void {
+    if (!this.fog || this.fog.version === this.fogVersion) return;
+    this.fogVersion = this.fog.version;
+    const vis = this.fog.visibility;
+    for (const batch of this.batches) {
+      const { mesh, base } = batch;
+      for (let i = 0; i < mesh.count; i++) {
+        this.scratch.fromArray(base, i * 16);
+        const concealed = isConcealed(vis, this.scratch.elements[12], this.scratch.elements[14]);
+        matrixForConcealment(this.scratch, concealed, this.scratch);
+        mesh.setMatrixAt(i, this.scratch);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
     }
   }
 
@@ -84,6 +132,14 @@ export class PropsView {
       mesh.geometry.dispose();
     }
     this.material.dispose();
+    this.depthMaterial?.dispose();
     this.object.clear();
+  }
+
+  private hook(mesh: THREE.InstancedMesh): void {
+    if (this.depthMaterial) mesh.customDepthMaterial = this.depthMaterial;
+    if (mesh.userData.agFogHook) return;
+    mesh.userData.agFogHook = 1;
+    mesh.onBeforeRender = () => this.syncFog();
   }
 }

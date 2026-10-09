@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { detectQuality, type Quality } from '../core/quality';
 import { type Heightfield } from '../core/types';
+import { applyFog, type FogOfWar } from './fog';
 import { packSplat } from './terrainColor';
 import { createGroundTextures, GROUND_UV_SCALE, type GroundTextures } from './textures';
 import { Water } from './Water';
@@ -19,15 +20,17 @@ interface EdgeVert {
 /**
  * Splat-textured terrain mesh plus sea-level water.
  * Vertex weights come from `Heightfield.ground`; the shader adds macro variation,
- * slope rock, and an underwater tint. Public surface: constructor, object, update.
+ * slope rock, and an underwater tint. Public surface: constructor, object, update, setFog.
  * `quality` defaults to {@link detectQuality} so the current game loop still picks a tier.
  */
 export class TerrainView {
   readonly object = new THREE.Group();
   private readonly water: Water;
+  private readonly ground: THREE.Mesh;
 
   constructor(hf: Heightfield, quality: Quality = detectQuality()) {
-    this.object.add(buildTerrain(hf, quality));
+    this.ground = buildTerrain(hf, quality);
+    this.object.add(this.ground);
     this.water = new Water(hf, quality);
     this.object.add(this.water.mesh);
   }
@@ -35,6 +38,12 @@ export class TerrainView {
   /** Per-frame water motion. `time` in seconds. */
   update(time: number): void {
     this.water.update(time);
+  }
+
+  /** Darken the heightfield and the sea with the shared fog mask. */
+  setFog(fog: FogOfWar): void {
+    applyFog(this.ground.material as THREE.Material, fog);
+    this.water.setFog(fog);
   }
 }
 
