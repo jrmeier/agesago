@@ -193,5 +193,13 @@ export function generateTerrain(seed: number, width = MAP_W, depth = MAP_D): Hei
       const mask = valueNoise(x / (7 * scale), z / (7 * scale), seed ^ 0x510e527f);
       return clamp(cluster * (0.8 + 0.25 * mask) * shoreWeight * padWeight, 0, 1);
     },
+    ground(x, z) {
+      // Placeholder blend until the World lane replaces it.
+      const h = heightAt(x, z);
+      const sand = 1 - smoothstep(SEA_LEVEL + 0.2, SEA_LEVEL + 0.6, h);
+      const forest = (1 - sand) * this.forestDensity(x, z);
+      const grass = Math.max(0, 1 - sand - forest);
+      return { grass, meadow: 0, forest, dirt: 0, rock: 0, sand, path: 0 };
+    },
   };
 }

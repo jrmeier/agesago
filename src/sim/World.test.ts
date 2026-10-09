@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SEED, type Heightfield, type MapLayout, type SimEvent, type Vec2 } from '../core/types';
+import { DEFAULT_SEED, GRASS_ONLY, type Heightfield, type MapLayout, type SimEvent, type Vec2 } from '../core/types';
 import { BALANCE } from './balance';
 import { generateMap } from './mapgen';
 import { World } from './World';
@@ -16,11 +16,12 @@ function flatField(water: (x: number, z: number) => boolean = () => false): Heig
     isWater: water,
     isWalkable: (x, z) => inside(x, z) && !water(x, z),
     forestDensity: () => 0,
+    ground: () => GRASS_ONLY,
   };
 }
 
 function layout(villagers: Vec2[], nodes: MapLayout['nodes'] = []): MapLayout {
-  return { townCenter: { x: 32, z: 24 }, villagers, nodes };
+  return { townCenter: { x: 32, z: 24 }, villagers, nodes, props: [] };
 }
 
 function record(world: World): SimEvent[] {

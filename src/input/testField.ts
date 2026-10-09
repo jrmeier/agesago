@@ -1,4 +1,4 @@
-import type { Heightfield } from '../core/types';
+import { GRASS_ONLY, type Heightfield } from '../core/types';
 
 /** Test-only terrain: a smooth bump field with a pit below sea level centred on (10, 10), or flat at y = 1. */
 export function testField(flat = false): Heightfield {
@@ -11,5 +11,6 @@ export function testField(flat = false): Heightfield {
     isWater: (x, z) => heightAt(x, z) < 0,
     isWalkable: (x, z) => heightAt(x, z) >= 0,
     forestDensity: () => 0,
+    ground: () => GRASS_ONLY,
   };
 }

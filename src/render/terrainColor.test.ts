@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Heightfield } from '../core/types';
+import { GRASS_ONLY, type Heightfield } from '../core/types';
 import { hash01, sampleTerrain, terrainVertexSrgb } from './terrainColor';
 
 describe('terrainVertexSrgb', () => {
@@ -49,6 +49,7 @@ describe('sampleTerrain', () => {
       isWater: () => false,
       isWalkable: () => true,
       forestDensity: (x) => (x >= 10 ? 1 : 0),
+      ground: () => GRASS_ONLY,
     };
     const open = sampleTerrain(hf, 4, 4);
     const woods = sampleTerrain(hf, 14, 4);

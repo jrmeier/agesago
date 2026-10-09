@@ -55,6 +55,7 @@ export function generateMap(seed: number): { hf: Heightfield; layout: MapLayout 
       { x: townCenter.x + 1.8, z: townCenter.z + 3.6 },
     ],
     nodes: [],
+    props: [],
   };
   const canPlace = (pos: Vec2): boolean => reachable(pos)
     && distance(pos, townCenter) >= 4
