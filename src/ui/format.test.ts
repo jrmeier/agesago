@@ -1,10 +1,58 @@
 import { describe, expect, it } from 'vitest';
-import { formatCount, groupStatus, statusLabel, trainLabel, trainProgress, unitName } from './format';
+import {
+  explorerIds,
+  exploredLabel,
+  formatCount,
+  groupStatus,
+  portraitKind,
+  selectionName,
+  showExplore,
+  statusLabel,
+  trainLabel,
+  trainProgress,
+  unitName,
+} from './format';
 
 describe('HUD labels', () => {
   it('names the selection', () => {
     expect(unitName(1)).toBe('Villager');
     expect(unitName(4)).toBe('4 Villagers');
+  });
+
+  it('names mixed selections of villagers and scouts', () => {
+    expect(selectionName(['villager'])).toBe('Villager');
+    expect(selectionName(['scout'])).toBe('Scout');
+    expect(selectionName(['scout', 'scout'])).toBe('2 Scouts');
+    expect(selectionName(['villager', 'scout', 'villager', 'villager'])).toBe('3 Villagers, 1 Scout');
+    expect(selectionName(['scout', 'villager', 'scout'])).toBe('1 Villager, 2 Scouts');
+    expect(selectionName(['villager', 'villager'])).toBe('2 Villagers');
+  });
+
+  it('picks the portrait of the larger group', () => {
+    expect(portraitKind(['scout'])).toBe('scout');
+    expect(portraitKind(['villager', 'scout'])).toBe('villager');
+    expect(portraitKind(['scout', 'scout', 'villager'])).toBe('scout');
+    expect(portraitKind([])).toBe('villager');
+  });
+
+  it('shows Explore only for selections that can explore', () => {
+    expect(showExplore([])).toBe(false);
+    expect(showExplore([{ kind: 'scout' }])).toBe(true);
+    expect(showExplore([{ kind: 'villager' }, { kind: 'scout' }])).toBe(true);
+    expect(explorerIds([{ id: 4, kind: 'scout' }, { id: 2, kind: 'villager' }])).toEqual([4, 2]);
+  });
+
+  it('labels exploring units and the explored share', () => {
+    expect(statusLabel({ state: 'exploring', carry: null, gatherType: null }, 10)).toBe('Exploring');
+    const explore = { state: 'exploring' as const, carry: null, gatherType: null };
+    const idle = { state: 'idle' as const, carry: null, gatherType: null };
+    expect(groupStatus([explore, explore, idle], 10)).toBe('2 exploring, 1 idle');
+    expect(exploredLabel(0)).toBe('Explored 0%');
+    expect(exploredLabel(0.0749)).toBe('Explored 7%');
+    expect(exploredLabel(0.29)).toBe('Explored 29%');
+    expect(exploredLabel(0.999)).toBe('Explored 99%');
+    expect(exploredLabel(1)).toBe('Explored 100%');
+    expect(exploredLabel(1.4)).toBe('Explored 100%');
   });
 
   it('describes state and carry', () => {

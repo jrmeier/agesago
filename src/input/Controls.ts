@@ -3,9 +3,12 @@ import type { CameraRig } from '../camera/CameraRig';
 import type { EntityId } from '../core/types';
 import type { Selection } from '../game/Selection';
 import type { World } from '../sim/World';
+import { explorerIds } from '../ui/format';
 import type { GestureEvent } from './gestures';
 import { LMB, RMB, type DragState, type Input } from './Input';
+import { resolveOrder } from './orders';
 import { pickGround, screenRay, toNdc } from './pickGround';
+import { focusNextScout } from './scouts';
 
 export interface ControlsDeps {
   world: World;
@@ -31,11 +34,12 @@ export function rectBetween(ax: number, ay: number, bx: number, by: number): Scr
 }
 
 /**
- * Player intent → sim commands: click / box / A select (RTS only), RMB on node = gather,
- * on ground = move, T = train. Disabled in first-person mode (where A strafes).
+ * Player intent → sim commands: click / box / A select (RTS only), RMB on an explored node =
+ * gather, on ground (explored or not) = move, T = train, E = explore, "." / Home = centre on
+ * the next scout. Disabled in first-person mode (where A strafes).
  * Touch: tap selects a villager or orders the selection (gather / move); long-press toggles a
  * villager; long-press + drag box-selects. Also binds the touch buttons (#touch-select-all,
- * #touch-deselect, #touch-fps) and mirrors the camera mode as `fps-mode` on <body>.
+ * #touch-deselect, #touch-fps), the #explore-btn, and mirrors the camera mode as `fps-mode` on <body>.
  * Owned by the Controls lane (T6). Public surface FROZEN: constructor, update.
  */
 export class Controls {
@@ -63,7 +67,16 @@ export class Controls {
     bindButton('touch-select-all', () => selection.set(world.units.keys()));
     bindButton('touch-deselect', () => selection.clear());
     bindButton('touch-fps', () => rig.setMode(rig.mode === 'rts' ? 'fps' : 'rts'));
+    bindButton('explore-btn', () => this.explore());
     this.syncMode();
+  }
+
+  /** Send the selected units that can explore off to auto-explore. */
+  explore(): void {
+    const { world, selection } = this.deps;
+    const units = [...selection.ids].flatMap((id) => world.units.get(id) ?? []);
+    const unitIds = explorerIds(units);
+    if (unitIds.length) world.dispatch({ type: 'explore', unitIds });
   }
 
   update(_dt: number): void {
@@ -85,6 +98,10 @@ export class Controls {
 
     if (input.keyPressed('KeyA')) this.deps.selection.set(world.units.keys());
     if (input.keyPressed('KeyT')) world.dispatch({ type: 'train', buildingId: world.townCenter.id });
+    if (input.keyPressed('KeyE')) this.explore();
+    if (input.keyPressed('Period') || input.keyPressed('NumpadDecimal') || input.keyPressed('Home')) {
+      focusNextScout(world, rig);
+    }
 
     const right = input.drag(RMB);
     if (input.released(RMB) && right && classifyRelease(right) === 'click') this.order(right.x, right.y);
@@ -156,14 +173,14 @@ export class Controls {
     const unitIds: EntityId[] = [...selection.ids].filter((id) => world.units.has(id));
     if (!unitIds.length) return;
     const id = views.pick(toNdc(x, y, input.width, input.height), rig.camera);
-    if (id !== null && world.nodes.has(id)) {
-      world.dispatch({ type: 'gather', unitIds, nodeId: id });
-      return;
-    }
-    const target = pickGround(screenRay(rig.camera, x, y, input.width, input.height), rig.rts.hf);
-    if (!target) return;
-    world.dispatch({ type: 'move', unitIds, target });
-    views.flashMarker(target);
+    const node = id !== null ? world.nodes.get(id) : undefined;
+    const nodeExplored = !!node && world.visibility.isExplored(node.pos.x, node.pos.z);
+    const ground =
+      node && nodeExplored ? null : pickGround(screenRay(rig.camera, x, y, input.width, input.height), rig.rts.hf);
+    const cmd = resolveOrder(unitIds, { nodeId: node?.id ?? null, nodeExplored, ground });
+    if (!cmd) return;
+    world.dispatch(cmd);
+    if (cmd.type === 'move') views.flashMarker(cmd.target);
   }
 
   private showBox(r: ScreenRect | null): void {
