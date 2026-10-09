@@ -81,7 +81,7 @@ describe('buildings, ghost and picking', () => {
     expect(BUILDINGS.house.size.w).toBeGreaterThan(0);
   });
 
-  it('grows foundation, then scaffold, then fades the finished shell', () => {
+  it('builds up the foundation stages, then swaps to the finished model', () => {
     const world = makeWorld(field(() => 2));
     const views = new EntityViews(world);
     const building = place(world, 'storehouse', { x: 30, z: 30 }, 0, false, 0.1);
@@ -90,28 +90,25 @@ describe('buildings, ghost and picking', () => {
     camera.lookAt(30, 2, 30);
     const group = views.object.getObjectByName('building:storehouse')!;
     const foundation = group.getObjectByName('foundation')!;
-    const scaffold = group.getObjectByName('scaffold')!;
     const finished = group.getObjectByName('finished')!;
+    const shown = () => {
+      let n = 0;
+      foundation.traverseVisible((o) => {
+        if ((o as THREE.Mesh).isMesh) n++;
+      });
+      return n;
+    };
 
     views.sync(0, 0, camera);
     expect(foundation.visible).toBe(true);
-    expect(scaffold.visible).toBe(false);
     expect(finished.visible).toBe(false);
-    const low = foundation.scale.y;
-
-    building.buildProgress = 0.5;
-    views.sync(0, 0.1, camera);
-    expect(foundation.visible).toBe(true);
-    expect(scaffold.visible).toBe(true);
-    expect(finished.visible).toBe(false);
-    expect(foundation.scale.y).toBeGreaterThan(low);
+    const early = shown();
 
     building.buildProgress = 0.85;
     views.sync(0, 0.2, camera);
     expect(foundation.visible).toBe(true);
-    expect(scaffold.visible).toBe(true);
-    expect(finished.visible).toBe(true);
-    expect(opacityOf(finished)).toBeLessThan(0.99);
+    expect(finished.visible).toBe(false);
+    expect(shown()).toBeGreaterThan(early);
     expect(group.getObjectByName('progress')!.visible).toBe(true);
 
     building.complete = true;
@@ -119,9 +116,7 @@ describe('buildings, ghost and picking', () => {
     world.events.emit({ type: 'constructed', id: building.id });
     views.sync(0, 0.3, camera);
     expect(foundation.visible).toBe(false);
-    expect(scaffold.visible).toBe(false);
     expect(finished.visible).toBe(true);
-    expect(opacityOf(finished)).toBe(1);
     expect(group.getObjectByName('progress')!.visible).toBe(false);
 
     views.setSelected(new Set([building.id]));
@@ -243,13 +238,3 @@ describe('buildings, ghost and picking', () => {
   });
 });
 
-function opacityOf(root: THREE.Object3D): number {
-  let opacity = 1;
-  root.traverse((obj) => {
-    const mesh = obj as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    const mat = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.Material;
-    opacity = mat.opacity;
-  });
-  return opacity;
-}

@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 import { BUILDINGS, FARM_FOOD, footprint } from '../core/buildings';
 import { SEA_LEVEL, type BuildingKind, type Heightfield, type Vec2 } from '../core/types';
-import { buildTownCenter } from './buildings';
-import * as models from './models';
+import { buildingModel, foundationModel } from './buildings';
 
 /** Placement ghost tints. Outline uses these directly; the model lerps toward them. */
 export const GHOST_VALID = 0x3cba6a;
@@ -13,11 +12,6 @@ export const SOIL_FALLOW = 0x8d7048;
 export const CROP_RIPE = 0x6f9a3a;
 export const CROP_THIN = 0xc6a24a;
 
-const FRAME_AT = 1 / 3;
-const SHELL_AT = 2 / 3;
-const LIMESTONE = 0xe1dac4;
-const TERRACOTTA = 0x9d4937;
-const TIMBER = 0x6b4630;
 
 const boxCache = new Map<string, THREE.BoxGeometry>();
 
@@ -53,13 +47,15 @@ export function footprintMinY(hf: Heightfield, kind: BuildingKind, pos: Vec2, ro
 export function createBuildingVisual(kind: BuildingKind): BuildingVisual {
   const root = new THREE.Group();
   root.name = kind === 'townCenter' ? 'town-center' : `building:${kind}`;
-  const foundation = foundationFor(kind);
-  const scaffold = scaffoldFor(kind);
+  const stages = foundationModel(kind);
+  const foundation = stages.object;
+  foundation.name = 'foundation';
+  ownMaterials(foundation);
   const finished = finishedFor(kind);
   const bar = progressBar();
   const top = modelTop(finished);
   bar.position.y = top + 0.55;
-  root.add(foundation, scaffold, finished, bar);
+  root.add(foundation, finished, bar);
 
   const crops = finished.getObjectByName('crops');
   const cropMat = (crops?.userData.cropMat as THREE.MeshLambertMaterial | undefined) ?? null;
@@ -71,14 +67,10 @@ export function createBuildingVisual(kind: BuildingKind): BuildingVisual {
     setProgress(progress: number, complete: boolean): void {
       const p = complete ? 1 : clamp01(progress);
       const done = complete || p >= 0.999;
+      // Staked footprint → plinth → timber frame/scaffold → nearly finished, then the finished model.
       foundation.visible = !done;
-      scaffold.visible = !done && p >= FRAME_AT;
-      finished.visible = done || p >= SHELL_AT;
-      if (foundation.visible) foundation.scale.y = 0.08 + 0.92 * Math.min(1, p / FRAME_AT);
-      else foundation.scale.y = 1;
-      if (scaffold.visible) scaffold.scale.y = 0.08 + 0.92 * Math.min(1, (p - FRAME_AT) / (SHELL_AT - FRAME_AT));
-      else scaffold.scale.y = 1;
-      if (finished.visible) setOpacity(finished, done ? 1 : 0.2 + 0.8 * Math.min(1, (p - SHELL_AT) / (1 - SHELL_AT)));
+      finished.visible = done;
+      if (!done) stages.setProgress(p);
     },
     setFarmFood(food: number): void {
       if (!crops || !cropMat) return;
@@ -155,101 +147,10 @@ export function tintGhost(ghost: THREE.Group, valid: boolean): void {
 function finishedFor(kind: BuildingKind): THREE.Object3D {
   const group = new THREE.Group();
   group.name = 'finished';
-  if (kind === 'farm') {
-    group.add(farmField());
-    const custom = optionalObject('buildingModel', kind);
-    if (custom) group.add(custom);
-    return group;
-  }
-  const custom = optionalObject('buildingModel', kind);
-  if (custom) {
-    ownMaterials(custom);
-    group.add(custom);
-    return group;
-  }
-  if (kind === 'townCenter') {
-    const tc = buildTownCenter(0);
-    ownMaterials(tc);
-    group.add(tc);
-    return group;
-  }
-  group.add(placeholderBuilding(kind));
-  return group;
-}
-
-function foundationFor(kind: BuildingKind): THREE.Group {
-  const group = new THREE.Group();
-  group.name = 'foundation';
-  const custom = optionalObject('foundationModel', kind);
-  if (custom) {
-    ownMaterials(custom);
-    group.add(custom);
-    return group;
-  }
-  const { w, d } = BUILDINGS[kind].size;
-  const dirt = kind === 'farm';
-  const h = dirt ? 0.08 : 0.22;
-  group.add(meshBox(w * 0.98, h, d * 0.98, dirt ? SOIL_TILLED : LIMESTONE, 0, h / 2, 0));
-  return group;
-}
-
-function scaffoldFor(kind: BuildingKind): THREE.Group {
-  const group = new THREE.Group();
-  group.name = 'scaffold';
-  const custom = optionalObject('scaffoldingModel', kind) ?? optionalObject('scaffoldModel', kind);
-  if (custom) {
-    ownMaterials(custom);
-    group.add(custom);
-    return group;
-  }
-  const { w, d } = BUILDINGS[kind].size;
-  const h = kind === 'farm' ? 0.55 : kind === 'townCenter' ? 3.2 : 2.05;
-  const insetX = w / 2 - 0.14;
-  const insetZ = d / 2 - 0.14;
-  for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) {
-      group.add(meshBox(0.08, h, 0.08, TIMBER, sx * insetX, h / 2, sz * insetZ));
-    }
-  }
-  group.add(meshBox(w - 0.2, 0.06, 0.06, TIMBER, 0, h, insetZ));
-  group.add(meshBox(w - 0.2, 0.06, 0.06, TIMBER, 0, h, -insetZ));
-  group.add(meshBox(0.06, 0.06, d - 0.2, TIMBER, insetX, h, 0));
-  group.add(meshBox(0.06, 0.06, d - 0.2, TIMBER, -insetX, h, 0));
-  return group;
-}
-
-function placeholderBuilding(kind: BuildingKind): THREE.Group {
-  const { w, d } = BUILDINGS[kind].size;
-  const group = new THREE.Group();
-  group.name = `placeholder:${kind}`;
-  if (kind === 'house') {
-    group.add(meshBox(w * 0.82, 1.45, d * 0.82, LIMESTONE, 0, 0.84, 0));
-    group.add(meshBox(w * 0.92, 0.32, d * 0.92, TERRACOTTA, 0, 1.68, 0));
-    group.add(meshBox(0.46, 0.9, 0.08, TIMBER, 0, 0.48, d * 0.42));
-    return group;
-  }
-  if (kind === 'granary') {
-    group.add(meshBox(0.12, 0.7, 0.12, TIMBER, -w * 0.28, 0.35, -d * 0.28));
-    group.add(meshBox(0.12, 0.7, 0.12, TIMBER, w * 0.28, 0.35, -d * 0.28));
-    group.add(meshBox(0.12, 0.7, 0.12, TIMBER, -w * 0.28, 0.35, d * 0.28));
-    group.add(meshBox(0.12, 0.7, 0.12, TIMBER, w * 0.28, 0.35, d * 0.28));
-    group.add(meshBox(w * 0.86, 1.15, d * 0.86, 0xc4a46a, 0, 1.35, 0));
-    group.add(meshBox(w * 0.96, 0.22, d * 0.96, TERRACOTTA, 0, 2.0, 0));
-    return group;
-  }
-  if (kind === 'miningCamp') {
-    group.add(meshBox(0.1, 1.5, 0.1, TIMBER, -w * 0.32, 0.75, d * 0.32));
-    group.add(meshBox(0.1, 1.5, 0.1, TIMBER, w * 0.32, 0.75, d * 0.32));
-    group.add(meshBox(0.1, 1.5, 0.1, TIMBER, -w * 0.32, 0.75, -d * 0.28));
-    group.add(meshBox(0.1, 1.5, 0.1, TIMBER, w * 0.32, 0.75, -d * 0.28));
-    group.add(meshBox(w * 0.9, 0.12, d * 0.9, 0x8a5a32, 0, 1.55, 0));
-    group.add(meshBox(0.7, 0.4, 0.55, 0xb7b2a4, -0.35, 0.22, -0.2));
-    return group;
-  }
-  // storehouse (and any future kind): timber barn
-  group.add(meshBox(w * 0.88, 1.35, d * 0.88, 0x8d5a32, 0, 0.78, 0));
-  group.add(meshBox(w * 0.98, 0.28, d * 0.98, 0x6e4428, 0, 1.55, 0));
-  group.add(meshBox(0.7, 0.85, 0.08, 0x4e3424, 0, 0.48, d * 0.45));
+  // Farms keep the animated tilled field (crops track food); other kinds use the ancient-world models.
+  const model = kind === 'farm' ? farmField() : buildingModel(kind);
+  if (kind !== 'farm') ownMaterials(model);
+  group.add(model);
   return group;
 }
 
@@ -355,13 +256,6 @@ function meshBox(w: number, h: number, d: number, color: number, x: number, y: n
   return mesh;
 }
 
-function optionalObject(name: string, kind: BuildingKind): THREE.Object3D | null {
-  const fn = (models as Record<string, unknown>)[name];
-  if (typeof fn !== 'function') return null;
-  const result = (fn as (kind: BuildingKind) => unknown)(kind);
-  return result instanceof THREE.Object3D ? result : null;
-}
-
 function ownMaterials(root: THREE.Object3D): void {
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
@@ -371,18 +265,6 @@ function ownMaterials(root: THREE.Object3D): void {
   });
 }
 
-function setOpacity(root: THREE.Object3D, opacity: number): void {
-  root.traverse((obj) => {
-    const mesh = obj as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    for (const mat of mats) {
-      mat.opacity = opacity;
-      mat.transparent = opacity < 0.999;
-      mat.depthWrite = opacity >= 0.999;
-    }
-  });
-}
 
 function modelTop(object: THREE.Object3D): number {
   object.updateWorldMatrix(true, true);
