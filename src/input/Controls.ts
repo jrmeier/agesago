@@ -68,13 +68,14 @@ export function rectBetween(ax: number, ay: number, bx: number, by: number): Scr
  * 1–9 select it, a quick second press centres on it; the side rail's group buttons do the
  * same by tap (long-press assigns). "," and the idle button cycle idle villagers. Double-click
  * (double-tap) a unit selects all of that kind on screen. T = train villager, E = explore,
- * "." / Home = next scout. Clicking a building selects it. With villagers selected,
+ * "." / Home = next scout. Clicking a visible building selects it. A last-seen enemy
+ * building is not a target until it is in sight again. With villagers selected,
  * H / S / G / M / P / B / Y / K (or the #build-grid buttons) enter placement mode: the ghost
  * follows the cursor, R or Shift+wheel rotates, LMB places (Shift keeps placing), RMB / Esc
  * cancels. Disabled in first-person mode (where A strafes).
  * Touch: tap selects a unit, attacks a visible enemy with units selected, orders the selection
  * (gather / construct / farm / move), sets a selected building's rally point, or with no units
- * selected selects the tapped building / enemy; long-press toggles a villager; long-press +
+ * selected selects the tapped visible building / enemy; long-press toggles a villager; long-press +
  * drag box-selects. While placing, a tap moves the ghost, a finger on the ghost drags it, and
  * #place-bar's ⟳ / ✕ / ✓ rotate, cancel, confirm.
  * Also binds the touch buttons (#touch-select-all, #touch-deselect, #touch-fps), #explore-btn,
@@ -348,15 +349,25 @@ export class Controls {
 
   /** A unit under the pointer: any of ours, or someone else's only where we can see it. */
   private unitAt(x: number, y: number): EntityId | null {
-    const id = this.pickAt(x, y);
+    return this.unitFromPick(this.pickAt(x, y));
+  }
+
+  private unitFromPick(id: EntityId | null): EntityId | null {
     const u = id !== null ? this.deps.world.units.get(id) : undefined;
     if (!u) return null;
     return u.owner === this.deps.world.localPlayer || this.deps.world.visibility.isVisible(u.pos.x, u.pos.z) ? u.id : null;
   }
 
+  /** A building under the pointer. Enemy buildings count only while their cell is visible. */
   private buildingAt(x: number, y: number): EntityId | null {
-    const id = this.pickAt(x, y);
-    return id !== null && this.deps.world.buildings.has(id) ? id : null;
+    return this.buildingFromPick(this.pickAt(x, y));
+  }
+
+  private buildingFromPick(id: EntityId | null): EntityId | null {
+    const b = id !== null ? this.deps.world.buildings.get(id) : undefined;
+    if (!b) return null;
+    if (b.owner !== this.deps.world.localPlayer && !this.deps.world.visibility.isVisible(b.pos.x, b.pos.z)) return null;
+    return b.id;
   }
 
   private groundAt(x: number, y: number): Vec2 | null {
@@ -450,17 +461,18 @@ export class Controls {
   }
 
   private clickSelect(x: number, y: number, additive: boolean): void {
-    const { selection, world } = this.deps;
-    const unit = this.unitAt(x, y);
-    const id = unit ?? this.pickAt(x, y);
+    const { selection } = this.deps;
+    const picked = this.pickAt(x, y);
+    const unit = this.unitFromPick(picked);
+    const building = unit === null ? this.buildingFromPick(picked) : null;
     if (unit !== null && this.isOwnUnit(unit)) {
       if (!additive) this.selectUnit(unit);
       else if (this.ownUnitIds().length === selection.ids.size) this.toggle(unit);
       else selection.set([unit]);
     } else if (unit !== null) {
       selection.set([unit]);
-    } else if (id !== null && world.buildings.has(id)) {
-      selection.set([id]);
+    } else if (building !== null) {
+      selection.set([building]);
     } else if (!additive) {
       selection.clear();
     }

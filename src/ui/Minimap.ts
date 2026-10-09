@@ -1,6 +1,7 @@
 import type { CameraRig, CameraMode } from '../camera/CameraRig';
 import type { NodeKind } from '../core/types';
 import { focusNextScout } from '../input/scouts';
+import { minimapBuildingBlips, sightFromState, stepLastSeen, unitMayShow, type LastSeenBuilding } from '../render/lastSeen';
 import type { World } from '../sim/World';
 import { nodeAlpha, paintFog } from './fog';
 import { exploredLabel } from './format';
@@ -29,7 +30,7 @@ const VIEW = 'rgba(255, 246, 214, 0.95)';
  * Framed minimap: terrain painted once from the Heightfield, a fog-of-war layer (one pixel
  * per visibility cell, repainted only when world.visibility.version changes), resources /
  * units / buildings in owner colours redrawn at ~5 Hz (enemy units only where visible, enemy
- * buildings once seen), alert pings (ui/pings.ts) as CSS rings, and the RTS view footprint whenever it
+ * buildings from the last-seen snapshot, including one that died in fog), alert pings (ui/pings.ts) as CSS rings, and the RTS view footprint whenever it
  * moves. Below the chart: an "Explored NN%" readout (~2 Hz) and a find-scout button.
  * Click, tap or drag to move the camera; input never reaches the game canvas. Hidden in
  * first person. Owned by the HUD lane.
@@ -57,8 +58,8 @@ export class Minimap {
   private dragId: number | null = null;
   private collapsed = false;
   private mode: CameraMode;
-  /** Enemy buildings the local player has seen at least once. */
-  private readonly seenBuildings = new Set<number>();
+  /** Enemy buildings remembered for the map. Not the live building. */
+  private snaps = new Map<number, LastSeenBuilding>();
   private readonly colorCache = new Map<number, [string, string]>();
 
   constructor(
@@ -230,19 +231,16 @@ export class Minimap {
     ctx.globalAlpha = 1;
 
     const local = this.world.localPlayer;
-    // Enemy buildings appear once seen and stay (as last seen) while they stand.
-    for (const b of this.world.buildings.values()) {
-      if (b.owner !== local && !this.seenBuildings.has(b.id) && vis.isVisible(b.pos.x, b.pos.z)) this.seenBuildings.add(b.id);
-    }
-    const shown = (owner: number, x: number, z: number) => owner === local || vis.isVisible(x, z);
+    const sightAt = (x: number, z: number) => sightFromState(vis.stateAt(x, z));
+    this.snaps = stepLastSeen(this.snaps, this.world.buildings.values(), local, sightAt).snaps;
+    const shown = (owner: number, x: number, z: number) => unitMayShow(owner === local, sightAt(x, z));
 
     ctx.lineWidth = Math.max(1, s * 0.3);
-    for (const b of this.world.buildings.values()) {
-      if (b.owner !== local && !this.seenBuildings.has(b.id)) continue;
+    for (const b of minimapBuildingBlips(local, this.world.buildings.values(), this.snaps)) {
       const [fill, edge] = this.colors(b.owner);
       ctx.fillStyle = fill;
       ctx.strokeStyle = edge;
-      const p = worldToMap(b.pos, this.box);
+      const p = worldToMap({ x: b.x, z: b.z }, this.box);
       const half = Math.max(s * b.radius * 1.4, 4 * (w / 220));
       ctx.fillRect(p.u - half, p.v - half, half * 2, half * 2);
       ctx.strokeRect(p.u - half, p.v - half, half * 2, half * 2);
