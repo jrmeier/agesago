@@ -8,6 +8,7 @@ import { Alerts } from '../ui/Alerts';
 import { BUILD_HOTKEYS, kindForKey } from '../ui/build';
 import { Discoveries } from '../ui/Discoveries';
 import { explorerIds } from '../ui/format';
+import { HotkeyHelp } from '../ui/hotkeyHelp';
 import { canTrainAt, kindForSlotKey, trainBatch } from '../ui/military';
 import { RallyFlag } from '../ui/RallyFlag';
 import { SideRail } from '../ui/SideRail';
@@ -70,7 +71,8 @@ export function rectBetween(ax: number, ay: number, bx: number, by: number): Scr
  * 1–9 select it, a quick second press centres on it; the side rail's group buttons do the
  * same by tap (long-press assigns). "," and the idle button cycle idle villagers. Double-click
  * (double-tap) a unit selects all of that kind on screen. T = train villager, E = explore,
- * "." / Home = next scout. Clicking a visible building selects it. A last-seen enemy
+ * "." / Home = next scout. Shift+/ (or the ? button) opens the hotkey list; Esc closes it.
+ * Clicking a visible building selects it. A last-seen enemy
  * building is not a target until it is in sight again. With villagers selected,
  * H / S / G / M / P / B / Y / K (or the #build-grid buttons) enter placement mode: the ghost
  * follows the cursor, R or Shift+wheel rotates, LMB places (Shift keeps placing), RMB / Esc
@@ -98,6 +100,7 @@ export class Controls {
   private readonly discoveries: Discoveries;
   private readonly alerts: Alerts;
   readonly groups = new ControlGroups();
+  private readonly help = new HotkeyHelp();
   private readonly rail: SideRail;
   private readonly rallyFlag: RallyFlag;
   private readonly idle = new IdleCycler();
@@ -195,6 +198,13 @@ export class Controls {
     this.alerts.update(this.time);
     this.updateRail();
     this.rallyFlag.update(rig.mode === 'rts' ? this.rallyPoint() : null);
+    const slash = input.keyMods('Slash');
+    if (slash?.shift && !slash.ctrl && !slash.alt) this.help.toggle();
+    if (this.help.open) {
+      if (input.keyPressed('Escape')) this.help.close();
+      this.syncBoxArm();
+      return;
+    }
     if (rig.mode !== 'rts') {
       this.syncBoxArm();
       return;

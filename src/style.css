@@ -208,6 +208,41 @@ body {
   }
 }
 
+/* Hotkey reference. The hint line hides on a narrow window; this button stays. */
+.help-btn {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  border-radius: 4px;
+  font-family: var(--title);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink);
+  background: var(--bronze-face);
+  border: 1px solid var(--bronze-lo);
+  box-shadow:
+    var(--trim),
+    0 2px 6px rgba(0, 0, 0, 0.4);
+  touch-action: manipulation;
+}
+
+.help-btn:hover {
+  filter: brightness(1.08);
+}
+
+.help-btn:active {
+  transform: translateY(1px);
+}
+
+.help-btn:focus-visible {
+  outline: 2px solid var(--gilt);
+  outline-offset: 2px;
+}
+
 /* ---- Bottom row ---- */
 
 .hud-bottom {
@@ -803,6 +838,12 @@ body.touch .hud-top {
   gap: 12px;
   padding: max(6px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 6px
     max(12px, env(safe-area-inset-left));
+}
+
+body.touch .help-btn {
+  width: 44px;
+  height: 44px;
+  font-size: 20px;
 }
 
 body.touch .resource-bar {
@@ -2257,6 +2298,162 @@ body.touch.menu-orders .cmd-btn svg {
   width: 26px;
   height: 26px;
 }
+/* ---- Hotkey list. Below the end-of-match sheet so a finished game still covers it. ---- */
+
+.hotkey-help[hidden] {
+  display: none !important;
+}
+
+.hotkey-help {
+  position: absolute;
+  inset: 0;
+  z-index: 28;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  overflow: hidden;
+  background: rgba(18, 10, 4, 0.72);
+  pointer-events: auto;
+}
+
+.hotkey-sheet {
+  position: relative;
+  width: min(680px, 100%);
+  max-height: 100%;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 22px 18px 16px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--papyrus);
+  border: 1px solid #8a6230;
+  box-shadow:
+    inset 0 0 18px rgba(120, 76, 28, 0.45),
+    inset 0 0 2px rgba(80, 50, 15, 0.6),
+    0 0 0 3px var(--wood),
+    0 0 0 4px var(--bronze),
+    0 16px 40px rgba(0, 0, 0, 0.55);
+  color: var(--ink);
+}
+
+.hotkey-sheet::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 5px;
+  height: 8px;
+  background: var(--meander-ink) 0 0 / 8px 8px repeat-x;
+  opacity: 0.75;
+}
+
+.hotkey-title {
+  margin-top: 8px;
+  font-family: var(--title);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+  color: #6e2416;
+  text-shadow: 0 1px 0 rgba(255, 245, 215, 0.6);
+}
+
+.hotkey-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.hotkey-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--ink-soft);
+}
+
+.hotkey-list kbd {
+  flex: none;
+  min-width: 1.6em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-align: center;
+  background: var(--bronze-face);
+  border: 1px solid var(--bronze-lo);
+  box-shadow: 0 1px 0 var(--wood-dark);
+  font-family: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.hotkey-list span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hotkey-close {
+  flex: none;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  font-family: var(--title);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--grain), var(--bronze-face);
+  border: 1px solid var(--bronze-lo);
+  box-shadow:
+    0 0 0 2px var(--wood-dark),
+    inset 0 1px 0 rgba(255, 245, 210, 0.75),
+    inset 0 -2px 3px rgba(80, 45, 10, 0.45);
+  touch-action: manipulation;
+}
+
+.hotkey-close:hover {
+  filter: brightness(1.08);
+}
+
+.hotkey-close:active {
+  transform: translateY(1px);
+}
+
+.hotkey-close:focus-visible {
+  outline: 2px solid var(--gilt);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .hotkey-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hotkey-sheet {
+    padding: 18px 12px 12px;
+  }
+
+  .hotkey-title {
+    font-size: 18px;
+    letter-spacing: 0.08em;
+  }
+}
+
 /* ---- End of match: resign, then the conquest/resign summary. Wonder and relic are not offered. ---- */
 
 .resign-btn {

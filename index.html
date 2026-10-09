@@ -489,6 +489,7 @@
       <div id="hud">
         <button id="resign-btn" class="resign-btn" type="button" title="Resign the match">Resign</button>
         <header class="hud-top">
+          <button id="help-btn" class="help-btn" type="button" title="Hotkeys (?)" aria-expanded="false" aria-controls="hotkey-help">?</button>
           <div class="logo">
             <svg class="logo-icon" aria-hidden="true"><use href="#i-shield" /></svg>
             <span class="logo-text">Ages Ago</span>
@@ -628,6 +629,13 @@
             </span>
           </button>
         </footer>
+      </div>
+      <div id="hotkey-help" class="hotkey-help" hidden role="dialog" aria-modal="true" aria-labelledby="hotkey-help-title">
+        <div class="hotkey-sheet">
+          <h2 id="hotkey-help-title" class="hotkey-title">Hotkeys</h2>
+          <ul id="hotkey-list" class="hotkey-list"></ul>
+          <button id="hotkey-close" class="hotkey-close" type="button">Close</button>
+        </div>
       </div>
       <!-- Conquest or resign. Wonder and relic victories are not part of this screen. -->
       <div id="endgame" class="endgame" hidden>
