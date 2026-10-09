@@ -1,8 +1,11 @@
 import * as THREE from 'three';
+import { BUILDINGS, FARM_FOOD } from '../core/buildings';
 import { SEA_LEVEL, type Building, type BuildingKind, type EntityId, type NodeKind, type ResourceNode, type ResourceType, type Unit, type Vec2 } from '../core/types';
 import type { World } from '../sim/World';
-import { buildTownCenter } from './buildings';
+import { createBuildingVisual, createGhost, footprintMinY, tintGhost, type BuildingVisual } from './buildingVisuals';
 import { applyFog, createFogDepthMaterial, isConcealed, matrixForConcealment, type FogOfWar } from './fog';
+import { SpatialInstances } from './instanceChunks';
+import { berryLodGeometry, goldLodGeometry, stoneLodGeometry, stoneNodeGeometry, treeLodGeometry } from './lod';
 import {
   berryBushGeometry,
   createScout,
@@ -38,33 +41,43 @@ interface UnitView {
 }
 
 const MARKER_DURATION = 0.6;
-const TC_SIZE: SpriteSize = { width: 3.05, height: 3.85 };
 /** Units are drawn larger than life (as in classic RTS games) so they stay readable when zoomed out. */
 const VILLAGER_SCALE = 1.35;
 const VILLAGER_SIZE: SpriteSize = { width: 0.7 * VILLAGER_SCALE, height: 1.0 * VILLAGER_SCALE };
 const SCOUT_SCALE = 1.1;
 const SCOUT_SIZE: SpriteSize = { width: 1.4 * SCOUT_SCALE, height: 2.0 * SCOUT_SCALE };
 const TUNICS = [0x8b4513, 0x3f6e9a, 0x4f7a3a];
-const GATHER_POSE: Record<string, VillagerPose> = { wood: 'chop', food: 'forage', gold: 'mine' };
+const GATHER_POSE: Record<string, VillagerPose> = { wood: 'chop', food: 'forage', gold: 'mine', stone: 'mine' };
+const BUILDING_HEIGHT: Record<BuildingKind, number> = {
+  townCenter: 4.2,
+  house: 2.3,
+  storehouse: 2.4,
+  granary: 2.5,
+  miningCamp: 2.2,
+  farm: 0.75,
+};
 
 /**
- * Visuals for every sim entity: low-poly 3D models (instanced for resources, animated
- * for villagers), the Town Center, stumps left by felled trees, selection rings and the
- * move marker. Subscribes to world.events for spawned/removed.
- * Public surface: constructor, object, sync, pick, idsInRect, setSelected, flashMarker, setFog.
+ * Visuals for every sim entity: chunked instanced resources (near mesh + far LOD),
+ * animated villagers, buildings and construction, selection rings and the move marker.
+ * Public surface: constructor, object, sync, pick, idsInRect, setSelected, flashMarker,
+ * setFog, setShadows, showGhost, hideGhost.
  *
  * The world constructor does not emit `spawned`, so existing entities are mounted here
- * and later spawns/removals follow the event bus.
+ * and later spawns/removals follow the event bus. `sync` also frustum-ready LOD-swaps
+ * resource chunks from the camera (each chunk mesh carries its own bounding sphere).
  */
 export class EntityViews {
   readonly object = new THREE.Group();
   private readonly material = modelMaterial();
   private readonly geometries: Record<NodeKind, THREE.BufferGeometry[]>;
-  private readonly stumps: InstancePool;
+  private readonly lodGeometries: Record<NodeKind, THREE.BufferGeometry>;
+  private readonly stumps: SpatialInstances;
   private readonly villagers = new Map<EntityId, UnitView>();
-  private readonly pools = new Map<string, InstancePool>();
-  private readonly nodePool = new Map<EntityId, InstancePool>();
-  private readonly buildings = new Map<EntityId, THREE.Group>();
+  private readonly pools = new Map<string, SpatialInstances>();
+  private readonly nodePool = new Map<EntityId, SpatialInstances>();
+  private readonly buildingViews = new Map<EntityId, BuildingVisual>();
+  private readonly ghosts = new Map<BuildingKind, THREE.Group>();
   private readonly sizeOf = new Map<EntityId, SpriteSize>();
   private readonly rings: THREE.Mesh[] = [];
   private readonly ringGeo: THREE.BufferGeometry;
@@ -75,6 +88,7 @@ export class EntityViews {
   private readonly markerMat: THREE.MeshBasicMaterial;
   private readonly dummy = new THREE.Object3D();
   private readonly v = new THREE.Vector3();
+  private readonly pose = new THREE.Matrix4();
   private selected: ReadonlySet<EntityId> = new Set();
   private shadows = false;
   private markerPos: Vec2 = { x: 0, z: 0 };
@@ -83,15 +97,24 @@ export class EntityViews {
   private fog: FogOfWar | null = null;
   private fogVersion = -1;
   private depthMaterial: THREE.Material | null = null;
-  private readonly pose = new THREE.Matrix4();
+  private activeGhost: THREE.Group | null = null;
 
   constructor(readonly world: World) {
-    // Stone quarries reuse the gold pile until the models lane adds a quarry geometry.
-    this.geometries = { tree: treeGeometries(), berry: [berryBushGeometry()], gold: [goldPileGeometry()], stone: [goldPileGeometry()] };
-    for (const list of Object.values(this.geometries)) for (const geo of list) geo.computeBoundingBox();
-    this.stumps = new InstancePool(stumpGeometry(), this.material, 64);
-    this.stumps.mesh.name = 'stumps';
-    this.object.add(this.stumps.mesh);
+    this.geometries = {
+      tree: treeGeometries(),
+      berry: [berryBushGeometry()],
+      gold: [goldPileGeometry()],
+      stone: [stoneNodeGeometry()],
+    };
+    this.lodGeometries = {
+      tree: treeLodGeometry(),
+      berry: berryLodGeometry(),
+      gold: goldLodGeometry(),
+      stone: stoneLodGeometry(),
+    };
+    for (const list of Object.values(this.geometries)) for (const geo of list) if (geo.boundingBox === null) geo.computeBoundingBox();
+
+    this.stumps = new SpatialInstances(this.object, stumpGeometry(), stumpGeometry(), this.material, 'stumps', 32, (mesh) => this.hook(mesh));
 
     this.shadowGeo = new THREE.PlaneGeometry(1.4, 1.4);
     this.shadowGeo.rotateX(-Math.PI / 2);
@@ -130,18 +153,23 @@ export class EntityViews {
       const entity = this.world.get(e.id);
       if (!entity) return;
       if ('carry' in entity) this.mountVillager(entity);
-      else if ('complete' in entity) this.mountTownCenter(entity);
+      else if ('complete' in entity) this.mountBuilding(entity);
       else this.mountNode(entity);
     });
     this.world.events.on('removed', (e) => this.unmount(e.id));
+    this.world.events.on('constructed', (e) => {
+      const building = this.world.buildings.get(e.id);
+      const view = this.buildingViews.get(e.id);
+      if (building && view) view.setProgress(building.buildProgress, true);
+    });
 
-    for (const building of this.world.buildings.values()) this.mountTownCenter(building);
+    for (const building of this.world.buildings.values()) this.mountBuilding(building);
     for (const node of this.world.nodes.values()) this.mountNode(node);
     for (const unit of this.world.units.values()) this.mountVillager(unit);
   }
 
   /**
-   * Fog resource nodes, stumps and the town center. Units stay fully lit — they are the viewers.
+   * Fog resource nodes, stumps and buildings. Units stay fully lit — they are the viewers.
    * `sync` already calls `syncFog`. Call `fog.update` before `sync` so the mask and the scales match.
    */
   setFog(fog: FogOfWar): void {
@@ -150,21 +178,14 @@ export class EntityViews {
       applyFog(this.material, fog, { hideUnexplored: true });
       this.depthMaterial = createFogDepthMaterial(fog);
     }
-    this.hook(this.stumps.mesh);
-    for (const pool of this.pools.values()) this.hook(pool.mesh);
-    for (const group of this.buildings.values()) {
-      group.traverse((obj) => {
-        const mesh = obj as THREE.Mesh;
-        if (!mesh.isMesh) return;
-        applyFog(mesh.material as THREE.Material, fog, { hideUnexplored: true });
-        this.hook(mesh);
-      });
-    }
+    for (const pool of this.pools.values()) pool.forEachMesh((mesh) => this.hook(mesh));
+    this.stumps.forEachMesh((mesh) => this.hook(mesh));
+    for (const view of this.buildingViews.values()) this.fogBuilding(view.object);
     this.fogVersion = -1;
     this.syncFog();
   }
 
-  /** Collapse nodes and stumps on unexplored cells, and hide an unexplored town center. */
+  /** Collapse nodes and stumps on unexplored cells, and hide an unexplored building. */
   syncFog(): void {
     if (!this.fog || this.fog.version === this.fogVersion) return;
     this.fogVersion = this.fog.version;
@@ -174,13 +195,15 @@ export class EntityViews {
   /** Update visuals. `alpha` ∈ [0,1] interpolates unit prevPos → pos; `time` in seconds. */
   sync(alpha: number, time: number, camera: THREE.Camera): void {
     this.syncFog();
+    this.cullChunks(camera);
     const t = clamp01(alpha);
-    this.syncVillagers(t, time, camera);
+    this.syncVillagers(t, time);
+    this.syncBuildings(camera);
     this.syncRings(t);
     this.syncMarker(time);
   }
 
-  /** Entity under a normalised-device-coordinate point, or null. Units win over nodes. */
+  /** Entity under a normalised-device-coordinate point, or null. Units win over nodes, which win over buildings. */
   pick(ndc: THREE.Vector2, camera: THREE.Camera): EntityId | null {
     this.prepareCamera(camera);
     const hits: PickCandidate[] = [];
@@ -197,7 +220,7 @@ export class EntityViews {
     }
     for (const building of this.world.buildings.values()) {
       if (this.concealed(building.pos.x, building.pos.z)) continue;
-      this.consider(hits, camera, ndc, building.id, PICK_RANK.townCenter, building.pos.x, building.pos.z, TC_SIZE);
+      this.considerBuilding(hits, camera, ndc, building);
     }
     return choosePick(hits);
   }
@@ -222,24 +245,47 @@ export class EntityViews {
     return ids;
   }
 
-  /** Let trees, resources, villagers and buildings cast (and receive) sun shadows. */
+  /** Let near resource chunks, villagers and buildings cast (and receive) sun shadows. Far LOD chunks never do. */
   setShadows(on: boolean): void {
     this.shadows = on;
     this.object.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
-      if (!mesh.isMesh || mesh.material === this.shadowMat || mesh.material === this.ringMat || mesh.material === this.markerMat) return;
+      if (!mesh.isMesh) return;
+      if (mesh.userData.noShadow || mesh.name.endsWith(':lod')) {
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        return;
+      }
+      if (mesh.material === this.shadowMat || mesh.material === this.ringMat || mesh.material === this.markerMat) return;
       mesh.castShadow = on;
       mesh.receiveShadow = on;
     });
+    for (const pool of this.pools.values()) pool.setShadows(on);
+    this.stumps.setShadows(on);
   }
 
   /**
-   * Show a translucent placement preview of `kind` at `pos`/`rot`, tinted green when `valid`
-   * and red otherwise. FROZEN signature (UI placement mode). STUB until the Render lane lands.
+   * Translucent placement preview of `kind` at `pos`/`rot`, tinted green when `valid`
+   * and red otherwise, plus a footprint outline on the ground.
    */
-  showGhost(_kind: BuildingKind, _pos: Vec2, _rot: number, _valid: boolean): void {}
+  showGhost(kind: BuildingKind, pos: Vec2, rot: number, valid: boolean): void {
+    let ghost = this.ghosts.get(kind);
+    if (!ghost) {
+      ghost = createGhost(kind);
+      this.object.add(ghost);
+      this.ghosts.set(kind, ghost);
+    }
+    if (this.activeGhost && this.activeGhost !== ghost) this.activeGhost.visible = false;
+    this.activeGhost = ghost;
+    ghost.visible = true;
+    ghost.position.set(pos.x, footprintMinY(this.world.hf, kind, pos, rot), pos.z);
+    ghost.rotation.y = rot;
+    tintGhost(ghost, valid);
+  }
 
-  hideGhost(): void {}
+  hideGhost(): void {
+    if (this.activeGhost) this.activeGhost.visible = false;
+  }
 
   setSelected(ids: ReadonlySet<EntityId>): void {
     this.selected = ids;
@@ -283,40 +329,35 @@ export class EntityViews {
     const variants = this.geometries[node.kind];
     const variant = node.id % variants.length;
     const geometry = variants[variant];
-    const capacity = node.kind === 'tree' ? 512 : node.kind === 'berry' ? 256 : 128;
-    const pool = this.poolFor(`${node.kind}:${variant}`, geometry, capacity);
-    if (pool.ids.length >= pool.mesh.instanceMatrix.count) this.grow(pool);
+    const capacity = node.kind === 'tree' ? 48 : 24;
+    const pool = this.poolFor(node.kind, variant, geometry, capacity);
     const scale = 0.9 + frac(node.id * 12.9898) * 0.2;
-    pool.add(node.id, scale);
-    this.nodePool.set(node.id, pool);
-    const box = geometry.boundingBox as THREE.Box3;
-    const width = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * scale;
-    this.sizeOf.set(node.id, { width, height: box.max.y * scale });
     this.dummy.position.set(node.pos.x, this.groundY(node.pos.x, node.pos.z), node.pos.z);
     this.dummy.rotation.set(0, frac(node.id * 78.233) * Math.PI * 2, 0);
     this.dummy.scale.set(scale, scale, scale);
     this.dummy.updateMatrix();
-    pool.mesh.setMatrixAt(pool.ids.length - 1, this.dummy.matrix);
-    pool.remember(pool.ids.length - 1);
-    pool.mesh.instanceMatrix.needsUpdate = true;
+    pool.add(node.id, this.dummy.matrix);
+    this.nodePool.set(node.id, pool);
+    const box = geometry.boundingBox;
+    const width = box ? Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * scale : 1;
+    const height = box ? box.max.y * scale : 1;
+    this.sizeOf.set(node.id, { width, height });
     if (this.fog) this.refreshConcealment();
   }
 
-  private mountTownCenter(building: Building): void {
-    if (this.buildings.has(building.id)) return;
-    const group = buildTownCenter(this.groundY(building.pos.x, building.pos.z));
-    group.position.x = building.pos.x;
-    group.position.z = building.pos.z;
-    this.object.add(group);
-    this.buildings.set(building.id, group);
+  private mountBuilding(building: Building): void {
+    if (this.buildingViews.has(building.id)) return;
+    const visual = createBuildingVisual(building.kind);
+    const y = footprintMinY(this.world.hf, building.kind, building.pos, building.rot);
+    visual.object.position.set(building.pos.x, y, building.pos.z);
+    visual.object.rotation.y = building.rot;
+    visual.setProgress(building.buildProgress, building.complete);
+    if (building.kind === 'farm') visual.setFarmFood(building.food ?? (building.complete ? FARM_FOOD : 0));
+    this.applyBuildingShadows(visual.object);
+    this.object.add(visual.object);
+    this.buildingViews.set(building.id, visual);
     if (this.fog) {
-      const fog = this.fog;
-      group.traverse((obj) => {
-        const mesh = obj as THREE.Mesh;
-        if (!mesh.isMesh) return;
-        applyFog(mesh.material as THREE.Material, fog, { hideUnexplored: true });
-        this.hook(mesh);
-      });
+      this.fogBuilding(visual.object);
       this.refreshConcealment();
     }
   }
@@ -329,71 +370,31 @@ export class EntityViews {
     }
     const pool = this.nodePool.get(id);
     if (pool) {
-      if (pool.mesh.name.startsWith('tree:')) this.leaveStump(pool, id);
-      pool.remove(id);
+      const base = pool.remove(id);
+      if (base && pool.label.startsWith('tree:')) this.stumps.add(id, base);
       this.nodePool.delete(id);
     }
-    const building = this.buildings.get(id);
+    const building = this.buildingViews.get(id);
     if (building) {
-      this.object.remove(building);
-      this.buildings.delete(id);
+      this.object.remove(building.object);
+      disposeMaterials(building.object);
+      this.buildingViews.delete(id);
     }
     this.sizeOf.delete(id);
     if (this.fog) this.refreshConcealment();
   }
 
-  /** A felled tree leaves a stump where it stood (same position, yaw and scale). */
-  private leaveStump(pool: InstancePool, id: EntityId): void {
-    const index = pool.indexOf.get(id);
-    if (index === undefined) return;
-    if (this.stumps.ids.length >= this.stumps.mesh.instanceMatrix.count) this.grow(this.stumps);
-    const base = pool.bases[index];
-    if (base) this.dummy.matrix.copy(base);
-    else pool.mesh.getMatrixAt(index, this.dummy.matrix);
-    this.stumps.add(id, 1);
-    const stumpIndex = this.stumps.ids.length - 1;
-    this.stumps.mesh.setMatrixAt(stumpIndex, this.dummy.matrix);
-    this.stumps.remember(stumpIndex);
-    this.stumps.mesh.instanceMatrix.needsUpdate = true;
-  }
-
-  private poolFor(key: string, geometry: THREE.BufferGeometry, capacity: number): InstancePool {
+  private poolFor(kind: NodeKind, variant: number, geometry: THREE.BufferGeometry, capacity: number): SpatialInstances {
+    const key = `${kind}:${variant}`;
     let pool = this.pools.get(key);
     if (!pool) {
-      pool = new InstancePool(geometry, this.material, capacity);
-      pool.mesh.name = key;
-      pool.mesh.castShadow = this.shadows;
-      pool.mesh.receiveShadow = this.shadows;
-      if (this.fog) this.hook(pool.mesh);
-      this.object.add(pool.mesh);
+      pool = new SpatialInstances(this.object, geometry, this.lodGeometries[kind], this.material, key, capacity, (mesh) => this.hook(mesh));
       this.pools.set(key, pool);
     }
     return pool;
   }
 
-  private grow(pool: InstancePool): void {
-    const src = pool.mesh;
-    const next = new THREE.InstancedMesh(src.geometry, src.material, src.instanceMatrix.count * 2);
-    next.name = src.name;
-    next.castShadow = src.castShadow;
-    next.receiveShadow = src.receiveShadow;
-    next.frustumCulled = false;
-    next.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    next.customDepthMaterial = src.customDepthMaterial;
-    next.onBeforeRender = src.onBeforeRender;
-    if (src.userData.agFogHook) next.userData.agFogHook = 1;
-    next.count = pool.ids.length;
-    for (let i = 0; i < pool.ids.length; i++) {
-      src.getMatrixAt(i, this.dummy.matrix);
-      next.setMatrixAt(i, this.dummy.matrix);
-    }
-    next.instanceMatrix.needsUpdate = true;
-    this.object.remove(src);
-    this.object.add(next);
-    pool.mesh = next;
-  }
-
-  private syncVillagers(alpha: number, time: number, _camera: THREE.Camera): void {
+  private syncVillagers(alpha: number, time: number): void {
     for (const unit of this.world.units.values()) this.placeVillager(unit, alpha, time);
   }
 
@@ -407,6 +408,20 @@ export class EntityViews {
     view.object.rotation.set(0, unit.facing, 0);
     view.pose(unit, time);
     view.shadow.position.set(x, ground + 0.04, z);
+  }
+
+  private syncBuildings(camera: THREE.Camera): void {
+    for (const building of this.world.buildings.values()) {
+      const view = this.buildingViews.get(building.id);
+      if (!view) continue;
+      view.setProgress(building.buildProgress, building.complete);
+      if (building.kind === 'farm') {
+        const food = building.food !== undefined ? building.food : building.complete ? FARM_FOOD : 0;
+        view.setFarmFood(food);
+      }
+      const showBar = !building.complete || this.selected.has(building.id);
+      view.setBar(showBar, building.buildProgress, camera);
+    }
   }
 
   private syncRings(alpha: number): void {
@@ -498,6 +513,42 @@ export class EntityViews {
     hits.push({ id, rank, depth: toX * toX + dy * dy + toZ * toZ });
   }
 
+  private considerBuilding(hits: PickCandidate[], camera: THREE.Camera, ndc: THREE.Vector2, building: Building): void {
+    const { w, d } = BUILDINGS[building.kind].size;
+    const hw = w / 2;
+    const hd = d / 2;
+    const cos = Math.cos(building.rot);
+    const sin = Math.sin(building.rot);
+    const y0 = this.groundY(building.pos.x, building.pos.z);
+    const y1 = y0 + BUILDING_HEIGHT[building.kind];
+    this.v.set(building.pos.x, (y0 + y1) * 0.5, building.pos.z).applyMatrix4(camera.matrixWorldInverse);
+    if (this.v.z >= 0) return;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const y of [y0, y1]) {
+      for (const lx of [-hw, hw]) {
+        for (const lz of [-hd, hd]) {
+          const x = building.pos.x + lx * cos - lz * sin;
+          const z = building.pos.z + lx * sin + lz * cos;
+          this.v.set(x, y, z).applyMatrix4(camera.matrixWorldInverse);
+          if (this.v.z >= 0) continue;
+          this.v.set(x, y, z).project(camera);
+          if (this.v.x < minX) minX = this.v.x;
+          if (this.v.x > maxX) maxX = this.v.x;
+          if (this.v.y < minY) minY = this.v.y;
+          if (this.v.y > maxY) maxY = this.v.y;
+        }
+      }
+    }
+    if (minX === Infinity || !rectContains(ndc.x, ndc.y, minX, minY, maxX, maxY)) return;
+    const dx = camera.position.x - building.pos.x;
+    const dy = camera.position.y - (y0 + y1) * 0.5;
+    const dz = camera.position.z - building.pos.z;
+    hits.push({ id: building.id, rank: PICK_RANK.townCenter, depth: dx * dx + dy * dy + dz * dz });
+  }
+
   private pointInRect(
     camera: THREE.Camera,
     rect: ScreenRect,
@@ -537,84 +588,63 @@ export class EntityViews {
     mesh.onBeforeRender = () => this.syncFog();
   }
 
+  private fogBuilding(group: THREE.Object3D): void {
+    if (!this.fog) return;
+    const fog = this.fog;
+    group.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh || mesh.userData.noShadow) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const mat of mats) applyFog(mat, fog, { hideUnexplored: true });
+      this.hook(mesh);
+    });
+  }
+
+  private applyBuildingShadows(group: THREE.Object3D): void {
+    group.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if (mesh.userData.noShadow) {
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        return;
+      }
+      mesh.castShadow = this.shadows;
+      mesh.receiveShadow = this.shadows;
+    });
+  }
+
+  /** Near/far swap from the camera. Off-screen rejection is each chunk's bounding sphere. */
+  private cullChunks(camera: THREE.Camera): void {
+    const x = camera.position.x;
+    const z = camera.position.z;
+    for (const pool of this.pools.values()) pool.cull(x, z, this.shadows);
+    this.stumps.cull(x, z, this.shadows);
+  }
+
   /** Zero the scale of nodes and stumps on unexplored cells; restore it once seen. */
   private refreshConcealment(): void {
     if (!this.fog) return;
     const vis = this.fog.visibility;
-    for (const pool of this.pools.values()) this.concealPool(pool, vis);
-    this.concealPool(this.stumps, vis);
-    for (const [id, group] of this.buildings) {
+    const hidden = (x: number, z: number) => isConcealed(vis, x, z);
+    for (const pool of this.pools.values()) pool.conceal(hidden, this.pose, matrixForConcealment);
+    this.stumps.conceal(hidden, this.pose, matrixForConcealment);
+    for (const [id, view] of this.buildingViews) {
       const building = this.world.buildings.get(id);
       if (!building) continue;
-      group.visible = !isConcealed(vis, building.pos.x, building.pos.z);
+      view.object.visible = !isConcealed(vis, building.pos.x, building.pos.z);
     }
-  }
-
-  private concealPool(pool: InstancePool, vis: FogOfWar['visibility']): void {
-    for (let i = 0; i < pool.ids.length; i++) {
-      const base = pool.bases[i];
-      if (!base) continue;
-      const concealed = isConcealed(vis, base.elements[12], base.elements[14]);
-      matrixForConcealment(base, concealed, this.pose);
-      pool.mesh.setMatrixAt(i, this.pose);
-    }
-    pool.mesh.instanceMatrix.needsUpdate = true;
   }
 }
 
-class InstancePool {
-  readonly ids: EntityId[] = [];
-  readonly scales: number[] = [];
-  /** Full-scale matrices, kept so fog can restore a concealed instance. */
-  readonly bases: THREE.Matrix4[] = [];
-  readonly indexOf = new Map<EntityId, number>();
-  mesh: THREE.InstancedMesh;
-
-  constructor(geometry: THREE.BufferGeometry, material: THREE.Material, capacity: number) {
-    this.mesh = new THREE.InstancedMesh(geometry, material, capacity);
-    this.mesh.count = 0;
-    this.mesh.frustumCulled = false;
-    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  }
-
-  add(id: EntityId, scale: number): void {
-    const index = this.ids.length;
-    this.ids.push(id);
-    this.scales.push(scale);
-    this.indexOf.set(id, index);
-    this.mesh.count = this.ids.length;
-  }
-
-  /** Snapshot the matrix just written so concealment can restore it. */
-  remember(index: number): void {
-    const base = this.bases[index] ?? new THREE.Matrix4();
-    this.mesh.getMatrixAt(index, base);
-    this.bases[index] = base;
-  }
-
-  remove(id: EntityId): void {
-    const index = this.indexOf.get(id);
-    if (index === undefined) return;
-    const last = this.ids.length - 1;
-    if (index !== last) {
-      const moved = this.ids[last];
-      this.ids[index] = moved;
-      this.scales[index] = this.scales[last];
-      this.bases[index] = this.bases[last];
-      this.indexOf.set(moved, index);
-      this.mesh.getMatrixAt(last, swapMatrix);
-      this.mesh.setMatrixAt(index, swapMatrix);
-    }
-    this.ids.pop();
-    this.scales.pop();
-    this.bases.pop();
-    this.indexOf.delete(id);
-    this.mesh.count = this.ids.length;
-    this.mesh.instanceMatrix.needsUpdate = true;
-  }
+function disposeMaterials(root: THREE.Object3D): void {
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const mat of mats) mat.dispose();
+  });
 }
-
-const swapMatrix = new THREE.Matrix4();
 
 function poseOf(unit: Unit): VillagerPose {
   switch (unit.state) {
@@ -622,9 +652,12 @@ function poseOf(unit: Unit): VillagerPose {
     case 'toNode':
     case 'toDrop':
     case 'exploring':
+    case 'toBuild':
       return 'walk';
     case 'gathering':
       return GATHER_POSE[unit.gatherType ?? 'food'];
+    case 'building':
+      return 'chop';
     default:
       return 'idle';
   }
@@ -639,7 +672,7 @@ function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
-/** Villager models show wood, food or gold bundles; stone reuses the gold look for now. */
+/** Villager models show wood, food or gold bundles; stone reuses the gold look until models grow a stone bundle. */
 function carriedLook(type: ResourceType | null): 'wood' | 'food' | 'gold' | null {
   return type === 'stone' ? 'gold' : type;
 }

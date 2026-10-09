@@ -97,7 +97,18 @@ describe('EntityViews', () => {
     let n = 0;
     views.object.traverse((obj) => {
       const mesh = obj as THREE.InstancedMesh;
-      if (mesh.isInstancedMesh && mesh.name !== 'stumps') n += mesh.count;
+      if (!mesh.isInstancedMesh) return;
+      if (mesh.name.startsWith('stumps') || mesh.name.endsWith(':lod')) return;
+      n += mesh.count;
+    });
+    return n;
+  }
+
+  function stumpCount(): number {
+    let n = 0;
+    views.object.traverse((obj) => {
+      const mesh = obj as THREE.InstancedMesh;
+      if (mesh.isInstancedMesh && mesh.name.startsWith('stumps:') && !mesh.name.endsWith(':lod')) n += mesh.count;
     });
     return n;
   }
@@ -166,10 +177,9 @@ describe('EntityViews', () => {
 
   it('hides a resource instance when it is removed, leaving a stump for trees', () => {
     const tree = [...world.nodes.values()].find((n) => n.kind === 'tree')!;
-    const stumps = views.object.children.find((obj) => obj.name === 'stumps') as THREE.InstancedMesh;
     const before = instanceCount();
     world.events.emit({ type: 'removed', id: tree.id });
     expect(instanceCount()).toBe(before - 1);
-    expect(stumps.count).toBe(1);
+    expect(stumpCount()).toBe(1);
   });
 });
