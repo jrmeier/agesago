@@ -6,8 +6,8 @@
  * x ∈ [0, MAP_W], z ∈ [0, MAP_D]. Y is up; sea level is y = 0.
  */
 
-export const MAP_W = 160;
-export const MAP_D = 120;
+export const MAP_W = 176;
+export const MAP_D = 176;
 export const SEA_LEVEL = 0;
 export const DEFAULT_SEED = 1;
 
