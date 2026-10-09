@@ -22,3 +22,5 @@ export const TREE_FOLIAGE = [0x4f7a36, 0x3e682c, 0x628848];
 export const VILLAGER = { body: 0xc4956a, tunic: 0x8e4030, head: 0xe8c4a0 };
 export const SELECTION = 0xe0b45a;
 export const MOVE_MARKER = 0x6ecfff;
+/** Selection ring drawn on an enemy unit. */
+export const ENEMY_RING = 0xc4312c;
