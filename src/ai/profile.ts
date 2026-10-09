@@ -9,6 +9,37 @@ export interface AIOptions {
   personality?: Personality;
   /** Seeds the AI's own choices (unit picks, placement ties). Default 1. */
   seed?: number;
+  /** Overrides applied on top of the tuned profile (tests, tuning; e.g. `{ research: null }`). */
+  tune?: Partial<Profile>;
+}
+
+/** Groups in the research priority table (see research.ts). */
+export type TechGroup = 'eco' | 'tc' | 'forge' | 'line' | 'defence';
+
+/**
+ * Research and age timing. `null` turns research and aging off entirely (a control AI for tests).
+ */
+export interface ResearchProfile {
+  /** Villagers before saving for the Town Age / City Age. */
+  townAgeAt: number;
+  cityAgeAt: number;
+  /** Earliest sim second each age-up may start (slows easy down). */
+  townAgeTime: number;
+  cityAgeTime: number;
+  /** Villagers working a resource before its drop-site techs are worth it. */
+  ecoWorkers: number;
+  /** Units of a kind before its unit-line upgrade. */
+  lineUnits: number;
+  /** Per-group weight on the priority table's base score; 0 skips the group. */
+  weights: Record<TechGroup, number>;
+  /** Minimum seconds between starting two (non-age) techs. */
+  gap: number;
+  /** Extra food (beyond one villager) kept back for villager production while it still booms. */
+  villagerReserve: number;
+  /** Sell or buy at its market when a stock passes this and a needed resource is short. */
+  marketExcess: number;
+  /** Watch towers it raises toward the enemy from the Town Age (paid mostly in idle stone). */
+  towers: number;
 }
 
 /**
@@ -54,7 +85,12 @@ export interface Profile {
   shelter: boolean;
   /** Light cheats for 'hardest': resources per sim second and full map knowledge. */
   cheat: { trickle: Partial<Stockpile>; fullMap: boolean } | null;
+  /** Ages and upgrades; null = never researches or ages up. */
+  research: ResearchProfile | null;
 }
+
+const ALL_GROUPS: Record<TechGroup, number> = { eco: 1, tc: 1, forge: 1, line: 1, defence: 1 };
+
 
 const BASE: Record<Difficulty, Profile> = {
   easy: {
@@ -78,6 +114,19 @@ const BASE: Record<Difficulty, Profile> = {
     builders: 1,
     shelter: false,
     cheat: null,
+    research: {
+      townAgeAt: 18,
+      cityAgeAt: 22,
+      townAgeTime: 14 * 60,
+      cityAgeTime: 28 * 60,
+      ecoWorkers: 8,
+      lineUnits: 8,
+      weights: { eco: 0.7, tc: 0.5, forge: 0.4, line: 0.3, defence: 0 },
+      gap: 75,
+      villagerReserve: 100,
+      marketExcess: 1500,
+      towers: 1,
+    },
   },
   moderate: {
     econInterval: 2,
@@ -100,6 +149,19 @@ const BASE: Record<Difficulty, Profile> = {
     builders: 2,
     shelter: true,
     cheat: null,
+    research: {
+      townAgeAt: 20,
+      cityAgeAt: 30,
+      townAgeTime: 0,
+      cityAgeTime: 0,
+      ecoWorkers: 6,
+      lineUnits: 5,
+      weights: ALL_GROUPS,
+      gap: 15,
+      villagerReserve: 50,
+      marketExcess: 1000,
+      towers: 3,
+    },
   },
   hard: {
     econInterval: 1,
@@ -122,6 +184,19 @@ const BASE: Record<Difficulty, Profile> = {
     builders: 3,
     shelter: true,
     cheat: null,
+    research: {
+      townAgeAt: 19,
+      cityAgeAt: 28,
+      townAgeTime: 0,
+      cityAgeTime: 0,
+      ecoWorkers: 5,
+      lineUnits: 5,
+      weights: { ...ALL_GROUPS, forge: 1.2, line: 1.2 },
+      gap: 8,
+      villagerReserve: 50,
+      marketExcess: 900,
+      towers: 3,
+    },
   },
   hardest: {
     econInterval: 0.6,
@@ -144,12 +219,26 @@ const BASE: Record<Difficulty, Profile> = {
     builders: 3,
     shelter: true,
     cheat: { trickle: { food: 0.35, wood: 0.35, gold: 0.25, stone: 0.1 }, fullMap: true },
+    research: {
+      townAgeAt: 18,
+      cityAgeAt: 27,
+      townAgeTime: 0,
+      cityAgeTime: 0,
+      ecoWorkers: 5,
+      lineUnits: 4,
+      weights: { ...ALL_GROUPS, forge: 1.3, line: 1.3, defence: 1.2 },
+      gap: 5,
+      villagerReserve: 50,
+      marketExcess: 800,
+      towers: 4,
+    },
   },
 };
 
 /** The tuned profile for a difficulty and personality. */
-export function makeProfile(difficulty: Difficulty, personality?: Personality): Profile {
-  const p: Profile = { ...BASE[difficulty] };
+export function makeProfile(difficulty: Difficulty, personality?: Personality, tune?: Partial<Profile>): Profile {
+  const base = BASE[difficulty];
+  const p: Profile = { ...base, research: base.research && { ...base.research, weights: { ...base.research.weights } } };
   switch (personality) {
     case 'rusher':
       // Early barracks, a small early wave, then steady pressure; a leaner economy.
@@ -174,7 +263,18 @@ export function makeProfile(difficulty: Difficulty, personality?: Personality): 
       p.maxWave = Math.round(p.maxWave * 1.3);
       p.waveGap *= 1.5;
       p.reaction *= 0.6;
+      if (p.research) {
+        p.research.weights.defence *= 1.5;
+        p.research.towers += 2;
+      }
       break;
+  }
+  Object.assign(p, tune);
+  // A smaller economy (rusher, easy) still ages up: never wait for more villagers than it trains.
+  if (p.research) {
+    p.research = { ...p.research, weights: { ...p.research.weights } };
+    p.research.cityAgeAt = Math.min(p.research.cityAgeAt, p.targetVillagers);
+    p.research.townAgeAt = Math.min(p.research.townAgeAt, p.research.cityAgeAt - 4);
   }
   return p;
 }

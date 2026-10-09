@@ -20,6 +20,21 @@ export interface Ctx {
   home: Vec2;
   /** Nav region of the base (for reachability checks). */
   region: number;
+  /**
+   * Resources being saved for something important (an age-up). Villager and army training,
+   * construction and research leave this much in the stockpile.
+   */
+  reserve: Partial<Stockpile>;
+  /** Resources held for the next tech: army training leaves this much (villagers don't). */
+  techReserve: Partial<Stockpile>;
+  /** Food villager training leaves for an economy tech (a short, bounded pause). */
+  villagerHold: number;
+  /** Outgunned or raided: army training ignores `reserve` and `techReserve`. */
+  armyFirst: boolean;
+  /** Saving for or researching an age-up: hold new attack waves (defend at home). */
+  aging: boolean;
+  /** Villager training also leaves `reserve` (a short pause to click up to the Town Age). */
+  pauseVillagers: boolean;
 }
 
 /** One sweep over the world: this player's units and buildings, sorted by role. */

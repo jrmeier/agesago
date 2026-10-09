@@ -51,10 +51,14 @@ export class Economy {
     else if (s.villagers.length < 25) r = { food: 0.45, wood: 0.32, gold: 0.18, stone: 0.05 };
     else r = { food: 0.4, wood: 0.27, gold: 0.25, stone: 0.08 };
     const stock = this.c.world.stockOf(this.c.player);
+    const reserve = this.c.reserve;
     let sum = 0;
     for (const t of TYPES) {
+      // Saving up (an age-up): lean toward what is still missing.
+      const missing = (reserve[t] ?? 0) - stock[t];
+      if (missing > 0) r[t] = Math.max(r[t], 0.1) * (1 + Math.min(0.6, missing / 1000));
       // Stockpiling more than it spends: move workers elsewhere.
-      const plenty = t === 'food' || t === 'wood' ? 400 : 300;
+      const plenty = (t === 'food' || t === 'wood' ? 400 : 300) + (reserve[t] ?? 0);
       if (stock[t] > plenty) r[t] *= plenty / stock[t];
       if (t !== 'food' && !this.c.intel.nodes[t].length) r[t] = 0;
       sum += r[t];
@@ -74,7 +78,7 @@ export class Economy {
         tc.queue < profile.tcQueue &&
         s.villagers.length + tc.queue < profile.targetVillagers &&
         s.popUsed < s.popCap &&
-        stock.food >= 50
+        stock.food - this.c.villagerHold - (this.c.pauseVillagers ? this.c.reserve.food ?? 0 : 0) >= 50
       ) {
         const before = tc.queue;
         this.c.issue({ type: 'train', buildingId: tc.id, unit: 'villager' });
@@ -103,6 +107,11 @@ export class Economy {
 
     for (const v of idle) {
       const order = [...TYPES].sort((a, b) => want(b) - want(a));
+      // No food to gather: wood (for fields) beats piling up more gold or stone.
+      if (want('food') > 0.5 && order.indexOf('wood') > order.indexOf('food')) {
+        order.splice(order.indexOf('wood'), 1);
+        order.splice(order.indexOf('food') + 1, 0, 'wood');
+      }
       for (const t of order) {
         if (this.assign(v, t, s)) {
           counts[t]++;
@@ -316,11 +325,22 @@ export class Economy {
     return r;
   }
 
+  /**
+   * Build one `kind` around `center` (between minR and maxR from it) with `n` builders. Used by
+   * the research planner for age buildings, the forge, market and academy.
+   * true: laid; false: can't afford yet; null: no spot or no builder.
+   */
+  buildAt(s: Snapshot, kind: BuildingKind, center: Vec2, minR: number, maxR: number, n: number, near?: Vec2, toward?: Vec2): boolean | null {
+    const big = BUILDINGS[kind].size.w > 3;
+    const q: SpotQuery = { kind, center, minR, maxR, clearOfNodes: big ? 3 : 1, gap: big ? 1.5 : 1, maxChecks: 40, toward, bias: toward ? 10 : undefined };
+    return this.place(s, q, n, near);
+  }
+
   /** Lay a foundation found by `q` and send `n` builders. */
   private place(s: Snapshot, q: SpotQuery, n: number, near?: Vec2): boolean | null {
     const { world, player, intel } = this.c;
     if (ageLocked(world, q.kind, player)) return null;
-    if (!canAfford(world.stockOf(player), BUILDINGS[q.kind].cost)) return false;
+    if (!canAfford(world.stockOf(player), BUILDINGS[q.kind].cost, this.c.reserve)) return false;
     const builders = this.builders(s, near ?? q.center, n, q.kind === 'farm');
     if (!builders.length) return null;
     const pos = findSpot(world, intel, player, { ...q, region: this.c.region });

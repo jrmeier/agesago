@@ -258,7 +258,7 @@ describe('age gating', () => {
 });
 
 describe('AI and age gating', () => {
-  it('a Village Age AI never asks for age-locked buildings or units', () => {
+  it('an AI never asks for buildings or units beyond its age', () => {
     const world = makeGame(2, ['ai', 'ai']);
     const ais = [1, 2].map((p) => new AIPlayer(world, p, { difficulty: 'hard', seed: p }));
     let ageRejects = 0;
@@ -269,8 +269,10 @@ describe('AI and age gating', () => {
     expect(ageRejects).toBe(0);
     const kinds = new Set([...world.buildings.values()].filter((b) => b.owner === 1).map((b) => b.kind));
     expect(kinds.has('barracks')).toBe(true);
-    for (const b of world.buildings.values()) expect(BUILDINGS[b.kind].age ?? 0).toBe(0);
-    for (const u of world.units.values()) expect(UNITS[u.kind].age ?? 0).toBe(0);
+    // The AI ages up (M8-16): nothing it owns may be from a later age than its own.
+    const age = (p: number) => world.players.get(p)?.age ?? 0;
+    for (const b of world.buildings.values()) expect(BUILDINGS[b.kind].age ?? 0).toBeLessThanOrEqual(age(b.owner));
+    for (const u of world.units.values()) expect(UNITS[u.kind].age ?? 0).toBeLessThanOrEqual(age(u.owner));
     for (const ai of ais) ai.dispose();
   }, 120_000);
 });

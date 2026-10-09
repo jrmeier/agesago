@@ -4,6 +4,7 @@ import { rngFrom, snapshot, type Ctx } from './context';
 import { Economy } from './economy';
 import { Intel } from './intel';
 import { Military } from './military';
+import { Research } from './research';
 import { makeProfile, type AIOptions, type Profile } from './profile';
 
 export type { AIOptions, Difficulty, Personality } from './profile';
@@ -31,6 +32,7 @@ export class AIPlayer {
   readonly intel: Intel;
   readonly economy: Economy;
   readonly military: Military;
+  readonly research: Research;
   /** Counters for tests and debugging. */
   readonly stats = { commands: 0, rejected: 0, tasks: 0 };
   private readonly ctx: Ctx;
@@ -46,7 +48,7 @@ export class AIPlayer {
     readonly opts: AIOptions
   ) {
     if (!world.players.has(player)) throw new Error(`no player ${player}`);
-    this.profile = makeProfile(opts.difficulty, opts.personality);
+    this.profile = makeProfile(opts.difficulty, opts.personality, opts.tune);
     this.intel = new Intel(world, player, !!this.profile.cheat?.fullMap);
     const tc = world.townCenterOf(player);
     const home: Vec2 = tc ? { ...tc.pos } : firstOwned(world, player) ?? { x: world.hf.width / 2, z: world.hf.depth / 2 };
@@ -61,9 +63,16 @@ export class AIPlayer {
       sheltered: new Set<EntityId>(),
       home,
       region: world.nav.regionAt(tc ? { x: tc.pos.x, z: tc.pos.z + tc.radius + 1 } : home),
+      reserve: {},
+      techReserve: {},
+      villagerHold: 0,
+      armyFirst: false,
+      aging: false,
+      pauseVillagers: false,
     };
     this.economy = new Economy(this.ctx);
     this.military = new Military(this.ctx, this.economy);
+    this.research = new Research(this.ctx, this.economy);
     this.lastTime = world.time;
 
     const p = this.profile;
@@ -77,10 +86,17 @@ export class AIPlayer {
       { name: 'scout', every: 3, next: t + 0.15, run: () => this.economy.scoutPass(this.snap()) },
       { name: 'military', every: p.militaryInterval, next: t + 0.45, run: () => this.military.pass(this.snap()) },
     ];
+    if (p.research) this.tasks.push({ name: 'research', every: p.buildInterval, next: t + 0.6, run: () => this.research.pass(this.snap()) });
 
     this.offs.push(
       world.events.on('attacked', (e) => {
-        if (e.owner === player) this.military.onAttacked(e.pos);
+        if (e.owner === player) {
+          this.military.onAttacked(e.pos);
+          this.research.onAttacked(e.pos);
+        }
+      }),
+      world.events.on('agedUp', (e) => {
+        if (e.owner === player) this.research.onAgedUp(e.age);
       }),
       world.events.on('defeated', (e) => {
         if (e.player === player) this.defeated = true;
