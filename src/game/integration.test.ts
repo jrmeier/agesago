@@ -41,7 +41,7 @@ describe('generated map + sim', () => {
 
     world.dispatch({ type: 'train', buildingId: world.townCenter.id });
     run(world, BALANCE.trainTime + 1);
-    expect(world.pop).toBe(4);
+    expect(world.villagerCount).toBe(4);
   });
 });
 
