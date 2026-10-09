@@ -68,7 +68,7 @@ src/
 | T4 | Rendering | Render | M | Terrain mesh matches `heightAt`; water plane; Y-billboard sprites anchored at feet; ~400 trees via instancing at ≥55 fps; selection rings; move marker; `pick` / `idsInRect` |
 | T5 | Cameras | Controls | M | Zoom keeps the terrain point under the cursor; RMB-drag & Space-drag pan; 18 px edge scroll (ignores HUD buttons); clamps; F toggles a terrain-following observer and restores the RTS pose |
 | T6 | Input, selection, HUD | Controls | M | Click / 5 px box / A select; RMB on node = gather, on ground = move, drag = pan (no order); T and button share `train`; counters + selection panel update from events; button dims below 50 food |
-| T7 | Integration + deploy | Integrator | S | Real wiring in `Game.ts`; `npm ci && npm run build` clean; root and `/agesago/` builds load; README controls table checked row by row |
+| T7 | Integration + deploy | Integrator | S | Real wiring in `Game.ts`; `npm ci && npm run build` clean; live at https://agesago.jedm.dev; README controls table checked row by row |
 
 ## M2 — Feels like an RTS
 

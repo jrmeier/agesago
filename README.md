@@ -35,4 +35,4 @@ Then open http://localhost:5173
 npm run build   # static site to dist/
 ```
 
-Deployed to GitHub Pages via `.github/workflows/deploy.yml`.
+Pushes to `main` are tested, built and deployed to https://agesago.jedm.dev by `.github/workflows/ci.yml`.
