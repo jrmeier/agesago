@@ -56,6 +56,31 @@ test('the scout explores and the fog lifts', async ({ page }) => {
   expect(result.state).toBe('exploring');
 });
 
+test('villagers build a house and the population cap rises', async ({ page }) => {
+  await boot(page);
+  const result = await page.evaluate(() => {
+    const w = (window as any).game.world;
+    const tc = w.townCenter.pos;
+    w.stock.wood = 200;
+    const villagers = [...w.units.values()].filter((u: any) => u.kind === 'villager').map((u: any) => u.id);
+    let pos = null;
+    for (let r = 6; r < 14 && !pos; r += 0.5) {
+      for (let a = 0; a < 16 && !pos; a++) {
+        const p = { x: tc.x + Math.cos(a) * r, z: tc.z + Math.sin(a) * r };
+        if (w.canPlace('house', p, 0).ok) pos = p;
+      }
+    }
+    if (!pos) return { placed: false, capBefore: w.popCap, capAfter: w.popCap };
+    const capBefore = w.popCap;
+    w.dispatch({ type: 'build', unitIds: villagers, kind: 'house', pos, rot: 0 });
+    for (let i = 0; i < 20 * 40; i++) w.tick(0.05);
+    return { placed: true, capBefore, capAfter: w.popCap };
+  });
+  expect(result.placed).toBe(true);
+  expect(result.capAfter).toBe(result.capBefore + 5);
+  await expect(page.locator('#res-pop')).toContainText(`/${result.capAfter}`);
+});
+
 for (const tier of ['low', 'high']) {
   test(`quality=${tier} boots cleanly`, async ({ page }) => {
     const errors = await boot(page, `&quality=${tier}`);
