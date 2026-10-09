@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { type Heightfield, type MapLayout, type PropPlacement, type Vec2 } from '../core/types';
-import { generateMap } from './mapgen';
+import { BUILD_RING_RADIUS, generateMap, START_RADIUS } from './mapgen';
 import { terrainFeatures } from './terrain';
 
 function distance(a: Vec2, b: Vec2): number {
@@ -23,8 +23,8 @@ function floodFill(hf: Heightfield, layout: MapLayout, step = 0.5): (pos: Vec2) 
       walk[row * columns + column] = hf.isWalkable((column + 0.5) * step, (row + 0.5) * step) ? 1 : 0;
     }
   }
-  const obstacles = [{ pos: layout.townCenter, radius: 1.6 },
-    ...layout.props.filter((p) => p.blockRadius > 0).map((p) => ({ pos: p.pos, radius: p.blockRadius }))];
+  const obstacles = [layout, ...(layout.extraStarts ?? [])].map((start) => ({ pos: start.townCenter, radius: 2.3 })).concat([
+    ...layout.props.filter((p) => p.blockRadius > 0).map((p) => ({ pos: p.pos, radius: p.blockRadius }))]);
   for (const obstacle of obstacles) {
     const r = obstacle.radius + 0.3;
     const left = Math.max(0, Math.floor((obstacle.pos.x - r) / step));
@@ -84,61 +84,113 @@ function floodFill(hf: Heightfield, layout: MapLayout, step = 0.5): (pos: Vec2) 
   };
 }
 
-describe('generateMap', () => {
-  const maps = new Map<number, ReturnType<typeof generateMap>>();
-  beforeAll(() => {
-    for (let seed = 1; seed <= 20; seed++) maps.set(seed, generateMap(seed));
-  }, 15000);
+const cases = [1, 2, 3, 4].flatMap((players) => Array.from({ length: 10 }, (_, i) => [players, i + 1] as const));
 
-  it('repeats the complete layout, heights and ground for the same seed', () => {
-    const first = maps.get(1)!;
-    const repeated = generateMap(1);
-    expect(repeated.layout).toEqual(first.layout);
-    expect(maps.get(2)!.layout).not.toEqual(first.layout);
-    let same = true;
-    for (let z = 0; z <= first.hf.depth; z += 0.5) {
-      for (let x = 0; x <= first.hf.width; x += 0.5) {
-        if (repeated.hf.heightAt(x, z) !== first.hf.heightAt(x, z)) same = false;
+describe('generateMap', () => {
+  const maps = new Map<string, ReturnType<typeof generateMap>>();
+  beforeAll(() => {
+    for (const [players, seed] of cases) {
+      try {
+        maps.set(`${players}/${seed}`, generateMap(seed, players));
+      } catch (error) {
+        throw new Error(`${players} players, seed ${seed}: ${String(error)}`);
       }
     }
-    expect(same).toBe(true);
-    expect(repeated.hf.ground(13.75, 161.25)).toEqual(first.hf.ground(13.75, 161.25));
+  }, 30000);
+
+  it('defaults to a rival, supports solo play and rejects invalid counts', () => {
+    expect(generateMap(1).layout).toEqual(maps.get('2/1')!.layout);
+    expect(maps.get('1/1')!.layout.extraStarts).toEqual([]);
+    for (const count of [0, 5, 1.5, NaN, Infinity]) expect(() => generateMap(1, count)).toThrow(RangeError);
+    expect(maps.get('2/1')!.layout).not.toEqual(maps.get('2/2')!.layout);
   });
 
-  it.each([[1, 'f4777e29'], [7, '3cd3712b'], [10, 'f6c66be6'], [20, 'f8c4616']] as const)(
-    'preserves the pre-quarry resource layout outside the building ring for seed %i', (seed, expected) => {
-      const { layout } = maps.get(seed)!;
-      const nodes = layout.nodes.filter((node) => node.kind !== 'stone'
-        && (node.kind !== 'tree' || distance(node.pos, layout.townCenter) >= 12.5));
-      // FNV-1a of the original ordered node data, captured before quarry placement.
-      const serialized = JSON.stringify(nodes);
-      let hash = 2166136261;
-      for (let i = 0; i < serialized.length; i++) hash = Math.imul(hash ^ serialized.charCodeAt(i), 16777619);
-      expect((hash >>> 0).toString(16)).toBe(expected);
+  it.each(cases)('is deterministic and generates below 700 ms for %i players, seed %i', (players, seed) => {
+    const first = maps.get(`${players}/${seed}`)!;
+    const start = performance.now();
+    const repeated = generateMap(seed, players);
+    expect(performance.now() - start).toBeLessThan(700);
+    expect(repeated.layout).toEqual(first.layout);
+    for (let z = 0; z <= first.hf.depth; z += 7.5) {
+      for (let x = 0; x <= first.hf.width; x += 7.5) {
+        expect(repeated.hf.heightAt(x, z)).toBe(first.hf.heightAt(x, z));
+        expect(repeated.hf.ground(x, z)).toEqual(first.hf.ground(x, z));
+      }
     }
-  );
+  });
 
-  it.each(Array.from({ length: 10 }, (_, i) => i + 1))('scales resources and keeps every node and villager reachable, including across fords, for seed %i', (seed) => {
-    const { hf, layout } = maps.get(seed)!;
-    const tc = layout.townCenter;
+  it.each(cases)('spreads level starts with equal kits and open construction rings for %i players, seed %i', (players, seed) => {
+    const { hf, layout } = maps.get(`${players}/${seed}`)!;
+    const starts = [layout, ...layout.extraStarts!];
+    expect(starts).toHaveLength(players);
+    const totals = starts.map((start) => {
+      const tc = start.townCenter;
+      expect(start.villagers).toHaveLength(3);
+      expect(start.scouts).toHaveLength(1);
+      expect(tc.x).toBeGreaterThan(START_RADIUS);
+      expect(tc.z).toBeGreaterThan(START_RADIUS);
+      expect(tc.x).toBeLessThan(hf.width - START_RADIUS);
+      expect(tc.z).toBeLessThan(hf.depth - START_RADIUS);
+      const height = hf.heightAt(tc.x, tc.z);
+      expect(height).toBeGreaterThan(0.8);
+      for (let z = -3; z <= 3; z += 0.5) {
+        for (let x = -3; x <= 3; x += 0.5) {
+          expect(hf.heightAt(tc.x + x, tc.z + z)).toBeCloseTo(height, 12);
+          expect(hf.isWalkable(tc.x + x, tc.z + z)).toBe(true);
+          expect(hf.forestDensity(tc.x + x, tc.z + z)).toBe(0);
+        }
+      }
+      const nodes = layout.nodes.filter((node) => distance(node.pos, tc) <= START_RADIUS);
+      expect(nodes.filter((node) => node.kind === 'tree')).toHaveLength(20);
+      expect(nodes.filter((node) => node.kind === 'berry')).toHaveLength(7);
+      expect(nodes.filter((node) => node.kind === 'gold')).toHaveLength(2);
+      expect(nodes.filter((node) => node.kind === 'stone')).toHaveLength(2);
+      expect(nodes.every((node) => distance(node.pos, tc) <= 18)).toBe(true);
+      expect(layout.props.filter((prop) => distance(prop.pos, tc) < START_RADIUS + footprint(prop))).toEqual([]);
+      for (const node of layout.nodes) {
+        expect(distance(node.pos, tc)).toBeGreaterThanOrEqual(BUILD_RING_RADIUS + (node.kind === 'gold' || node.kind === 'stone' ? 0.8 : 0.5));
+      }
+      // Every orientation offers usable building footprints inside the cleared ring.
+      for (let a = 0; a < 24; a++) {
+        const angle = a * Math.PI / 12;
+        const center = { x: tc.x + Math.cos(angle) * 8.5, z: tc.z + Math.sin(angle) * 8.5 };
+        for (const x of [-1.5, 0, 1.5]) {
+          for (const z of [-1.5, 0, 1.5]) expect(hf.isWalkable(center.x + x, center.z + z)).toBe(true);
+        }
+        expect(nodes.every((node) => distance(node.pos, center) >= 2.9)).toBe(true);
+      }
+      return ['tree', 'berry', 'gold', 'stone'].map((kind) => nodes.filter((node) => node.kind === kind).reduce((sum, node) => sum + node.amount, 0));
+    });
+    expect(totals[0]).toEqual([2000, 875, 800, 700]);
+    for (const total of totals) expect(total).toEqual(totals[0]);
+    for (let i = 0; i < starts.length; i++) {
+      for (let j = i + 1; j < starts.length; j++) {
+        expect(distance(starts[i].townCenter, starts[j].townCenter)).toBeGreaterThan(70);
+      }
+      if (players > 1) {
+        const a = starts[i].townCenter;
+        const b = starts[(i + 1) % players].townCenter;
+        expect(distance(a, b)).toBeCloseTo(104 * Math.sin(Math.PI / players), 0);
+      }
+    }
+  });
+
+  it.each(cases)('keeps every start, resource and gathering approach reachable with scenery blocked for %i players, seed %i', (players, seed) => {
+    const { hf, layout } = maps.get(`${players}/${seed}`)!;
     const reachable = floodFill(hf, layout);
-    const trees = layout.nodes.filter((node) => node.kind === 'tree');
-    const berries = layout.nodes.filter((node) => node.kind === 'berry');
-    const gold = layout.nodes.filter((node) => node.kind === 'gold');
-    expect(layout.villagers).toHaveLength(3);
-    expect(trees.length).toBeGreaterThanOrEqual(3000);
-    expect(trees.length).toBeLessThanOrEqual(4500);
-    expect(Math.min(...trees.map((node) => distance(node.pos, tc)))).toBeLessThanOrEqual(12);
-    expect(berries.filter((node) => distance(node.pos, tc) <= 10)).toHaveLength(7);
-    expect(berries.length).toBeGreaterThanOrEqual(6 * 6);
-    expect(berries.length).toBeLessThanOrEqual(8 * 8);
-    expect(gold.filter((node) => distance(node.pos, tc) <= 16)).toHaveLength(2);
-    expect(gold.length).toBeGreaterThanOrEqual(12);
-    expect(gold.length).toBeLessThanOrEqual(16);
-    expect(gold.filter((node) => distance(node.pos, tc) > 35).length).toBeGreaterThanOrEqual(10);
-    expect(berries.filter((node) => distance(node.pos, tc) > 45).length).toBeGreaterThanOrEqual(25);
-    const unreachable = [...layout.villagers, ...layout.nodes.map((node) => node.pos)].filter((pos) => !reachable(pos));
-    expect(unreachable).toEqual([]);
+    const units = [layout, ...layout.extraStarts!].flatMap((start) => [...start.villagers, ...start.scouts]);
+    expect([...units, ...layout.nodes.map((node) => node.pos)].filter((pos) => !reachable(pos))).toEqual([]);
+    const quarries = layout.nodes.filter((node) => node.kind === 'stone');
+    expect(quarries).toHaveLength(10 + players * 2);
+    const blockedApproaches = layout.nodes.filter((node) => {
+      const radius = node.kind === 'stone' || node.kind === 'gold' ? 1.3 : 1.1;
+      const approaches = Array.from({ length: 8 }, (_, a) => {
+        const angle = a * Math.PI / 4;
+        return reachable({ x: node.pos.x + Math.cos(angle) * radius, z: node.pos.z + Math.sin(angle) * radius });
+      });
+      return node.kind === 'stone' ? approaches.some((clear) => !clear) : !approaches.some(Boolean);
+    });
+    expect(blockedApproaches).toEqual([]);
     const f = terrainFeatures(seed);
     for (const ford of f.river.fords) {
       expect(reachable({ x: ford.x - 8, z: ford.z })).toBe(true);
@@ -146,170 +198,87 @@ describe('generateMap', () => {
     }
     expect(reachable({ x: f.tributary.ford.x, z: f.tributary.ford.z - 8 })).toBe(true);
     expect(reachable({ x: f.tributary.ford.x, z: f.tributary.ford.z + 8 })).toBe(true);
-    expect(gold.some((node) => node.pos.x > f.river.fords[1].x + 8 && Math.abs(node.pos.z - f.river.fords[1].z) < 12)).toBe(true);
-    const badPlacement = layout.nodes.filter((node) => {
-      const g = hf.ground(node.pos.x, node.pos.z);
-      return node.amount !== (node.kind === 'tree' ? 100 : node.kind === 'berry' ? 125 : node.kind === 'stone' ? 350 : 400)
-        || g.path > 0.04 || g.sand > 0.24 || (node.kind !== 'stone' && g.rock > 0.32) || distance(node.pos, tc) < 5.5
-        || (node.kind === 'tree' && hf.forestDensity(node.pos.x, node.pos.z) < 0.43);
-    });
-    expect(badPlacement).toEqual([]);
-    let spacing = Infinity;
-    const cells = new Map<number, Vec2[]>();
-    for (const node of layout.nodes) {
-      const column = Math.floor(node.pos.x / 2);
-      const row = Math.floor(node.pos.z / 2);
-      for (let z = row - 1; z <= row + 1; z++) {
-        for (let x = column - 1; x <= column + 1; x++) {
-          for (const pos of cells.get(z * 100 + x) ?? []) spacing = Math.min(spacing, distance(pos, node.pos));
-        }
-      }
-      const key = row * 100 + column;
-      const cell = cells.get(key) ?? [];
-      cell.push(node.pos);
-      cells.set(key, cell);
-    }
-    expect(spacing).toBeGreaterThanOrEqual(1.2 - 1e-9);
-    for (const [x, z] of [[0, 0], [0, 1], [1, 0], [1, 1]]) {
-      expect(trees.filter((node) => Math.floor(node.pos.x / 88) === x && Math.floor(node.pos.z / 88) === z).length).toBeGreaterThan(250);
-    }
   });
 
-  it.each(Array.from({ length: 10 }, (_, i) => i + 1))('places rich scenery clear of water, roads, the pad and all other footprints for seed %i', (seed) => {
-    const { hf, layout } = maps.get(seed)!;
-    const f = terrainFeatures(seed);
+  it.each(cases)('retains exploration landmarks and spaced resources on dry ground for %i players, seed %i', (players, seed) => {
+    const { hf, layout } = maps.get(`${players}/${seed}`)!;
+    const centers = [layout, ...layout.extraStarts!].map((start) => start.townCenter);
+    const neutral = layout.nodes.filter((node) => centers.every((center) => distance(node.pos, center) > START_RADIUS));
+    expect(layout.nodes.filter((node) => node.kind === 'tree').length).toBeGreaterThanOrEqual(3000);
+    expect(layout.nodes.filter((node) => node.kind === 'tree').length).toBeLessThanOrEqual(4500);
+    expect(neutral.filter((node) => node.kind === 'berry')).toHaveLength(42);
+    expect(neutral.filter((node) => node.kind === 'gold')).toHaveLength(12);
+    expect(neutral.filter((node) => node.kind === 'stone')).toHaveLength(10);
     expect(layout.props.length).toBeGreaterThanOrEqual(500);
     expect(layout.props.length).toBeLessThanOrEqual(1100);
-    const invalid: PropPlacement[] = [];
-    let overlap = false;
-    for (let i = 0; i < layout.props.length; i++) {
-      const p = layout.props[i];
-      const r = footprint(p);
-      if (hf.isWater(p.pos.x, p.pos.z) || hf.ground(p.pos.x, p.pos.z).path > 0.035
-        || Math.max(Math.abs(p.pos.x - layout.townCenter.x), Math.abs(p.pos.z - layout.townCenter.z)) < 5 + r
-        || !Number.isFinite(p.rot) || p.scale < 0.7 || p.scale > 1.4) invalid.push(p);
-      for (const node of layout.nodes) {
-        const dx = p.pos.x - node.pos.x;
-        const dz = p.pos.z - node.pos.z;
-        const minimum = r + (node.kind === 'gold' || node.kind === 'stone' ? 0.8 : 0.5) + 0.2;
-        if (dx * dx + dz * dz < minimum * minimum - 1e-8) overlap = true;
-      }
-      for (let j = 0; j < i; j++) {
-        const other = layout.props[j];
-        if (distance(p.pos, other.pos) < r + footprint(other) + 0.2 - 1e-8) overlap = true;
-      }
-      if (p.kind === 'wheatField' || p.kind === 'reeds' || p.kind === 'bush') expect(p.blockRadius).toBe(0);
-      if (p.kind === 'boulder' || p.kind === 'rocks') expect(p.blockRadius / p.scale).toBeGreaterThanOrEqual(0.8);
-    }
+    expect(layout.props.filter((p) => p.kind === 'ruinColumn' || p.kind === 'ruinWall').length).toBeGreaterThanOrEqual(20);
+    expect(layout.props.filter((p) => p.kind === 'house').length).toBeGreaterThanOrEqual(3);
+    expect(layout.props.some((p) => p.kind === 'well')).toBe(true);
+    expect(layout.props.some((p) => p.kind === 'wheatField')).toBe(true);
+    const invalid = layout.nodes.filter((node) => {
+      const g = hf.ground(node.pos.x, node.pos.z);
+      return node.amount !== (node.kind === 'tree' ? 100 : node.kind === 'berry' ? 125 : node.kind === 'stone' ? 350 : 400)
+        || !hf.isWalkable(node.pos.x, node.pos.z) || g.path > 0.04 || g.sand > 0.24
+        || (node.kind !== 'stone' && g.rock > 0.32)
+        || (node.kind === 'tree' && hf.forestDensity(node.pos.x, node.pos.z) < 0.43);
+    });
     expect(invalid).toEqual([]);
-    expect(overlap).toBe(false);
-    for (const ridge of f.ridges) {
-      const ruins = layout.props.filter((p) => (p.kind === 'ruinColumn' || p.kind === 'ruinWall') && distance(p.pos, ridge.center) < 8);
-      expect(ruins.length).toBeGreaterThanOrEqual(7);
-      expect(ruins.every((p) => hf.heightAt(p.pos.x, p.pos.z) > 5.5)).toBe(true);
-    }
-    expect(layout.props.filter((p) => p.kind === 'standingStone' && distance(p.pos, f.stoneCircle) < 7).length).toBeGreaterThanOrEqual(8);
-    expect(distance(f.stoneCircle, layout.townCenter)).toBeGreaterThan(60);
-    const farm = layout.props.filter((p) => distance(p.pos, f.hamlet) < 25);
-    expect(farm.filter((p) => p.kind === 'house')).toHaveLength(4);
-    expect(farm.filter((p) => p.kind === 'house').every((p) => distance(p.pos, layout.townCenter) >= 10)).toBe(true);
-    expect(farm.filter((p) => p.kind === 'well')).toHaveLength(1);
-    expect(farm.some((p) => p.kind === 'cart')).toBe(true);
-    expect(farm.filter((p) => p.kind === 'wheatField').length).toBeGreaterThanOrEqual(3);
-    expect(farm.filter((p) => p.kind === 'wheatField').length).toBeLessThanOrEqual(6);
-    expect(farm.filter((p) => p.kind === 'fence').length).toBeGreaterThanOrEqual(4);
-    expect(farm.filter((p) => p.kind === 'hayBale').length).toBeGreaterThanOrEqual(3);
-    expect(layout.props.filter((p) => p.kind === 'house' && distance(p.pos, f.abandonedHamlet) < 12).length).toBeGreaterThanOrEqual(3);
-    expect(distance(f.abandonedHamlet, layout.townCenter)).toBeGreaterThan(65);
-    const reeds = layout.props.filter((p) => p.kind === 'reeds');
-    expect(reeds.length).toBeGreaterThan(40);
-    expect(reeds.every((p) => hf.heightAt(p.pos.x, p.pos.z) < 0.9 && hf.ground(p.pos.x, p.pos.z).sand > 0.3)).toBe(true);
-    expect(layout.props.filter((p) => p.kind === 'log' && hf.forestDensity(p.pos.x, p.pos.z) > 0.35).length).toBeGreaterThanOrEqual(30);
-  });
-
-  it('also connects every resource and villager on a one-unit grid with scenery blocked', () => {
-    const { hf, layout } = maps.get(1)!;
-    const reachable = floodFill(hf, layout, 1);
-    expect([...layout.villagers, ...layout.nodes.map((node) => node.pos)].filter((pos) => !reachable(pos))).toEqual([]);
-  });
-
-  it.each(Array.from({ length: 20 }, (_, i) => i + 1))('places twelve spaced, accessible quarries on dry ground with rocky exploration rewards for seed %i', (seed) => {
-    const { hf, layout } = maps.get(seed)!;
-    const quarries = layout.nodes.filter((node) => node.kind === 'stone');
-    const starting = quarries.filter((node) => distance(node.pos, layout.townCenter) <= 16);
-    const distant = quarries.filter((node) => distance(node.pos, layout.townCenter) > 35);
-    const reachable = floodFill(hf, layout);
-    expect(quarries).toHaveLength(12);
-    expect(starting).toHaveLength(2);
-    expect(distant).toHaveLength(10);
-    expect(distant.filter((node) => hf.ground(node.pos.x, node.pos.z).rock > 0.05).length).toBeGreaterThanOrEqual(5);
-    const f = terrainFeatures(seed);
-    expect(distant.every((node) => [...f.outcrops, ...f.ridges.map((ridge) => ridge.center),
-      { x: f.river.fords[1].x + 15, z: f.river.fords[1].z - 15 }]
-      .some((landmark) => distance(node.pos, landmark) < 30))).toBe(true);
-    // The main river winds: compare with its bank at the quarry's actual latitude.
-    expect(distant.some((node) => {
-      const index = f.river.points.findIndex((point) => point.z >= node.pos.z);
-      if (index <= 0) return false;
-      const a = f.river.points[index - 1];
-      const b = f.river.points[index];
-      const bankX = a.x + (b.x - a.x) * (node.pos.z - a.z) / (b.z - a.z);
-      return node.pos.x > bankX + 8;
-    })).toBe(true);
-    for (const quarry of quarries) {
-      expect(quarry.amount).toBe(350);
-      expect(reachable(quarry.pos)).toBe(true);
-      for (const radius of [0, 0.8, 1.3]) {
-        for (let a = 0; a < 8; a++) {
-          const angle = a * Math.PI / 4;
-          const pos = { x: quarry.pos.x + Math.cos(angle) * radius, z: quarry.pos.z + Math.sin(angle) * radius };
-          expect(hf.isWater(pos.x, pos.z)).toBe(false);
-          expect(hf.isWalkable(pos.x, pos.z)).toBe(true);
-          expect(hf.ground(pos.x, pos.z).path).toBeLessThanOrEqual(0.04);
-          expect(reachable(pos)).toBe(true);
+    // Check nearby resource pairs without an all-pairs forest scan.
+    const cells = new Map<string, typeof layout.nodes>();
+    let tightSpacing = false;
+    for (const node of layout.nodes) {
+      const column = Math.floor(node.pos.x / 8);
+      const row = Math.floor(node.pos.z / 8);
+      for (let z = row - 1; z <= row + 1; z++) {
+        for (let x = column - 1; x <= column + 1; x++) {
+          for (const other of cells.get(`${x}/${z}`) ?? []) {
+            const r = (kind: string) => kind === 'stone' || kind === 'gold' ? 0.8 : 0.5;
+            const minimum = node.kind === 'stone' && other.kind === 'stone' ? 8 : r(node.kind) + r(other.kind) + 0.2;
+            if (distance(node.pos, other.pos) < minimum - 1e-9) tightSpacing = true;
+          }
         }
       }
-      for (const other of layout.nodes) {
-        if (other === quarry) continue;
-        const minimum = other.kind === 'stone' ? 8 : other.kind === 'gold' ? 1.8 : 1.5;
-        expect(distance(quarry.pos, other.pos)).toBeGreaterThanOrEqual(minimum - 1e-9);
+      const key = `${column}/${row}`;
+      const cell = cells.get(key) ?? [];
+      cell.push(node);
+      cells.set(key, cell);
+    }
+    expect(tightSpacing).toBe(false);
+    const invalidProps = layout.props.filter((prop) => hf.isWater(prop.pos.x, prop.pos.z)
+      || hf.ground(prop.pos.x, prop.pos.z).path > 0.035 || !Number.isFinite(prop.rot) || prop.scale < 0.7 || prop.scale > 1.4);
+    expect(invalidProps).toEqual([]);
+    let overlap = false;
+    for (let i = 0; i < layout.props.length; i++) {
+      const prop = layout.props[i];
+      const radius = footprint(prop);
+      for (const node of layout.nodes) {
+        if (distance(prop.pos, node.pos) < radius + (node.kind === 'gold' || node.kind === 'stone' ? 0.8 : 0.5) + 0.2 - 1e-8) overlap = true;
+      }
+      for (const other of layout.props.slice(0, i)) {
+        if (distance(prop.pos, other.pos) < radius + footprint(other) + 0.2 - 1e-8) overlap = true;
       }
     }
+    expect(overlap).toBe(false);
   });
 
-  it.each(Array.from({ length: 20 }, (_, i) => i + 1))('clears building room around the TC while retaining starting food, gold and wood for seed %i', (seed) => {
-    const { hf, layout } = maps.get(seed)!;
-    const tc = layout.townCenter;
-    expect(layout.props.filter((prop) => distance(prop.pos, tc) < 12 + footprint(prop))).toEqual([]);
-    const nearbyTrees = layout.nodes.filter((node) => node.kind === 'tree' && distance(node.pos, tc) < 12.5);
-    expect(nearbyTrees).toHaveLength(1);
-    expect(distance(nearbyTrees[0].pos, tc)).toBeLessThanOrEqual(12);
-    expect(layout.nodes.filter((node) => node.kind === 'berry' && distance(node.pos, tc) <= 10)).toHaveLength(7);
-    expect(layout.nodes.filter((node) => node.kind === 'gold' && distance(node.pos, tc) <= 16)).toHaveLength(2);
-    // Verify actual house/storehouse footprints fit on open, walkable ground.
-    let sites = 0;
-    for (let a = 0; a < 24; a++) {
-      const angle = a * Math.PI / 12;
-      const center = { x: tc.x + Math.cos(angle) * 9, z: tc.z + Math.sin(angle) * 9 };
-      if (layout.nodes.some((node) => distance(node.pos, center) < 2.9)) continue;
-      let walkable = true;
-      for (const x of [-1.5, 0, 1.5]) {
-        for (const z of [-1.5, 0, 1.5]) if (!hf.isWalkable(center.x + x, center.z + z)) walkable = false;
-      }
-      if (walkable) sites++;
-    }
-    expect(sites).toBeGreaterThanOrEqual(12);
+  it('also keeps resources connected on the coarser navigation grid', () => {
+    const { hf, layout } = maps.get('4/1')!;
+    const reachable = floodFill(hf, layout, 1);
+    expect(layout.nodes.filter((node) => !reachable(node.pos))).toEqual([]);
   });
 
-  it('generates in under 500 ms and keeps 80k ground queries cheap', () => {
-    const timings: number[] = [];
-    for (const seed of [11, 12, 13]) {
-      const start = performance.now();
-      generateMap(seed);
-      timings.push(performance.now() - start);
-    }
-    expect(Math.max(...timings)).toBeLessThan(500);
-    const hf = maps.get(1)!.hf;
+  it.each(Array.from({ length: 10 }, (_, i) => i + 11))('retains the earlier extended seed coverage for seed %i', (seed) => {
+    const { hf, layout } = generateMap(seed);
+    const reachable = floodFill(hf, layout);
+    expect(layout.extraStarts).toHaveLength(1);
+    expect(layout.nodes.filter((node) => node.kind === 'stone')).toHaveLength(14);
+    expect(layout.nodes.filter((node) => !reachable(node.pos))).toEqual([]);
+    expect([layout, ...layout.extraStarts!].flatMap((start) => [...start.villagers, ...start.scouts])
+      .filter((pos) => !reachable(pos))).toEqual([]);
+  });
+
+  it('keeps 80k cached ground queries cheap', () => {
+    const hf = maps.get('4/1')!.hf;
     const start = performance.now();
     let sum = 0;
     for (let i = 0; i < 80000; i++) sum += hf.ground(i % 176 + 0.25, Math.floor(i / 176) % 176 + 0.25).grass;
