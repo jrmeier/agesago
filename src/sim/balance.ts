@@ -13,4 +13,13 @@ export const BALANCE = {
   startingStock: { wood: 0, food: 0, gold: 0 },
   villagerRadius: 0.3,
   townCenterRadius: 1.6,
+  /** Gap kept between a villager's edge and the node / building it walks up to. */
+  approachGap: 0.15,
+  /** How far beyond a footprint's edge a villager may stand and still work / deposit. */
+  reach: 0.8,
+  /** Search radius for the next node of the same type when one runs out. */
+  retargetRadius: 15,
+  /** Group move ring offsets: unit i stands formationBase + formationStep·√i from the target. */
+  formationBase: 0.6,
+  formationStep: 0.35,
 } as const;
