@@ -73,6 +73,7 @@ const PENNANT_Y: Record<UnitKind, number> = {
   slinger: 1.12,
   archer: 1.15,
   horseman: 1.7,
+  tradeCart: 1.4,
   deer: 1.3,
   boar: 0.8,
   sheep: 0.8,

@@ -11,6 +11,9 @@ export const MAP_D = 176;
 export const SEA_LEVEL = 0;
 export const DEFAULT_SEED = 1;
 
+import type { Age, TechId } from './techs';
+export type { Age, TechId } from './techs';
+
 export type EntityId = number;
 
 /** 0 is gaia (neutral: resources, wildlife); players are 1..4. */
@@ -45,7 +48,17 @@ export type AnimalKind = 'deer' | 'boar' | 'sheep';
  * Villagers gather and build; scouts explore; soldiers fight; wildlife starts as Gaia.
  * Stats live in core/units.ts.
  */
-export type UnitKind = 'villager' | 'scout' | 'hoplite' | 'swordsman' | 'slinger' | 'archer' | 'horseman' | AnimalKind;
+export type UnitKind =
+  | 'villager'
+  | 'scout'
+  | 'hoplite'
+  | 'swordsman'
+  | 'slinger'
+  | 'archer'
+  | 'horseman'
+  /** Walks between markets for gold (M8-12). */
+  | 'tradeCart'
+  | AnimalKind;
 /** Everything a player can build. Data (sizes, costs, build times) lives in core/buildings.ts. */
 export type BuildingKind =
   | 'townCenter'
@@ -60,7 +73,13 @@ export type BuildingKind =
   | 'watchTower'
   | 'palisade'
   | 'stoneWall'
-  | 'gate';
+  | 'gate'
+  /** M8: weapon and armour upgrades. */
+  | 'forge'
+  /** M8: buy/sell resources, tribute, trade carts. */
+  | 'market'
+  /** M8: City Age techs (masonry, ballistics, tower upgrades). */
+  | 'academy';
 export type EntityKind = UnitKind | NodeKind | BuildingKind;
 
 export const NODE_RESOURCE: Record<NodeKind, ResourceType> = {
@@ -206,6 +225,8 @@ export interface Unit {
   shelter?: EntityId | null;
   /** Wildlife's original home, retained through fleeing and save/load. */
   leashAnchor?: Vec2;
+  /** Trade carts only: the market this cart trades with (its home is the nearest own market). */
+  tradeWith?: EntityId;
 }
 
 export interface ResourceNode {
@@ -248,6 +269,13 @@ export interface Building {
   occupants?: EntityId[];
   /** Seconds until the next defensive volley. */
   cooldown?: number;
+  /**
+   * Techs queued for research here, head first (M8). While non-empty the building researches
+   * and its unit queue waits, like AoE.
+   */
+  research?: TechId[];
+  /** Seconds of research completed on research[0]. */
+  researchProgress?: number;
 }
 
 export type Entity = Unit | ResourceNode | Building;
@@ -287,7 +315,20 @@ export type Command =
   /** Panic: every villager of the issuer runs into the nearest shelter with room. */
   | { type: 'townBell' }
   /** Place a line of wall segments from `from` to `to` (palisade or stone wall). */
-  | { type: 'buildWall'; unitIds: EntityId[]; kind: BuildingKind; from: Vec2; to: Vec2 };
+  | { type: 'buildWall'; unitIds: EntityId[]; kind: BuildingKind; from: Vec2; to: Vec2 }
+  /** Queue a tech (or an age) at a building; pays up front. */
+  | { type: 'research'; buildingId: EntityId; tech: TechId }
+  /** Remove research queue entry `index` (0 = in progress) and refund it. */
+  | { type: 'cancelResearch'; buildingId: EntityId; index: number }
+  /** Buy or sell 100 of a resource for gold at the issuer's market prices (needs a finished market). */
+  | { type: 'marketTrade'; resource: MarketResource; side: 'buy' | 'sell' }
+  /** Send resources to another player; a fee is lost (see MARKET.tributeFee). Needs a finished market. */
+  | { type: 'tribute'; to: PlayerId; resource: ResourceType; amount: number }
+  /** Trade carts walk between their nearest own market and `marketId` (own or allied) for gold. */
+  | { type: 'trade'; unitIds: EntityId[]; marketId: EntityId };
+
+/** Resources traded for gold at the market. */
+export type MarketResource = Exclude<ResourceType, 'gold'>;
 
 export type RejectReason =
   | 'insufficient-food'
@@ -297,7 +338,15 @@ export type RejectReason =
   | 'invalid-target'
   | 'blocked-site'
   /** A farm (or similar single-worker site) already has its worker. */
-  | 'occupied';
+  | 'occupied'
+  /** Needs a later age. */
+  | 'age'
+  /** A prerequisite tech or building is missing. */
+  | 'requires'
+  /** Already researched or already queued. */
+  | 'researched'
+  /** The building is busy (e.g. a Town Center aging up can't queue more). */
+  | 'busy';
 
 /** Result of checking whether a building fits at a spot (World.canPlace). */
 export interface PlacementCheck {
@@ -328,4 +377,16 @@ export type SimEvent =
   | { type: 'farmFood'; id: EntityId; food: number }
   | { type: 'unitState'; id: EntityId; state: UnitState }
   | { type: 'trainProgress'; buildingId: EntityId; queue: number; progress: number; total: number }
-  | { type: 'rejected'; reason: RejectReason };
+  | { type: 'rejected'; reason: RejectReason }
+  /** Research progress at a building (local player only, like trainProgress). */
+  | { type: 'researchProgress'; buildingId: EntityId; tech: TechId; queue: number; progress: number; total: number }
+  /** `owner` finished researching `tech` (all players; consumers filter). */
+  | { type: 'researched'; owner: PlayerId; tech: TechId }
+  /** `owner` entered a new age. */
+  | { type: 'agedUp'; owner: PlayerId; age: Age }
+  /** `owner`'s market prices changed (gold per 100). */
+  | { type: 'marketPrices'; owner: PlayerId; prices: Record<MarketResource, number> }
+  /** Resources sent between players (amount is what arrived). */
+  | { type: 'tribute'; from: PlayerId; to: PlayerId; resource: ResourceType; amount: number }
+  /** A trade cart delivered gold at a market. */
+  | { type: 'traded'; owner: PlayerId; id: EntityId; gold: number };

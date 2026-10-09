@@ -1,4 +1,4 @@
-import type { BuildingKind, ResourceType, Stockpile } from './types';
+import type { Age, BuildingKind, ResourceType, Stockpile } from './types';
 
 /**
  * Building data table — the single source of truth for sizes, costs and roles.
@@ -33,6 +33,8 @@ export interface BuildingSpec {
   line?: boolean;
   /** A finished gate lets its owner walk through and blocks everyone else. */
   gate?: boolean;
+  /** Earliest age it can be placed in (default 0, Village). */
+  age?: Age;
 }
 
 export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
@@ -141,6 +143,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     sight: 6,
     hp: 1000,
     armor: { melee: 1, pierce: 7 },
+    age: 1,
   },
   stable: {
     name: 'Stable',
@@ -154,6 +157,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     sight: 6,
     hp: 1000,
     armor: { melee: 1, pierce: 7 },
+    age: 1,
   },
   watchTower: {
     name: 'Watch Tower',
@@ -167,6 +171,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     sight: 14,
     hp: 900,
     armor: { melee: 1, pierce: 7 },
+    age: 1,
     garrison: 5,
     attack: { pierce: 6, range: 8, reload: 2, arrows: 1 },
   },
@@ -196,6 +201,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     sight: 2,
     hp: 1200,
     armor: { melee: 2, pierce: 8 },
+    age: 1,
     line: true,
   },
   gate: {
@@ -210,7 +216,50 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     sight: 3,
     hp: 650,
     armor: { melee: 1, pierce: 5 },
+    age: 1,
     gate: true,
+  },
+  forge: {
+    name: 'Forge',
+    size: { w: 3.4, d: 3.4 },
+    cost: { wood: 150 },
+    buildTime: 40,
+    popBonus: 0,
+    drop: [],
+    walkable: false,
+    buildable: true,
+    sight: 6,
+    hp: 1000,
+    armor: { melee: 1, pierce: 7 },
+    age: 1,
+  },
+  market: {
+    name: 'Market',
+    size: { w: 4.4, d: 4.4 },
+    cost: { wood: 175 },
+    buildTime: 50,
+    popBonus: 0,
+    drop: [],
+    walkable: false,
+    buildable: true,
+    sight: 6,
+    hp: 1400,
+    armor: { melee: 1, pierce: 7 },
+    age: 1,
+  },
+  academy: {
+    name: 'Academy',
+    size: { w: 4.4, d: 4.4 },
+    cost: { wood: 200, stone: 100 },
+    buildTime: 60,
+    popBonus: 0,
+    drop: [],
+    walkable: false,
+    buildable: true,
+    sight: 6,
+    hp: 1600,
+    armor: { melee: 2, pierce: 8 },
+    age: 2,
   },
 };
 
@@ -231,3 +280,21 @@ export function footprintRadius(kind: BuildingKind): number {
   const { w, d } = BUILDINGS[kind].size;
   return Math.hypot(w, d) / 2;
 }
+
+/** Market tuning (M8-12). Prices are gold per 100 of a resource. */
+export const MARKET = {
+  /** Starting price of each resource. */
+  basePrice: 100,
+  /** Each trade moves that resource's price by this fraction (modified by 'priceStep'). */
+  priceStep: 0.03,
+  /** Prices drift back toward base by this fraction of the gap per second. */
+  recovery: 0.004,
+  minPrice: 20,
+  maxPrice: 300,
+  /** Selling gets this fraction of the buy price (the spread). */
+  sellFactor: 0.7,
+  /** Fraction of a tribute lost in transit (modified by 'tributeFee'). */
+  tributeFee: 0.3,
+  /** Trade cart gold per trip ≈ goldPerDistance × distance between the two markets. */
+  goldPerDistance: 0.6,
+} as const;

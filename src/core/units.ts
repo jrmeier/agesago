@@ -1,4 +1,4 @@
-import type { BuildingKind, Stockpile, UnitKind } from './types';
+import type { Age, BuildingKind, Stockpile, UnitKind } from './types';
 
 /**
  * Unit data table — stats, costs and counters for every unit kind. Single source of truth
@@ -31,6 +31,8 @@ export interface UnitSpec {
   trainedAt: BuildingKind | null;
   /** Collision/selection radius. */
   radius: number;
+  /** Earliest age it can be trained in (default 0, Village). */
+  age?: Age;
 }
 
 export const UNITS: Record<UnitKind, UnitSpec> = {
@@ -112,6 +114,7 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     trainTime: 14,
     trainedAt: 'barracks',
     radius: 0.32,
+    age: 1,
   },
   slinger: {
     name: 'Slinger',
@@ -146,6 +149,7 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     trainTime: 12,
     trainedAt: 'archeryRange',
     radius: 0.3,
+    age: 1,
   },
   horseman: {
     name: 'Horseman',
@@ -162,6 +166,24 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     trainTime: 18,
     trainedAt: 'stable',
     radius: 0.55,
+    age: 1,
+  },
+  tradeCart: {
+    name: 'Trade Cart',
+    unitClass: 'villager',
+    hp: 70,
+    speed: 2.6,
+    sight: 6,
+    attack: { melee: 0, pierce: 0 },
+    armor: { melee: 0, pierce: 1 },
+    range: 0,
+    reload: 2,
+    bonus: {},
+    cost: { wood: 100, food: 50 },
+    trainTime: 25,
+    trainedAt: 'market',
+    radius: 0.55,
+    age: 1,
   },
 };
 

@@ -74,7 +74,8 @@ export function orderCancelTrain(world: World, buildingId: EntityId, index: numb
 /** Advance every training queue; spawn the head unit beside the building when it completes. */
 export function trainSystem(world: World, dt: number): void {
   for (const b of world.buildings.values()) {
-    if (b.queue <= 0) continue;
+    // Research (including aging up) holds the unit queue, like AoE.
+    if (b.queue <= 0 || b.research?.length) continue;
     const kind = b.queueKinds?.[0] ?? 'villager';
     b.progress += dt;
     if (b.progress >= UNITS[kind].trainTime - 1e-9) {

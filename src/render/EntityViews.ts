@@ -86,6 +86,7 @@ const UNIT_SCALE: Record<UnitKind, number> = {
   slinger: 1.25,
   archer: 1.25,
   horseman: 1.15,
+  tradeCart: 1.2,
   deer: 1.3,
   boar: 1.3,
   sheep: 1.3,
@@ -99,6 +100,7 @@ const BAR_Y: Record<UnitKind, number> = {
   slinger: 1.75,
   archer: 1.8,
   horseman: 2.4,
+  tradeCart: 2,
   deer: 2,
   boar: 1.3,
   sheep: 1.3,
@@ -117,6 +119,9 @@ const BUILDING_HEIGHT: Record<BuildingKind, number> = {
   palisade: 1.6,
   stoneWall: 2.2,
   gate: 2.4,
+  forge: 3,
+  market: 3,
+  academy: 3.8,
 };
 
 /**

@@ -1,4 +1,4 @@
-import { BUILDINGS, MAX_POP, footprintRadius } from '../core/buildings';
+import { BUILDINGS, MARKET, MAX_POP, footprintRadius } from '../core/buildings';
 import { EventBus } from '../core/events';
 import { isAnimal, UNITS } from '../core/units';
 import {
@@ -22,6 +22,9 @@ import {
   type UnitKind,
   type UnitState,
   type Vec2,
+  type Age,
+  type MarketResource,
+  type TechId,
 } from '../core/types';
 import { BALANCE } from './balance';
 import { NavGrid } from './nav';
@@ -45,6 +48,7 @@ import { gatherSystem, orderFarm, orderGather, type GatherState } from './system
 import { buildingRect } from './systems/sites';
 import { movementSystem, orderMove } from './systems/movement';
 import { orderCancelTrain, orderTrain, trainSystem } from './systems/train';
+import { orderCancelResearch, orderResearch, researchSystem } from './systems/research';
 import { resign, victorySystem, type GameResult } from './systems/victory';
 import { wildlifeSystem } from './systems/wildlife';
 
@@ -77,6 +81,12 @@ export interface PlayerState {
   readonly player: Player;
   readonly stock: Stockpile;
   readonly visibility: Visibility;
+  /** Techs this player has finished researching (M8). Mutate only via the research system. */
+  readonly researched: Set<TechId>;
+  /** Current age, 0 Village … 3 Empire. */
+  age: Age;
+  /** Market prices, gold per 100 (M8-12). */
+  readonly prices: Record<MarketResource, number>;
 }
 
 export class World {
@@ -132,6 +142,9 @@ export class World {
         player,
         stock: { ...BALANCE.startingStock },
         visibility: new Visibility(hf.width, hf.depth),
+        researched: new Set(),
+        age: 0,
+        prices: { wood: MARKET.basePrice, food: MARKET.basePrice, stone: MARKET.basePrice },
       });
     }
     const starts: StartLayout[] = [layout, ...(layout.extraStarts ?? [])];
@@ -341,6 +354,17 @@ export class World {
       case 'buildWall':
         orderBuildWall(this, cmd.unitIds, cmd.kind, cmd.from, cmd.to, by);
         break;
+      case 'research':
+        if (this.buildings.get(cmd.buildingId)?.owner === by) orderResearch(this, cmd.buildingId, cmd.tech);
+        break;
+      case 'cancelResearch':
+        if (this.buildings.get(cmd.buildingId)?.owner === by) orderCancelResearch(this, cmd.buildingId, cmd.index);
+        break;
+      case 'marketTrade':
+      case 'tribute':
+      case 'trade':
+        // M8-12 market lane.
+        break;
     }
   }
 
@@ -365,6 +389,7 @@ export class World {
     wildlifeSystem(this, dt);
     combatSystem(this, dt, arrived);
     exploreSystem(this);
+    researchSystem(this, dt);
     trainSystem(this, dt);
     this.time += dt;
     this.fogClock -= dt;
