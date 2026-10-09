@@ -2,6 +2,8 @@ import type { Vec2 } from '../core/types';
 import type { World } from '../sim/World';
 import { AlertLimiter, BurstCounter, attackText, deathText } from './alertRules';
 import { pushPing } from './pings';
+import { TECHS } from '../core/techs';
+import { researchedText } from './research';
 
 /** Seconds an alert toast stays up. */
 const ALERT_LIFE = 6;
@@ -12,7 +14,8 @@ const MAX_SHOWN = 3;
  * Combat alerts for the local player: "You are under attack! (north-east)" on 'attacked'
  * (rate-limited by AlertLimiter, with a minimap ping; clicking jumps the camera there), and a
  * small "A villager was killed" toast on 'died' (bursts batched). Toasts share the discovery
- * toast stack (`container`). `update(time)` must be called every frame.
+ * toast stack (`container`). A local 'researched' shows "Iron Axe researched".
+ * `update(time)` must be called every frame.
  */
 export class Alerts {
   private readonly limiter = new AlertLimiter();
@@ -41,6 +44,11 @@ export class Alerts {
       const n = this.deaths.add(this.time);
       if (n) this.show('death', '#i-skull', deathText(n), e.pos);
     });
+    // "Iron Axe researched" (age-ups get the banner instead; see Hud).
+    world.events.on('researched', (e) => {
+      if (e.owner !== world.localPlayer || TECHS[e.tech].ageUp !== undefined) return;
+      this.show('research', '#i-tech', researchedText(e.tech), this.home());
+    });
   }
 
   update(time: number): void {
@@ -53,7 +61,7 @@ export class Alerts {
     return this.world.townCenterOf(this.world.localPlayer)?.pos ?? { x: this.world.hf.width / 2, z: this.world.hf.depth / 2 };
   }
 
-  private show(kind: 'alert' | 'death', iconHref: string, text: string, pos: Vec2): void {
+  private show(kind: 'alert' | 'death' | 'research', iconHref: string, text: string, pos: Vec2): void {
     const toast = document.createElement('button');
     toast.type = 'button';
     toast.className = `toast toast-${kind}`;

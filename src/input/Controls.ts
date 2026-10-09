@@ -5,7 +5,8 @@ import { GAIA, type Building, type BuildingKind, type EntityId, type PropPlaceme
 import type { Selection } from '../game/Selection';
 import type { World } from '../sim/World';
 import { Alerts } from '../ui/Alerts';
-import { BUILD_HOTKEYS, kindForKey } from '../ui/build';
+import { buildHotkeyCodes, kindForKey } from '../ui/build';
+import { ageLockText, unitAge } from '../ui/research';
 import { Discoveries } from '../ui/Discoveries';
 import { explorerIds } from '../ui/format';
 import { HotkeyHelp } from '../ui/hotkeyHelp';
@@ -262,15 +263,15 @@ export class Controls {
       focusNextScout(world, rig);
     }
     if (plain(HOTKEYS.townBell)) world.dispatch({ type: 'townBell' });
-    for (const code of Object.values(BUILD_HOTKEYS)) {
-      const kind = plain(code) ? kindForKey(code) : null;
+    for (const code of buildHotkeyCodes()) {
+      const kind = plain(code) ? kindForKey(code, !!input.keyMods(code)?.shift) : null;
       if (kind) this.beginPlacement(kind);
     }
     const trainer = this.rallyBuilding();
     if (trainer) {
       for (const code of TRAIN_SLOT_KEYS) {
         const unit = plain(code) ? kindForSlotKey(trainer.kind, code) : null;
-        if (!unit) continue;
+        if (!unit || ageLockText(unitAge(unit), world.players.get(world.localPlayer)?.age ?? 0)) continue;
         const n = trainBatch(!!input.keyMods(code)?.shift);
         for (let i = 0; i < n; i++) world.dispatch({ type: 'train', buildingId: trainer.id, unit });
       }
@@ -289,6 +290,9 @@ export class Controls {
     const { input, rig } = this.deps;
     const builders = this.villagerIds();
     if (!builders.length) return;
+    // Age-locked kinds stay greyed in the build menu ("Requires Town Age").
+    const age = this.deps.world.players.get(this.deps.world.localPlayer)?.age ?? 0;
+    if (ageLockText(BUILDINGS[kind].age, age)) return;
     this.showBox(null);
     this.touchBox = null;
     this.deps.input.touch.disarmBox();
