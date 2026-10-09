@@ -11,9 +11,14 @@ import {
   type SimEvent,
   type Stockpile,
   type Unit,
+  type UnitState,
   type Vec2,
 } from '../core/types';
 import { BALANCE } from './balance';
+import { NavGrid } from './nav';
+import { gatherSystem, orderGather, type GatherState } from './systems/gather';
+import { movementSystem, orderMove } from './systems/movement';
+import { orderTrain, trainSystem } from './systems/train';
 
 /**
  * The simulation. Plain data; mutate only through dispatch(); advance with tick(dt).
@@ -22,8 +27,6 @@ import { BALANCE } from './balance';
  * Public surface below is FROZEN (Game, render, controls and HUD depend on it).
  * The constructor populates entities WITHOUT emitting 'spawned' — consumers read the
  * maps once at startup, then follow events.
- *
- * STUB: holds entities and teleports nothing; commands are ignored.
  */
 export class World {
   readonly events = new EventBus<SimEvent>();
@@ -33,6 +36,10 @@ export class World {
   readonly stock: Stockpile = { ...BALANCE.startingStock };
   /** Simulated seconds elapsed. */
   time = 0;
+  /** Navigation grid over the terrain with building footprints blocked. */
+  readonly nav: NavGrid;
+  /** Per-unit gather timer and retarget anchor (system bookkeeping, not rendered). */
+  readonly gatherState = new Map<EntityId, GatherState>();
   private nextId = 1;
 
   constructor(
@@ -48,21 +55,8 @@ export class World {
       progress: 0,
     };
     this.buildings.set(tc.id, tc);
-    for (const p of layout.villagers) {
-      const u: Unit = {
-        id: this.nextId++,
-        kind: 'villager',
-        pos: { ...p },
-        prevPos: { ...p },
-        facing: 0,
-        state: 'idle',
-        path: [],
-        gatherNode: null,
-        gatherType: null,
-        carry: null,
-      };
-      this.units.set(u.id, u);
-    }
+    this.nav = new NavGrid(hf, [tc]);
+    for (const p of layout.villagers) this.addVillager(p);
     for (const n of layout.nodes) {
       const node: ResourceNode = {
         id: this.nextId++,
@@ -103,11 +97,72 @@ export class World {
     return best;
   }
 
-  dispatch(_cmd: Command): void {}
+  dispatch(cmd: Command): void {
+    switch (cmd.type) {
+      case 'move':
+        orderMove(this, cmd.unitIds, cmd.target);
+        break;
+      case 'gather':
+        orderGather(this, cmd.unitIds, cmd.nodeId);
+        break;
+      case 'train':
+        orderTrain(this, cmd.buildingId);
+        break;
+    }
+  }
 
   /** Advance the simulation by dt seconds (called at a fixed BALANCE.tickRate). */
   tick(dt: number): void {
     for (const u of this.units.values()) u.prevPos = { ...u.pos };
+    const arrived = movementSystem(this, dt);
+    gatherSystem(this, dt, arrived);
+    trainSystem(this, dt);
     this.time += dt;
+  }
+
+  /** Change a unit's state, emitting 'unitState' if it actually changed. */
+  setState(u: Unit, state: UnitState): void {
+    if (u.state === state) return;
+    u.state = state;
+    this.events.emit({ type: 'unitState', id: u.id, state });
+  }
+
+  /** Emit the current stockpile and population. */
+  emitStock(): void {
+    this.events.emit({ type: 'stockpile', stock: { ...this.stock }, pop: this.pop });
+  }
+
+  /** Create a villager at `p` and emit 'spawned'. */
+  spawnVillager(p: Vec2): Unit {
+    const u = this.addVillager(p);
+    this.events.emit({ type: 'spawned', id: u.id, kind: 'villager' });
+    return u;
+  }
+
+  /** Point just outside a footprint of `radius` around `center`, on the side facing `from`. */
+  approachPoint(from: Vec2, center: Vec2, radius: number): Vec2 {
+    const dx = from.x - center.x;
+    const dz = from.z - center.z;
+    const d = Math.hypot(dx, dz);
+    const r = radius + BALANCE.villagerRadius + BALANCE.approachGap;
+    if (d < 1e-6) return { x: center.x, z: center.z + r };
+    return { x: center.x + (dx / d) * r, z: center.z + (dz / d) * r };
+  }
+
+  private addVillager(p: Vec2): Unit {
+    const u: Unit = {
+      id: this.nextId++,
+      kind: 'villager',
+      pos: { ...p },
+      prevPos: { ...p },
+      facing: 0,
+      state: 'idle',
+      path: [],
+      gatherNode: null,
+      gatherType: null,
+      carry: null,
+    };
+    this.units.set(u.id, u);
+    return u;
   }
 }
