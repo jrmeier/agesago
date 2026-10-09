@@ -1,7 +1,7 @@
 /** A press that moves no further than this (px) and lifts within TAP_MAX_MS is a tap. */
 export const TAP_MAX_MOVE_PX = 10;
 export const TAP_MAX_MS = 300;
-/** Holding still this long (ms) arms a long-press (box select / toggle). */
+/** Holding still this long (ms) arms a long-press (box select, toggle, or attack-move). */
 export const LONG_PRESS_MS = 450;
 /** Per-sample bound on the pinch spread ratio, so a glitchy sample cannot zoom wildly. */
 const MAX_PINCH_STEP = 2;
@@ -9,8 +9,8 @@ const MAX_PINCH_STEP = 2;
 /**
  * Touch gestures in canvas CSS px.
  * - tap: quick press-and-release without moving.
- * - longPress: a finger has been held still for LONG_PRESS_MS (feedback only).
- * - longPressTap: a long-press released without moving.
+ * - longPress: a finger has been held still for LONG_PRESS_MS (feedback only; a drag from here is a box).
+ * - longPressTap: a long-press released without moving (toggle an own unit, or attack-move soldiers).
  * - box / boxEnd / boxCancel: long-press then drag, or a drag while a box is armed; (x0, y0) is the press point.
  * - armCancel: an armed box was cancelled by a tap or a second finger (not a tap, and not an order).
  * - panStart / pan / panEnd: grab-the-ground pan; panStart re-anchors (finger count changed).
