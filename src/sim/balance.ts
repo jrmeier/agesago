@@ -4,6 +4,8 @@ export const BALANCE = {
   tickRate: 20,
   villagerSpeed: 2.4,
   villagerSpeedLoaded: 2.0,
+  /** Scouts are fast explorers (and never carry anything). */
+  scoutSpeed: 5.5,
   carryCap: 10,
   /** Seconds per resource unit gathered. */
   gatherInterval: 0.8,
@@ -22,4 +24,12 @@ export const BALANCE = {
   /** Group move ring offsets: unit i stands formationBase + formationStep·√i from the target. */
   formationBase: 0.6,
   formationStep: 0.35,
+  /** Frontier searches (BFS over the nav grid) the explore system may run per tick, across all units. */
+  exploreSearchesPerTick: 3,
+  /** Stop planning further explorers this tick once their searches cost this much (≈ BFS cells; ~1 ms on desktop). */
+  exploreWorkPerTick: 40000,
+  /** Weighted-A* factor for explore paths (targets can be far; a slightly longer route is fine). */
+  explorePathGreed: 1.5,
+  /** Explore targeting: score = distance · (1 + forwardBias · (1 − cos angle to heading) / 2). */
+  exploreForwardBias: 1,
 } as const;

@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { Quality } from '../core/quality';
 import { SEA_LEVEL, type Heightfield, type Vec2 } from '../core/types';
+import type { Visibility } from '../sim/visibility';
+import { applyFog, createFogDepthMaterial, isConcealed, type FogOfWar } from './fog';
 import { WILDFLOWERS } from './palette';
 import { coverTint } from './textures';
 
@@ -28,8 +30,9 @@ const FLOWER_RGB = WILDFLOWERS.map((hex) => ({
 /**
  * Deterministic tufts around `focus`, only where grass or meadow shows through
  * and never on path, rock, sand, water, or under trees. Empty when density or radius is 0.
+ * Tufts on unexplored cells are skipped when `visibility` is passed.
  */
-export function collectGrass(hf: Heightfield, quality: Quality, focus: Vec2): GrassTuft[] {
+export function collectGrass(hf: Heightfield, quality: Quality, focus: Vec2, visibility?: Visibility): GrassTuft[] {
   if (quality.grassDensity <= 0 || quality.grassRadius <= 0) return [];
   const out: GrassTuft[] = [];
   const radius = quality.grassRadius;
@@ -58,6 +61,7 @@ export function collectGrass(hf: Heightfield, quality: Quality, focus: Vec2): Gr
         const dz = z - focus.z;
         if (dx * dx + dz * dz > r2) continue;
         if (x < 0 || z < 0 || x > hf.width || z > hf.depth) continue;
+        if (visibility && isConcealed(visibility, x, z)) continue;
         const y = hf.heightAt(x, z);
         if (y < SEA_LEVEL || hf.isWater(x, z)) continue;
         if (hf.forestDensity(x, z) > 0.45) continue;
@@ -120,6 +124,8 @@ export class GrassField {
   private grassMesh: THREE.InstancedMesh | null = null;
   private flowerMesh: THREE.InstancedMesh | null = null;
   private windowKey = '';
+  private fog: FogOfWar | null = null;
+  private depthMaterial: THREE.Material | null = null;
 
   constructor(
     private readonly hf: Heightfield,
@@ -134,14 +140,25 @@ export class GrassField {
     this.object.name = 'grass';
   }
 
+  /** Fog the tufts and skip any that stand on unexplored ground. */
+  setFog(fog: FogOfWar): void {
+    this.fog = fog;
+    applyFog(this.grassMat, fog, { hideUnexplored: true });
+    applyFog(this.flowerMat, fog, { hideUnexplored: true });
+    this.depthMaterial = createFogDepthMaterial(fog);
+    if (this.grassMesh) this.grassMesh.customDepthMaterial = this.depthMaterial;
+    if (this.flowerMesh) this.flowerMesh.customDepthMaterial = this.depthMaterial;
+    this.windowKey = '';
+  }
+
   /** Rebuild chunks when the focus crosses a cell boundary, and advance the wind clock. */
   update(focus: Vec2, time: number): void {
     this.time.value = time;
     if (this.capacity === 0) return;
-    const key = windowKey(focus, this.quality.grassRadius);
+    const key = `${windowKey(focus, this.quality.grassRadius)}|${this.fog ? this.fog.version : '-'}`;
     if (key === this.windowKey && this.grassMesh) return;
     this.windowKey = key;
-    const tufts = collectGrass(this.hf, this.quality, focus);
+    const tufts = collectGrass(this.hf, this.quality, focus, this.fog?.visibility);
     const blades: GrassTuft[] = [];
     const flowers: GrassTuft[] = [];
     for (const tuft of tufts) {
@@ -169,6 +186,7 @@ export class GrassField {
       mesh.frustumCulled = false;
       mesh.castShadow = false;
       mesh.receiveShadow = false;
+      if (this.depthMaterial) mesh.customDepthMaterial = this.depthMaterial;
       mesh.count = 0;
       this.object.add(mesh);
     }

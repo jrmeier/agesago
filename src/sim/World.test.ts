@@ -21,7 +21,7 @@ function flatField(water: (x: number, z: number) => boolean = () => false): Heig
 }
 
 function layout(villagers: Vec2[], nodes: MapLayout['nodes'] = []): MapLayout {
-  return { townCenter: { x: 32, z: 24 }, villagers, nodes, props: [] };
+  return { townCenter: { x: 32, z: 24 }, villagers, scouts: [], nodes, props: [] };
 }
 
 function record(world: World): SimEvent[] {
@@ -45,7 +45,8 @@ describe('World (contract smoke test)', () => {
   it('builds from the generated map', () => {
     const { hf, layout } = generateMap(DEFAULT_SEED);
     const world = new World(hf, layout);
-    expect(world.pop).toBe(layout.villagers.length);
+    expect(world.pop).toBe(layout.villagers.length + layout.scouts.length);
+    expect(world.villagerCount).toBe(layout.villagers.length);
     expect(world.nodes.size).toBe(layout.nodes.length);
     expect(world.townCenter.kind).toBe('townCenter');
   });

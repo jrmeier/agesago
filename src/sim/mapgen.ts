@@ -107,6 +107,7 @@ export function generateMap(seed: number): { hf: Heightfield; layout: MapLayout 
       { x: townCenter.x, z: townCenter.z + 3.8 },
       { x: townCenter.x + 1.8, z: townCenter.z + 3.6 },
     ],
+    scouts: [{ x: townCenter.x - 4.2, z: townCenter.z + 1.2 }],
     nodes: [],
     props: [],
   };

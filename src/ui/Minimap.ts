@@ -1,12 +1,17 @@
 import type { CameraRig, CameraMode } from '../camera/CameraRig';
 import type { NodeKind } from '../core/types';
+import { focusNextScout } from '../input/scouts';
 import type { World } from '../sim/World';
+import { nodeAlpha, paintFog } from './fog';
+import { exploredLabel } from './format';
 import { footprintKey, mapToWorld, renderTerrain, worldToMap, type MapBox } from './minimapMath';
 
 /** Terrain raster resolution in pixels per world unit. */
 const TERRAIN_PX_PER_UNIT = 2;
 /** Seconds between redraws of the unit / resource layer (~5 Hz). */
 const DYNAMIC_INTERVAL = 0.2;
+/** Seconds between "Explored NN%" refreshes (~2 Hz). */
+const EXPLORED_INTERVAL = 0.5;
 
 const NODE_COLOR: Record<NodeKind, string> = {
   tree: '#24401c',
@@ -15,23 +20,32 @@ const NODE_COLOR: Record<NodeKind, string> = {
 };
 const PLAYER = '#3fa0ff';
 const PLAYER_EDGE = '#0b2340';
+const SCOUT_RIM = '#f6ead0';
 const VIEW = 'rgba(255, 246, 214, 0.95)';
 
 /**
- * Framed minimap: terrain painted once from the Heightfield, resources / villagers / Town
- * Center redrawn at ~5 Hz, and the RTS view footprint whenever it moves. Click, tap or drag
- * to move the camera; input never reaches the game canvas. Hidden in first person.
- * Owned by the HUD lane.
+ * Framed minimap: terrain painted once from the Heightfield, a fog-of-war layer (one pixel
+ * per visibility cell, repainted only when world.visibility.version changes), resources /
+ * villagers / scouts / Town Center redrawn at ~5 Hz, and the RTS view footprint whenever it
+ * moves. Below the chart: an "Explored NN%" readout (~2 Hz) and a find-scout button.
+ * Click, tap or drag to move the camera; input never reaches the game canvas. Hidden in
+ * first person. Owned by the HUD lane.
  */
 export class Minimap {
   readonly root: HTMLDivElement;
   private readonly frame: HTMLDivElement;
+  private readonly fog: HTMLCanvasElement;
+  private readonly fogPixels: ImageData | null;
   private readonly units: HTMLCanvasElement;
   private readonly view: HTMLCanvasElement;
   private readonly toggle: HTMLButtonElement;
+  private readonly explored: HTMLSpanElement;
   private readonly box: MapBox;
   private readonly offMode: () => void;
   private lastDynamic = -Infinity;
+  private lastExplored = -Infinity;
+  private fogVersion = -1;
+  private exploredVersion = -1;
   private lastView = '';
   private cssW = 0;
   /** Frame width from the ResizeObserver; null = measure on next update. */
@@ -60,9 +74,28 @@ export class Minimap {
     terrain.width = Math.round(hf.width * TERRAIN_PX_PER_UNIT);
     terrain.height = Math.round(hf.depth * TERRAIN_PX_PER_UNIT);
     terrain.getContext('2d')?.putImageData(new ImageData(renderTerrain(hf, terrain.width, terrain.height), terrain.width), 0, 0);
+    const vis = world.visibility;
+    this.fog = el('canvas', 'minimap-layer minimap-fog');
+    this.fog.width = vis.cols;
+    this.fog.height = vis.rows;
+    this.fogPixels = typeof ImageData === 'undefined' ? null : new ImageData(vis.cols, vis.rows);
     this.units = el('canvas', 'minimap-layer');
     this.view = el('canvas', 'minimap-layer');
-    this.frame.append(terrain, this.units, this.view);
+    this.frame.append(terrain, this.fog, this.units, this.view);
+
+    const bar = el('div', 'minimap-bar');
+    this.explored = el('span', 'minimap-explored');
+    this.explored.setAttribute('aria-live', 'off');
+    const scout = el('button', 'minimap-scout');
+    scout.type = 'button';
+    scout.title = 'Find scout (. or Home)';
+    scout.setAttribute('aria-label', 'Find scout');
+    scout.innerHTML = '<svg aria-hidden="true"><use href="#i-scout"></use></svg>';
+    scout.addEventListener('click', (e) => {
+      (e.currentTarget as HTMLElement).blur();
+      focusNextScout(world, rig);
+    });
+    bar.append(this.explored, scout);
 
     this.toggle = el('button', 'minimap-toggle');
     this.toggle.type = 'button';
@@ -74,7 +107,7 @@ export class Minimap {
       this.setCollapsed(!this.collapsed);
     });
 
-    this.root.append(this.frame, this.toggle);
+    this.root.append(this.frame, bar, this.toggle);
     container.append(this.root);
 
     this.frame.addEventListener('pointerdown', this.onDown);
@@ -103,6 +136,17 @@ export class Minimap {
   /** Call every frame with elapsed seconds; redraws layers as needed. */
   update(time: number): void {
     if (this.mode !== 'rts' || this.collapsed) return;
+    const version = this.world.visibility.version;
+    if (version !== this.fogVersion) {
+      this.fogVersion = version;
+      this.drawFog();
+    }
+    if (version !== this.exploredVersion && time - this.lastExplored >= EXPLORED_INTERVAL) {
+      this.lastExplored = time;
+      this.exploredVersion = version;
+      const text = exploredLabel(this.world.visibility.exploredFraction);
+      if (this.explored.textContent !== text) this.explored.textContent = text;
+    }
     const resized = this.fit();
     if (resized || time - this.lastDynamic >= DYNAMIC_INTERVAL) {
       this.lastDynamic = time;
@@ -129,6 +173,7 @@ export class Minimap {
     this.toggle.setAttribute('aria-label', on ? 'Show map' : 'Hide map');
     this.lastView = '';
     this.lastDynamic = -Infinity;
+    this.lastExplored = -Infinity;
     this.syncVisibility();
   }
 
@@ -162,15 +207,20 @@ export class Minimap {
     ctx.clearRect(0, 0, w, h);
 
     const r = Math.max(1, s * 0.55);
+    const vis = this.world.visibility;
     for (const kind of ['tree', 'berry', 'gold'] as const) {
       ctx.fillStyle = NODE_COLOR[kind];
       const size = kind === 'tree' ? r * 1.6 : r * 2.4;
       for (const n of this.world.nodes.values()) {
         if (n.kind !== kind || n.amount <= 0) continue;
+        const a = nodeAlpha(vis.stateAt(n.pos.x, n.pos.z));
+        if (!a) continue;
+        ctx.globalAlpha = a;
         const p = worldToMap(n.pos, this.box);
         ctx.fillRect(p.u - size / 2, p.v - size / 2, size, size);
       }
     }
+    ctx.globalAlpha = 1;
 
     ctx.lineWidth = Math.max(1, s * 0.3);
     ctx.strokeStyle = PLAYER_EDGE;
@@ -184,12 +234,39 @@ export class Minimap {
     const ur = Math.max(1.6, s * 0.9);
     ctx.beginPath();
     for (const u of this.world.units.values()) {
+      if (u.kind === 'scout') continue;
       const p = worldToMap(u.pos, this.box);
       ctx.moveTo(p.u + ur, p.v);
       ctx.arc(p.u, p.v, ur, 0, Math.PI * 2);
     }
     ctx.fill();
     ctx.stroke();
+
+    // Scouts: a larger diamond with a pale rim, so they stand out on a big map.
+    const d = ur * 2;
+    ctx.beginPath();
+    for (const u of this.world.units.values()) {
+      if (u.kind !== 'scout') continue;
+      const p = worldToMap(u.pos, this.box);
+      ctx.moveTo(p.u, p.v - d);
+      ctx.lineTo(p.u + d * 0.75, p.v);
+      ctx.lineTo(p.u, p.v + d);
+      ctx.lineTo(p.u - d * 0.75, p.v);
+      ctx.closePath();
+    }
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(1.5, s * 0.5);
+    ctx.strokeStyle = SCOUT_RIM;
+    ctx.stroke();
+    ctx.fill();
+  }
+
+  /** Repaint the fog layer: one pixel per visibility cell, smoothed by the browser when scaled up. */
+  private drawFog(): void {
+    const ctx = this.fog.getContext('2d');
+    if (!ctx || !this.fogPixels) return;
+    paintFog(this.world.visibility.state, this.fogPixels.data);
+    ctx.putImageData(this.fogPixels, 0, 0);
   }
 
   private drawView(quad: readonly { x: number; z: number }[]): void {

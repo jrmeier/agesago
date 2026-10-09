@@ -4,6 +4,7 @@ import { CameraRig } from '../camera/CameraRig';
 import { Controls } from '../input/Controls';
 import { Input } from '../input/Input';
 import { EntityViews } from '../render/EntityViews';
+import { FogOfWar } from '../render/fog';
 import { GrassField } from '../render/Grass';
 import { PropsView } from '../render/PropsView';
 import { Renderer } from '../render/Renderer';
@@ -33,6 +34,7 @@ export class Game {
   private readonly views: EntityViews;
   private readonly props: PropsView;
   private readonly grass: GrassField;
+  private readonly fog: FogOfWar;
   private readonly controls: Controls;
   private readonly hud: Hud;
   private readonly minimap: Minimap;
@@ -55,6 +57,11 @@ export class Game {
     this.views = new EntityViews(this.world);
     this.props = new PropsView(hf, layout.props);
     this.grass = new GrassField(hf, this.quality);
+    this.fog = new FogOfWar(this.world.visibility, this.quality);
+    this.terrain.setFog(this.fog);
+    this.props.setFog(this.fog);
+    this.grass.setFog(this.fog);
+    this.views.setFog(this.fog);
     this.views.setShadows(this.quality.shadows);
     this.props.setShadows(this.quality.shadows);
     this.renderer.scene.add(this.terrain.object, this.props.object, this.grass.object, this.views.object);
@@ -98,6 +105,8 @@ export class Game {
     }
     if (steps === MAX_STEPS_PER_FRAME) this.accumulator = 0;
 
+    this.fog.update(dt);
+    this.props.syncFog();
     const focus = this.focus();
     this.renderer.update(focus, this.elapsed);
     this.terrain.update(this.elapsed);

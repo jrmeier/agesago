@@ -2,14 +2,15 @@ import * as THREE from 'three';
 import { SEA_LEVEL, type Building, type EntityId, type NodeKind, type ResourceNode, type Unit, type Vec2 } from '../core/types';
 import type { World } from '../sim/World';
 import { buildTownCenter } from './buildings';
+import { applyFog, createFogDepthMaterial, isConcealed, matrixForConcealment, type FogOfWar } from './fog';
 import {
   berryBushGeometry,
+  createScout,
   createVillager,
   goldPileGeometry,
   modelMaterial,
   stumpGeometry,
   treeGeometries,
-  type VillagerModel,
   type VillagerPose,
 } from './models';
 import { MOVE_MARKER, SELECTION } from './palette';
@@ -29,8 +30,10 @@ interface SpriteSize {
   height: number;
 }
 
-interface VillagerView {
-  model: VillagerModel;
+/** A unit's model plus its blob shadow; `pose` animates it from the unit's sim state. */
+interface UnitView {
+  object: THREE.Object3D;
+  pose(unit: Unit, time: number): void;
   shadow: THREE.Mesh;
 }
 
@@ -39,6 +42,8 @@ const TC_SIZE: SpriteSize = { width: 3.05, height: 3.85 };
 /** Units are drawn larger than life (as in classic RTS games) so they stay readable when zoomed out. */
 const VILLAGER_SCALE = 1.35;
 const VILLAGER_SIZE: SpriteSize = { width: 0.7 * VILLAGER_SCALE, height: 1.0 * VILLAGER_SCALE };
+const SCOUT_SCALE = 1.1;
+const SCOUT_SIZE: SpriteSize = { width: 1.4 * SCOUT_SCALE, height: 2.0 * SCOUT_SCALE };
 const TUNICS = [0x8b4513, 0x3f6e9a, 0x4f7a3a];
 const GATHER_POSE: Record<string, VillagerPose> = { wood: 'chop', food: 'forage', gold: 'mine' };
 
@@ -46,7 +51,7 @@ const GATHER_POSE: Record<string, VillagerPose> = { wood: 'chop', food: 'forage'
  * Visuals for every sim entity: low-poly 3D models (instanced for resources, animated
  * for villagers), the Town Center, stumps left by felled trees, selection rings and the
  * move marker. Subscribes to world.events for spawned/removed.
- * Public surface FROZEN: constructor, object, sync, pick, idsInRect, setSelected, flashMarker.
+ * Public surface: constructor, object, sync, pick, idsInRect, setSelected, flashMarker, setFog.
  *
  * The world constructor does not emit `spawned`, so existing entities are mounted here
  * and later spawns/removals follow the event bus.
@@ -56,7 +61,7 @@ export class EntityViews {
   private readonly material = modelMaterial();
   private readonly geometries: Record<NodeKind, THREE.BufferGeometry[]>;
   private readonly stumps: InstancePool;
-  private readonly villagers = new Map<EntityId, VillagerView>();
+  private readonly villagers = new Map<EntityId, UnitView>();
   private readonly pools = new Map<string, InstancePool>();
   private readonly nodePool = new Map<EntityId, InstancePool>();
   private readonly buildings = new Map<EntityId, THREE.Group>();
@@ -75,6 +80,10 @@ export class EntityViews {
   private markerPos: Vec2 = { x: 0, z: 0 };
   private markerStart: number | null = null;
   private markerPending = false;
+  private fog: FogOfWar | null = null;
+  private fogVersion = -1;
+  private depthMaterial: THREE.Material | null = null;
+  private readonly pose = new THREE.Matrix4();
 
   constructor(readonly world: World) {
     this.geometries = { tree: treeGeometries(), berry: [berryBushGeometry()], gold: [goldPileGeometry()] };
@@ -119,7 +128,7 @@ export class EntityViews {
     this.world.events.on('spawned', (e) => {
       const entity = this.world.get(e.id);
       if (!entity) return;
-      if (entity.kind === 'villager') this.mountVillager(entity);
+      if ('carry' in entity) this.mountVillager(entity);
       else if (entity.kind === 'townCenter') this.mountTownCenter(entity);
       else this.mountNode(entity);
     });
@@ -130,8 +139,40 @@ export class EntityViews {
     for (const unit of this.world.units.values()) this.mountVillager(unit);
   }
 
+  /**
+   * Fog resource nodes, stumps and the town center. Units stay fully lit — they are the viewers.
+   * `sync` already calls `syncFog`. Call `fog.update` before `sync` so the mask and the scales match.
+   */
+  setFog(fog: FogOfWar): void {
+    this.fog = fog;
+    if (!this.depthMaterial) {
+      applyFog(this.material, fog, { hideUnexplored: true });
+      this.depthMaterial = createFogDepthMaterial(fog);
+    }
+    this.hook(this.stumps.mesh);
+    for (const pool of this.pools.values()) this.hook(pool.mesh);
+    for (const group of this.buildings.values()) {
+      group.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        applyFog(mesh.material as THREE.Material, fog, { hideUnexplored: true });
+        this.hook(mesh);
+      });
+    }
+    this.fogVersion = -1;
+    this.syncFog();
+  }
+
+  /** Collapse nodes and stumps on unexplored cells, and hide an unexplored town center. */
+  syncFog(): void {
+    if (!this.fog || this.fog.version === this.fogVersion) return;
+    this.fogVersion = this.fog.version;
+    this.refreshConcealment();
+  }
+
   /** Update visuals. `alpha` ∈ [0,1] interpolates unit prevPos → pos; `time` in seconds. */
   sync(alpha: number, time: number, camera: THREE.Camera): void {
+    this.syncFog();
     const t = clamp01(alpha);
     this.syncVillagers(t, time, camera);
     this.syncRings(t);
@@ -148,11 +189,13 @@ export class EntityViews {
       this.consider(hits, camera, ndc, unit.id, PICK_RANK.villager, unit.pos.x, unit.pos.z, size);
     }
     for (const node of this.world.nodes.values()) {
+      if (this.concealed(node.pos.x, node.pos.z)) continue;
       const size = this.sizeOf.get(node.id);
       if (!size) continue;
       this.consider(hits, camera, ndc, node.id, PICK_RANK.node, node.pos.x, node.pos.z, size);
     }
     for (const building of this.world.buildings.values()) {
+      if (this.concealed(building.pos.x, building.pos.z)) continue;
       this.consider(hits, camera, ndc, building.id, PICK_RANK.townCenter, building.pos.x, building.pos.z, TC_SIZE);
     }
     return choosePick(hits);
@@ -202,17 +245,27 @@ export class EntityViews {
 
   private mountVillager(unit: Unit): void {
     if (this.villagers.has(unit.id)) return;
-    const model = createVillager({ tunic: TUNICS[unit.id % TUNICS.length], seed: unit.id });
-    model.object.scale.setScalar(VILLAGER_SCALE);
     const shadow = new THREE.Mesh(this.shadowGeo, this.shadowMat);
     shadow.renderOrder = 2;
-    model.object.traverse((obj) => {
+    let view: UnitView;
+    if (unit.kind === 'scout') {
+      const model = createScout({ cloak: TUNICS[unit.id % TUNICS.length], seed: unit.id });
+      model.object.scale.setScalar(SCOUT_SCALE);
+      shadow.scale.setScalar(1.7);
+      view = { object: model.object, shadow, pose: (u, t) => model.setPose(u.path.length > 0 ? 'gallop' : 'idle', t) };
+      this.sizeOf.set(unit.id, SCOUT_SIZE);
+    } else {
+      const model = createVillager({ tunic: TUNICS[unit.id % TUNICS.length], seed: unit.id });
+      model.object.scale.setScalar(VILLAGER_SCALE);
+      view = { object: model.object, shadow, pose: (u, t) => model.setPose(poseOf(u), t, u.carry?.type ?? null) };
+      this.sizeOf.set(unit.id, VILLAGER_SIZE);
+    }
+    view.object.traverse((obj) => {
       obj.castShadow = this.shadows;
       obj.receiveShadow = this.shadows;
     });
-    this.object.add(model.object, shadow);
-    this.villagers.set(unit.id, { model, shadow });
-    this.sizeOf.set(unit.id, VILLAGER_SIZE);
+    this.object.add(view.object, shadow);
+    this.villagers.set(unit.id, view);
     this.placeVillager(unit, 1, 0);
   }
 
@@ -235,7 +288,9 @@ export class EntityViews {
     this.dummy.scale.set(scale, scale, scale);
     this.dummy.updateMatrix();
     pool.mesh.setMatrixAt(pool.ids.length - 1, this.dummy.matrix);
+    pool.remember(pool.ids.length - 1);
     pool.mesh.instanceMatrix.needsUpdate = true;
+    if (this.fog) this.refreshConcealment();
   }
 
   private mountTownCenter(building: Building): void {
@@ -245,12 +300,22 @@ export class EntityViews {
     group.position.z = building.pos.z;
     this.object.add(group);
     this.buildings.set(building.id, group);
+    if (this.fog) {
+      const fog = this.fog;
+      group.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        applyFog(mesh.material as THREE.Material, fog, { hideUnexplored: true });
+        this.hook(mesh);
+      });
+      this.refreshConcealment();
+    }
   }
 
   private unmount(id: EntityId): void {
     const villager = this.villagers.get(id);
     if (villager) {
-      this.object.remove(villager.model.object, villager.shadow);
+      this.object.remove(villager.object, villager.shadow);
       this.villagers.delete(id);
     }
     const pool = this.nodePool.get(id);
@@ -265,6 +330,7 @@ export class EntityViews {
       this.buildings.delete(id);
     }
     this.sizeOf.delete(id);
+    if (this.fog) this.refreshConcealment();
   }
 
   /** A felled tree leaves a stump where it stood (same position, yaw and scale). */
@@ -272,9 +338,13 @@ export class EntityViews {
     const index = pool.indexOf.get(id);
     if (index === undefined) return;
     if (this.stumps.ids.length >= this.stumps.mesh.instanceMatrix.count) this.grow(this.stumps);
-    pool.mesh.getMatrixAt(index, this.dummy.matrix);
+    const base = pool.bases[index];
+    if (base) this.dummy.matrix.copy(base);
+    else pool.mesh.getMatrixAt(index, this.dummy.matrix);
     this.stumps.add(id, 1);
-    this.stumps.mesh.setMatrixAt(this.stumps.ids.length - 1, this.dummy.matrix);
+    const stumpIndex = this.stumps.ids.length - 1;
+    this.stumps.mesh.setMatrixAt(stumpIndex, this.dummy.matrix);
+    this.stumps.remember(stumpIndex);
     this.stumps.mesh.instanceMatrix.needsUpdate = true;
   }
 
@@ -285,6 +355,7 @@ export class EntityViews {
       pool.mesh.name = key;
       pool.mesh.castShadow = this.shadows;
       pool.mesh.receiveShadow = this.shadows;
+      if (this.fog) this.hook(pool.mesh);
       this.object.add(pool.mesh);
       this.pools.set(key, pool);
     }
@@ -299,6 +370,9 @@ export class EntityViews {
     next.receiveShadow = src.receiveShadow;
     next.frustumCulled = false;
     next.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    next.customDepthMaterial = src.customDepthMaterial;
+    next.onBeforeRender = src.onBeforeRender;
+    if (src.userData.agFogHook) next.userData.agFogHook = 1;
     next.count = pool.ids.length;
     for (let i = 0; i < pool.ids.length; i++) {
       src.getMatrixAt(i, this.dummy.matrix);
@@ -320,9 +394,9 @@ export class EntityViews {
     const x = unit.prevPos.x + (unit.pos.x - unit.prevPos.x) * alpha;
     const z = unit.prevPos.z + (unit.pos.z - unit.prevPos.z) * alpha;
     const ground = this.groundY(x, z);
-    view.model.object.position.set(x, ground, z);
-    view.model.object.rotation.set(0, unit.facing, 0);
-    view.model.setPose(poseOf(unit), time, unit.carry?.type ?? null);
+    view.object.position.set(x, ground, z);
+    view.object.rotation.set(0, unit.facing, 0);
+    view.pose(unit, time);
     view.shadow.position.set(x, ground + 0.04, z);
   }
 
@@ -336,6 +410,7 @@ export class EntityViews {
       const x = unit.prevPos.x + (unit.pos.x - unit.prevPos.x) * alpha;
       const z = unit.prevPos.z + (unit.pos.z - unit.prevPos.z) * alpha;
       ring.position.set(x, this.groundY(x, z) + 0.07, z);
+      ring.scale.setScalar(unit.kind === 'scout' ? 1.8 : 1);
       ring.visible = true;
     }
     for (let i = n; i < this.rings.length; i++) this.rings[i].visible = false;
@@ -441,11 +516,48 @@ export class EntityViews {
   private groundY(x: number, z: number): number {
     return Math.max(this.world.hf.heightAt(x, z), SEA_LEVEL);
   }
+
+  private concealed(x: number, z: number): boolean {
+    return this.fog ? isConcealed(this.fog.visibility, x, z) : false;
+  }
+
+  private hook(mesh: THREE.Object3D): void {
+    if (this.depthMaterial) mesh.customDepthMaterial = this.depthMaterial;
+    if (mesh.userData.agFogHook) return;
+    mesh.userData.agFogHook = 1;
+    mesh.onBeforeRender = () => this.syncFog();
+  }
+
+  /** Zero the scale of nodes and stumps on unexplored cells; restore it once seen. */
+  private refreshConcealment(): void {
+    if (!this.fog) return;
+    const vis = this.fog.visibility;
+    for (const pool of this.pools.values()) this.concealPool(pool, vis);
+    this.concealPool(this.stumps, vis);
+    for (const [id, group] of this.buildings) {
+      const building = this.world.buildings.get(id);
+      if (!building) continue;
+      group.visible = !isConcealed(vis, building.pos.x, building.pos.z);
+    }
+  }
+
+  private concealPool(pool: InstancePool, vis: FogOfWar['visibility']): void {
+    for (let i = 0; i < pool.ids.length; i++) {
+      const base = pool.bases[i];
+      if (!base) continue;
+      const concealed = isConcealed(vis, base.elements[12], base.elements[14]);
+      matrixForConcealment(base, concealed, this.pose);
+      pool.mesh.setMatrixAt(i, this.pose);
+    }
+    pool.mesh.instanceMatrix.needsUpdate = true;
+  }
 }
 
 class InstancePool {
   readonly ids: EntityId[] = [];
   readonly scales: number[] = [];
+  /** Full-scale matrices, kept so fog can restore a concealed instance. */
+  readonly bases: THREE.Matrix4[] = [];
   readonly indexOf = new Map<EntityId, number>();
   mesh: THREE.InstancedMesh;
 
@@ -464,6 +576,13 @@ class InstancePool {
     this.mesh.count = this.ids.length;
   }
 
+  /** Snapshot the matrix just written so concealment can restore it. */
+  remember(index: number): void {
+    const base = this.bases[index] ?? new THREE.Matrix4();
+    this.mesh.getMatrixAt(index, base);
+    this.bases[index] = base;
+  }
+
   remove(id: EntityId): void {
     const index = this.indexOf.get(id);
     if (index === undefined) return;
@@ -472,12 +591,14 @@ class InstancePool {
       const moved = this.ids[last];
       this.ids[index] = moved;
       this.scales[index] = this.scales[last];
+      this.bases[index] = this.bases[last];
       this.indexOf.set(moved, index);
       this.mesh.getMatrixAt(last, swapMatrix);
       this.mesh.setMatrixAt(index, swapMatrix);
     }
     this.ids.pop();
     this.scales.pop();
+    this.bases.pop();
     this.indexOf.delete(id);
     this.mesh.count = this.ids.length;
     this.mesh.instanceMatrix.needsUpdate = true;
@@ -491,6 +612,7 @@ function poseOf(unit: Unit): VillagerPose {
     case 'moving':
     case 'toNode':
     case 'toDrop':
+    case 'exploring':
       return 'walk';
     case 'gathering':
       return GATHER_POSE[unit.gatherType ?? 'food'];

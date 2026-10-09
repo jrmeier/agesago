@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Quality } from '../core/quality';
 import { SEA_LEVEL, type Heightfield } from '../core/types';
+import { applyFog, type FogOfWar } from './fog';
 import { SKY_HORIZON, SKY_TOP, WATER_COLOR, WATER_DEEP } from './palette';
 import { sunDirection } from './Sky';
 
@@ -180,6 +181,11 @@ export class Water {
     this.mesh.castShadow = false;
     this.mesh.receiveShadow = false;
     this.mesh.visible = bounds !== null;
+  }
+
+  /** Shade the sea with fog of war. Unexplored water becomes the black map, not a hole. */
+  setFog(fog: FogOfWar): void {
+    applyFog(this.mesh.material as THREE.Material, fog);
   }
 
   /** Geometric swell plus, on the fancy shader, ripple time. `time` is seconds. */
