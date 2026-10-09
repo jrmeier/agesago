@@ -1,6 +1,9 @@
+import { TouchInput } from './TouchInput';
+
 /**
  * Raw pointer/keyboard state with per-frame edge events (pressed / released this frame,
- * wheel delta, drag tracking with the 5 px click-vs-drag threshold).
+ * wheel delta, drag tracking with the 5 px click-vs-drag threshold). Touch input lives in
+ * `touch`; mouse events synthesised from touches are ignored.
  * Owned by the Controls lane (T5/T6). Internal API is up to the lane;
  * Game only relies on: constructor(dom), endFrame(), dispose().
  */
@@ -49,6 +52,8 @@ export class Input {
   moveY = 0;
   /** Wheel delta this frame in pixels (positive = scroll down / zoom out). */
   wheel = 0;
+  /** Touch gestures (RTS) and joystick / look (first person). */
+  readonly touch: TouchInput;
 
   private readonly buttons = new Set<number>();
   private readonly pressedButtons = new Set<number>();
@@ -59,6 +64,7 @@ export class Input {
   private readonly off: (() => void)[] = [];
 
   constructor(readonly dom: HTMLElement) {
+    this.touch = new TouchInput(dom);
     this.listen(dom, 'mousedown', this.onDown);
     this.listen(window, 'mousemove', this.onMove);
     this.listen(window, 'mouseup', this.onUp);
@@ -132,11 +138,13 @@ export class Input {
     this.moveX = 0;
     this.moveY = 0;
     for (const [b, d] of this.drags) if (!d.held) this.drags.delete(b);
+    this.touch.endFrame();
   }
 
   dispose(): void {
     for (const fn of this.off) fn();
     this.off.length = 0;
+    this.touch.dispose();
   }
 
   private listen<K extends keyof WindowEventMap>(
@@ -159,6 +167,7 @@ export class Input {
   }
 
   private onDown = (e: MouseEvent): void => {
+    if (this.touch.isCompatMouse()) return;
     this.setPointer(e);
     this.buttons.add(e.button);
     this.pressedButtons.add(e.button);
@@ -178,6 +187,7 @@ export class Input {
   };
 
   private onMove = (e: MouseEvent): void => {
+    if (this.touch.isCompatMouse()) return;
     this.setPointer(e);
     this.moveX += e.movementX;
     this.moveY += e.movementY;
