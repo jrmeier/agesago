@@ -2257,3 +2257,247 @@ body.touch.menu-orders .cmd-btn svg {
   width: 26px;
   height: 26px;
 }
+/* ---- End of match: resign, then the conquest/resign summary. Wonder and relic are not offered. ---- */
+
+.resign-btn {
+  position: absolute;
+  z-index: 13;
+  top: 64px;
+  right: max(12px, env(safe-area-inset-right));
+  min-height: 36px;
+  padding: 7px 12px;
+  pointer-events: auto;
+  cursor: pointer;
+  border-radius: 4px;
+  font-family: var(--title);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--parch-hi);
+  background: var(--timber);
+  border: 1px solid var(--bronze);
+  box-shadow:
+    var(--trim),
+    0 4px 12px rgba(0, 0, 0, 0.45);
+  touch-action: manipulation;
+}
+
+.resign-btn:hover {
+  filter: brightness(1.12);
+}
+
+.resign-btn:active {
+  transform: translateY(1px);
+}
+
+/* Touch: the minimap owns the top-right (about 64px down, ~150px tall), so resign sits just under it. */
+body.touch .resign-btn {
+  top: calc(max(6px, env(safe-area-inset-top)) + 230px);
+  right: max(10px, env(safe-area-inset-right));
+  min-height: 44px;
+  min-width: 44px;
+}
+
+@media (max-width: 420px) {
+  .resign-btn {
+    min-height: 44px;
+    padding: 8px 12px;
+  }
+}
+
+/* Short landscape: the minimap is shorter and the footer owns the bottom, so resign moves to the top-left. */
+@media (max-height: 460px) {
+  body.touch .resign-btn {
+    top: calc(max(6px, env(safe-area-inset-top)) + 52px);
+    right: auto;
+    left: max(10px, env(safe-area-inset-left));
+  }
+}
+
+.endgame[hidden] {
+  display: none !important;
+}
+
+.endgame {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+    max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  background: rgba(18, 10, 4, 0.72);
+  pointer-events: auto;
+}
+
+.endgame-sheet {
+  position: relative;
+  width: min(520px, 100%);
+  max-width: 100%;
+  margin: auto;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 22px 18px 16px;
+  border-radius: 3px;
+  overflow-x: hidden;
+  background: var(--papyrus);
+  border: 1px solid #8a6230;
+  box-shadow:
+    inset 0 0 18px rgba(120, 76, 28, 0.45),
+    inset 0 0 2px rgba(80, 50, 15, 0.6),
+    0 0 0 3px var(--wood),
+    0 0 0 4px var(--bronze),
+    0 16px 40px rgba(0, 0, 0, 0.55);
+  color: var(--ink);
+}
+
+.endgame-sheet::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 5px;
+  height: 8px;
+  background: var(--meander-ink) 0 0 / 8px 8px repeat-x;
+  opacity: 0.75;
+}
+
+.endgame-title {
+  margin-top: 8px;
+  font-family: var(--title);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+  color: #6e2416;
+  text-shadow: 0 1px 0 rgba(255, 245, 215, 0.6);
+}
+
+.endgame-line {
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.endgame-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin-top: 4px;
+  min-width: 0;
+}
+
+.endgame-chart {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.endgame-chart figcaption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-family: var(--title);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.endgame-chart figcaption span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.endgame-chart figcaption b {
+  margin-left: auto;
+  font-family: var(--text);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
+.endgame-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.endgame-plot {
+  display: block;
+  width: 100%;
+  height: 64px;
+  max-width: 100%;
+  border-radius: 2px;
+  background: rgba(90, 60, 24, 0.08);
+}
+
+.endgame-btn {
+  margin-top: 6px;
+  width: 100%;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  font-family: var(--title);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--grain), var(--bronze-face);
+  border: 1px solid var(--bronze-lo);
+  box-shadow:
+    0 0 0 2px var(--wood-dark),
+    inset 0 1px 0 rgba(255, 245, 210, 0.75),
+    inset 0 -2px 3px rgba(80, 45, 10, 0.45);
+  touch-action: manipulation;
+}
+
+.endgame-btn:hover,
+.resign-btn:focus-visible,
+.endgame-btn:focus-visible {
+  filter: brightness(1.08);
+}
+
+.endgame-btn:active {
+  transform: translateY(1px);
+}
+
+.resign-btn:focus-visible,
+.endgame-btn:focus-visible {
+  outline: 2px solid var(--gilt);
+  outline-offset: 2px;
+}
+
+@media (max-width: 520px) {
+  .endgame-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .endgame-sheet {
+    padding: 18px 12px 12px;
+  }
+
+  .endgame-title {
+    font-size: 22px;
+    letter-spacing: 0.08em;
+  }
+}

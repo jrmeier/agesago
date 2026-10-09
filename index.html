@@ -487,6 +487,7 @@
     <div id="app">
       <div id="game-container"></div>
       <div id="hud">
+        <button id="resign-btn" class="resign-btn" type="button" title="Resign the match">Resign</button>
         <header class="hud-top">
           <div class="logo">
             <svg class="logo-icon" aria-hidden="true"><use href="#i-shield" /></svg>
@@ -627,6 +628,65 @@
             </span>
           </button>
         </footer>
+      </div>
+      <!-- Conquest or resign. Wonder and relic victories are not part of this screen. -->
+      <div id="endgame" class="endgame" hidden>
+        <div class="endgame-sheet" role="dialog" aria-modal="true" aria-labelledby="endgame-title">
+          <h2 id="endgame-title" class="endgame-title">Match over</h2>
+          <p id="endgame-winners" class="endgame-line"></p>
+          <p id="endgame-reason" class="endgame-line"></p>
+          <div class="endgame-charts">
+            <figure class="endgame-chart" data-series="food">
+              <figcaption>
+                <svg class="endgame-icon" aria-hidden="true"><use href="#i-food" /></svg>
+                <span>Food</span>
+                <b></b>
+              </figcaption>
+              <svg class="endgame-plot" viewBox="0 0 200 64" preserveAspectRatio="none" role="img" aria-label="Food"></svg>
+            </figure>
+            <figure class="endgame-chart" data-series="wood">
+              <figcaption>
+                <svg class="endgame-icon" aria-hidden="true"><use href="#i-wood" /></svg>
+                <span>Wood</span>
+                <b></b>
+              </figcaption>
+              <svg class="endgame-plot" viewBox="0 0 200 64" preserveAspectRatio="none" role="img" aria-label="Wood"></svg>
+            </figure>
+            <figure class="endgame-chart" data-series="gold">
+              <figcaption>
+                <svg class="endgame-icon" aria-hidden="true"><use href="#i-gold" /></svg>
+                <span>Gold</span>
+                <b></b>
+              </figcaption>
+              <svg class="endgame-plot" viewBox="0 0 200 64" preserveAspectRatio="none" role="img" aria-label="Gold"></svg>
+            </figure>
+            <figure class="endgame-chart" data-series="stone">
+              <figcaption>
+                <svg class="endgame-icon" aria-hidden="true"><use href="#i-stone" /></svg>
+                <span>Stone</span>
+                <b></b>
+              </figcaption>
+              <svg class="endgame-plot" viewBox="0 0 200 64" preserveAspectRatio="none" role="img" aria-label="Stone"></svg>
+            </figure>
+            <figure class="endgame-chart" data-series="population">
+              <figcaption>
+                <svg class="endgame-icon" aria-hidden="true"><use href="#i-pop" /></svg>
+                <span>Population</span>
+                <b></b>
+              </figcaption>
+              <svg class="endgame-plot" viewBox="0 0 200 64" preserveAspectRatio="none" role="img" aria-label="Population"></svg>
+            </figure>
+            <figure class="endgame-chart" data-series="explored">
+              <figcaption>
+                <svg class="endgame-icon" aria-hidden="true"><use href="#i-map" /></svg>
+                <span>Explored</span>
+                <b></b>
+              </figcaption>
+              <svg class="endgame-plot" viewBox="0 0 200 64" preserveAspectRatio="none" role="img" aria-label="Explored"></svg>
+            </figure>
+          </div>
+          <button id="play-again" class="endgame-btn" type="button">Play again</button>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
