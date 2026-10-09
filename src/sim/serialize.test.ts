@@ -38,7 +38,7 @@ function active(): World {
   // A small controlled arena in the generated starting clearings, with actual seeded scenery.
   w.nodes.clear();
   for (const u of w.units.values()) u.stance = 'passive';
-  const tc = w.townCenter;
+  const tc = w.townCenter!;
   const workers = [...w.units.values()].filter((u) => u.owner === 1 && u.kind === 'villager');
   const [gatherer, builder, farmer] = workers;
   gatherer.pos = { x: tc.pos.x + 6, z: tc.pos.z + 6 };
@@ -129,7 +129,7 @@ describe('world save/load', () => {
     const removed = a.townCenterOf(2)!;
     a.buildings.delete(removed.id);
     a.nav.removeRect(removed.id);
-    const p = a.townCenter.pos;
+    const p = a.townCenter!.pos;
     const house = layFoundation(a, 'house', { x: p.x + 7, z: p.z + 2 }, Math.PI / 2, 1);
     const farm = layFoundation(a, 'farm', { x: p.x - 7, z: p.z + 2 }, 0, 1);
     const b = deserializeWorld(serializeWorld(a));
@@ -185,7 +185,7 @@ describe('world save/load', () => {
 
   it('documents the movement contract gap: mixed-speed formations lose their private speed cap on load', () => {
     const a = fresh();
-    const tc = a.townCenter.pos;
+    const tc = a.townCenter!.pos;
     const v = a.spawnUnit('villager', { x: tc.x + 6, z: tc.z + 5 });
     const scout = a.spawnUnit('scout', { x: tc.x + 7, z: tc.z + 5 });
     a.dispatch({ type: 'move', unitIds: [v.id, scout.id], target: { x: tc.x + 9, z: tc.z - 6 } });

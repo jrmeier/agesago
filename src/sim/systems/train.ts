@@ -55,6 +55,22 @@ export function orderTrain(world: World, buildingId: EntityId, unit?: UnitKind):
   emitProgress(world, b);
 }
 
+/** 'cancelTrain': drop queue entry `index` and refund its full cost (the head also loses its progress). */
+export function orderCancelTrain(world: World, buildingId: EntityId, index: number): void {
+  const b = world.buildings.get(buildingId);
+  const kinds = b?.queueKinds;
+  if (!b || !kinds || index < 0 || index >= kinds.length) {
+    world.events.emit({ type: 'rejected', reason: 'invalid-target' });
+    return;
+  }
+  const [kind] = kinds.splice(index, 1);
+  b.queue = kinds.length;
+  if (index === 0) b.progress = 0;
+  pay(world, UNITS[kind].cost, -1, b.owner);
+  if (b.owner === world.localPlayer) world.emitStock();
+  emitProgress(world, b);
+}
+
 /** Advance every training queue; spawn the head unit beside the building when it completes. */
 export function trainSystem(world: World, dt: number): void {
   for (const b of world.buildings.values()) {

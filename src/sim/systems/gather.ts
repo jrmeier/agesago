@@ -2,6 +2,7 @@ import type { Building, EntityId, ResourceNode, ResourceType, Unit, UnitState, V
 import { BALANCE } from '../balance';
 import { rectDistance } from '../nav';
 import type { World } from '../World';
+import { route } from './passage';
 import { cancelExplore, settleCancelled } from './explore';
 import { buildingRect, inReach, nearestDrop } from './sites';
 
@@ -81,7 +82,7 @@ export function orderFarm(world: World, unitIds: EntityId[], farm: Building): vo
 
 /** Plain move to the edge of `node` (for units that can't gather). False if unreachable. */
 function walkToNode(world: World, u: Unit, node: ResourceNode): boolean {
-  const path = world.nav.findPath(u.pos, world.approachPoint(u.pos, node.pos, node.radius));
+  const path = route(world, u.owner, u.pos, world.approachPoint(u.pos, node.pos, node.radius));
   if (!path) return false;
   u.path = path;
   u.gatherNode = null;
@@ -94,7 +95,7 @@ function walkToNode(world: World, u: Unit, node: ResourceNode): boolean {
 /** Assign `node` to `u` and path to its edge (scouts just walk there). False (unit untouched) if unreachable. */
 export function sendToNode(world: World, u: Unit, node: ResourceNode): boolean {
   if (u.kind === 'scout') return walkToNode(world, u, node);
-  const path = world.nav.findPath(u.pos, world.approachPoint(u.pos, node.pos, node.radius));
+  const path = route(world, u.owner, u.pos, world.approachPoint(u.pos, node.pos, node.radius));
   if (!path) return false;
   assign(world, u, node.id, node.type, node.pos, path);
   return true;
@@ -103,7 +104,7 @@ export function sendToNode(world: World, u: Unit, node: ResourceNode): boolean {
 /** Claim `farm` for `u` and walk onto its near edge. False (unit untouched) if taken, fallow or unreachable. */
 export function sendToFarm(world: World, u: Unit, farm: Building): boolean {
   if (u.kind !== 'villager' || !isWorkableFarm(farm) || !farmFree(world, farm, u)) return false;
-  const path = world.nav.findPath(u.pos, farmSpot(u.pos, farm));
+  const path = route(world, u.owner, u.pos, farmSpot(u.pos, farm));
   if (!path) return false;
   assign(world, u, farm.id, 'food', farm.pos, path);
   world.farmers.set(farm.id, u.id);

@@ -152,7 +152,11 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   restoreMap(world.units, saved.units.map((u) => [u.id, u]));
   restoreMap(world.nodes, saved.nodes.map((n) => [n.id, n]));
   restoreMap(world.buildings, saved.buildings.map((b) => [b.id, b]));
-  for (const b of world.buildings.values()) if (!BUILDINGS[b.kind].walkable) world.nav.addRect(b.id, buildingRect(b));
+  for (const b of world.buildings.values()) {
+    const spec = BUILDINGS[b.kind];
+    // A finished gate is open on the shared grid; its foundation still blocks.
+    if (!spec.walkable || (spec.gate && !b.complete)) world.nav.addRect(b.id, buildingRect(b));
+  }
   for (const p of saved.players) {
     const state = world.players.get(p.player.id)!;
     Object.assign(state.stock, p.stock);

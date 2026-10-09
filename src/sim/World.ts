@@ -25,7 +25,8 @@ import {
 import { BALANCE } from './balance';
 import { NavGrid } from './nav';
 import { Visibility, sightOf, type Viewer } from './visibility';
-import { buildSystem, canPlace, orderBuild, orderCancelBuild, orderConstruct } from './systems/build';
+import { buildSystem, canPlace, orderBuild, orderBuildWall, orderCancelBuild, orderConstruct } from './systems/build';
+import { garrisonSystem, orderGarrison, orderTownBell, orderUngarrison } from './systems/defence';
 import {
   combatSystem,
   orderAttack,
@@ -42,7 +43,7 @@ import { exploreSystem, orderExplore, type ExploreState } from './systems/explor
 import { gatherSystem, orderFarm, orderGather, type GatherState } from './systems/gather';
 import { buildingRect } from './systems/sites';
 import { movementSystem, orderMove } from './systems/movement';
-import { orderTrain, trainSystem } from './systems/train';
+import { orderCancelTrain, orderTrain, trainSystem } from './systems/train';
 import { resign, victorySystem, type GameResult } from './systems/victory';
 
 /**
@@ -231,9 +232,9 @@ export class World {
     return n;
   }
 
-  /** The local player's (first) Town Center. */
-  get townCenter(): Building {
-    return this.townCenterOf(this.localPlayer) as Building;
+  /** The local player's (first) Town Center; undefined once it has been destroyed. */
+  get townCenter(): Building | undefined {
+    return this.townCenterOf(this.localPlayer);
   }
 
   /** A player's first standing Town Center, if any. */
@@ -267,7 +268,10 @@ export class World {
   dispatch(cmd: Command, by: PlayerId = this.localPlayer): void {
     cmd = this.ownedOnly(cmd, by);
     // Any other unit order supersedes fighting and fleeing.
-    if (cmd.type === 'move' || cmd.type === 'gather' || cmd.type === 'build' || cmd.type === 'construct' || cmd.type === 'explore') {
+    if (
+      cmd.type === 'move' || cmd.type === 'gather' || cmd.type === 'build' || cmd.type === 'construct' ||
+      cmd.type === 'explore' || cmd.type === 'garrison' || cmd.type === 'buildWall'
+    ) {
       releaseCombat(this, cmd.unitIds);
     }
     switch (cmd.type) {
@@ -309,6 +313,9 @@ export class World {
       case 'stance':
         orderStance(this, cmd.unitIds, cmd.stance);
         break;
+      case 'cancelTrain':
+        if (this.buildings.get(cmd.buildingId)?.owner === by) orderCancelTrain(this, cmd.buildingId, cmd.index);
+        break;
       case 'resign':
         resign(this, by);
         break;
@@ -318,13 +325,29 @@ export class World {
         else this.events.emit({ type: 'rejected', reason: 'invalid-target' });
         break;
       }
+      case 'garrison':
+        if (this.buildings.get(cmd.buildingId)?.owner === by) orderGarrison(this, cmd.unitIds, cmd.buildingId);
+        else this.events.emit({ type: 'rejected', reason: 'invalid-target' });
+        break;
+      case 'ungarrison':
+        orderUngarrison(this, cmd.buildingId, by);
+        break;
+      case 'townBell':
+        orderTownBell(this, by);
+        break;
+      case 'buildWall':
+        orderBuildWall(this, cmd.unitIds, cmd.kind, cmd.from, cmd.to, by);
+        break;
     }
   }
 
   /** Strip unit ids the issuer doesn't own. */
   private ownedOnly(cmd: Command, by: PlayerId): Command {
     if (!('unitIds' in cmd)) return cmd;
-    const unitIds = cmd.unitIds.filter((id) => this.units.get(id)?.owner === by);
+    const unitIds = cmd.unitIds.filter((id) => {
+      const u = this.units.get(id);
+      return u?.owner === by && u.state !== 'garrisoned';
+    });
     return unitIds.length === cmd.unitIds.length ? cmd : { ...cmd, unitIds };
   }
 
@@ -332,6 +355,7 @@ export class World {
   tick(dt: number): void {
     for (const u of this.units.values()) u.prevPos = { ...u.pos };
     const arrived = movementSystem(this, dt);
+    garrisonSystem(this, arrived);
     gatherSystem(this, dt, arrived);
     buildSystem(this, dt, arrived);
     // After gather/build so units it sends back to work aren't treated as arrivals this tick.

@@ -85,6 +85,10 @@ export function statusLabel(u: StatusUnit, carryCap: number): string {
       return 'Going to build';
     case 'building':
       return 'Building';
+    case 'toShelter':
+      return 'Running for shelter';
+    case 'garrisoned':
+      return 'Garrisoned';
     case 'attacking':
       return 'Attacking';
     case 'idle':

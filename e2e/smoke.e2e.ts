@@ -9,11 +9,19 @@ async function boot(page: Page, query = ''): Promise<string[]> {
   });
   await page.goto(`/?e2e${query}`);
   await page.waitForFunction(() => (window as any).game?.renderer?.webgl?.info?.render?.frame > 2, null, { timeout: 30_000 });
+  // The overlay is the first thing in <body> and stamps performance.now() as the parser reaches it.
+  const loadingAt = await page.evaluate(() => (window as any).__loadingAt as number);
+  expect(typeof loadingAt).toBe('number');
   return errors;
 }
 
 test('boots, renders and shows the HUD without errors', async ({ page }) => {
   const errors = await boot(page);
+  const bootInfo = await page.evaluate(() => ({
+    loadingAt: (window as any).__loadingAt as number,
+    boot: (window as any).game.boot,
+  }));
+  console.log('boot', JSON.stringify(bootInfo));
   await expect(page).toHaveTitle('Ages Ago');
   await expect(page.locator('#game-container canvas')).toBeVisible();
   for (const id of ['#res-food', '#res-wood', '#res-gold', '#res-pop', '#train-btn']) {

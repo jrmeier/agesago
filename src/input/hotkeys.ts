@@ -22,6 +22,7 @@ export const HOTKEYS = {
   scout: 'Period',
   scoutAlt: 'Home',
   cancel: 'Escape',
+  townBell: 'KeyU',
 } as const;
 
 /** Training-panel slot keys, left to right. */

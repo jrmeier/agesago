@@ -17,7 +17,9 @@ import { rectApproach, rectDistance, type Rect } from '../nav';
 import type { World } from '../World';
 import { cancelExplore, settleCancelled } from './explore';
 import { isWorkableFarm, nearestSources, orderFarm, sendToFarm, sendToSource } from './gather';
+import { route } from './passage';
 import { buildingRect, footprintRect, inReach, snapRot } from './sites';
+import { wallSegments } from './walls';
 
 const reject = (world: World, reason: RejectReason) => world.events.emit({ type: 'rejected', reason });
 
@@ -121,7 +123,8 @@ export function layFoundation(world: World, kind: BuildingKind, pos: Vec2, rot: 
     progress: 0,
   };
   world.buildings.set(b.id, b);
-  if (!BUILDINGS[kind].walkable) blockFootprint(world, b);
+  // A gate blocks while it is a foundation, then opens for its owner once complete.
+  if (!BUILDINGS[kind].walkable || BUILDINGS[kind].gate) blockFootprint(world, b);
   world.events.emit({ type: 'spawned', id: b.id, kind });
   return b;
 }
@@ -139,7 +142,7 @@ export function blockFootprint(world: World, b: Building): void {
       if (p) u.pos = p;
     }
     if (u.path.length && pathCrosses(u.pos, u.path, grown)) {
-      const path = world.nav.findPath(u.pos, u.path[u.path.length - 1]);
+      const path = route(world, u.owner, u.pos, u.path[u.path.length - 1]);
       if (path) u.path = path;
     }
   }
@@ -216,7 +219,7 @@ export function sendBuilders(world: World, unitIds: EntityId[], b: Building): vo
   }
   let sent = 0;
   units.forEach((u, i) => {
-    const path = world.nav.findPath(u.pos, builderSpot(b, c, i));
+    const path = route(world, u.owner, u.pos, builderSpot(b, c, i));
     if (!path) return;
     sent++;
     u.path = path;
@@ -268,6 +271,37 @@ export function orderConstruct(world: World, unitIds: EntityId[], buildingId: En
     world.emitStock();
   }
   orderFarm(world, unitIds, b);
+}
+
+/**
+ * 'buildWall': lay as many segments as fit and can be paid for along the drag.
+ * Occupied or out-of-bounds segments are skipped; running out of resources stops the line.
+ */
+export function orderBuildWall(world: World, unitIds: EntityId[], kind: BuildingKind, from: Vec2, to: Vec2, by: PlayerId): void {
+  const spec = BUILDINGS[kind];
+  if (!spec.buildable || !spec.line) {
+    reject(world, 'invalid-target');
+    return;
+  }
+  const placed: Building[] = [];
+  let denied: RejectReason | null = null;
+  for (const s of wallSegments(kind, from, to)) {
+    const check = canPlace(world, kind, s.pos, s.rot, by);
+    if (!check.ok) {
+      denied = check.reason === 'insufficient-resources' ? 'insufficient-resources' : 'blocked-site';
+      if (check.reason === 'insufficient-resources') break;
+      continue;
+    }
+    pay(world, spec.cost, 1, by);
+    placed.push(layFoundation(world, kind, s.pos, s.rot, by));
+  }
+  if (!placed.length) {
+    reject(world, denied ?? 'blocked-site');
+    return;
+  }
+  world.emitStock();
+  const villagers = unitIds.map((id) => world.units.get(id)).filter((u): u is Unit => !!u && u.kind === 'villager');
+  villagers.forEach((u, i) => sendBuilders(world, [u.id], placed[i % placed.length]));
 }
 
 /** 'cancelBuild': refund the full cost of an unfinished foundation and remove it. */
@@ -346,9 +380,25 @@ export function buildSystem(world: World, dt: number, arrived: Unit[]): void {
  * Finish `b`: 'constructed', pop cap / fog update, then the builders move on — a farm's first
  * builder farms it, drop-site builders gather the nearest matching resource, the rest go idle.
  */
+/** Nearest unfinished segment of the same wall, close enough that the builder should walk to it. */
+function nextSegment(world: World, b: Building): Building | null {
+  let best: Building | null = null;
+  let bestD = 8;
+  for (const o of world.buildings.values()) {
+    if (o.complete || o.owner !== b.owner || o.kind !== b.kind || o.id === b.id) continue;
+    const d = Math.hypot(o.pos.x - b.pos.x, o.pos.z - b.pos.z);
+    if (d < bestD) {
+      bestD = d;
+      best = o;
+    }
+  }
+  return best;
+}
+
 export function completeBuilding(world: World, b: Building): void {
   b.complete = true;
   b.buildProgress = 1;
+  if (BUILDINGS[b.kind].gate) world.nav.removeRect(b.id);
   if (b.kind === 'farm') b.food = FARM_FOOD;
   world.events.emit({ type: 'constructed', id: b.id });
   world.emitStock();
@@ -358,6 +408,12 @@ export function completeBuilding(world: World, b: Building): void {
     u.path = [];
     if (b.kind === 'farm') {
       if (sendToFarm(world, u, b)) continue;
+    } else if (spec.line) {
+      const next = nextSegment(world, b);
+      if (next) {
+        sendBuilders(world, [u.id], next);
+        if (u.state === 'toBuild') continue;
+      }
     } else if (spec.drop.length && b.kind !== 'townCenter') {
       const s = nearestOf(world, spec.drop, b.pos, u);
       if (s && sendToSource(world, u, s)) continue;

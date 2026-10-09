@@ -20,6 +20,18 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
+    <div id="loading" role="status" aria-live="polite">
+      <div class="loading-card">
+        <p class="loading-kicker">Ages Ago</p>
+        <h1>Raising the city</h1>
+        <p id="loading-stage">Preparing the expedition…</p>
+        <div class="loading-track" aria-hidden="true"><div id="loading-bar"></div></div>
+      </div>
+    </div>
+    <script>
+      // Classic script, so this runs while the document is still parsing, before the game module.
+      window.__loadingAt = performance.now();
+    </script>
     <!-- Icon sprite: referenced with <svg><use href="#i-…"/></svg>. -->
     <svg class="icon-sprite" aria-hidden="true" focusable="false">
       <defs>
@@ -184,6 +196,35 @@
         <path d="M8.6 20v-5.6h6.8V20z" fill="#2e1c0c" />
         <path d="M8.6 14.4l6.8 5.6M15.4 14.4 8.6 20" stroke="#a46c35" stroke-width=".8" />
         <path d="M9.4 10.6a2.6 2.6 0 1 1 5.2 0" fill="none" stroke="#c8cbd0" stroke-width="1.6" stroke-linecap="round" />
+      </symbol>
+
+      <symbol id="i-b-watchTower" viewBox="0 0 24 24">
+        <path d="M8 21V9.2h8V21z" fill="#c9c0a6" stroke="#4a3418" stroke-width=".9" />
+        <path d="M6.4 9.2h11.2v2.2H6.4z" fill="#d9c49a" stroke="#4a3418" stroke-width=".8" />
+        <path d="M7.2 6.2h1.6V9.2H7.2zM11.2 6.2h1.6V9.2h-1.6zM15.2 6.2H16.8V9.2h-1.6z" fill="#b7ad92" stroke="#4a3418" stroke-width=".6" />
+        <path d="M10.6 21v-4.2h2.8V21z" fill="#5c3816" />
+        <path d="M16.6 4.6V12" stroke="#5c3816" stroke-width="1" />
+        <path d="M16.6 4.6h3.2v2.1h-3.2z" fill="#9e3b26" stroke="#4d140c" stroke-width=".5" />
+      </symbol>
+
+      <symbol id="i-b-palisade" viewBox="0 0 24 24">
+        <path d="M3 20h18" stroke="#6b4718" stroke-width="1.4" stroke-linecap="round" />
+        <path d="M5 20V8l1.2-2.4L7.4 8V20M10.2 20V6.4l1.2-2.2 1.2 2.2V20M16.6 20V8l1.2-2.4 1.2 2.4V20" fill="#8a6234" stroke="#3b230d" stroke-width=".8" stroke-linejoin="round" />
+        <path d="M4 13.2h16M4 16.4h16" stroke="#c4a36a" stroke-width="1" stroke-linecap="round" />
+      </symbol>
+
+      <symbol id="i-b-stoneWall" viewBox="0 0 24 24">
+        <path d="M2.4 8h19.2V20H2.4z" fill="#c9c0a6" stroke="#4a3418" stroke-width=".9" />
+        <path d="M2.4 12h19.2M2.4 16h19.2M8.4 8v4M15.6 8v4M6 12v4M12 12v4M18 12v4M9.2 16v4M15 16v4" stroke="#6d5c40" stroke-width=".8" />
+        <path d="M3.2 5.2h3.2V8H3.2zM8.4 5.2h3.2V8H8.4zM13.6 5.2h3.2V8h-3.2zM18.4 6h2.6V8h-2.6z" fill="#b7ad92" stroke="#4a3418" stroke-width=".6" />
+      </symbol>
+
+      <symbol id="i-b-gate" viewBox="0 0 24 24">
+        <path d="M3 20V8.4h4.2V20H3zM16.8 20V8.4H21V20h-4.2z" fill="#c9c0a6" stroke="#4a3418" stroke-width=".8" />
+        <path d="M3 6.2h18V9.2H3z" fill="#d4ccb4" stroke="#4a3418" stroke-width=".8" />
+        <path d="M8.2 20V11.2h3.4L10 20zM15.8 20V11.2h-3.4L14 20z" fill="#6b4718" stroke="#3b230d" stroke-width=".7" />
+        <circle cx="11.2" cy="15.2" r=".6" fill="#c8a453" />
+        <circle cx="12.8" cy="15.2" r=".6" fill="#c8a453" />
       </symbol>
 
       <!-- Soldiers (portraits, training buttons, queue). -->
@@ -412,6 +453,10 @@
         <path d="M8 16.5 12 7l4 9.5" fill="none" stroke="#f3dfa6" stroke-width="1.8" stroke-linejoin="round" />
       </symbol>
 
+      <symbol id="i-box" viewBox="0 0 24 24">
+        <rect x="4" y="6" width="16" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="3.2 2.2" />
+      </symbol>
+
       <symbol id="i-all" viewBox="0 0 24 24">
         <g fill="currentColor">
           <circle cx="7" cy="8.4" r="2.6" />
@@ -502,6 +547,20 @@
             <button id="cancel-build-btn" class="explore-btn cancel-build-btn" type="button" title="Cancel the foundation (refunds its cost)" hidden>
               <svg class="eicon" aria-hidden="true"><use href="#i-none" /></svg><span>Cancel</span>
             </button>
+            <button id="town-bell-btn" class="explore-btn" type="button" title="Town bell (U): villagers run to the nearest shelter" hidden>
+              <svg class="eicon" aria-hidden="true"><use href="#i-b-townCenter" /></svg><span>Town bell</span><kbd>U</kbd>
+            </button>
+            <button id="ungarrison-btn" class="explore-btn" type="button" title="Send everyone back outside" hidden>
+              <svg class="eicon" aria-hidden="true"><use href="#i-villager" /></svg><span>Ungarrison</span>
+            </button>
+            <button id="select-same-btn" class="explore-btn" type="button" title="Select every visible unit of this kind" aria-label="Select every visible unit of this kind" hidden>
+              <svg class="eicon" aria-hidden="true"><use href="#i-all" /></svg><span>These</span>
+            </button>
+            <div id="menu-tabs" class="menu-tabs" role="tablist" aria-label="Selection menus" hidden>
+              <button type="button" class="menu-tab" data-menu="build" role="tab" aria-pressed="false">Build</button>
+              <button type="button" class="menu-tab" data-menu="train" role="tab" aria-pressed="false">Train</button>
+              <button type="button" class="menu-tab" data-menu="orders" role="tab" aria-pressed="false">Orders</button>
+            </div>
             <div id="build-grid" class="build-grid" role="group" aria-label="Build" hidden></div>
             <div id="train-grid" class="build-grid train-grid" role="group" aria-label="Train" hidden></div>
             <div id="train-queue" class="train-queue" aria-label="Training queue" hidden></div>
@@ -533,13 +592,18 @@
               <span id="place-reason" class="place-reason"></span>
               <span class="place-help place-help-mouse"><kbd>LMB</kbd> place · <kbd>Shift</kbd> more · <kbd>R</kbd> rotate · <kbd>Esc</kbd> cancel</span>
               <span class="place-help place-help-touch">Drag the outline, then ✓</span>
+              <span class="place-help place-help-line">Drag a line, release to build · <kbd>Esc</kbd> cancel</span>
             </div>
             <button id="place-rotate" class="place-btn" type="button" aria-label="Rotate" title="Rotate (R / Shift+wheel)">⟳</button>
             <button id="place-cancel" class="place-btn place-btn-cancel" type="button" aria-label="Cancel" title="Cancel (Esc / RMB)">✕</button>
             <button id="place-confirm" class="place-btn place-btn-ok" type="button" aria-label="Place here" title="Place">✓</button>
           </div>
+          <p id="select-hint" class="select-hint" hidden>Drag around your units · tap to cancel</p>
           <div class="touch-bar">
-            <button id="touch-select-all" class="touch-btn rts-only" aria-label="Select all villagers">
+            <button id="touch-box" class="touch-btn rts-only" aria-label="Drag a box around units to select them" aria-pressed="false">
+              <svg class="ticon" aria-hidden="true"><use href="#i-box" /></svg><span>Box</span>
+            </button>
+            <button id="touch-select-all" class="touch-btn rts-only" aria-label="Select all your units">
               <svg class="ticon" aria-hidden="true"><use href="#i-all" /></svg><span>All</span>
             </button>
             <button id="touch-deselect" class="touch-btn rts-only" aria-label="Deselect">

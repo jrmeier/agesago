@@ -25,6 +25,14 @@ export interface BuildingSpec {
   hp: number;
   /** Damage reduction against attacks. */
   armor: { melee: number; pierce: number };
+  /** Pierce attack once complete. `arrows` fire with nobody inside; each garrisoned villager adds one. */
+  attack?: { pierce: number; range: number; reload: number; arrows: number };
+  /** Villagers that can shelter here once complete. */
+  garrison?: number;
+  /** Placed by dragging a line of segments rather than one click. */
+  line?: boolean;
+  /** A finished gate lets its owner walk through and blocks everyone else. */
+  gate?: boolean;
 }
 
 export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
@@ -40,6 +48,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     sight: 11,
     hp: 2400,
     armor: { melee: 3, pierce: 7 },
+    garrison: 10,
+    attack: { pierce: 5, range: 6, reload: 2, arrows: 0 },
   },
   house: {
     name: 'House',
@@ -144,6 +154,63 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     sight: 6,
     hp: 1000,
     armor: { melee: 1, pierce: 7 },
+  },
+  watchTower: {
+    name: 'Watch Tower',
+    size: { w: 2.2, d: 2.2 },
+    cost: { wood: 80, stone: 50 },
+    buildTime: 45,
+    popBonus: 0,
+    drop: [],
+    walkable: false,
+    buildable: true,
+    sight: 14,
+    hp: 900,
+    armor: { melee: 1, pierce: 7 },
+    garrison: 5,
+    attack: { pierce: 6, range: 8, reload: 2, arrows: 1 },
+  },
+  palisade: {
+    name: 'Palisade',
+    size: { w: 2, d: 2 },
+    cost: { wood: 6 },
+    buildTime: 8,
+    popBonus: 0,
+    drop: [],
+    walkable: false,
+    buildable: true,
+    sight: 2,
+    hp: 280,
+    armor: { melee: 0, pierce: 2 },
+    line: true,
+  },
+  stoneWall: {
+    name: 'Stone Wall',
+    size: { w: 2, d: 2 },
+    cost: { stone: 6 },
+    buildTime: 12,
+    popBonus: 0,
+    drop: [],
+    walkable: false,
+    buildable: true,
+    sight: 2,
+    hp: 1200,
+    armor: { melee: 2, pierce: 8 },
+    line: true,
+  },
+  gate: {
+    name: 'Gate',
+    size: { w: 2, d: 2 },
+    cost: { wood: 30 },
+    buildTime: 18,
+    popBonus: 0,
+    drop: [],
+    walkable: true,
+    buildable: true,
+    sight: 3,
+    hp: 650,
+    armor: { melee: 1, pierce: 5 },
+    gate: true,
   },
 };
 

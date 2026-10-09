@@ -1,6 +1,7 @@
 import type { EntityViews, ScreenRect } from '../render/EntityViews';
 import type { CameraRig } from '../camera/CameraRig';
-import { GAIA, type Building, type BuildingKind, type EntityId, type PropPlacement, type Stance, type Vec2 } from '../core/types';
+import { BUILDINGS } from '../core/buildings';
+import { GAIA, type Building, type BuildingKind, type EntityId, type PropPlacement, type Stance, type UnitKind, type Vec2 } from '../core/types';
 import type { Selection } from '../game/Selection';
 import type { World } from '../sim/World';
 import { Alerts } from '../ui/Alerts';
@@ -10,6 +11,7 @@ import { explorerIds } from '../ui/format';
 import { canTrainAt, kindForSlotKey, trainBatch } from '../ui/military';
 import { RallyFlag } from '../ui/RallyFlag';
 import { SideRail } from '../ui/SideRail';
+import { closeTouchMenus, touchMenuOpen } from '../ui/touchMenus';
 import { ControlGroups, groupCentre } from './controlGroups';
 import type { GestureEvent } from './gestures';
 import { GROUP_KEYS, HOTKEYS, TRAIN_SLOT_KEYS, groupForKey } from './hotkeys';
@@ -74,10 +76,12 @@ export function rectBetween(ax: number, ay: number, bx: number, by: number): Scr
  * cancels. Disabled in first-person mode (where A strafes).
  * Touch: tap selects a unit, attacks a visible enemy with units selected, orders the selection
  * (gather / construct / farm / move), sets a selected building's rally point, or with no units
- * selected selects the tapped building / enemy; long-press toggles a villager; long-press +
- * drag box-selects. While placing, a tap moves the ghost, a finger on the ghost drags it, and
- * #place-bar's ⟳ / ✕ / ✓ rotate, cancel, confirm.
- * Also binds the touch buttons (#touch-select-all, #touch-deselect, #touch-fps), #explore-btn,
+ * selected selects the tapped building / enemy. A tap while a Build / Train / Orders sheet is
+ * open closes it and does not order. Long-press toggles a villager; long-press + drag, or the
+ * Box button then a drag, box-selects (a tap cancels Box). #select-same-btn selects every
+ * visible own unit of the selected kind. While placing, a tap moves the ghost, a finger on the
+ * ghost drags it, and #place-bar's ⟳ / ✕ / ✓ rotate, cancel, confirm.
+ * Also binds the touch buttons (#touch-box, #touch-select-all, #touch-deselect, #touch-fps), #explore-btn,
  * #cancel-build-btn, #command-card, the side rail, runs discovery toasts and combat alerts, and
  * mirrors the camera mode as `fps-mode` on <body> (and attack-move targeting as `targeting`).
  * Owned by the Controls lane (T6). Public surface FROZEN: constructor, update.
@@ -87,6 +91,8 @@ export class Controls {
   private readonly ring: HTMLDivElement;
   /** Touch box-select in progress. */
   private touchBox: ScreenRect | null = null;
+  /** Last painted state of the Box button and its hint, so a frame does not rewrite the DOM. */
+  private boxArmOn: boolean | null = null;
   readonly placement: Placement;
   private readonly discoveries: Discoveries;
   private readonly alerts: Alerts;
@@ -139,14 +145,20 @@ export class Controls {
         this.showBox(null);
         this.placement.cancel();
         this.setTargeting(false);
+        input.touch.disarmBox();
       }
       this.syncMode();
+      this.syncBoxArm();
     });
+    bindButton('touch-box', () => this.toggleBoxArm());
+    bindButton('select-same-btn', () => this.selectSameKind());
     bindButton('touch-select-all', () => this.selectAllOwn());
     bindButton('touch-deselect', () => selection.clear());
     bindButton('touch-fps', () => rig.setMode(rig.mode === 'rts' ? 'fps' : 'rts'));
     bindButton('explore-btn', () => this.explore());
     bindButton('cancel-build-btn', () => this.cancelSelectedFoundation());
+    bindButton('town-bell-btn', () => this.deps.world.dispatch({ type: 'townBell' }));
+    bindButton('ungarrison-btn', () => this.ungarrison());
     bindButton('place-rotate', () => this.placement.rotate(1));
     bindButton('place-cancel', () => this.placement.cancel());
     bindButton('place-confirm', () => this.placement.confirm(false));
@@ -182,10 +194,15 @@ export class Controls {
     this.alerts.update(this.time);
     this.updateRail();
     this.rallyFlag.update(rig.mode === 'rts' ? this.rallyPoint() : null);
-    if (rig.mode !== 'rts') return;
+    if (rig.mode !== 'rts') {
+      this.syncBoxArm();
+      return;
+    }
 
     if (this.placement.active) {
-      this.updatePlacement();
+      if (this.placement.line) this.updateLinePlacement();
+      else this.updatePlacement();
+      this.syncBoxArm();
       return;
     }
 
@@ -210,6 +227,7 @@ export class Controls {
       if (this.targeting) this.setTargeting(false);
       else this.order(right.x, right.y, input.ctrl);
     }
+    this.syncBoxArm();
   }
 
   private hotkeys(): void {
@@ -232,6 +250,7 @@ export class Controls {
     if (input.keyPressed(HOTKEYS.scout) || input.keyPressed('NumpadDecimal') || input.keyPressed(HOTKEYS.scoutAlt)) {
       focusNextScout(world, rig);
     }
+    if (plain(HOTKEYS.townBell)) world.dispatch({ type: 'townBell' });
     for (const code of Object.values(BUILD_HOTKEYS)) {
       const kind = plain(code) ? kindForKey(code) : null;
       if (kind) this.beginPlacement(kind);
@@ -261,6 +280,8 @@ export class Controls {
     if (!builders.length) return;
     this.showBox(null);
     this.touchBox = null;
+    this.deps.input.touch.disarmBox();
+    closeTouchMenus();
     this.setTargeting(false);
     const at = input.touch.active || input.overHud || !input.inside ? { ...rig.rts.target } : this.groundAt(input.x, input.y);
     this.placement.start(kind, builders, at ?? { ...rig.rts.target });
@@ -297,10 +318,57 @@ export class Controls {
     if (input.released(RMB) && right && classifyRelease(right) === 'click') p.cancel();
   }
 
+  /**
+   * Wall placement. A drag lays the line and release builds it; a click does not.
+   * Touch drags are claimed by Placement, and the mouse events they synthesise are ignored.
+   */
+  private updateLinePlacement(): void {
+    const { input } = this.deps;
+    const p = this.placement;
+    this.showBox(null);
+    if (input.keyPressed('Escape')) {
+      p.cancel();
+      return;
+    }
+    const right = input.drag(RMB);
+    if (input.released(RMB) && right && classifyRelease(right) === 'click') {
+      p.cancel();
+      return;
+    }
+    if (input.touch.isCompatMouse()) {
+      p.refresh();
+      return;
+    }
+    const left = input.drag(LMB);
+    if (input.pressed(LMB) && left && !left.withSpace && input.inside && !input.overHud) {
+      const g = this.groundAt(left.startX, left.startY);
+      if (g) p.beginLine(g);
+    }
+    if (left && left.dragging && !left.withSpace && input.inside && !input.overHud) {
+      const g = this.groundAt(left.x, left.y);
+      if (g) p.extendLine(g);
+    } else if (!left?.held && !input.touch.active && input.inside && !input.overHud) {
+      const g = this.groundAt(input.x, input.y);
+      if (g) p.moveTo(g);
+      else p.refresh();
+    } else {
+      p.refresh();
+    }
+    if (input.released(LMB) && left && !left.withSpace) {
+      if (left.dragging) p.confirmLine(input.shift);
+      else p.endLineDrag();
+    }
+  }
+
   private gesture(g: GestureEvent): void {
     const { selection, world } = this.deps;
     switch (g.type) {
       case 'tap': {
+        // A sheet is in the way: the tap dismisses it. The next tap orders.
+        if (touchMenuOpen()) {
+          closeTouchMenus();
+          break;
+        }
         if (this.targeting) {
           this.targetClick(g.x, g.y, false);
           break;
@@ -329,6 +397,7 @@ export class Controls {
         break;
       }
       case 'box':
+        if (!this.touchBox) closeTouchMenus();
         this.touchBox = rectBetween(g.x0, g.y0, g.x, g.y);
         break;
       case 'boxEnd':
@@ -418,9 +487,51 @@ export class Controls {
     return b.rally?.pos ?? this.rallyEcho.get(b.id) ?? null;
   }
 
+  /** Box button: the next one-finger drag selects units. A tap cancels, and does not order. */
+  private toggleBoxArm(): void {
+    const { input, rig } = this.deps;
+    if (rig.mode !== 'rts') return;
+    if (input.touch.boxArmed) input.touch.disarmBox();
+    else {
+      input.touch.armBox();
+      closeTouchMenus();
+    }
+    this.syncBoxArm();
+  }
+
+  /** Paint the Box button and the "drag around your units" hint from the recogniser. */
+  private syncBoxArm(): void {
+    const on = this.deps.rig.mode === 'rts' && (this.deps.input.touch.boxArmed || this.touchBox !== null);
+    if (on === this.boxArmOn) return;
+    this.boxArmOn = on;
+    document.getElementById('touch-box')?.setAttribute('aria-pressed', String(on));
+    const hint = document.getElementById('select-hint');
+    if (hint) hint.hidden = !on;
+  }
+
   private selectAllOwn(): void {
     const { world, selection } = this.deps;
-    selection.set([...world.units.values()].filter((u) => u.owner === world.localPlayer).map((u) => u.id));
+    selection.set(
+      [...world.units.values()]
+        .filter((u) => u.owner === world.localPlayer && u.state !== 'garrisoned')
+        .map((u) => u.id)
+    );
+  }
+
+  /** The selected own building villagers can shelter in. */
+  private shelterBuilding(): Building | null {
+    const { world, selection } = this.deps;
+    if (selection.ids.size !== 1) return null;
+    const [id] = selection.ids;
+    const b = world.buildings.get(id);
+    if (!b || b.owner !== world.localPlayer || !b.complete || !(BUILDINGS[b.kind].garrison ?? 0)) return null;
+    return b;
+  }
+
+  /** Empty the selected shelter. */
+  private ungarrison(): void {
+    const b = this.shelterBuilding();
+    if (b && b.occupants?.length) this.deps.world.dispatch({ type: 'ungarrison', buildingId: b.id });
   }
 
   private toggle(id: EntityId): void {
@@ -431,22 +542,38 @@ export class Controls {
 
   /** Select one own unit; a quick second click / tap on it selects every own unit of its kind on screen. */
   private selectUnit(id: EntityId): void {
-    const { world, selection, views, rig, input } = this.deps;
+    const { world, selection } = this.deps;
     const prev = this.lastClick;
     this.lastClick = { id, time: this.time };
     if (prev && prev.id === id && this.time - prev.time <= DOUBLE_CLICK_S) {
       this.lastClick = null;
       const kind = world.units.get(id)?.kind;
-      const ids = views
-        .idsInRect({ x0: 0, y0: 0, x1: input.width, y1: input.height }, rig.camera, { width: input.width, height: input.height })
-        .filter((u) => {
-          const unit = world.units.get(u);
-          return unit?.owner === world.localPlayer && unit.kind === kind;
-        });
+      const ids = kind ? this.ownIdsOfKindOnScreen(kind) : [];
       selection.set(ids.length ? ids : [id]);
       return;
     }
     selection.set([id]);
+  }
+
+  /** Every own, non-garrisoned unit of `kind` currently on screen. */
+  private ownIdsOfKindOnScreen(kind: UnitKind): EntityId[] {
+    const { world, views, rig, input } = this.deps;
+    return views
+      .idsInRect({ x0: 0, y0: 0, x1: input.width, y1: input.height }, rig.camera, { width: input.width, height: input.height })
+      .filter((u) => {
+        const unit = world.units.get(u);
+        return unit?.owner === world.localPlayer && unit.kind === kind && unit.state !== 'garrisoned';
+      });
+  }
+
+  /** Select every visible own unit of the same kind as the current selection. */
+  private selectSameKind(): void {
+    const { world, selection } = this.deps;
+    const own = this.ownUnitIds().flatMap((id) => world.units.get(id) ?? []);
+    const kind = own[0]?.kind;
+    if (!kind || own.some((u) => u.kind !== kind)) return;
+    const ids = this.ownIdsOfKindOnScreen(kind);
+    if (ids.length) selection.set(ids);
   }
 
   private clickSelect(x: number, y: number, additive: boolean): void {
@@ -572,7 +699,11 @@ export class Controls {
   /** Digit / group button: select group `n`; a quick second press centres the camera on it. */
   private recallGroup(n: number): void {
     const { world, selection, rig } = this.deps;
-    const ids = this.groups.get(n).filter((id) => world.units.has(id) || world.buildings.has(id));
+    const ids = this.groups.get(n).filter((id) => {
+      const u = world.units.get(id);
+      if (u) return u.state !== 'garrisoned';
+      return world.buildings.has(id);
+    });
     if (!ids.length) return;
     if (this.groups.press(n, this.time) === 'centre') {
       const c = groupCentre(ids, (id) => (world.units.get(id) ?? world.buildings.get(id))?.pos);

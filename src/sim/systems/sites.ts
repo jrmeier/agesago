@@ -3,6 +3,7 @@ import type { Building, BuildingKind, ResourceType, Unit, Vec2, PlayerId } from 
 import { BALANCE } from '../balance';
 import { rectApproach, rectDistance, type Rect } from '../nav';
 import type { World } from '../World';
+import { route } from './passage';
 
 /** Snap a yaw to the nearest 90° step, in [0, 2π). */
 export function snapRot(rot: number): number {
@@ -42,7 +43,7 @@ export function nearestDrop(world: World, from: Vec2, type: ResourceType, owner:
   }
   cands.sort((a, c) => a.d - c.d);
   for (const { b } of cands) {
-    const path = world.nav.findPath(from, siteApproach(from, b));
+    const path = route(world, owner, from, siteApproach(from, b));
     if (path) return { b, path };
   }
   return null;

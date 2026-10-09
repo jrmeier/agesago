@@ -32,7 +32,7 @@ describe('players and ownership', () => {
     expect(w.players.size).toBe(2);
     expect(w.townCenterOf(1)!.pos).toEqual({ x: 15, z: 15 });
     expect(w.townCenterOf(2)!.pos).toEqual({ x: 65, z: 65 });
-    expect(w.townCenter.owner).toBe(1);
+    expect(w.townCenter!.owner).toBe(1);
     expect(w.popOf(1)).toBe(1);
     expect(w.popOf(2)).toBe(1);
     w.stockOf(2).food = 500;
@@ -69,5 +69,24 @@ describe('players and ownership', () => {
     for (let i = 0; i < 20 * 9; i++) w.tick(0.05);
     expect(w.popOf(2)).toBe(2);
     expect(w.popOf(1)).toBe(1);
+  });
+});
+
+describe('training queues', () => {
+  it('cancels a queued unit and refunds its cost', () => {
+    const w = twoPlayers();
+    const tc = w.townCenterOf(1)!;
+    w.stock.food = 150;
+    w.dispatch({ type: 'train', buildingId: tc.id });
+    w.dispatch({ type: 'train', buildingId: tc.id });
+    expect(tc.queue).toBe(2);
+    expect(w.stock.food).toBe(50);
+    w.dispatch({ type: 'cancelTrain', buildingId: tc.id, index: 1 });
+    expect(tc.queue).toBe(1);
+    expect(tc.queueKinds).toEqual(['villager']);
+    expect(w.stock.food).toBe(100);
+    // Another player can't cancel it.
+    w.dispatch({ type: 'cancelTrain', buildingId: tc.id, index: 0 }, 2);
+    expect(tc.queue).toBe(1);
   });
 });

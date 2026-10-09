@@ -46,7 +46,20 @@ describe('build hotkeys', () => {
 
   it('gives every buildable kind a unique key that clashes with nothing else', () => {
     const kinds = buildableKinds();
-    expect(kinds).toEqual(['house', 'storehouse', 'miningCamp', 'granary', 'farm', 'barracks', 'archeryRange', 'stable']);
+    expect(kinds).toEqual([
+      'house',
+      'storehouse',
+      'miningCamp',
+      'granary',
+      'farm',
+      'barracks',
+      'archeryRange',
+      'stable',
+      'watchTower',
+      'palisade',
+      'stoneWall',
+      'gate',
+    ]);
     const keys = kinds.map((k) => BUILD_HOTKEYS[k]);
     expect(keys.every(Boolean)).toBe(true);
     expect(new Set(keys).size).toBe(keys.length);
@@ -99,6 +112,10 @@ describe('building panel labels', () => {
     expect(constructionLabel(1.2)).toBe('Under construction 100%');
     expect(buildingRole('house')).toBe('+5 population');
     expect(buildingRole('miningCamp')).toBe('Drop site: gold, stone');
+    expect(buildingRole('watchTower', undefined, undefined, 2)).toBe('Shelter 2/5 · Ranged defence');
+    expect(buildingRole('townCenter', undefined, undefined, 0)).toBe('+5 population · Shelter 0/10 · Fires when garrisoned');
+    expect(buildingRole('palisade')).toBe('Blocks movement');
+    expect(buildingRole('gate')).toBe('Opens for your units');
     expect(buildingRole('farm', 180.6, 250)).toBe('Food 180/250');
     expect(buildingRole('farm', 0, 250)).toMatch(/reseed/);
     expect(popLabel(7, 10)).toBe('7/10');

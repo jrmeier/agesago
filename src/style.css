@@ -1288,6 +1288,24 @@ body.touch .place-help-touch {
   display: inline;
 }
 
+.place-help-line {
+  display: none;
+}
+
+body.placing-line .place-help-mouse,
+body.placing-line .place-help-touch,
+body.placing-line.touch .place-help-touch {
+  display: none;
+}
+
+body.placing-line .place-help-line {
+  display: inline;
+}
+
+body.placing-line #place-rotate {
+  display: none;
+}
+
 .place-btn {
   width: 40px;
   height: 40px;
@@ -1606,6 +1624,13 @@ body.touch .build-icon {
 
 .queue-item {
   position: relative;
+  /* Buttons (click to cancel) styled as round icons. */
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
   width: 26px;
   height: 26px;
   flex: none;
@@ -1954,6 +1979,77 @@ body.touch .cmd-btn {
   height: 44px;
 }
 
+/* ---- Boot: painted before the module runs, so the first frame is never a blank tab ---- */
+
+#loading {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  background:
+    radial-gradient(90% 70% at 50% 18%, #f3dfb0 0%, #c49255 42%, #6a4324 100%);
+  transition: opacity 0.4s ease;
+}
+
+#loading.is-done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading-card {
+  width: min(420px, 100%);
+  padding: 28px 26px 22px;
+  text-align: center;
+  color: var(--ink);
+  background: var(--papyrus);
+  border: 1px solid var(--bronze-lo);
+  box-shadow:
+    var(--trim),
+    0 18px 40px rgba(33, 20, 11, 0.45);
+}
+
+.loading-kicker {
+  font-family: var(--title);
+  font-size: 13px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--bronze-lo);
+}
+
+.loading-card h1 {
+  margin: 8px 0 14px;
+  font-family: var(--title);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+#loading-stage {
+  min-height: 1.4em;
+  font-size: 16px;
+  color: var(--ink-soft);
+}
+
+.loading-track {
+  margin-top: 16px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: rgba(43, 26, 15, 0.18);
+  box-shadow: inset 0 1px 2px rgba(43, 26, 15, 0.35);
+}
+
+#loading-bar {
+  width: 100%;
+  height: 100%;
+  transform: scaleX(0.08);
+  transform-origin: left center;
+  background: var(--bronze-face);
+  transition: transform 0.25s ease;
+}
+
 body.touch .cmd-btn kbd {
   display: none;
 }
@@ -2011,4 +2107,153 @@ body.touch .train-tile {
   body.touch .group-btn:nth-child(n + 4).empty {
     display: none;
   }
+}
+
+/* ---- Touch menus: Build / Train / Orders sheets, and the box-select hint ---- */
+
+.menu-tabs,
+#select-same-btn {
+  display: none;
+}
+
+.menu-tab {
+  flex: 1 1 0;
+  min-height: 44px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  font-family: var(--title);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #3a240c;
+  background: var(--grain), linear-gradient(180deg, rgba(255, 248, 228, 0.75) 0%, rgba(226, 202, 152, 0.75) 100%);
+  border: 1px solid var(--bronze-lo);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 250, 230, 0.8),
+    0 2px 4px rgba(60, 35, 10, 0.35);
+}
+
+.menu-tab[hidden] {
+  display: none;
+}
+
+.menu-tab[aria-pressed='true'] {
+  color: var(--ink);
+  background: var(--grain), var(--bronze-face);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 245, 210, 0.75),
+    0 0 0 1px var(--wood-dark);
+}
+
+body.touch .menu-tabs:not([hidden]) {
+  display: flex;
+  flex: 1 0 100%;
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(110, 70, 26, 0.35);
+}
+
+body.touch #select-same-btn:not([hidden]) {
+  display: flex;
+}
+
+/* Grids stay in the panel on desktop. On a phone they open from a tab, so the summary stays one row. */
+body.touch:not(.menu-build) #build-grid,
+body.touch:not(.menu-train) #train-grid,
+body.touch:not(.menu-train) #train-queue,
+body.touch:not(.menu-orders) #command-card {
+  display: none;
+}
+
+body.touch .selection-panel {
+  white-space: normal;
+}
+
+body.touch .touch-bar {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+body.touch .touch-btn {
+  width: auto;
+  max-width: 54px;
+  min-width: 44px;
+  flex: 0 1 54px;
+  padding: 0 2px;
+}
+
+.select-hint {
+  position: fixed;
+  z-index: 16;
+  left: 12px;
+  right: 12px;
+  bottom: calc(86px + env(safe-area-inset-bottom));
+  margin: 0 auto;
+  max-width: 320px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  text-align: center;
+  pointer-events: none;
+  font-family: var(--title);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+  background: var(--papyrus);
+  border: 1px solid var(--bronze);
+  box-shadow: var(--trim), 0 8px 18px rgba(0, 0, 0, 0.4);
+}
+
+.select-hint[hidden] {
+  display: none;
+}
+
+/* An open tab becomes a sheet: names visible, three columns, scroll instead of one cramped strip. */
+body.touch.menu-build .selection-panel,
+body.touch.menu-train .selection-panel,
+body.touch.menu-orders .selection-panel {
+  position: absolute;
+  left: 64px;
+  right: 8px;
+  bottom: 100%;
+  width: auto;
+  max-width: none;
+  max-height: min(42vh, 380px);
+  transform: none;
+  overflow-y: auto;
+  align-items: flex-start;
+  white-space: normal;
+}
+
+body.touch.menu-build .build-name,
+body.touch.menu-train .build-name {
+  display: block;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.15;
+}
+
+body.touch.menu-build #build-grid,
+body.touch.menu-train #train-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+}
+
+body.touch.menu-orders .command-card {
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+body.touch.menu-orders .cmd-btn {
+  width: 52px;
+  height: 52px;
+}
+
+body.touch.menu-orders .cmd-btn svg {
+  width: 26px;
+  height: 26px;
 }

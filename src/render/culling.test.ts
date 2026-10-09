@@ -166,7 +166,7 @@ describe('resource and prop chunks', () => {
     const props = new PropsView(map.hf, map.layout.props);
     const aspects = [16 / 9, 9 / 16];
     for (const aspect of aspects) {
-      const camera = rtsCamera(map.hf, world.townCenter.pos.x, world.townCenter.pos.z, aspect, 26);
+      const camera = rtsCamera(map.hf, world.townCenter!.pos.x, world.townCenter!.pos.z, aspect, 26);
       views.sync(1, 0, camera);
       props.update(camera);
       const resources = triangleLoad(views.object, camera);

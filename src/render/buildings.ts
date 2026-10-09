@@ -221,6 +221,41 @@ export function buildingModel(kind: BuildingKind, opts?: { color?: number; seed?
     for (const z of [1.1, 1.54]) parts.push(block([2.1, 0.33, 0.08], STONE, [0, 0.265, z]));
     for (const x of [-1.01, 1.01]) parts.push(block([0.08, 0.33, 0.44], STONE, [x, 0.265, 1.32]));
     parts.push(block([1.92, 0.015, 0.34], 0x527779, [0, 0.285, 1.32]));
+  } else if (kind === 'watchTower') {
+    // Square stone shaft, a timber fighting floor and a crenellated head. Faces +z.
+    parts.push(block([1.9, 0.28, 1.9], STONE, [0, 0.14, 0]));
+    parts.push(block([1.28, 2.55, 1.28], 0xb7ad92, [0, 1.555, 0]));
+    parts.push(block([0.42, 0.85, 0.08], TREE_TRUNK, [0, 0.56, 0.64]));
+    parts.push(block([1.72, 0.16, 1.72], WOOD, [0, 2.91, 0]));
+    for (const z of [0.78, -0.78]) {
+      parts.push(block([1.72, 0.22, 0.16], STONE, [0, 3.1, z]));
+      for (const x of [-0.62, 0, 0.62]) parts.push(block([0.22, 0.32, 0.16], 0xd4ccb4, [x, 3.37, z]));
+    }
+    for (const x of [0.78, -0.78]) parts.push(block([0.16, 0.22, 1.4], STONE, [x, 3.1, 0]));
+  } else if (kind === 'palisade') {
+    // A short run of stakes along local +x, so a horizontal wall (rot 0) reads as a fence.
+    parts.push(block([1.86, 0.12, 0.36], WOOD, [0, 0.08, 0]));
+    for (const x of [-0.72, -0.24, 0.24, 0.72]) {
+      parts.push(block([0.16, 1.28, 0.16], TREE_TRUNK, [x, 0.72, 0]));
+      parts.push(block([0.1, 0.18, 0.1], 0x6a4a28, [x, 1.45, 0]));
+    }
+    parts.push(block([1.8, 0.08, 0.08], WOOD, [0, 0.48, 0]));
+    parts.push(block([1.8, 0.08, 0.08], WOOD, [0, 1.05, 0]));
+  } else if (kind === 'stoneWall') {
+    // Masonry courses along local +x, with a crenellated top.
+    parts.push(block([1.9, 0.32, 0.78], 0xa79b84, [0, 0.16, 0]));
+    parts.push(block([1.78, 0.42, 0.62], STONE, [0, 0.53, 0]));
+    parts.push(block([1.7, 0.42, 0.56], 0xd4ccb4, [0, 0.95, 0]));
+    parts.push(block([1.78, 0.38, 0.62], STONE, [0, 1.35, 0]));
+    for (const x of [-0.66, -0.22, 0.22, 0.66]) parts.push(block([0.3, 0.28, 0.62], 0xb7ad92, [x, 1.68, 0]));
+  } else if (kind === 'gate') {
+    // Two piers and a lintel, leaves swung open along local +z (the passage through the wall).
+    for (const x of [-0.72, 0.72]) parts.push(block([0.42, 1.7, 0.72], STONE, [x, 0.85, 0]));
+    parts.push(block([1.9, 0.28, 0.76], 0xd4ccb4, [0, 1.84, 0]));
+    parts.push(block([0.1, 1.35, 0.52], WOOD, [-0.28, 0.72, 0.16]));
+    parts.push(block([0.1, 1.35, 0.52], WOOD, [0.28, 0.72, -0.16]));
+    parts.push(block([0.08, 0.16, 0.08], 0xb89b53, [-0.28, 0.85, 0.4]));
+    parts.push(block([0.08, 0.16, 0.08], 0xb89b53, [0.28, 0.85, -0.4]));
   } else {
     for (let i = 0; i < 6; i++) {
       parts.push(block([0.27, 0.045, 3.66], 0x8f6944, [-1.61 + i * 0.64, 0.075, 0]));
@@ -239,7 +274,15 @@ export function buildingModel(kind: BuildingKind, opts?: { color?: number; seed?
   }
   const military = kind === 'barracks' || kind === 'archeryRange' || kind === 'stable';
   if (military || opts?.color !== undefined) {
-    const height = kind === 'barracks' ? 3.12 : kind === 'archeryRange' ? 3.48 : kind === 'stable' ? 2.82 : kind === 'farm' ? 0.5 : 1.7;
+    const height =
+      kind === 'barracks' ? 3.12
+      : kind === 'archeryRange' ? 3.48
+      : kind === 'stable' ? 2.82
+      : kind === 'watchTower' ? 4.4
+      : kind === 'stoneWall' || kind === 'gate' ? 2.1
+      : kind === 'palisade' ? 1.8
+      : kind === 'farm' ? 0.5
+      : 1.7;
     const x = w / 2 - 0.38, z = d / 2 - 0.4;
     parts.push(block([0.055, height - 0.06, 0.055], TREE_TRUNK, [x, (height + 0.06) / 2, z]));
     parts.push(block([0.44, military ? 0.58 : 0.25, 0.025], opts?.color ?? 0x9e3b26, [x - 0.24, height - (military ? 0.36 : 0.16), z]));
@@ -274,9 +317,13 @@ export function foundationModel(kind: BuildingKind, opts?: { color?: number; see
     frame.push(block([w * 0.89, 0.08, 0.09], WOOD, [0, kind === 'farm' ? 0.38 : 1.78, side * d * 0.43]));
   }
   if (kind !== 'farm') {
-    frame.push(block([w * 0.87, 0.06, 0.33], WOOD, [0, 1.02, -d * 0.42]));
-    for (const x of [-0.22, 0.22]) frame.push(block([0.05, 1.45, 0.06], WOOD, [x, 0.75, d * 0.42], [-0.2, 0, 0]));
-    for (let i = 0; i < 6; i++) frame.push(block([0.48, 0.05, 0.05], WOOD, [0, 0.16 + i * 0.22, d * 0.42 + 0.12 - i * 0.044]));
+    // The tilted ladder swings past d * 0.42. Pull it in only when a small footprint
+    // (a 2×2 wall segment) would otherwise leave the scaffold outside the plan.
+    const beamZ = Math.min(d * 0.42, d / 2 - 0.17);
+    const ladderZ = Math.min(d * 0.42, d / 2 - 0.2);
+    frame.push(block([w * 0.87, 0.06, 0.33], WOOD, [0, 1.02, -beamZ]));
+    for (const x of [-0.22, 0.22]) frame.push(block([0.05, 1.45, 0.06], WOOD, [x, 0.75, ladderZ], [-0.2, 0, 0]));
+    for (let i = 0; i < 6; i++) frame.push(block([0.48, 0.05, 0.05], WOOD, [0, 0.16 + i * 0.22, ladderZ + 0.12 - i * 0.044]));
   }
   section(object, 'cleared-site', cleared, material);
   section(object, 'low-plinth', plinth, material);

@@ -96,6 +96,20 @@ export class TouchInput implements TouchState {
     this.drawStick();
   }
 
+  /** True while the next one-finger drag box-selects instead of panning. */
+  get boxArmed(): boolean {
+    return this.recognizer.boxArmed;
+  }
+
+  /** Arm the next one-finger drag as a selection box. A tap cancels it. */
+  armBox(): void {
+    this.recognizer.armBox();
+  }
+
+  disarmBox(): void {
+    this.recognizer.disarmBox();
+  }
+
   /** Install (or clear with null) a grabber that may claim new single-finger touches in RTS mode. */
   setGrabber(g: TouchGrab | null): void {
     if (this.grabbed !== null && g !== this.grabber) {

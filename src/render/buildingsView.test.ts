@@ -203,7 +203,7 @@ describe('buildings, ghost and picking', () => {
     const unit = world.units.values().next().value!;
     unit.pos = { x: 150, z: 150 };
     unit.prevPos = { x: 150, z: 150 };
-    const tc = world.townCenter;
+    const tc = world.townCenter!;
     camera.position.set(tc.pos.x, 10, tc.pos.z + 12);
     camera.lookAt(tc.pos.x, 2, tc.pos.z);
     expect(views.pick(new THREE.Vector2(0, 0), camera)).toBe(tc.id);

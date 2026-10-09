@@ -1,8 +1,10 @@
+import { BUILDINGS } from '../../core/buildings';
 import type { Building, EntityId, PlayerId, ResourceType, Stance, Unit, UnitKind, UnitState, Vec2 } from '../../core/types';
 import { UNITS } from '../../core/units';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
 import { removeBuilding, sendBuilders } from './build';
+import { route } from './passage';
 import { cancelExplore, settleCancelled } from './explore';
 import { nearestSources, sendToDrop, sendToFarm, sendToNode, sendToSource } from './gather';
 import { formationOffset } from './movement';
@@ -45,6 +47,8 @@ export interface PendingHit {
   kind: UnitKind;
   owner: PlayerId;
   from: Vec2;
+  /** Building shot: pierce damage, instead of `kind`'s attack. */
+  pierce?: number;
 }
 
 type Target = Unit | Building;
@@ -164,7 +168,7 @@ export function findEnemy(world: World, u: Unit, radius: number): Target | null 
           lastOwner = v.owner;
           lastEnemy = world.areEnemies(u.owner, v.owner);
         }
-        if (!lastEnemy || v.hp <= 0) continue;
+        if (!lastEnemy || v.hp <= 0 || v.state === 'garrisoned') continue;
         const d = edgeDistance(u, v);
         if (d > radius || d >= bestD || !world.units.has(v.id) || !vis.isVisible(v.pos.x, v.pos.z)) continue;
         best = v;
@@ -258,8 +262,8 @@ export function orderAttackMove(world: World, unitIds: EntityId[], target: Vec2)
   list.forEach((u, i) => {
     const o = formationOffset(i);
     let dest = { x: target.x + o.x, z: target.z + o.z };
-    let path = world.nav.findPath(u.pos, dest);
-    if (!path && i > 0) path = world.nav.findPath(u.pos, (dest = { ...target }));
+    let path = route(world, u.owner, u.pos, dest);
+    if (!path && i > 0) path = route(world, u.owner, u.pos, (dest = { ...target }));
     if (!path) return;
     moved++;
     const cs = stateOf(world, u);
@@ -331,7 +335,7 @@ export function applyRally(world: World, b: Building, u: Unit): void {
       } else if (t.kind === 'farm' && sendToFarm(world, u, t)) return;
     }
   }
-  const path = world.nav.findPath(u.pos, r.pos);
+  const path = route(world, u.owner, u.pos, r.pos);
   if (!path) return;
   u.path = path;
   world.setState(u, 'moving');
@@ -365,7 +369,7 @@ function disengage(world: World, u: Unit, cs: CombatState): void {
     return;
   }
   if (cs.order === 'attackMove' && cs.dest) {
-    const path = world.nav.findPath(u.pos, cs.dest);
+    const path = route(world, u.owner, u.pos, cs.dest);
     if (path) {
       u.path = path;
       world.setState(u, 'moving');
@@ -375,7 +379,7 @@ function disengage(world: World, u: Unit, cs: CombatState): void {
     cs.dest = null;
   }
   if (u.stance === 'defensive' && cs.post && dist(u.pos, cs.post) > 1) {
-    const path = world.nav.findPath(u.pos, cs.post);
+    const path = route(world, u.owner, u.pos, cs.post);
     if (path) {
       u.path = path;
       world.setState(u, 'moving');
@@ -399,6 +403,7 @@ function attackTick(world: World, u: Unit, cs: CombatState, threat: Unit | undef
   if (
     !t ||
     t.hp <= 0 ||
+    (isUnit(t) && t.state === 'garrisoned') ||
     !world.areEnemies(u.owner, t.owner) ||
     (u.stance === 'passive' && !explicit) ||
     world.time - cs.seen > BALANCE.lostSightGrace
@@ -438,7 +443,7 @@ function attackTick(world: World, u: Unit, cs: CombatState, threat: Unit | undef
   const goal = approachOf(u, t);
   if (u.path.length && cs.goal && dist(goal, cs.goal) < BALANCE.repathDistance) return;
   cs.repath = BALANCE.repathInterval;
-  const path = world.nav.findPath(u.pos, goal);
+  const path = route(world, u.owner, u.pos, goal);
   if (!path) {
     disengage(world, u, cs);
     return;
@@ -463,7 +468,7 @@ function kite(world: World, u: Unit, cs: CombatState, threat: Unit): boolean {
   const want = { x: u.pos.x + dx * BALANCE.kiteStep, z: u.pos.z + dz * BALANCE.kiteStep };
   const spot = world.nav.isFree(want) ? want : world.nav.nearestFree(want);
   if (!spot || dist(spot, u.pos) < 0.5) return false;
-  const path = world.nav.findPath(u.pos, spot);
+  const path = route(world, u.owner, u.pos, spot);
   if (!path) return false;
   u.path = path;
   cs.goal = spot;
@@ -510,8 +515,10 @@ function resolveProjectiles(world: World): void {
   for (const p of due) {
     const t = targetOf(world, p.targetId);
     if (!t || t.hp <= 0) continue;
+    if (isUnit(t) && t.state === 'garrisoned') continue;
     if (isUnit(t) && dist(t.pos, p.aim) > BALANCE.hitRadius) continue; // dodged
-    applyDamage(world, t, damageTo(p.kind, t), p.by, p.owner, p.from);
+    const amount = p.pierce !== undefined ? Math.max(1, p.pierce - pierceArmor(t)) : damageTo(p.kind, t);
+    applyDamage(world, t, amount, p.by, p.owner, p.from);
   }
 }
 
@@ -562,7 +569,7 @@ function flee(world: World, v: Unit, from: Vec2): void {
   }
   const want = { x: v.pos.x + dx * BALANCE.fleeDistance, z: v.pos.z + dz * BALANCE.fleeDistance };
   const spot = world.nav.isFree(want) ? want : world.nav.nearestFree(want);
-  const path = spot && world.nav.findPath(v.pos, spot);
+  const path = spot && route(world, v.owner, v.pos, spot);
   if (!path) return;
   const working = v.state !== 'idle';
   world.fleeState.set(v.id, {
@@ -607,7 +614,19 @@ function resume(world: World, u: Unit): void {
 // ---- Death ----
 
 /** Remove a dead unit: 'died' then 'removed', and every system's bookkeeping about it. */
+function pierceArmor(t: Target): number {
+  return isUnit(t) ? UNITS[t.kind].armor.pierce : BUILDINGS[t.kind].armor.pierce;
+}
+
 export function killUnit(world: World, u: Unit): void {
+  if (u.shelter != null) {
+    const b = world.buildings.get(u.shelter);
+    const occupants = b?.occupants;
+    if (occupants) {
+      const i = occupants.indexOf(u.id);
+      if (i >= 0) occupants.splice(i, 1);
+    }
+  }
   world.events.emit({ type: 'died', id: u.id, kind: u.kind, owner: u.owner, pos: { x: u.pos.x, z: u.pos.z } });
   world.units.delete(u.id);
   world.gatherState.delete(u.id);
@@ -624,6 +643,15 @@ export function killUnit(world: World, u: Unit): void {
 
 /** Destroy a building: 'died', queue dropped (no refund), nav freed, 'removed', pop cap and fog update. */
 export function destroyBuilding(world: World, b: Building): void {
+  const inside = b.occupants ?? [];
+  b.occupants = [];
+  for (const id of inside) {
+    const u = world.units.get(id);
+    if (!u) continue;
+    u.shelter = null;
+    u.pos = { x: b.pos.x, z: b.pos.z };
+    killUnit(world, u);
+  }
   world.events.emit({ type: 'died', id: b.id, kind: b.kind, owner: b.owner, pos: { x: b.pos.x, z: b.pos.z } });
   b.queue = 0;
   b.queueKinds = [];
@@ -669,6 +697,7 @@ export function combatSystem(world: World, dt: number, arrived: Unit[]): void {
   }
 
   for (const u of world.units.values()) {
+    if (u.state === 'garrisoned') continue;
     const cs = world.combatState.get(u.id);
     if (cs) {
       cs.cooldown -= dt;
@@ -687,4 +716,47 @@ export function combatSystem(world: World, dt: number, arrived: Unit[]): void {
     const t = findEnemy(world, u, acquireRadius(u, cs));
     if (t) engage(world, u, t, false);
   }
+  defenceFire(world, dt);
+}
+
+/** Watch towers, and shelters with villagers inside, fire a volley at the nearest enemies in range. */
+function defenceFire(world: World, dt: number): void {
+  for (const b of world.buildings.values()) {
+    const attack = BUILDINGS[b.kind].attack;
+    if (!attack || !b.complete || b.hp <= 0) continue;
+    const arrows = attack.arrows + (b.occupants?.length ?? 0);
+    if (arrows <= 0) continue;
+    b.cooldown = (b.cooldown ?? 0) - dt;
+    if (b.cooldown > 0) continue;
+    const targets = enemiesInRange(world, b, attack.range);
+    if (!targets.length) continue;
+    b.cooldown = attack.reload;
+    for (let i = 0; i < arrows; i++) shootBuilding(world, b, targets[Math.min(i, targets.length - 1)], attack.pierce);
+  }
+}
+
+function enemiesInRange(world: World, b: Building, range: number): Unit[] {
+  const vis = world.visibilityOf(b.owner);
+  const found: { u: Unit; d: number }[] = [];
+  for (const u of world.units.values()) {
+    if (u.state === 'garrisoned' || u.hp <= 0 || !world.areEnemies(b.owner, u.owner)) continue;
+    const d = dist(b.pos, u.pos);
+    if (d > range || !vis.isVisible(u.pos.x, u.pos.z)) continue;
+    found.push({ u, d });
+  }
+  found.sort((a, c) => a.d - c.d || a.u.id - c.u.id);
+  return found.map((e) => e.u);
+}
+
+function shootBuilding(world: World, b: Building, t: Unit, pierce: number): void {
+  const from = { x: b.pos.x, z: b.pos.z };
+  const dt = 1 / BALANCE.tickRate;
+  const flight0 = dist(from, t.pos) / BALANCE.projectileSpeed;
+  const aim = {
+    x: t.pos.x + ((t.pos.x - t.prevPos.x) / dt) * flight0,
+    z: t.pos.z + ((t.pos.z - t.prevPos.z) / dt) * flight0,
+  };
+  const flight = dist(from, aim) / BALANCE.projectileSpeed;
+  world.events.emit({ type: 'projectile', kind: 'arrow', from, to: aim, flight, targetId: t.id });
+  world.projectiles.push({ at: world.time + flight, targetId: t.id, aim, by: b.id, kind: 'archer', owner: b.owner, from, pierce });
 }

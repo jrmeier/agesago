@@ -39,7 +39,9 @@ export class Discoveries {
     private readonly focusOn: (p: Vec2) => void,
     props: readonly PropPlacement[]
   ) {
-    this.home = { ...world.townCenter.pos };
+    // Directions are relative to home; fall back to the map centre if the Town Center is already gone.
+    const tc = world.townCenter;
+    this.home = tc ? { ...tc.pos } : { x: world.hf.width / 2, z: world.hf.depth / 2 };
     this.tracker = new DiscoveryTracker(findSites(props, world.nodes.values(), this.home));
     const vis = world.visibility;
     this.tracker.check((x, z) => vis.isExplored(x, z));

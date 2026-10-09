@@ -28,6 +28,7 @@ import {
   trainBatch,
   trainEntries,
 } from './military';
+import { closeTouchMenus, toggleTouchMenu, touchMenuOpen, type TouchMenu } from './touchMenus';
 
 /** Length of the train ring's circle (its `pathLength`). */
 const RING = 100;
@@ -47,8 +48,10 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * Controls handles clicks), #build-progress / #cancel-build-btn (building panel for a selected
  * foundation; Controls handles the click), #train-grid (one [data-train] button per unit a
  * selected complete building trains — click trains one, Shift-click five; dispatched here),
- * #train-queue (read-only queue strip), #command-card (attack-move / stop / stances; this
- * class shows it and marks the current stance, Controls handles clicks), #train-btn
+ * #train-queue (queue strip; click an entry to cancel it), #command-card (attack-move / stop / stances; this
+ * class shows it and marks the current stance, Controls handles clicks). On a phone the build grid, training
+ * grid and command card stay behind #menu-tabs (Build / Train / Orders) until that tab is open, and
+ * #select-same-btn shows when the selection is one kind of own unit. #train-btn
  * (.train-sub label, .train-ring-fill progress ring, .training while queued). Updates from
  * world.events and selection changes.
  * Owned by the HUD lane. Public surface FROZEN: constructor, update.
@@ -70,11 +73,15 @@ export class Hud {
     grid: byId('build-grid'),
     progress: byId('build-progress'),
     cancel: byId('cancel-build-btn'),
+    bell: byId('town-bell-btn'),
+    ungarrison: byId('ungarrison-btn'),
     hp: byId('unit-hp'),
     stats: byId('unit-stats'),
     trainGrid: byId('train-grid'),
     queue: byId('train-queue'),
     commands: byId('command-card'),
+    menus: byId('menu-tabs'),
+    same: byId('select-same-btn'),
   };
   private readonly trainSub: HTMLElement | null;
   private readonly trainRing: SVGElement | null;
@@ -100,6 +107,7 @@ export class Hud {
   private queueHead = '';
   private statsKey = '';
   private hpKey = '';
+  private readonly menuTabs: Record<TouchMenu, HTMLElement | null>;
 
   constructor(
     readonly world: World,
@@ -116,6 +124,18 @@ export class Hud {
     for (const btn of this.el.commands?.querySelectorAll<HTMLElement>('[data-stance]') ?? []) {
       this.stanceButtons.set(btn.dataset.stance!, btn);
     }
+    this.menuTabs = {
+      build: this.el.menus?.querySelector<HTMLElement>('[data-menu="build"]') ?? null,
+      train: this.el.menus?.querySelector<HTMLElement>('[data-menu="train"]') ?? null,
+      orders: this.el.menus?.querySelector<HTMLElement>('[data-menu="orders"]') ?? null,
+    };
+    this.el.menus?.addEventListener('click', (e) => {
+      const btn = (e.target as Element).closest<HTMLElement>('[data-menu]');
+      const menu = btn?.dataset.menu;
+      if (menu !== 'build' && menu !== 'train' && menu !== 'orders') return;
+      btn?.blur();
+      toggleTouchMenu(menu);
+    });
     this.buildGrid();
     this.setStock(world.stock, world.pop, world.popCap);
     world.events.on('stockpile', (e) => this.setStock(e.stock, e.pop, e.popCap));
@@ -231,6 +251,23 @@ export class Hud {
       this.setHp(-1, 0);
       this.setStats(null);
     }
+    const showBuild = villagers;
+    const showTrain = !!this.el.trainGrid && !this.el.trainGrid.hidden;
+    const showOrders = !!this.el.commands && !this.el.commands.hidden;
+    this.syncTouchMenus(showBuild, showTrain, showOrders, own.length > 0 && own.every((u) => u.kind === own[0].kind));
+  }
+
+  /** Show only the tabs whose sheet has something in it, and the These button for a single kind. */
+  private syncTouchMenus(showBuild: boolean, showTrain: boolean, showOrders: boolean, sameKind: boolean): void {
+    setHidden(this.menuTabs.build, !showBuild);
+    setHidden(this.menuTabs.train, !showTrain);
+    setHidden(this.menuTabs.orders, !showOrders);
+    setHidden(this.el.menus, !(showBuild || showTrain || showOrders));
+    const open = touchMenuOpen();
+    if ((open === 'build' && !showBuild) || (open === 'train' && !showTrain) || (open === 'orders' && !showOrders)) {
+      closeTouchMenus();
+    }
+    setHidden(this.el.same, !sameKind);
   }
 
   private ownerName(owner: number | undefined): string {
@@ -257,8 +294,11 @@ export class Hud {
   /** Building panel: foundation progress, training grid + queue for own trainers, role text. */
   private updateBuilding(b: Building | undefined, own: Building | undefined): void {
     const foundation = !!own && !own.complete;
+    const shelter = !!own && own.complete && (BUILDINGS[own.kind].garrison ?? 0) > 0;
     setHidden(this.el.progress, !foundation);
     setHidden(this.el.cancel, !foundation);
+    setHidden(this.el.bell, !shelter);
+    setHidden(this.el.ungarrison, !shelter || !(own?.occupants?.length));
     const trainer = own && canTrainAt(own) ? own : undefined;
     const kind = trainer?.kind ?? '';
     if (kind !== this.trainKind) this.buildTrainGrid(kind);
@@ -283,11 +323,11 @@ export class Hud {
       const total = head ? UNITS[head].trainTime : BALANCE.trainTime;
       setText(this.el.status, trainLabel(b.queue, b.progress, total, 0, true));
     } else {
-      setText(this.el.status, buildingRole(b.kind, b.food, FARM_FOOD));
+      setText(this.el.status, buildingRole(b.kind, b.food, FARM_FOOD, b.occupants?.length ?? 0));
     }
   }
 
-  /** Queue strip: one icon per queued unit, the head with a progress fill. Read-only for now. */
+  /** Queue strip: one icon per queued unit, the head with a progress fill. Click an icon to cancel it (refund). */
   private updateQueue(b: Building): void {
     const q = this.el.queue;
     if (!q) return;
@@ -298,9 +338,14 @@ export class Hud {
       this.queueHead = '';
       q.replaceChildren();
       view.kinds.forEach((k, i) => {
-        const item = document.createElement('span');
+        const item = document.createElement('button');
+        item.type = 'button';
         item.className = i === 0 ? 'queue-item head' : 'queue-item';
-        item.title = `${UNITS[k].name}${i === 0 ? ' (training)' : ''}`;
+        item.title = `${UNITS[k].name}${i === 0 ? ' (training)' : ''} — click to cancel`;
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.world.dispatch({ type: 'cancelTrain', buildingId: b.id, index: i });
+        });
         item.append(icon(`#i-${k}`, 'queue-icon'));
         if (i === 0) {
           const bar = document.createElement('span');

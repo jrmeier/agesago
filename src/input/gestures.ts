@@ -11,14 +11,15 @@ const MAX_PINCH_STEP = 2;
  * - tap: quick press-and-release without moving.
  * - longPress: a finger has been held still for LONG_PRESS_MS (feedback only).
  * - longPressTap: a long-press released without moving.
- * - box / boxEnd / boxCancel: long-press then drag; (x0, y0) is the press point.
+ * - box / boxEnd / boxCancel: long-press then drag, or a drag while a box is armed; (x0, y0) is the press point.
+ * - armCancel: an armed box was cancelled by a tap or a second finger (not a tap, and not an order).
  * - panStart / pan / panEnd: grab-the-ground pan; panStart re-anchors (finger count changed).
  * - pinch: the two-finger spread changed by `scale` (> 1 = fingers apart = zoom in) about (x, y).
  */
 export type GestureEvent =
   | { type: 'tap' | 'longPress' | 'longPressTap' | 'panStart' | 'pan'; x: number; y: number }
   | { type: 'box' | 'boxEnd'; x0: number; y0: number; x: number; y: number }
-  | { type: 'boxCancel' | 'panEnd' }
+  | { type: 'boxCancel' | 'panEnd' | 'armCancel' }
   | { type: 'pinch'; x: number; y: number; scale: number };
 
 interface Track {
@@ -40,6 +41,8 @@ type Mode = 'idle' | 'pending' | 'held' | 'box' | 'pan' | 'multi';
 export class GestureRecognizer {
   private readonly tracks = new Map<number, Track>();
   private mode: Mode = 'idle';
+  /** Next one-finger drag draws a selection box instead of panning. A tap cancels it. */
+  private armed = false;
   /** Ids of the pointer pair driving a multi-touch gesture, and their last spread. */
   private pair: [number, number] | null = null;
   private spread = 0;
@@ -47,6 +50,20 @@ export class GestureRecognizer {
   /** Number of active pointers. */
   get count(): number {
     return this.tracks.size;
+  }
+
+  /** True while the next one-finger drag should box-select. */
+  get boxArmed(): boolean {
+    return this.armed;
+  }
+
+  /** Arm the next one-finger drag as a selection box. A tap, a second finger, or reset() disarms it. */
+  armBox(): void {
+    this.armed = true;
+  }
+
+  disarmBox(): void {
+    this.armed = false;
   }
 
   down(id: number, x: number, y: number, t: number): GestureEvent[] {
@@ -59,6 +76,10 @@ export class GestureRecognizer {
     }
     if (this.tracks.size > 2) return out;
     if (this.mode === 'box') out.push({ type: 'boxCancel' });
+    if (this.armed) {
+      this.armed = false;
+      out.push({ type: 'armCancel' });
+    }
     this.mode = 'multi';
     this.repair(out);
     return out;
@@ -78,8 +99,11 @@ export class GestureRecognizer {
           out.push({ type: 'longPress', x: p.startX, y: p.startY });
           this.heldMoved(p, out);
         } else if (moved(p)) {
-          this.mode = 'pan';
-          out.push({ type: 'panStart', x: p.startX, y: p.startY }, { type: 'pan', x, y });
+          if (this.armed) this.beginBox(p, out);
+          else {
+            this.mode = 'pan';
+            out.push({ type: 'panStart', x: p.startX, y: p.startY }, { type: 'pan', x, y });
+          }
         }
         break;
       case 'held':
@@ -129,6 +153,7 @@ export class GestureRecognizer {
     this.tracks.clear();
     this.mode = 'idle';
     this.pair = null;
+    this.armed = false;
     return out;
   }
 
@@ -139,11 +164,19 @@ export class GestureRecognizer {
       case 'pending': {
         const dt = t - p.startT;
         if (cancelled || moved(p)) break;
-        if (dt < TAP_MAX_MS) out.push({ type: 'tap', x: p.startX, y: p.startY });
-        else if (dt >= LONG_PRESS_MS) out.push({ type: 'longPress', x: p.startX, y: p.startY }, { type: 'longPressTap', x: p.startX, y: p.startY });
+        if (dt < TAP_MAX_MS) {
+          if (this.armed) {
+            this.armed = false;
+            out.push({ type: 'armCancel' });
+          } else out.push({ type: 'tap', x: p.startX, y: p.startY });
+        } else if (dt >= LONG_PRESS_MS) {
+          this.armed = false;
+          out.push({ type: 'longPress', x: p.startX, y: p.startY }, { type: 'longPressTap', x: p.startX, y: p.startY });
+        }
         break;
       }
       case 'held':
+        this.armed = false;
         if (!cancelled) out.push({ type: 'longPressTap', x: p.startX, y: p.startY });
         break;
       case 'box':
@@ -175,6 +208,12 @@ export class GestureRecognizer {
 
   private heldMoved(p: Track, out: GestureEvent[]): void {
     if (!moved(p)) return;
+    this.beginBox(p, out);
+  }
+
+  /** Start a selection box from the press point and drop any arm (it has been used). */
+  private beginBox(p: Track, out: GestureEvent[]): void {
+    this.armed = false;
     this.mode = 'box';
     out.push(boxEvent('box', p));
   }

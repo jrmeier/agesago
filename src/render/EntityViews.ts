@@ -95,6 +95,10 @@ const BUILDING_HEIGHT: Record<BuildingKind, number> = {
   barracks: 3.2,
   archeryRange: 3,
   stable: 3,
+  watchTower: 4.6,
+  palisade: 1.6,
+  stoneWall: 2.2,
+  gate: 2.4,
 };
 
 /**
@@ -102,7 +106,7 @@ const BUILDING_HEIGHT: Record<BuildingKind, number> = {
  * animated units, buildings and construction, selection rings and the move marker.
  * Also pooled HP bars, projectiles and death ghosts. Listens for `projectile` and `died`.
  * Public surface: constructor(world, quality?), object, sync, pick, idsInRect, setSelected,
- * flashMarker, setFog, setShadows, showGhost, hideGhost.
+ * flashMarker, setFog, setShadows, showGhost, showLine, hideGhost.
  *
  * The world constructor does not emit `spawned`, so existing entities are mounted here
  * and later spawns/removals follow the event bus. `sync` also frustum-ready LOD-swaps
@@ -119,6 +123,9 @@ export class EntityViews {
   private readonly nodePool = new Map<EntityId, SpatialInstances>();
   private readonly buildingViews = new Map<EntityId, BuildingVisual>();
   private readonly ghosts = new Map<BuildingKind, THREE.Group>();
+  /** Cloned ghosts for a wall-line preview. Capped so a map-length drag stays cheap. */
+  private readonly lineGhosts: THREE.Group[] = [];
+  private lineKind: BuildingKind | null = null;
   private readonly sizeOf = new Map<EntityId, SpriteSize>();
   private readonly rings: THREE.Mesh[] = [];
   private readonly ringGeo: THREE.BufferGeometry;
@@ -332,6 +339,7 @@ export class EntityViews {
    * and red otherwise, plus a footprint outline on the ground.
    */
   showGhost(kind: BuildingKind, pos: Vec2, rot: number, valid: boolean): void {
+    this.hideLine();
     let ghost = this.ghosts.get(kind);
     if (!ghost) {
       ghost = createGhost(kind);
@@ -346,8 +354,54 @@ export class EntityViews {
     tintGhost(ghost, valid);
   }
 
+  /**
+   * One ghost per wall segment. `rot` is the segment yaw (0 along x, π/2 along z), the same
+   * value the sim stores and the mesh copies onto `rotation.y`.
+   */
+  showLine(kind: BuildingKind, spots: readonly { pos: Vec2; rot: number; valid: boolean }[]): void {
+    if (this.activeGhost) this.activeGhost.visible = false;
+    this.activeGhost = null;
+    if (this.lineKind !== kind) this.clearLineGhosts(kind);
+    const n = Math.min(spots.length, 96);
+    for (let i = 0; i < n; i++) {
+      let ghost = this.lineGhosts[i];
+      if (!ghost) {
+        ghost = createGhost(kind);
+        this.object.add(ghost);
+        this.lineGhosts.push(ghost);
+      }
+      const s = spots[i];
+      ghost.visible = true;
+      ghost.position.set(s.pos.x, footprintMinY(this.world.hf, kind, s.pos, s.rot), s.pos.z);
+      ghost.rotation.y = s.rot;
+      tintGhost(ghost, s.valid);
+    }
+    for (let i = n; i < this.lineGhosts.length; i++) this.lineGhosts[i].visible = false;
+  }
+
   hideGhost(): void {
     if (this.activeGhost) this.activeGhost.visible = false;
+    this.hideLine();
+  }
+
+  private hideLine(): void {
+    for (const g of this.lineGhosts) g.visible = false;
+  }
+
+  /** Drop the line pool when the kind changes. Each ghost owns its geometry and materials. */
+  private clearLineGhosts(next: BuildingKind | null): void {
+    for (const g of this.lineGhosts) {
+      g.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        mesh.geometry?.dispose();
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const m of mats) m.dispose();
+      });
+      this.object.remove(g);
+    }
+    this.lineGhosts.length = 0;
+    this.lineKind = next;
   }
 
   setSelected(ids: ReadonlySet<EntityId>): void {
@@ -762,8 +816,9 @@ export class EntityViews {
     }
   }
 
-  /** Local units always draw. Everyone else draws only in a currently visible cell. */
+  /** Local units always draw. Everyone else draws only in a currently visible cell. Garrisoned units are inside. */
   private unitShown(unit: Unit): boolean {
+    if (unit.state === 'garrisoned') return false;
     if (unit.owner === this.world.localPlayer) return true;
     return this.sight().isVisible(unit.pos.x, unit.pos.z);
   }
@@ -860,6 +915,7 @@ function isTravelling(unit: Unit): boolean {
     case 'toDrop':
     case 'exploring':
     case 'toBuild':
+    case 'toShelter':
       return true;
     default:
       return false;
@@ -884,6 +940,7 @@ function poseOf(unit: Unit): VillagerPose {
     case 'toDrop':
     case 'exploring':
     case 'toBuild':
+    case 'toShelter':
       return 'walk';
     case 'gathering':
       return GATHER_POSE[unit.gatherType ?? 'food'];

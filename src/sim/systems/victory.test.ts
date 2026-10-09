@@ -65,7 +65,7 @@ describe('conquest victory', () => {
     w.dispatch({ type: 'train', buildingId: tc.id }, 2);
     w.buildState.set(u.id, tc.id);
     w.exploreQueue.add(u.id);
-    w.projectiles.push({ at: 10, by: u.id, kind: 'archer', owner: 2, from: u.pos, aim: w.townCenter.pos, targetId: 1 });
+    w.projectiles.push({ at: 10, by: u.id, kind: 'archer', owner: 2, from: u.pos, aim: w.townCenter!.pos, targetId: 1 });
     w.dispatch({ type: 'resign' }, 2);
     expect(w.popOf(2)).toBe(0);
     expect(w.townCenterOf(2)).toBeUndefined();

@@ -206,6 +206,14 @@ describe('GestureRecognizer: reset', () => {
     expect(g.reset()).toEqual([{ type: 'boxCancel' }]);
   });
 
+  it('clears an armed box', () => {
+    const g = new GestureRecognizer();
+    g.armBox();
+    expect(g.boxArmed).toBe(true);
+    expect(g.reset()).toEqual([]);
+    expect(g.boxArmed).toBe(false);
+  });
+
   it('ignores duplicate downs and unknown pointers', () => {
     const g = new GestureRecognizer();
     g.down(1, 0, 0, 0);
@@ -213,5 +221,49 @@ describe('GestureRecognizer: reset', () => {
     expect(g.move(9, 30, 30, 5)).toEqual([]);
     expect(g.up(9, 30, 30, 5)).toEqual([]);
     expect(types(g.up(1, 0, 0, 50))).toEqual(['tap']);
+  });
+});
+
+describe('GestureRecognizer: armed box', () => {
+  it('an armed drag is a box from the press point, not a pan', () => {
+    const g = new GestureRecognizer();
+    g.armBox();
+    g.down(1, 100, 100, 0);
+    expect(g.move(1, 130, 140, 40)).toEqual([{ type: 'box', x0: 100, y0: 100, x: 130, y: 140 }]);
+    expect(g.boxArmed).toBe(false);
+    expect(g.up(1, 160, 150, 80)).toEqual([{ type: 'boxEnd', x0: 100, y0: 100, x: 160, y: 150 }]);
+  });
+
+  it('an armed tap cancels the arm and is not a tap', () => {
+    const g = new GestureRecognizer();
+    g.armBox();
+    g.down(1, 10, 20, 0);
+    expect(g.up(1, 12, 22, 100)).toEqual([{ type: 'armCancel' }]);
+    expect(g.boxArmed).toBe(false);
+  });
+
+  it('an unarmed drag still pans', () => {
+    const g = new GestureRecognizer();
+    g.down(1, 0, 0, 0);
+    expect(types(g.move(1, 40, 0, 20))).toEqual(['panStart', 'pan']);
+  });
+
+  it('disarming before the drag pans again', () => {
+    const g = new GestureRecognizer();
+    g.armBox();
+    g.down(1, 0, 0, 0);
+    g.disarmBox();
+    expect(types(g.move(1, 40, 0, 20))).toEqual(['panStart', 'pan']);
+  });
+
+  it('a second finger clears the arm', () => {
+    const g = new GestureRecognizer();
+    g.armBox();
+    g.down(1, 0, 0, 0);
+    expect(g.down(2, 80, 0, 10)).toEqual([
+      { type: 'armCancel' },
+      { type: 'panStart', x: 40, y: 0 },
+    ]);
+    expect(g.boxArmed).toBe(false);
   });
 });

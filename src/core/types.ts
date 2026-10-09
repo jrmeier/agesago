@@ -55,7 +55,11 @@ export type BuildingKind =
   | 'farm'
   | 'barracks'
   | 'archeryRange'
-  | 'stable';
+  | 'stable'
+  | 'watchTower'
+  | 'palisade'
+  | 'stoneWall'
+  | 'gate';
 export type EntityKind = UnitKind | NodeKind | BuildingKind;
 
 export const NODE_RESOURCE: Record<NodeKind, ResourceType> = {
@@ -164,6 +168,10 @@ export type UnitState =
   | 'exploring'
   | 'toBuild'
   | 'building'
+  /** Walking into a Town Center or tower. */
+  | 'toShelter'
+  /** Inside a building: off the map, untargetable, until ungarrisoned. */
+  | 'garrisoned'
   /** Closing on or striking a target (see Unit.target). */
   | 'attacking';
 
@@ -189,6 +197,8 @@ export interface Unit {
   /** Resource type the unit is assigned to (survives node depletion for retargeting). */
   gatherType: ResourceType | null;
   carry: { type: ResourceType; amount: number } | null;
+  /** Town Center or tower this unit is entering, or inside while garrisoned. */
+  shelter?: EntityId | null;
 }
 
 export interface ResourceNode {
@@ -227,6 +237,10 @@ export interface Building {
   food?: number;
   /** Where newly trained units go: a point, or an entity (a resource to gather, a building to garrison later). */
   rally?: { pos: Vec2; targetId?: EntityId };
+  /** Villagers inside this shelter, in entry order. */
+  occupants?: EntityId[];
+  /** Seconds until the next defensive volley. */
+  cooldown?: number;
 }
 
 export type Entity = Unit | ResourceNode | Building;
@@ -238,6 +252,8 @@ export type Command =
   | { type: 'gather'; unitIds: EntityId[]; nodeId: EntityId }
   /** Train one unit (default: the building's first trainable kind, e.g. a villager at the TC). */
   | { type: 'train'; buildingId: EntityId; unit?: UnitKind }
+  /** Remove queue entry `index` (0 = the one in training) and refund its cost. */
+  | { type: 'cancelTrain'; buildingId: EntityId; index: number }
   /** Attack a unit or building. */
   | { type: 'attack'; unitIds: EntityId[]; targetId: EntityId }
   /** Walk to a point, fighting any enemy met on the way. */
@@ -256,7 +272,15 @@ export type Command =
   /** Cancel an unfinished foundation; refunds the cost. */
   | { type: 'cancelBuild'; buildingId: EntityId }
   /** Auto-explore: units head for the nearest reachable unexplored ground until told otherwise. */
-  | { type: 'explore'; unitIds: EntityId[] };
+  | { type: 'explore'; unitIds: EntityId[] }
+  /** Walk villagers into a completed Town Center or tower. */
+  | { type: 'garrison'; unitIds: EntityId[]; buildingId: EntityId }
+  /** Send everyone inside a shelter back outside. */
+  | { type: 'ungarrison'; buildingId: EntityId }
+  /** Panic: every villager of the issuer runs into the nearest shelter with room. */
+  | { type: 'townBell' }
+  /** Place a line of wall segments from `from` to `to` (palisade or stone wall). */
+  | { type: 'buildWall'; unitIds: EntityId[]; kind: BuildingKind; from: Vec2; to: Vec2 };
 
 export type RejectReason =
   | 'insufficient-food'

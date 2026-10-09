@@ -49,8 +49,22 @@ describe('orders onto buildings', () => {
     });
   });
 
-  it('is not a building order for finished non-farms or no villagers', () => {
-    expect(resolveBuildingOrder([1], { id: 1, kind: 'townCenter', complete: true })).toBeNull();
+  it('garrisons a finished shelter, and ignores a finished house', () => {
+    expect(resolveBuildingOrder([1], { id: 1, kind: 'townCenter', complete: true })).toEqual({
+      type: 'garrison',
+      unitIds: [1],
+      buildingId: 1,
+    });
+    expect(resolveBuildingOrder([1, 4], { id: 9, kind: 'watchTower', complete: true })).toEqual({
+      type: 'garrison',
+      unitIds: [1, 4],
+      buildingId: 9,
+    });
+    expect(resolveBuildingOrder([1], { id: 9, kind: 'watchTower', complete: false })).toEqual({
+      type: 'construct',
+      unitIds: [1],
+      buildingId: 9,
+    });
     expect(resolveBuildingOrder([1], { id: 3, kind: 'house', complete: true })).toBeNull();
     expect(resolveBuildingOrder([], { id: 3, kind: 'house', complete: false })).toBeNull();
   });

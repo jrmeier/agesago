@@ -2,8 +2,9 @@ import type { EntityId, Unit, Vec2 } from '../../core/types';
 import { UNITS } from '../../core/units';
 import { BALANCE } from '../balance';
 import { NAV_CELL } from '../nav';
-import type { NavGrid } from '../nav';
+import type { NavGrid, Rect } from '../nav';
 import type { World } from '../World';
+import { closedGates, route } from './passage';
 import { unitSpeed } from './stats';
 import { cancelExplore, settleCancelled } from './explore';
 
@@ -129,7 +130,7 @@ export function orderMove(world: World, unitIds: EntityId[], target: Vec2): void
   let moved = 0;
   units.forEach((u, i) => {
     const slot = slots[i];
-    const path = slot && world.nav.findPath(u.pos, slot);
+    const path = slot && route(world, u.owner, u.pos, slot);
     if (!path) return;
     moved++;
     u.path = path;
@@ -153,6 +154,7 @@ function separation(world: World, st: Steering): void {
   bodies.length = 0;
   hash.clear();
   for (const u of world.units.values()) {
+    if (u.state === 'garrisoned') continue;
     const i = bodies.length;
     bodies.push({ u, x: u.pos.x, z: u.pos.z, radius: radiusOf(u), moving: u.path.length > 0, pushX: 0, pushZ: 0 });
     const key = Math.floor(u.pos.z / HASH_CELL) * stride + Math.floor(u.pos.x / HASH_CELL);
@@ -201,14 +203,16 @@ function separation(world: World, st: Steering): void {
 }
 
 /** Free-ground clamp with axis sliding so a wall absorbs only the perpendicular push. */
-function safeStep(nav: NavGrid, from: Vec2, to: Vec2): Vec2 {
-  const next = nav.clampMove(from, to);
-  const wanted = Math.hypot(to.x - from.x, to.z - from.z);
-  if (Math.hypot(next.x - from.x, next.z - from.z) >= wanted * 0.8) return next;
-  const slideX = nav.clampMove(from, { x: to.x, z: from.z });
-  const slideZ = nav.clampMove(from, { x: from.x, z: to.z });
-  const distance = (p: Vec2) => (p.x - to.x) ** 2 + (p.z - to.z) ** 2;
-  return [next, slideX, slideZ].reduce((best, p) => distance(p) < distance(best) ? p : best);
+function safeStep(nav: NavGrid, from: Vec2, to: Vec2, mask: Rect[]): Vec2 {
+  return nav.withMask(mask, () => {
+    const next = nav.clampMove(from, to);
+    const wanted = Math.hypot(to.x - from.x, to.z - from.z);
+    if (Math.hypot(next.x - from.x, next.z - from.z) >= wanted * 0.8) return next;
+    const slideX = nav.clampMove(from, { x: to.x, z: from.z });
+    const slideZ = nav.clampMove(from, { x: from.x, z: to.z });
+    const distance = (p: Vec2) => (p.x - to.x) ** 2 + (p.z - to.z) ** 2;
+    return [next, slideX, slideZ].reduce((best, p) => distance(p) < distance(best) ? p : best);
+  });
 }
 
 /** Advance paths and local steering; returns units reaching their last waypoint this tick. */
@@ -217,6 +221,12 @@ export function movementSystem(world: World, dt: number): Unit[] {
   if (!(dt > 0) || !Number.isFinite(dt)) return arrived;
   const st = steeringOf(world);
   separation(world, st);
+  const masks = new Map<number, Rect[]>();
+  const maskFor = (owner: number): Rect[] => {
+    let mask = masks.get(owner);
+    if (!mask) masks.set(owner, (mask = closedGates(world, owner)));
+    return mask;
+  };
   for (const body of st.bodies) {
     const { u } = body;
     if (!body.moving) {
@@ -236,7 +246,7 @@ export function movementSystem(world: World, dt: number): Unit[] {
         const scale = Math.min(1, speedOf(u) / (Math.hypot(vx, vz) || 1));
         const next = rest && d <= 0.001 && !body.pushX && !body.pushZ ? rest.slot
           : { x: u.pos.x + vx * scale * dt, z: u.pos.z + vz * scale * dt };
-        u.pos = safeStep(world.nav, u.pos, next);
+        u.pos = safeStep(world.nav, u.pos, next, maskFor(u.owner));
       }
       continue;
     }
@@ -264,7 +274,7 @@ export function movementSystem(world: World, dt: number): Unit[] {
       const cap = Math.min(1, speed * time / (Math.hypot(mx, mz) || 1));
       mx *= cap;
       mz *= cap;
-      const next = safeStep(world.nav, u.pos, finish ? wp : { x: u.pos.x + mx, z: u.pos.z + mz });
+      const next = safeStep(world.nav, u.pos, finish ? wp : { x: u.pos.x + mx, z: u.pos.z + mz }, maskFor(u.owner));
       const advance = Math.hypot(next.x - u.pos.x, next.z - u.pos.z);
       if (advance > 1e-6) u.facing = Math.atan2(next.x - u.pos.x, next.z - u.pos.z);
       u.pos = next;
@@ -303,7 +313,7 @@ export function movementSystem(world: World, dt: number): Unit[] {
     const progress = st.progress.get(u);
     if (!progress || progress.stalled < JAM_SECONDS || !u.path.length) continue;
     const end = u.path[u.path.length - 1];
-    const path = world.nav.findPath(u.pos, end, 1.2);
+    const path = route(world, u.owner, u.pos, end, 1.2);
     progress.stalled = 0;
     if (path) {
       u.path = path;
