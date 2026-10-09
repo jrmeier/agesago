@@ -18,7 +18,23 @@ export class Selection {
   }
 
   clear(): void {
-    this.set([]);
+    if (this.current.size) this.set([]);
+  }
+
+  has(id: EntityId): boolean {
+    return this.current.has(id);
+  }
+
+  /** Add ids to the current selection. */
+  add(ids: Iterable<EntityId>): void {
+    this.set([...this.current, ...ids]);
+  }
+
+  /** Drop ids from the selection; notifies only if something was removed. */
+  remove(ids: Iterable<EntityId>): void {
+    const next = new Set(this.current);
+    for (const id of ids) next.delete(id);
+    if (next.size !== this.current.size) this.set(next);
   }
 
   onChange(fn: (ids: ReadonlySet<EntityId>) => void): () => void {

@@ -14,8 +14,9 @@ export type CameraMode = 'rts' | 'fps';
 export class CameraRig {
   readonly camera = new THREE.PerspectiveCamera(50, 1, 0.1, 400);
   mode: CameraMode = 'rts';
-  private readonly rts: RtsCamera;
-  private readonly fps: FpsCamera;
+  readonly rts: RtsCamera;
+  readonly fps: FpsCamera;
+  private readonly listeners = new Set<(mode: CameraMode) => void>();
 
   constructor(
     hf: Heightfield,
@@ -27,7 +28,23 @@ export class CameraRig {
   }
 
   update(dt: number): void {
+    if (this.input.keyPressed('KeyF')) this.setMode(this.mode === 'rts' ? 'fps' : 'rts');
     (this.mode === 'rts' ? this.rts : this.fps).update(dt, this.input);
+  }
+
+  /** Switch modes. Entering FPS starts at the RTS target facing the same way (−z); the RTS pose is kept for the return. */
+  setMode(mode: CameraMode): void {
+    if (mode === this.mode) return;
+    this.mode = mode;
+    if (mode === 'fps') this.fps.enter(this.rts.target, 0);
+    else this.rts.settle();
+    for (const fn of this.listeners) fn(mode);
+  }
+
+  /** Subscribe to mode changes. Returns an unsubscribe function. */
+  onModeChange(fn: (mode: CameraMode) => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
   }
 
   setAspect(aspect: number): void {
