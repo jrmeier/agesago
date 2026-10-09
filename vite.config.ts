@@ -10,5 +10,13 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
+    // three.js alone is ~550 kB minified; warn only if a chunk grows past that.
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        // three.js changes far less often than the game: its own chunk stays cached across deploys.
+        manualChunks: (id) => (id.includes('node_modules/three/') ? 'three' : undefined),
+      },
+    },
   },
 });
