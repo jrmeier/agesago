@@ -50,6 +50,7 @@ import { movementSystem, orderMove } from './systems/movement';
 import { orderCancelTrain, orderTrain, trainSystem } from './systems/train';
 import { orderCancelResearch, orderResearch, researchSystem } from './systems/research';
 import { buildingMaxHp, buildingSight, unitMaxHp, unitSight } from './systems/stats';
+import { marketSystem, orderMarketTrade, orderTrade, orderTribute, releaseTrade } from './systems/market';
 import { resign, victorySystem, type GameResult } from './systems/victory';
 import { wildlifeSystem } from './systems/wildlife';
 
@@ -291,6 +292,7 @@ export class World {
     ) {
       releaseCombat(this, cmd.unitIds);
     }
+    if ('unitIds' in cmd && cmd.type !== 'trade' && cmd.type !== 'stance') releaseTrade(this, cmd.unitIds);
     switch (cmd.type) {
       case 'move':
         orderMove(this, cmd.unitIds, cmd.target);
@@ -362,9 +364,13 @@ export class World {
         if (this.buildings.get(cmd.buildingId)?.owner === by) orderCancelResearch(this, cmd.buildingId, cmd.index);
         break;
       case 'marketTrade':
+        orderMarketTrade(this, by, cmd.resource, cmd.side);
+        break;
       case 'tribute':
+        orderTribute(this, by, cmd.to, cmd.resource, cmd.amount);
+        break;
       case 'trade':
-        // M8-12 market lane.
+        orderTrade(this, cmd.unitIds, cmd.marketId, by);
         break;
     }
   }
@@ -384,6 +390,7 @@ export class World {
     for (const u of this.units.values()) u.prevPos = { ...u.pos };
     const arrived = movementSystem(this, dt);
     garrisonSystem(this, arrived);
+    marketSystem(this, dt, arrived);
     gatherSystem(this, dt, arrived);
     buildSystem(this, dt, arrived);
     // After gather/build so units it sends back to work aren't treated as arrivals this tick.

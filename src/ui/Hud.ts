@@ -29,6 +29,7 @@ import {
   trainBatch,
   trainEntries,
 } from './military';
+import { MarketPanel } from './market';
 import { closeTouchMenus, toggleTouchMenu, touchMenuOpen, type TouchMenu } from './touchMenus';
 
 /** Length of the train ring's circle (its `pathLength`). */
@@ -111,6 +112,8 @@ export class Hud {
   private readonly menuTabs: Record<TouchMenu, HTMLElement | null>;
   /** Enemy buildings the panel may describe while they are out of sight. */
   private snaps = new Map<number, LastSeenBuilding>();
+  /** Buy / sell / tribute panel for a selected own market (M8-12, src/ui/market.ts). */
+  private readonly market: MarketPanel;
 
   constructor(
     readonly world: World,
@@ -140,6 +143,7 @@ export class Hud {
       toggleTouchMenu(menu);
     });
     this.buildGrid();
+    this.market = new MarketPanel(world, selection, this.el.panel);
     this.setStock(world.stock, world.pop, world.popCap);
     world.events.on('stockpile', (e) => this.setStock(e.stock, e.pop, e.popCap));
     world.events.on('rejected', (e) => {
@@ -165,6 +169,7 @@ export class Hud {
   update(): void {
     this.updateSelection();
     this.updateTrain();
+    this.market.update();
   }
 
   /** Queue `kind` at the building whose training panel is open (five with Shift). */

@@ -174,7 +174,8 @@ describe('world save/load', () => {
     expect([...q.researched]).toEqual(['bronzeAxe']);
     expect([...b.players.get(2)!.researched]).toEqual(['wovenTunics']);
     expect(q.age).toBe(1);
-    expect(q.prices.wood).toBe(130);
+    expect(q.prices.wood).toBe(p.prices.wood); // prices drift toward base while ticking
+    expect(q.prices.wood).toBeGreaterThan(100);
     expect(b.townCenter!.research).toEqual(['census']);
     expect(b.townCenter!.researchProgress).toBeCloseTo(1);
     expect(statOf(b, 1, { unit: 'villager' }, 'gather.wood', 1)).toBeCloseTo(1.2);
