@@ -4,6 +4,7 @@ import { BALANCE } from '../balance';
 import { NAV_CELL } from '../nav';
 import type { NavGrid } from '../nav';
 import type { World } from '../World';
+import { unitSpeed } from './stats';
 import { cancelExplore, settleCancelled } from './explore';
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
@@ -21,12 +22,9 @@ export function formationOffset(i: number): Vec2 {
   return { x: Math.sin(a) * r, z: Math.cos(a) * r };
 }
 
-/** Walking speed of `u` right now, including the historical loaded-villager penalty. */
+/** Walking speed of `u` right now (UNITS speed; loaded villagers are slower). */
 export function speedOf(u: Unit): number {
-  const speed = UNITS[u.kind]?.speed ?? (u.kind === 'scout' ? BALANCE.scoutSpeed : BALANCE.villagerSpeed);
-  return u.kind === 'villager' && u.carry && u.carry.amount > 0
-    ? speed * (BALANCE.villagerSpeedLoaded / BALANCE.villagerSpeed)
-    : speed;
+  return unitSpeed(u);
 }
 
 function radiusOf(u: Unit): number {
