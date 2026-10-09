@@ -7,12 +7,28 @@ export const BALANCE = {
   /** Scouts are fast explorers (and never carry anything). */
   scoutSpeed: 5.5,
   carryCap: 10,
-  /** Seconds per resource unit gathered. */
+  /** Seconds per resource unit gathered (default; see gatherIntervals). */
   gatherInterval: 0.8,
+  /** Seconds per unit by resource: quarrying stone is a little slower. */
+  gatherIntervals: { wood: 0.8, food: 0.8, gold: 0.8, stone: 0.95 },
+  /** Seconds per unit of food harvested from a farm (berries are 0.8). */
+  farmInterval: 0.85,
   trainCost: { food: 50 },
   trainTime: 8,
+  /**
+   * Legacy display value only. The real cap is World.popCap (houses + Town Center, ≤ MAX_POP),
+   * which 'train' enforces.
+   */
   popCap: 25,
-  startingStock: { wood: 0, food: 0, gold: 0 },
+  /** Construction exponent: progress/s = builders^buildExponent / buildTime (diminishing returns). */
+  buildExponent: 0.75,
+  /** Builders of a group order spread along the footprint edge this far apart. */
+  builderSpacing: 0.8,
+  /** Footprint sample spacing for placement terrain checks. */
+  placementSample: 0.5,
+  /** A farmer stands this far inside the field edge. */
+  farmInset: 0.6,
+  startingStock: { wood: 0, food: 0, gold: 0, stone: 0 },
   villagerRadius: 0.3,
   townCenterRadius: 1.6,
   /** Gap kept between a villager's edge and the node / building it walks up to. */

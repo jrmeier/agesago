@@ -17,6 +17,7 @@ const NODE_COLOR: Record<NodeKind, string> = {
   tree: '#24401c',
   berry: '#c8323c',
   gold: '#f4c638',
+  stone: '#c9c3b4',
 };
 const PLAYER = '#3fa0ff';
 const PLAYER_EDGE = '#0b2340';
@@ -208,7 +209,7 @@ export class Minimap {
 
     const r = Math.max(1, s * 0.55);
     const vis = this.world.visibility;
-    for (const kind of ['tree', 'berry', 'gold'] as const) {
+    for (const kind of ['tree', 'berry', 'gold', 'stone'] as const) {
       ctx.fillStyle = NODE_COLOR[kind];
       const size = kind === 'tree' ? r * 1.6 : r * 2.4;
       for (const n of this.world.nodes.values()) {

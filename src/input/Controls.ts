@@ -1,14 +1,17 @@
 import type { EntityViews, ScreenRect } from '../render/EntityViews';
 import type { CameraRig } from '../camera/CameraRig';
-import type { EntityId } from '../core/types';
+import type { BuildingKind, EntityId, PropPlacement, Vec2 } from '../core/types';
 import type { Selection } from '../game/Selection';
 import type { World } from '../sim/World';
+import { BUILD_HOTKEYS, kindForKey } from '../ui/build';
+import { Discoveries } from '../ui/Discoveries';
 import { explorerIds } from '../ui/format';
 import type { GestureEvent } from './gestures';
 import { LMB, RMB, type DragState, type Input } from './Input';
-import { resolveOrder } from './orders';
+import { resolveBuildingOrder, resolveOrder } from './orders';
 import { pickGround, screenRay, toNdc } from './pickGround';
-import { focusNextScout } from './scouts';
+import { Placement } from './Placement';
+import { focusNextScout, onScoutFocus } from './scouts';
 
 export interface ControlsDeps {
   world: World;
@@ -20,6 +23,11 @@ export interface ControlsDeps {
   canvas: HTMLElement;
   /** The `.select-box` overlay parent (the #hud element). */
   hud: HTMLElement;
+  /**
+   * Map scenery (layout.props). Enables ruins / standing-stone / hamlet discovery toasts;
+   * without it only distant gold and stone deposits are announced.
+   */
+  props?: readonly PropPlacement[];
 }
 
 /** What a finished press was: a click, a drag (box / pan), or nothing. */
@@ -35,11 +43,17 @@ export function rectBetween(ax: number, ay: number, bx: number, by: number): Scr
 
 /**
  * Player intent → sim commands: click / box / A select (RTS only), RMB on an explored node =
- * gather, on ground (explored or not) = move, T = train, E = explore, "." / Home = centre on
- * the next scout. Disabled in first-person mode (where A strafes).
- * Touch: tap selects a villager or orders the selection (gather / move); long-press toggles a
- * villager; long-press + drag box-selects. Also binds the touch buttons (#touch-select-all,
- * #touch-deselect, #touch-fps), the #explore-btn, and mirrors the camera mode as `fps-mode` on <body>.
+ * gather, on a foundation / farm = construct / farm, on ground (explored or not) = move,
+ * T = train, E = explore, "." / Home = centre on and select the next scout. Clicking a
+ * building selects it. With villagers selected, H / S / G / M / P (or the #build-grid buttons)
+ * enter placement mode: the ghost follows the cursor, R or Shift+wheel rotates, LMB places
+ * (Shift keeps placing), RMB / Esc cancels. Disabled in first-person mode (where A strafes).
+ * Touch: tap selects a unit, orders the selection (gather / construct / farm / move), or with
+ * no units selected selects the tapped building;
+ * long-press toggles a villager; long-press + drag box-selects. While placing, a tap moves the
+ * ghost, a finger on the ghost drags it, and #place-bar's ⟳ / ✕ / ✓ rotate, cancel, confirm.
+ * Also binds the touch buttons (#touch-select-all, #touch-deselect, #touch-fps), #explore-btn,
+ * #cancel-build-btn, runs discovery toasts, and mirrors the camera mode as `fps-mode` on <body>.
  * Owned by the Controls lane (T6). Public surface FROZEN: constructor, update.
  */
 export class Controls {
@@ -47,20 +61,34 @@ export class Controls {
   private readonly ring: HTMLDivElement;
   /** Touch box-select in progress. */
   private touchBox: ScreenRect | null = null;
+  readonly placement: Placement;
+  private readonly discoveries: Discoveries;
+  private time = 0;
 
   constructor(readonly deps: ControlsDeps) {
-    const { hud, world, selection, rig } = deps;
+    const { hud, world, selection, rig, input, views } = deps;
     this.box = document.createElement('div');
     this.box.className = 'select-box';
     hud.appendChild(this.box);
     this.ring = document.createElement('div');
     this.ring.className = 'press-ring';
     hud.appendChild(this.ring);
+    this.placement = new Placement({ world, views, rig });
+    this.placement.groundAt = (x, y) => this.groundAt(x, y);
+    this.placement.viewport = () => ({ width: input.width, height: input.height });
+    input.touch.setGrabber(this.placement);
+    this.discoveries = new Discoveries(hud, world, (p) => rig.focusOn(p), deps.props ?? []);
+
     world.events.on('removed', (e) => selection.remove([e.id]));
+    onScoutFocus(world, (id) => selection.set([id]));
+    selection.onChange(() => {
+      if (this.placement.active && !this.villagerIds().length) this.placement.cancel();
+    });
     rig.onModeChange((mode) => {
       if (mode === 'fps') {
         this.touchBox = null;
         this.showBox(null);
+        this.placement.cancel();
       }
       this.syncMode();
     });
@@ -68,6 +96,16 @@ export class Controls {
     bindButton('touch-deselect', () => selection.clear());
     bindButton('touch-fps', () => rig.setMode(rig.mode === 'rts' ? 'fps' : 'rts'));
     bindButton('explore-btn', () => this.explore());
+    bindButton('cancel-build-btn', () => this.cancelSelectedFoundation());
+    bindButton('place-rotate', () => this.placement.rotate(1));
+    bindButton('place-cancel', () => this.placement.cancel());
+    bindButton('place-confirm', () => this.placement.confirm(false));
+    document.getElementById('build-grid')?.addEventListener('click', (e) => {
+      const btn = (e.target as Element).closest<HTMLElement>('[data-build]');
+      if (!btn) return;
+      btn.blur();
+      this.beginPlacement(btn.dataset.build as BuildingKind);
+    });
     this.syncMode();
   }
 
@@ -79,9 +117,16 @@ export class Controls {
     if (unitIds.length) world.dispatch({ type: 'explore', unitIds });
   }
 
-  update(_dt: number): void {
+  update(dt: number): void {
     const { input, rig, world } = this.deps;
+    this.time += dt;
+    this.discoveries.update(this.time);
     if (rig.mode !== 'rts') return;
+
+    if (this.placement.active) {
+      this.updatePlacement();
+      return;
+    }
 
     for (const g of input.touch.gestures) this.gesture(g);
 
@@ -102,16 +147,68 @@ export class Controls {
     if (input.keyPressed('Period') || input.keyPressed('NumpadDecimal') || input.keyPressed('Home')) {
       focusNextScout(world, rig);
     }
+    for (const code of Object.values(BUILD_HOTKEYS)) {
+      const kind = input.keyPressed(code) ? kindForKey(code) : null;
+      if (kind) this.beginPlacement(kind);
+    }
 
     const right = input.drag(RMB);
     if (input.released(RMB) && right && classifyRelease(right) === 'click') this.order(right.x, right.y);
+  }
+
+  /** Enter placement for `kind` if villagers are selected. Mouse: the ghost starts under the cursor. */
+  private beginPlacement(kind: BuildingKind): void {
+    const { input, rig } = this.deps;
+    const builders = this.villagerIds();
+    if (!builders.length) return;
+    this.showBox(null);
+    this.touchBox = null;
+    const at = input.touch.active || input.overHud || !input.inside ? { ...rig.rts.target } : this.groundAt(input.x, input.y);
+    this.placement.start(kind, builders, at ?? { ...rig.rts.target });
+  }
+
+  private updatePlacement(): void {
+    const { input } = this.deps;
+    const p = this.placement;
+    this.showBox(null);
+    if (input.keyPressed('Escape')) {
+      p.cancel();
+      return;
+    }
+    if (input.keyPressed('KeyR')) p.rotate(1);
+    if (input.wheel && input.shift) {
+      p.rotate(Math.sign(input.wheel));
+      input.wheel = 0; // Shift+wheel rotates instead of zooming.
+    }
+    for (const g of input.touch.gestures) {
+      if (g.type !== 'tap') continue;
+      const ground = this.groundAt(g.x, g.y);
+      if (ground) p.moveTo(ground);
+    }
+    if (!input.touch.active && input.inside && !input.overHud) {
+      const ground = this.groundAt(input.x, input.y);
+      if (ground) p.moveTo(ground);
+      else p.refresh();
+    } else {
+      p.refresh();
+    }
+    const left = input.drag(LMB);
+    if (input.released(LMB) && left && !left.withSpace && classifyRelease(left) === 'click') p.confirm(input.shift);
+    const right = input.drag(RMB);
+    if (input.released(RMB) && right && classifyRelease(right) === 'click') p.cancel();
   }
 
   private gesture(g: GestureEvent): void {
     switch (g.type) {
       case 'tap': {
         const id = this.unitAt(g.x, g.y);
-        if (id !== null) this.deps.selection.set([id]);
+        if (id !== null) {
+          this.deps.selection.set([id]);
+          break;
+        }
+        // With units selected a tap orders them (construct / farm / move); otherwise it selects the building.
+        const b = this.buildingAt(g.x, g.y);
+        if (b !== null && !this.selectedUnitIds().length) this.deps.selection.set([b]);
         else this.order(g.x, g.y);
         break;
       }
@@ -136,10 +233,35 @@ export class Controls {
     }
   }
 
+  private pickAt(x: number, y: number): EntityId | null {
+    const { views, rig, input } = this.deps;
+    return views.pick(toNdc(x, y, input.width, input.height), rig.camera);
+  }
+
   private unitAt(x: number, y: number): EntityId | null {
-    const { views, world, rig, input } = this.deps;
-    const id = views.pick(toNdc(x, y, input.width, input.height), rig.camera);
-    return id !== null && world.units.has(id) ? id : null;
+    const id = this.pickAt(x, y);
+    return id !== null && this.deps.world.units.has(id) ? id : null;
+  }
+
+  private buildingAt(x: number, y: number): EntityId | null {
+    const id = this.pickAt(x, y);
+    return id !== null && this.deps.world.buildings.has(id) ? id : null;
+  }
+
+  private groundAt(x: number, y: number): Vec2 | null {
+    const { rig, input } = this.deps;
+    return pickGround(screenRay(rig.camera, x, y, input.width, input.height), rig.rts.hf);
+  }
+
+  /** Selected villagers (the ones that can build). */
+  private villagerIds(): EntityId[] {
+    const { world, selection } = this.deps;
+    return [...selection.ids].filter((id) => world.units.get(id)?.kind === 'villager');
+  }
+
+  private selectedUnitIds(): EntityId[] {
+    const { world, selection } = this.deps;
+    return [...selection.ids].filter((id) => world.units.has(id));
   }
 
   private toggle(id: EntityId): void {
@@ -149,11 +271,13 @@ export class Controls {
   }
 
   private clickSelect(x: number, y: number, additive: boolean): void {
-    const { selection } = this.deps;
-    const id = this.unitAt(x, y);
-    if (id !== null) {
+    const { selection, world } = this.deps;
+    const id = this.pickAt(x, y);
+    if (id !== null && world.units.has(id)) {
       if (!additive) selection.set([id]);
       else this.toggle(id);
+    } else if (id !== null && world.buildings.has(id)) {
+      selection.set([id]);
     } else if (!additive) {
       selection.clear();
     }
@@ -169,24 +293,44 @@ export class Controls {
   }
 
   private order(x: number, y: number): void {
-    const { selection, views, world, rig, input } = this.deps;
-    const unitIds: EntityId[] = [...selection.ids].filter((id) => world.units.has(id));
+    const { views, world } = this.deps;
+    const unitIds = this.selectedUnitIds();
     if (!unitIds.length) return;
-    const id = views.pick(toNdc(x, y, input.width, input.height), rig.camera);
+    const id = this.pickAt(x, y);
+    const building = id !== null ? world.buildings.get(id) : undefined;
+    const buildCmd = building ? resolveBuildingOrder(this.villagerIds(), building) : null;
+    let movers = unitIds;
+    if (buildCmd) {
+      world.dispatch(buildCmd);
+      // Scouts (which can't build or farm) just walk over.
+      movers = unitIds.filter((u) => world.units.get(u)?.kind !== 'villager');
+      if (!movers.length) return;
+    }
     const node = id !== null ? world.nodes.get(id) : undefined;
     const nodeExplored = !!node && world.visibility.isExplored(node.pos.x, node.pos.z);
-    const ground =
-      node && nodeExplored ? null : pickGround(screenRay(rig.camera, x, y, input.width, input.height), rig.rts.hf);
-    const cmd = resolveOrder(unitIds, { nodeId: node?.id ?? null, nodeExplored, ground });
+    const ground = node && nodeExplored ? null : this.groundAt(x, y);
+    const cmd = resolveOrder(movers, { nodeId: node?.id ?? null, nodeExplored, ground });
     if (!cmd) return;
     world.dispatch(cmd);
     if (cmd.type === 'move') views.flashMarker(cmd.target);
   }
 
+  /** Cancel the selected building if it is an unfinished foundation (refunds its cost). */
+  private cancelSelectedFoundation(): void {
+    const { world, selection } = this.deps;
+    for (const id of selection.ids) {
+      const b = world.buildings.get(id);
+      if (b && !b.complete) {
+        world.dispatch({ type: 'cancelBuild', buildingId: b.id });
+        return;
+      }
+    }
+  }
+
   private showBox(r: ScreenRect | null): void {
     const s = this.box.style;
     if (!r) {
-      s.display = 'none';
+      if (s.display !== 'none') s.display = 'none';
       return;
     }
     const c = this.deps.canvas.getBoundingClientRect();

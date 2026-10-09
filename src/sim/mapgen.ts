@@ -303,5 +303,74 @@ export function generateMap(seed: number): { hf: Heightfield; layout: MapLayout 
     addProp(kind, pos, random() * Math.PI * 2, 0.7 + random() * 0.65);
   }
   if (layout.props.length < 500) throw new Error(`Insufficient scenery for seed ${seed}`);
+
+  // Trim after the legacy placement passes: changing their rejection rules or random
+  // draws would reshuffle forests and scenery across the entire map. Keep the first
+  // nearby tree as starting wood, plus the original berries and gold.
+  const startingTree = layout.nodes.find((node) => node.kind === 'tree');
+  layout.nodes = layout.nodes.filter((node) => node.kind !== 'tree' || node === startingTree
+    || distance(node.pos, townCenter) >= 12.5);
+  layout.props = layout.props.filter((prop) => distance(prop.pos, townCenter) >= 12 + PROP_RADIUS[prop.kind] * prop.scale);
+
+  // Quarries have their own stream and are appended so existing resource ordering
+  // stays stable. Only loose natural scenery may give way to a quarry.
+  const quarryRandom = createSeededRandom(seed ^ 0x5a17c9e3);
+  const quarrySpace = new PlacementGrid(hf.width);
+  for (const node of layout.nodes) quarrySpace.add(node.pos, node.kind === 'gold' ? 0.8 : 0.5);
+  const replaceable = (kind: PropKind): boolean => kind === 'boulder' || kind === 'rocks' || kind === 'bush' || kind === 'log';
+  const protectedScenery = new PlacementGrid(hf.width);
+  for (const prop of layout.props) {
+    if (!replaceable(prop.kind)) protectedScenery.add(prop.pos, PROP_RADIUS[prop.kind] * prop.scale);
+  }
+  const quarries: Vec2[] = [];
+  const quarryNear = (desired: Vec2, starting = false): void => {
+    let best: Vec2 | undefined;
+    let bestScore = -Infinity;
+    const phase = quarryRandom() * Math.PI * 2;
+    for (let ring = 0; ring <= 24; ring++) {
+      const count = ring === 0 ? 1 : ring * 8;
+      for (let i = 0; i < count; i++) {
+        const angle = phase + i / count * Math.PI * 2;
+        const pos = { x: desired.x + Math.cos(angle) * ring * 0.65, z: desired.z + Math.sin(angle) * ring * 0.65 };
+        const fromTc = distance(pos, townCenter);
+        if (starting ? fromTc < 12.8 || fromTc > 16 : fromTc <= 35) continue;
+        const ground = hf.ground(pos.x, pos.z);
+        // Rock matters more than small offsets from the landmark. Unlike trees and
+        // gold, stone can occupy rocky ground if its footprint and approaches walk.
+        const score = ground.rock * 25 - ring * 0.015;
+        if (score <= bestScore || ground.path > 0.04 || ground.sand > 0.24 || hf.heightAt(pos.x, pos.z) < 0.55) continue;
+        if (!onMap(pos, 1.3) || !fordClear(pos, 1.3) || !quarrySpace.clear(pos, 0.8)
+          || !protectedScenery.clear(pos, 1.4) || quarries.some((other) => distance(other, pos) < 8) || !reachable(pos)) continue;
+        let clear = true;
+        for (let a = 0; a < 8 && clear; a++) {
+          const approach = a * Math.PI / 4;
+          for (const radius of [0.8, 1.3]) {
+            const edge = { x: pos.x + Math.cos(approach) * radius, z: pos.z + Math.sin(approach) * radius };
+            const surface = hf.ground(edge.x, edge.z);
+            if (!reachable(edge) || surface.path > 0.04 || surface.sand > 0.24 || hf.heightAt(edge.x, edge.z) < 0.55) {
+              clear = false;
+              break;
+            }
+          }
+        }
+        if (clear) {
+          best = pos;
+          bestScore = score;
+        }
+      }
+    }
+    if (!best) throw new Error(`No reachable stone placement for seed ${seed}`);
+    layout.nodes.push({ kind: 'stone', pos: best, amount: 350 });
+    quarries.push(best);
+    quarrySpace.add(best, 0.8);
+  };
+  quarryNear({ x: townCenter.x + 8, z: townCenter.z + 12 }, true);
+  quarryNear({ x: townCenter.x + 8, z: townCenter.z - 12 }, true);
+  for (const outcrop of features.outcrops) quarryNear(outcrop);
+  for (const ridge of features.ridges) quarryNear({ x: ridge.center.x, z: ridge.center.z + ridge.radiusZ * 0.5 });
+  quarryNear({ x: features.river.fords[1].x + 15, z: features.river.fords[1].z - 15 });
+  // Leave the 1.3-unit gathering approaches clear of inflated scenery obstacles.
+  layout.props = layout.props.filter((prop) => !replaceable(prop.kind)
+    || quarries.every((pos) => distance(prop.pos, pos) >= PROP_RADIUS[prop.kind] * prop.scale + 1.6));
   return { hf, layout };
 }

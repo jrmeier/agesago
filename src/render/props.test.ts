@@ -88,10 +88,8 @@ describe('civic centre', () => {
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
     expect(box.min.y).toBeCloseTo(2.25, 5);
-    expect(size.x).toBeGreaterThan(3.1);
-    expect(size.x).toBeLessThan(3.8);
-    expect(size.z).toBeGreaterThan(3.2);
-    expect(size.z).toBeLessThan(4.1);
+    expect(size.x).toBeCloseTo(3.2, 5);
+    expect(size.z).toBeCloseTo(3.2, 5);
     expect(size.y).toBeGreaterThan(3.8);
     expect(size.y).toBeLessThan(4.4);
     let count = 0;

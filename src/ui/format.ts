@@ -6,6 +6,7 @@ const GATHER_VERB: Record<ResourceType, string> = {
   wood: 'Chopping wood',
   food: 'Foraging food',
   gold: 'Mining gold',
+  stone: 'Quarrying stone',
 };
 
 /** Singular / plural display names, in panel order. */
@@ -70,6 +71,10 @@ export function statusLabel(u: StatusUnit, carryCap: number): string {
       return carry ? `Moving · ${carry.amount} ${carry.type}` : 'Moving';
     case 'exploring':
       return 'Exploring';
+    case 'toBuild':
+      return 'Going to build';
+    case 'building':
+      return 'Building';
     case 'idle':
       return carry ? `Idle · ${carry.amount} ${carry.type}` : 'Idle';
   }

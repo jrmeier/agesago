@@ -1,7 +1,10 @@
+import { BUILDINGS, MAX_POP, footprintRadius } from '../core/buildings';
 import { EventBus } from '../core/events';
 import {
   NODE_RESOURCE,
   type Building,
+  type BuildingKind,
+  type PlacementCheck,
   type Command,
   type Entity,
   type EntityId,
@@ -17,9 +20,11 @@ import {
 } from '../core/types';
 import { BALANCE } from './balance';
 import { NavGrid } from './nav';
-import { SIGHT, Visibility, sightOf, type Viewer } from './visibility';
+import { Visibility, sightOf, type Viewer } from './visibility';
+import { buildSystem, canPlace, orderBuild, orderCancelBuild, orderConstruct } from './systems/build';
 import { exploreSystem, orderExplore, type ExploreState } from './systems/explore';
-import { gatherSystem, orderGather, type GatherState } from './systems/gather';
+import { gatherSystem, orderFarm, orderGather, type GatherState } from './systems/gather';
+import { buildingRect } from './systems/sites';
 import { movementSystem, orderMove } from './systems/movement';
 import { orderTrain, trainSystem } from './systems/train';
 
@@ -53,6 +58,10 @@ export class World {
   readonly exploreState = new Map<EntityId, ExploreState>();
   /** Explorers waiting for a frontier search, oldest first (searches are staggered across ticks). */
   readonly exploreQueue = new Set<EntityId>();
+  /** Builder unit → the foundation it is walking to / working on (system bookkeeping). */
+  readonly buildState = new Map<EntityId, EntityId>();
+  /** Farm → the one villager working it (system bookkeeping; stale claims are dropped lazily). */
+  readonly farmers = new Map<EntityId, EntityId>();
   private nextId = 1;
 
   constructor(
@@ -63,7 +72,10 @@ export class World {
       id: this.nextId++,
       kind: 'townCenter',
       pos: { ...layout.townCenter },
-      radius: BALANCE.townCenterRadius,
+      rot: 0,
+      radius: footprintRadius('townCenter'),
+      complete: true,
+      buildProgress: 1,
       queue: 0,
       progress: 0,
     };
@@ -71,7 +83,9 @@ export class World {
     const scenery = layout.props
       .filter((p) => p.blockRadius > 0)
       .map((p) => ({ pos: { ...p.pos }, radius: p.blockRadius }));
-    this.nav = new NavGrid(hf, [tc, ...scenery]);
+    // Circles are static scenery; buildings (the TC included) are rectangular footprints.
+    this.nav = new NavGrid(hf, scenery);
+    this.nav.addRect(tc.id, buildingRect(tc));
     this.visibility = new Visibility(hf.width, hf.depth);
     for (const p of layout.villagers) this.addUnit('villager', p);
     for (const n of layout.nodes) {
@@ -81,7 +95,7 @@ export class World {
         type: NODE_RESOURCE[n.kind],
         pos: { ...n.pos },
         amount: n.amount,
-        radius: n.kind === 'gold' ? 0.7 : 0.5,
+        radius: n.kind === 'gold' || n.kind === 'stone' ? 0.7 : 0.5,
       };
       this.nodes.set(node.id, node);
     }
@@ -91,6 +105,22 @@ export class World {
   }
 
   /** Every unit (villagers and scouts) — the pop cap applies to all of them. */
+  /** Housing capacity from completed buildings, capped at MAX_POP. */
+  get popCap(): number {
+    let cap = 0;
+    for (const b of this.buildings.values()) if (b.complete) cap += BUILDINGS[b.kind].popBonus;
+    return Math.min(MAX_POP, cap);
+  }
+
+  /**
+   * Can a `kind` building go at `pos` with yaw `rot`? Checks bounds, water, slope, explored
+   * ground, overlaps and cost. FROZEN signature (UI placement mode calls it every frame).
+   * Units never block placement (they are nudged aside); see systems/build.ts canPlace.
+   */
+  canPlace(kind: BuildingKind, pos: Vec2, rot: number): PlacementCheck {
+    return canPlace(this, kind, pos, rot);
+  }
+
   get pop(): number {
     return this.units.size;
   }
@@ -130,11 +160,25 @@ export class World {
       case 'move':
         orderMove(this, cmd.unitIds, cmd.target);
         break;
-      case 'gather':
-        orderGather(this, cmd.unitIds, cmd.nodeId);
+      case 'gather': {
+        // A building id means: farm it (or reseed it if fallow), or help build a foundation.
+        const b = this.nodes.has(cmd.nodeId) ? undefined : this.buildings.get(cmd.nodeId);
+        if (b && (!b.complete || (b.kind === 'farm' && !(b.food! > 0)))) orderConstruct(this, cmd.unitIds, b.id);
+        else if (b && b.kind === 'farm') orderFarm(this, cmd.unitIds, b);
+        else orderGather(this, cmd.unitIds, cmd.nodeId);
         break;
+      }
       case 'train':
         orderTrain(this, cmd.buildingId);
+        break;
+      case 'build':
+        orderBuild(this, cmd.unitIds, cmd.kind, cmd.pos, cmd.rot);
+        break;
+      case 'construct':
+        orderConstruct(this, cmd.unitIds, cmd.buildingId);
+        break;
+      case 'cancelBuild':
+        orderCancelBuild(this, cmd.buildingId);
         break;
       case 'explore':
         orderExplore(this, cmd.unitIds);
@@ -147,6 +191,7 @@ export class World {
     for (const u of this.units.values()) u.prevPos = { ...u.pos };
     const arrived = movementSystem(this, dt);
     gatherSystem(this, dt, arrived);
+    buildSystem(this, dt, arrived);
     exploreSystem(this);
     trainSystem(this, dt);
     this.time += dt;
@@ -157,12 +202,22 @@ export class World {
     }
   }
 
-  /** Recompute fog of war from every unit and building's sight radius. */
+  /** Recompute fog of war from every unit's and complete building's sight radius (foundations see nothing). */
   updateFog(): void {
     const viewers: Viewer[] = [];
     for (const u of this.units.values()) viewers.push({ pos: u.pos, sight: sightOf(u.kind) });
-    for (const b of this.buildings.values()) viewers.push({ pos: b.pos, sight: SIGHT.townCenter });
+    for (const b of this.buildings.values()) if (b.complete) viewers.push({ pos: b.pos, sight: BUILDINGS[b.kind].sight });
     this.visibility.update(viewers);
+  }
+
+  /** Recompute fog on the next tick (e.g. a building just finished). */
+  refreshFog(): void {
+    this.fogClock = 0;
+  }
+
+  /** A fresh entity id. */
+  allocId(): EntityId {
+    return this.nextId++;
   }
 
   /** Change a unit's state, emitting 'unitState' if it actually changed. */
@@ -174,7 +229,7 @@ export class World {
 
   /** Emit the current stockpile and population. */
   emitStock(): void {
-    this.events.emit({ type: 'stockpile', stock: { ...this.stock }, pop: this.pop });
+    this.events.emit({ type: 'stockpile', stock: { ...this.stock }, pop: this.pop, popCap: this.popCap });
   }
 
   /** Create a villager at `p` and emit 'spawned'. */

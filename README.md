@@ -30,6 +30,8 @@ Then open http://localhost:5173
 | T | Train villager (50 food) |
 | E | Explore (send selected units, e.g. the scout, to auto-explore) |
 | . / Home | Jump to your scout (cycles if several) |
+| H / S / G / M / P | Build House / Storehouse / Granary / Mining Camp / Farm (villagers selected) |
+| R or Shift+Scroll | Rotate the building while placing (Shift-click keeps placing; Esc / right-click cancels) |
 | F | Toggle first-person (WASD move, arrows/drag look) |
 
 ### Touch (phones & tablets)

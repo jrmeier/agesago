@@ -1009,3 +1009,473 @@ body.touch .explore-btn .eicon {
     background-size: 6px 6px;
   }
 }
+
+/* ---- Stone & population plaques ---- */
+
+.res-pop {
+  position: relative;
+}
+
+.res-pop.capped #res-pop {
+  color: #ffb39a;
+}
+
+/* "Need more houses": a small red-lettered papyrus tag hanging under the pop plaque. */
+.res-note {
+  position: absolute;
+  top: calc(100% + 14px);
+  right: 0;
+  padding: 3px 8px;
+  border-radius: 3px;
+  background: var(--papyrus);
+  border: 1px solid #8a6230;
+  box-shadow: 0 0 0 2px var(--wood), 0 6px 14px rgba(0, 0, 0, 0.45);
+  font-family: var(--title);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #8e2414;
+  text-shadow: none;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+  pointer-events: none;
+}
+
+.res-note.show {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---- Selection panel: build grid, building mode ---- */
+
+.selection-panel {
+  flex-wrap: wrap;
+  row-gap: 10px;
+  pointer-events: auto;
+}
+
+.selection-panel.hidden {
+  pointer-events: none;
+}
+
+.selection-panel.hidden * {
+  pointer-events: none !important;
+}
+
+body.placing .selection-panel {
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+}
+
+body.placing .selection-panel * {
+  pointer-events: none !important;
+}
+
+.build-progress {
+  width: 150px;
+  height: 7px;
+  margin-top: 5px;
+  border-radius: 4px;
+  background: rgba(58, 36, 12, 0.25);
+  box-shadow: inset 0 1px 2px rgba(40, 22, 6, 0.6);
+  overflow: hidden;
+}
+
+.build-progress[hidden] {
+  display: none;
+}
+
+.build-progress-fill {
+  width: 0;
+  height: 100%;
+  background: var(--bronze-face);
+  transition: width 0.2s linear;
+}
+
+.cancel-build-btn[hidden] {
+  display: none;
+}
+
+.cancel-build-btn .eicon {
+  width: 16px;
+  height: 16px;
+  color: #8e2414;
+}
+
+.build-grid {
+  flex: 1 0 100%;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(110, 70, 26, 0.35);
+}
+
+.build-grid[hidden] {
+  display: none;
+}
+
+/* One bronze-edged tile per building: icon, name, cost, hotkey in the corner. */
+.build-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 66px;
+  padding: 5px 4px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  font-family: var(--text);
+  color: var(--ink);
+  background: var(--grain), linear-gradient(180deg, rgba(255, 248, 228, 0.75) 0%, rgba(226, 202, 152, 0.75) 100%);
+  border: 1px solid var(--bronze-lo);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 250, 230, 0.8),
+    0 2px 4px rgba(60, 35, 10, 0.35);
+}
+
+.build-btn:hover {
+  filter: brightness(1.06);
+  border-color: var(--bronze);
+}
+
+.build-btn:active {
+  transform: translateY(1px);
+}
+
+.build-icon {
+  width: 30px;
+  height: 30px;
+  filter: drop-shadow(0 1px 1px rgba(60, 35, 10, 0.4));
+}
+
+.build-name {
+  font-family: var(--title);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: #4d2a10;
+}
+
+.build-cost {
+  display: flex;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.build-cost-part {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.build-cost-part.short {
+  color: #a3220f;
+}
+
+.cost-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.build-btn kbd {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: rgba(58, 36, 12, 0.14);
+  border: 1px solid rgba(58, 36, 12, 0.4);
+  font-family: var(--text);
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.build-btn.unaffordable .build-icon,
+.build-btn.unaffordable .build-name {
+  filter: grayscale(0.9);
+  opacity: 0.55;
+}
+
+/* ---- Placement bar: a timber tablet above the bottom row ---- */
+
+.place-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 110px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 7px 8px 7px 14px;
+  border-radius: 6px;
+  pointer-events: auto;
+  background: var(--timber);
+  border: 1px solid var(--bronze);
+  box-shadow:
+    var(--trim),
+    0 8px 22px rgba(0, 0, 0, 0.5);
+  color: var(--parch);
+}
+
+.place-bar[hidden] {
+  display: none;
+}
+
+.place-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-right: 4px;
+}
+
+.place-text b {
+  font-family: var(--title);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  color: var(--gilt);
+}
+
+.place-reason {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ff9d82;
+}
+
+.place-reason:empty {
+  display: none;
+}
+
+.place-help {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(234, 217, 178, 0.75);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.place-help kbd {
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--bronze-face);
+  border: 1px solid var(--bronze-lo);
+  font-family: var(--text);
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.place-help-touch,
+body.touch .place-help-mouse {
+  display: none;
+}
+
+body.touch .place-help-touch {
+  display: inline;
+}
+
+.place-btn {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  cursor: pointer;
+  touch-action: manipulation;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--ink);
+  background: var(--grain), var(--bronze-face);
+  border: 1px solid var(--bronze-lo);
+  box-shadow:
+    0 0 0 1px var(--wood-dark),
+    inset 0 1px 0 rgba(255, 245, 210, 0.75);
+}
+
+.place-btn:active {
+  transform: translateY(1px);
+}
+
+.place-btn-ok {
+  color: #1f4a12;
+}
+
+.place-btn-cancel {
+  color: #7a1c10;
+}
+
+.place-bar.invalid .place-btn-ok {
+  filter: grayscale(0.8) brightness(0.8);
+}
+
+body.touch .place-bar {
+  bottom: calc(max(12px, env(safe-area-inset-bottom)) + 70px);
+}
+
+body.touch .place-btn {
+  width: 50px;
+  height: 50px;
+  font-size: 24px;
+}
+
+body.fps-mode .place-bar {
+  display: none;
+}
+
+/* ---- Discovery toasts: parchment slips under the top bar ---- */
+
+.toasts {
+  position: absolute;
+  left: 50%;
+  top: 64px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 12;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 5px 14px 5px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  text-align: left;
+  font-family: var(--title);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+  background: var(--papyrus);
+  border: 1px solid #8a6230;
+  box-shadow:
+    0 0 0 2px var(--wood),
+    0 0 0 3px var(--bronze),
+    0 8px 18px rgba(0, 0, 0, 0.45);
+  animation: toast-in 0.35s ease-out;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+}
+
+.toast.leaving {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.toast-icon {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 2px;
+  border-radius: 50%;
+  background: var(--bronze-face);
+  box-shadow: 0 0 0 1px var(--bronze-lo);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+body.fps-mode .toasts {
+  display: none;
+}
+
+/* Touch: toasts sit top-left, clear of the minimap in the top-right corner. */
+body.touch .toasts {
+  left: max(10px, env(safe-area-inset-left));
+  top: calc(max(6px, env(safe-area-inset-top)) + 58px);
+  transform: none;
+  align-items: flex-start;
+  max-width: calc(100% - 170px);
+}
+
+body.touch .toast {
+  font-size: 12px;
+  min-height: 44px;
+}
+
+/* ---- Touch & narrow layouts for the build grid ---- */
+
+body.touch .build-btn {
+  min-width: 0;
+  min-height: 56px;
+  justify-content: center;
+}
+
+body.touch .build-btn kbd {
+  display: none;
+}
+
+body.touch .build-icon {
+  width: 28px;
+  height: 28px;
+}
+
+@media (max-width: 719px) {
+  body.touch .build-name {
+    display: none;
+  }
+
+  body.touch .build-grid {
+    gap: 4px;
+  }
+
+  body.touch .selection-panel:has(.build-grid:not([hidden])) {
+    width: calc(100% - 32px);
+  }
+}
+
+@media (max-width: 380px) {
+  body.touch .res {
+    padding: 2px 5px 2px 3px;
+    font-size: 13px;
+  }
+
+  body.touch .ricon {
+    width: 16px;
+    height: 16px;
+  }
+
+  body.touch .resource-bar {
+    gap: 3px;
+  }
+
+  body.touch .build-cost {
+    font-size: 11px;
+  }
+
+  body.touch .toasts {
+    max-width: calc(100% - 150px);
+  }
+}

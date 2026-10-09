@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Unit, Vec2 } from '../core/types';
-import { resolveOrder } from './orders';
-import { focusNextScout, nextScout } from './scouts';
+import { resolveBuildingOrder, resolveOrder } from './orders';
+import { focusNextScout, nextScout, onScoutFocus } from './scouts';
 
 describe('order resolution under fog', () => {
   const ground = { x: 40, z: 12 };
@@ -23,6 +23,36 @@ describe('order resolution under fog', () => {
     expect(resolveOrder([3], { nodeId: null, nodeExplored: false, ground: null })).toBeNull();
     expect(resolveOrder([3], { nodeId: 9, nodeExplored: false, ground: null })).toBeNull();
     expect(resolveOrder([], { nodeId: 9, nodeExplored: true, ground })).toBeNull();
+  });
+});
+
+describe('orders onto buildings', () => {
+  it('sends villagers to construct a foundation', () => {
+    expect(resolveBuildingOrder([1, 2], { id: 7, kind: 'house', complete: false })).toEqual({
+      type: 'construct',
+      unitIds: [1, 2],
+      buildingId: 7,
+    });
+  });
+
+  it('farms a complete farm, and reseeds an exhausted one', () => {
+    expect(resolveBuildingOrder([1], { id: 8, kind: 'farm', complete: true, food: 120 })).toEqual({
+      type: 'gather',
+      unitIds: [1],
+      nodeId: 8,
+    });
+    expect(resolveBuildingOrder([1], { id: 8, kind: 'farm', complete: true })).toMatchObject({ type: 'gather' });
+    expect(resolveBuildingOrder([1], { id: 8, kind: 'farm', complete: true, food: 0 })).toEqual({
+      type: 'construct',
+      unitIds: [1],
+      buildingId: 8,
+    });
+  });
+
+  it('is not a building order for finished non-farms or no villagers', () => {
+    expect(resolveBuildingOrder([1], { id: 1, kind: 'townCenter', complete: true })).toBeNull();
+    expect(resolveBuildingOrder([1], { id: 3, kind: 'house', complete: true })).toBeNull();
+    expect(resolveBuildingOrder([], { id: 3, kind: 'house', complete: false })).toBeNull();
   });
 });
 
@@ -49,5 +79,16 @@ describe('find scout', () => {
     expect(focusNextScout(world, rig)).toBe(2);
     expect(seen.map((p) => p.x)).toEqual([20, 40, 20]);
     expect(focusNextScout({ units: new Map([[1, unit(1, 'villager', 10)]]) }, rig)).toBeNull();
+  });
+
+  it('tells scout-focus listeners (which select the scout) about each jump', () => {
+    const unit = (id: number, kind: Unit['kind'], x: number) => ({ id, kind, pos: { x, z: 1 } }) as Unit;
+    const world = { units: new Map([[2, unit(2, 'scout', 20)]]) };
+    const picked: number[] = [];
+    const off = onScoutFocus(world, (id) => picked.push(id));
+    focusNextScout(world, { focusOn: () => {} });
+    off();
+    focusNextScout(world, { focusOn: () => {} });
+    expect(picked).toEqual([2]);
   });
 });

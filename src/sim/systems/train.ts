@@ -12,16 +12,19 @@ function emitProgress(world: World, b: Building): void {
   });
 }
 
-/** 'train' command: needs food and a free pop slot (counting queued villagers); pays up front. */
+/**
+ * 'train' command (Town Center only): needs food and a free pop slot under World.popCap
+ * (houses + TC), counting villagers already queued; pays up front.
+ */
 export function orderTrain(world: World, buildingId: EntityId): void {
   const b = world.buildings.get(buildingId);
-  if (!b) {
+  if (!b || b.kind !== 'townCenter' || !b.complete) {
     world.events.emit({ type: 'rejected', reason: 'invalid-target' });
     return;
   }
   let queued = 0;
   for (const other of world.buildings.values()) queued += other.queue;
-  if (world.pop + queued >= BALANCE.popCap) {
+  if (world.pop + queued >= world.popCap) {
     world.events.emit({ type: 'rejected', reason: 'pop-cap' });
     return;
   }

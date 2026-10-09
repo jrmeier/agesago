@@ -13,12 +13,13 @@ export const modelMaterial = (): THREE.MeshLambertMaterial =>
   new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
 
 /** Procedural villager animation states. */
-export type VillagerPose = 'idle' | 'walk' | 'chop' | 'forage' | 'mine';
+export type VillagerPose = 'idle' | 'walk' | 'chop' | 'forage' | 'mine' | 'build';
+export type VillagerCarry = 'wood' | 'food' | 'gold' | 'stone' | null;
 
 /** A ground-anchored villager facing +z; animate without changing its world transform. */
 export interface VillagerModel {
   object: THREE.Group;
-  setPose(state: VillagerPose, t: number, carry?: 'wood' | 'food' | 'gold' | null): void;
+  setPose(state: VillagerPose, t: number, carry?: VillagerCarry): void;
 }
 
 export type ScoutPose = 'idle' | 'walk' | 'gallop';
@@ -240,6 +241,41 @@ export function goldPileGeometry(): THREE.BufferGeometry {
   ], 'gold-pile');
 }
 
+/** Pale stepped limestone with broad cut faces and dressed blocks; ready for instancing. */
+export function stoneQuarryGeometry(): THREE.BufferGeometry {
+  const random = seededRandom(211);
+  return grounded([
+    part(new THREE.BoxGeometry(1.25, 0.42, 0.95), 0xc8c5b2, [0, 0.21, -0.08]),
+    part(new THREE.BoxGeometry(0.93, 0.44, 0.72), 0xdad5bd, [-0.12, 0.64, -0.19]),
+    part(roughen(new THREE.BoxGeometry(0.61, 0.32, 0.5), random), 0xe5dfca, [-0.25, 1.01, -0.22]),
+    ...[0, 1, 2].map(i => part(new THREE.BoxGeometry(0.035, 0.38, 0.012), 0x999887,
+      [-0.45 + i * 0.3, 0.64, 0.177])),
+    part(new THREE.BoxGeometry(0.38, 0.25, 0.32), 0xe0dac5, [0.58, 0.125, 0.46]),
+    part(new THREE.BoxGeometry(0.36, 0.22, 0.29), 0xc2bfab, [0.16, 0.11, 0.53]),
+    part(new THREE.BoxGeometry(0.31, 0.23, 0.3), 0xd4cfb9, [0.48, 0.35, 0.44]),
+    crown(random, 0xb7b5a3, [-0.64, 0.11, 0.37], [0.19, 0.14, 0.18]),
+    crown(random, 0xd4cfb9, [-0.39, 0.08, 0.55], [0.15, 0.1, 0.13]),
+  ], 'stone-quarry');
+}
+
+/** Separate 4×4 farm crop layer. Scale Y and tint the material as food is consumed. */
+export function farmCropsGeometry(): THREE.BufferGeometry {
+  const random = seededRandom(223);
+  const parts: THREE.BufferGeometry[] = [];
+  for (let row = 0; row < 6; row++) {
+    for (let col = 0; col < 8; col++) {
+      const x = -1.61 + row * 0.64;
+      const z = -1.65 + col * 0.47;
+      const h = 0.48 + random() * 0.19;
+      parts.push(part(new THREE.CylinderGeometry(0.015, 0.027, h, 3), 0x919247, [x, h / 2, z]));
+      parts.push(part(new THREE.OctahedronGeometry(0.075), 0xd5ba69, [x, h, z], [0.55, 1.5, 0.55]));
+      parts.push(part(new THREE.ConeGeometry(0.055, h * 0.8, 3), 0xa4a253,
+        [x + 0.05, h * 0.39, z + 0.025], [1, 1, 0.22], [0, row, -0.23]));
+    }
+  }
+  return grounded(parts, 'farm-crops');
+}
+
 /** Build a 0.95 m villager with looping limb poses, tools and optional carried goods. */
 export function createVillager(opts?: { tunic?: number; skin?: number; seed?: number }): VillagerModel {
   const tunic = opts?.tunic ?? VILLAGER.tunic;
@@ -289,8 +325,8 @@ export function createVillager(opts?: { tunic?: number; skin?: number; seed?: nu
     ...(dress === 0 ? [
       part(new THREE.BoxGeometry(0.26, 0.32, 0.024), trim, [0, 0.16, -0.118], [1, 1, 1], [-0.12, 0, 0]),
     ] : dress === 1 ? [
-      part(new THREE.CylinderGeometry(0.17, 0.17, 0.014, 7), 0xd9bb78, [0, 0.542, -0.005]),
-      part(new THREE.CylinderGeometry(0.055, 0.09, 0.043, 7), 0xc3a369, [0, 0.564, -0.005]),
+      part(new THREE.CylinderGeometry(0.17, 0.17, 0.014, 5), 0xd9bb78, [0, 0.542, -0.005]),
+      part(new THREE.CylinderGeometry(0.055, 0.09, 0.043, 5), 0xc3a369, [0, 0.564, -0.005]),
     ] : [
       part(new THREE.BoxGeometry(0.19, 0.056, 0.18), 0xe4d9bd, [0, 0.528, -0.005]),
       part(new THREE.BoxGeometry(0.08, 0.15, 0.025), 0xd8c5a0, [0.07, 0.46, -0.09]),
@@ -329,6 +365,10 @@ export function createVillager(opts?: { tunic?: number; skin?: number; seed?: nu
     part(new THREE.ConeGeometry(0.025, 0.1, 4), 0xbfae8e, [-0.1, -0.51, 0], [1, 1, 1], [0, 0, 1.1]),
     part(new THREE.ConeGeometry(0.025, 0.1, 4), 0xbfae8e, [0.1, -0.51, 0], [1, 1, 1], [0, 0, -1.1]),
   ]), rightArm, 'pick');
+  const mallet = mesh(merge([
+    part(new THREE.BoxGeometry(0.028, 0.25, 0.028), TREE_TRUNK, [0, -0.34, 0]),
+    part(new THREE.BoxGeometry(0.17, 0.09, 0.09), 0x94714a, [0, -0.45, 0]),
+  ]), rightArm, 'mallet');
 
   const pack = pivot(body, 'pack', [0, 0.16, -0.14]);
   const wood = mesh(merge([
@@ -346,6 +386,8 @@ export function createVillager(opts?: { tunic?: number; skin?: number; seed?: nu
     part(new THREE.IcosahedronGeometry(0.1, 0), 0x9c7a3c, [0, 0.04, -0.04], [1, 0.8, 0.8]),
     part(new THREE.OctahedronGeometry(0.068), 0xd4a843, [0, 0.12, -0.07]),
   ]), pack, 'carry-gold');
+  const stone = mesh(part(new THREE.BoxGeometry(0.27, 0.14, 0.25), 0xd4cfb9,
+    [0.19, 0.34, 0.01]), body, 'carry-stone');
 
   const corners: THREE.Vector3[] = [];
   const bounds = legGeometry.boundingBox!;
@@ -356,7 +398,8 @@ export function createVillager(opts?: { tunic?: number; skin?: number; seed?: nu
   }
   const point = new THREE.Vector3();
 
-  function setPose(state: VillagerPose, t: number, carry?: 'wood' | 'food' | 'gold' | null): void {
+  const legs = [leftLeg, rightLeg];
+  function setPose(state: VillagerPose, t: number, carry?: VillagerCarry): void {
     const cycle = t * Math.PI * 2;
     const stride = Math.sin(cycle * 1.6 + phase);
     const work = 0.5 - 0.5 * Math.cos(cycle * 1.25 + phase);
@@ -379,6 +422,10 @@ export function createVillager(opts?: { tunic?: number; skin?: number; seed?: nu
       leftArm.rotation.x = -0.5 - work * 1.2;
       body.rotation.x = 0.06 + (1 - work) * 0.12;
       body.rotation.y = Math.sin(cycle * 1.25 + phase) * 0.08;
+    } else if (state === 'build') {
+      rightArm.rotation.x = -0.65 - work * 1.55;
+      leftArm.rotation.x = -0.8;
+      body.rotation.x = 0.13 + (1 - work) * 0.07;
     } else if (state === 'forage') {
       leftLeg.rotation.set(0.95, 0, 0.12);
       rightLeg.rotation.set(0.95, 0, -0.12);
@@ -391,12 +438,15 @@ export function createVillager(opts?: { tunic?: number; skin?: number; seed?: nu
 
     axe.visible = state === 'chop';
     pick.visible = state === 'mine';
+    mallet.visible = state === 'build';
     wood.visible = carry === 'wood';
     food.visible = carry === 'food';
     gold.visible = carry === 'gold';
+    stone.visible = carry === 'stone';
+    if (stone.visible && (state === 'idle' || state === 'walk')) rightArm.rotation.set(-2.4, 0, -0.45);
 
     let sole = Infinity;
-    for (const leg of [leftLeg, rightLeg]) {
+    for (const leg of legs) {
       leg.updateMatrix();
       for (const corner of corners) sole = Math.min(sole, point.copy(corner).applyMatrix4(leg.matrix).y);
     }
