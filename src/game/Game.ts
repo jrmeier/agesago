@@ -12,6 +12,8 @@ import { TerrainView } from '../render/TerrainView';
 import { BALANCE } from '../sim/balance';
 import { generateMap } from '../sim/mapgen';
 import { World } from '../sim/World';
+import { Endgame } from '../ui/Endgame';
+import { EndgameLog } from '../ui/endgameLog';
 import { Hud } from '../ui/Hud';
 import { Minimap } from '../ui/Minimap';
 import { Selection } from './Selection';
@@ -38,6 +40,10 @@ export class Game {
   private readonly controls: Controls;
   private readonly hud: Hud;
   private readonly minimap: Minimap;
+  private readonly endgameLog = new EndgameLog();
+  private readonly endgame: Endgame;
+  /** Set when gameOver fires; the loop stops so the summary matches the last sample. */
+  private matchOver = false;
   private accumulator = 0;
   private last = performance.now();
   private elapsed = 0;
@@ -79,6 +85,9 @@ export class Game {
     });
     this.hud = new Hud(this.world, this.selection, () => this.train());
     this.minimap = new Minimap(document.getElementById('hud') ?? container, this.world, this.rig);
+    this.endgame = new Endgame(this.world, this.endgameLog, () => {
+      this.matchOver = true;
+    });
 
     window.addEventListener('resize', this.onResize);
     this.resize();
@@ -90,6 +99,7 @@ export class Game {
   }
 
   private frame = (now: number) => {
+    if (this.matchOver) return;
     const dt = Math.min((now - this.last) / 1000, 0.25);
     this.last = now;
     this.elapsed += dt;
@@ -99,12 +109,15 @@ export class Game {
 
     this.accumulator += dt;
     let steps = 0;
-    while (this.accumulator >= STEP && steps < MAX_STEPS_PER_FRAME) {
+    while (this.accumulator >= STEP && steps < MAX_STEPS_PER_FRAME && !this.matchOver) {
       this.world.tick(STEP);
       this.accumulator -= STEP;
       steps++;
     }
     if (steps === MAX_STEPS_PER_FRAME) this.accumulator = 0;
+
+    // One economy sample about every 10 sim seconds. gameOver records the last one itself.
+    if (!this.matchOver && this.endgameLog.shouldSample(this.world.time)) this.endgame.sample();
 
     this.fog.update(dt);
     this.props.syncFog();
@@ -118,7 +131,7 @@ export class Game {
     this.minimap.update(this.elapsed);
     this.renderer.render(this.rig.camera);
     this.input.endFrame();
-    this.raf = requestAnimationFrame(this.frame);
+    if (!this.matchOver) this.raf = requestAnimationFrame(this.frame);
   };
 
   /** Ground point the player is looking at: shadows, grass and sky follow it. */
@@ -136,6 +149,7 @@ export class Game {
 
   dispose(): void {
     cancelAnimationFrame(this.raf);
+    this.endgame.dispose();
     window.removeEventListener('resize', this.onResize);
     this.input.dispose();
     this.minimap.dispose();
