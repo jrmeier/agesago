@@ -245,12 +245,29 @@ function windMaterial(kind: 'grass' | 'flower', time: { value: number }): THREE.
     vertexColors: true,
     side: THREE.DoubleSide,
   });
+  // Root-to-tip tint stays within the ground tint's own range: a slightly cooler root,
+  // a slightly straw-lit tip, no near-black multiplier.
   const tint =
     kind === 'grass'
-      ? 'vColor.rgb = aTint * mix(vec3(0.62, 0.74, 0.5), vec3(0.92, 1.02, 0.78), uv.y);'
-      : 'vColor.rgb = mix(vec3(0.16, 0.28, 0.1), aTint, smoothstep(0.4, 0.62, uv.y));';
+      ? 'vColor.rgb = aTint * mix(vec3(0.82, 0.86, 0.76), vec3(0.96, 1.0, 0.84), uv.y);'
+      : 'vColor.rgb = mix(vec3(0.42, 0.52, 0.3), aTint, smoothstep(0.4, 0.62, uv.y));';
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = time;
+    // Blades are thin double-sided quads; their own face normals leave the back half of
+    // every tuft unlit by the sun. Light them mostly with the ground's up normal, keeping a
+    // small share of the blade's own horizontal lean so tufts read as 3D rather than flat
+    // cutouts, and skip the double-sided flip so both faces shade like the meadow beneath.
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <beginnormal_vertex>',
+      `#include <beginnormal_vertex>
+objectNormal = normalize(vec3(objectNormal.x * 0.2, 1.0, objectNormal.z * 0.2));`,
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <normal_fragment_begin>',
+      `float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;
+vec3 normal = normalize( vNormal );
+vec3 nonPerturbedNormal = normal;`,
+    );
     shader.vertexShader =
       /* glsl */ `
 uniform float uTime;

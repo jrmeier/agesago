@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Quality, QualityTier } from '../core/quality';
-import { DIRT, FOREST_FLOOR, LIMESTONE, MEADOW, PATH_COLOR, SAND, WILDFLOWERS } from './palette';
+import { DIRT, FOREST_FLOOR, LIMESTONE, MEADOW, PATH_COLOR, SAND } from './palette';
 
 /** World-units → texture uv. One tile is about 4.5 m, broken up by shader macro noise. */
 export const GROUND_UV_SCALE = 0.22;
@@ -50,8 +50,9 @@ export function coverTint(x: number, z: number, meadow: number): { r: number; g:
   const n = tileNoise(u, v, 4);
   const blade = tileNoise(u, v, 11);
   const shade = 0.92 + n * 0.2 - blade * 0.08;
-  const g = lerpRgb(hexRgb(0x2c5418), hexRgb(0x4f8a32), n);
-  const m = lerpRgb(hexRgb(0x3d6e22), hexRgb(0x6a9a38), n);
+  // Same sage/olive range as paintGrass and paintMeadow so tufts sit in the ground, not on it.
+  const g = lerpRgb(hexRgb(0x66864a), hexRgb(0x92aa5c), n);
+  const m = lerpRgb(hexRgb(0x7a9a50), hexRgb(0xa6b866), n);
   const t = clamp01(meadow);
   // hexRgb is 0..255 (canvas paint space); tints are 0..1 sRGB.
   const k = shade / 255;
@@ -97,24 +98,27 @@ function makeTexture(size: number, paint: Paint): THREE.CanvasTexture {
   return tex;
 }
 
+/** Sage turf: soft irregular clumps and sun-dried straw pockets, no directional hatch. */
 function paintGrass(u: number, v: number): Rgb {
   const base = tileNoise(u, v, 6) * 0.55 + tileNoise(u, v, 15) * 0.45;
-  let rgb = lerpRgb(hexRgb(0x568432), hexRgb(0x8fb44c), base);
-  const warp = tileNoise(u, v, 4);
-  const s1 = Math.abs(Math.sin((u * 9 + v * 13 + warp * 6) * Math.PI));
-  const s2 = Math.abs(Math.sin((u * 14 - v * 7 + tileNoise(u, v, 5) * 5) * Math.PI));
-  const blade = (1 - smoothstep(0, 0.2, s1)) * 0.5 + (1 - smoothstep(0, 0.16, s2)) * 0.4;
-  rgb = lerpRgb(rgb, hexRgb(0x3a6420), Math.min(1, blade));
+  let rgb = lerpRgb(hexRgb(0x6a8c48), hexRgb(0x9ab05e), base);
+  const fine = tileNoise(u, v, 27);
+  const pocket = (1 - fine) * (1 - fine);
+  rgb = lerpRgb(rgb, hexRgb(0x587a3e), pocket * 0.4);
+  const dry = tileNoise(u, v, 3);
+  rgb = lerpRgb(rgb, hexRgb(0xb6ab6a), smoothstep(0.55, 0.88, dry) * 0.42);
   return rgb.map((c) => clamp255(c)) as Rgb;
 }
 
+/** Olive meadow: broader, lighter clumps than turf with a quiet straw cast; no baked dots. */
 function paintMeadow(u: number, v: number): Rgb {
   const n = tileNoise(u, v, 3) * 0.6 + tileNoise(u, v, 8) * 0.4;
   let rgb = lerpRgb(hexRgb(MEADOW[1]), hexRgb(MEADOW[2]), n);
-  const blade = Math.max(strokes(u, v, 8, 1.05, 0.055), strokes(u, v, 14, 0.8, 0.04) * 0.7);
-  rgb = lerpRgb(rgb, hexRgb(0x4a7428), blade * 0.5);
-  const flower = flowerAt(u, v, 12);
-  if (flower) rgb = lerpRgb(rgb, flower, 0.92);
+  const fine = tileNoise(u, v, 21);
+  const pocket = (1 - fine) * (1 - fine);
+  rgb = lerpRgb(rgb, hexRgb(0x6f8e46), pocket * 0.34);
+  const straw = tileNoise(u, v, 2);
+  rgb = lerpRgb(rgb, hexRgb(0xc2b878), smoothstep(0.5, 0.9, straw) * 0.36);
   return rgb.map((c) => clamp255(c)) as Rgb;
 }
 
@@ -137,9 +141,9 @@ function paintDirt(u: number, v: number): Rgb {
   const n = tileNoise(u, v, 6) * 0.55 + tileNoise(u, v, 14) * 0.45;
   let rgb = lerpRgb(hexRgb(DIRT[1]), hexRgb(DIRT[0]), n);
   const clump = tileNoise(u, v, 3);
-  rgb = lerpRgb(rgb, hexRgb(0x7a542c), clump * clump * 0.4);
+  rgb = lerpRgb(rgb, hexRgb(0x8a5a3c), clump * clump * 0.4);
   const pebble = worley(u, v, 18);
-  if (pebble.d < 0.11) rgb = lerpRgb(hexRgb(0x8a8074), rgb, pebble.d / 0.11);
+  if (pebble.d < 0.11) rgb = lerpRgb(hexRgb(0xa09484), rgb, 0.4 + (pebble.d / 0.11) * 0.6);
   return rgb.map((c) => clamp255(c)) as Rgb;
 }
 
@@ -148,21 +152,23 @@ function paintPath(u: number, v: number): Rgb {
   const wear = tileNoise(u, v, 2);
   let rgb = lerpRgb(hexRgb(PATH_COLOR[1]), hexRgb(PATH_COLOR[0]), n);
   rgb = lerpRgb(rgb, hexRgb(PATH_COLOR[2]), wear * 0.35);
+  // Wheel ruts as a soft, wide wear band rather than a dark repeating line.
   const track = Math.abs(Math.sin((v * 5 + tileNoise(u, v, 3) * 0.4) * Math.PI * 2));
-  rgb = lerpRgb(rgb, hexRgb(0x8c6840), (1 - smoothstep(0, 0.18, track)) * 0.28);
+  rgb = lerpRgb(rgb, hexRgb(0x9e8460), (1 - smoothstep(0, 0.3, track)) * 0.16);
   const pebble = worley(u, v, 16);
-  if (pebble.d < 0.1) rgb = lerpRgb(hexRgb(pebble.h > 0.55 ? 0xd8d0c4 : 0x6e675c), rgb, 0.75);
+  if (pebble.d < 0.1) rgb = lerpRgb(hexRgb(pebble.h > 0.55 ? 0xdcd3c4 : 0x8c8274), rgb, 0.45 + pebble.d * 4);
   return rgb.map((c) => clamp255(c)) as Rgb;
 }
 
+/** Warm limestone: faint bedding and hairline seams, held to low local contrast. */
 function paintRock(u: number, v: number): Rgb {
   const n = tileNoise(u, v, 4) * 0.7 + tileNoise(u, v, 10) * 0.3;
   let rgb = lerpRgb(hexRgb(LIMESTONE[1]), hexRgb(LIMESTONE[2]), n);
   const strata = Math.abs(Math.sin((v * 6 + tileNoise(u, v, 2) * 0.35) * Math.PI));
-  rgb = lerpRgb(rgb, hexRgb(0x8e897e), (1 - smoothstep(0, 0.14, strata)) * 0.55);
+  rgb = lerpRgb(rgb, hexRgb(0x9c968a), (1 - smoothstep(0, 0.26, strata)) * 0.3);
   const crack = worley(u, v, 7);
-  const edge = smoothstep(0.02, 0.07, crack.d);
-  rgb = lerpRgb(hexRgb(0x5e5a54), rgb, edge);
+  const edge = smoothstep(0.015, 0.09, crack.d);
+  rgb = lerpRgb(hexRgb(0x8b857a), rgb, edge);
   const warm = tileNoise(u, v, 2);
   rgb = lerpRgb(rgb, hexRgb(LIMESTONE[0]), warm * 0.2);
   return rgb.map((c) => clamp255(c)) as Rgb;
@@ -172,36 +178,8 @@ function paintSand(u: number, v: number): Rgb {
   const grain = tileNoise(u, v, 22) * 0.55 + tileNoise(u, v, 40) * 0.45;
   const ripple = Math.sin((u * 8 + tileNoise(u, v, 3) * 1.4) * Math.PI * 2) * 0.5 + 0.5;
   let rgb = lerpRgb(hexRgb(SAND[1]), hexRgb(SAND[0]), grain);
-  rgb = lerpRgb(rgb, hexRgb(0xc4a060), (1 - ripple) * 0.28);
+  rgb = lerpRgb(rgb, hexRgb(0xc9ab72), (1 - ripple) * 0.18);
   return rgb.map((c) => clamp255(c)) as Rgb;
-}
-
-function flowerAt(u: number, v: number, cells: number): Rgb | null {
-  const x = u * cells;
-  const y = v * cells;
-  const x0 = Math.floor(x);
-  const y0 = Math.floor(y);
-  let best: Rgb | null = null;
-  let bestD = 1;
-  for (let j = -1; j <= 1; j++) {
-    for (let i = -1; i <= 1; i++) {
-      const cx = x0 + i;
-      const cy = y0 + j;
-      const h = hash2(mod(cx, cells), mod(cy, cells) + 17);
-      if (h < 0.78) continue;
-      const fx = cx + hash2(mod(cx, cells) + 4, mod(cy, cells) + 8);
-      const fy = cy + hash2(mod(cx, cells) + 1, mod(cy, cells) + 21);
-      const d = Math.hypot(x - fx, y - fy);
-      if (d < 0.2 && d < bestD) {
-        bestD = d;
-        const idx = Math.floor(hash2(mod(cx, cells) + 3, mod(cy, cells)) * WILDFLOWERS.length);
-        const petal = hexRgb(WILDFLOWERS[idx] ?? WILDFLOWERS[0]);
-        const center = d < 0.06;
-        best = center ? lerpRgb(petal, hexRgb(0x2a2418), 0.45) : petal;
-      }
-    }
-  }
-  return best;
 }
 
 /** 0..1 coverage of a wrapping blade stroke centred in each cell. */

@@ -1,7 +1,11 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { type Heightfield, type MapLayout, type PropPlacement, type Vec2 } from '../core/types';
 import { BUILD_RING_RADIUS, generateMap, START_RADIUS } from './mapgen';
 import { terrainFeatures } from './terrain';
+
+// The synchronous seed sweep can exceed Vitest's worker RPC deadline on CI.
+// Let pending worker messages drain between cases without changing generation timings.
+afterEach(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
 
 function distance(a: Vec2, b: Vec2): number {
   return Math.hypot(a.x - b.x, a.z - b.z);

@@ -7,7 +7,7 @@ import { Sky, sunDirection } from './Sky';
 const SHADOW_EXTENT = 35;
 
 /**
- * WebGL renderer, scene, warm sun, cool sky fill, exponential haze, and sky dome.
+ * WebGL renderer, scene, soft gold sun, cool sky fill, limestone haze, and sky dome.
  * `update(focus, time)` follows the camera with the shadow map and drifts the clouds.
  * If a frame reaches `render` without `update`, the sun follows the camera and the
  * sky clock advances on its own so the current game loop still moves.
@@ -50,7 +50,9 @@ export class Renderer {
     this.sky = new Sky();
     this.scene.add(this.sky.object);
 
-    const hemi = new THREE.HemisphereLight(0x9eb6d4, 0xb8895a, 0.85);
+    // Cool open-sky fill from above, neutral earth bounce from below, so shade reads
+    // as blue-grey daylight rather than orange murk.
+    const hemi = new THREE.HemisphereLight(0xb9c9de, 0x8a7f6a, 1.25);
     this.scene.add(hemi);
 
     this.sun = new THREE.DirectionalLight(SUN_COLOR, 2.15);
@@ -83,6 +85,7 @@ export class Renderer {
   private ensureShadowFrustum(): void {
     const size = this.quality.shadowMapSize > 0 ? this.quality.shadowMapSize : 1024;
     this.quality.shadowMapSize = size;
+    this.sun.shadow.intensity = 0.88;
     this.sun.shadow.mapSize.set(size, size);
     this.sun.shadow.bias = -0.00035;
     this.sun.shadow.normalBias = 0.04;
