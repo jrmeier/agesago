@@ -23,6 +23,10 @@ describe('map setup variants',()=> {
       expect(world.nav.findPath({x:starts[0].townCenter.x,z:starts[0].townCenter.z+6},{x:start.townCenter.x,z:start.townCenter.z+6})?.length ?? 0).toBeGreaterThan(0);
     }
   });
+  it('island sea lanes remain connected around land bridges',()=>{
+    const {hf}=generateMap(1,4,{size:'giant',type:'islands'});
+    for(let i=2;i<hf.width-2;i+=2){expect(hf.isWater(i,2)).toBe(true);expect(hf.isWater(i,hf.depth-2)).toBe(true);expect(hf.isWater(2,i)).toBe(true);expect(hf.isWater(hf.width-2,i)).toBe(true);}
+  });
   it('preserves non-default landscape and dimensions on load',()=> {
     const mapOptions={size:'small',type:'islands'} as const; const g=generateMap(7,2,mapOptions);
     const world=new World(g.hf,g.layout);world.seed=7;world.mapOptions=mapOptions;
