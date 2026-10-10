@@ -84,6 +84,8 @@ body {
 
 body.touch {
   --edge: 10px;
+  /* The resume row (Save copy / Open file / New match, 44px buttons) wraps under the top bar on touch. */
+  --hud-top-h: calc(max(4px, env(safe-area-inset-top)) + 47px + 52px);
 }
 
 [hidden] {
@@ -2827,10 +2829,17 @@ body.touch.menu-train #market-panel {
 /* Age plaque: the age name, with a slim bronze bar along its foot while an age-up runs. */
 .res-age {
   position: relative;
+  /* Never squeezed by large counts in the other plaques (the age name must stay readable). */
+  flex: none;
   font-family: var(--title);
   font-size: 13px;
   letter-spacing: 0.03em;
   white-space: nowrap;
+}
+
+/* Cinzel's capitals rise above a 1.2 line box; give the age name room so it isn't clipped. */
+#res-age {
+  line-height: 1.6;
 }
 
 .age-bar {
