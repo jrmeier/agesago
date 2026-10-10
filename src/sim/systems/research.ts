@@ -1,3 +1,4 @@
+import { CIVS } from '../../core/civilizations';
 import { BUILDINGS } from '../../core/buildings';
 import { TECHS, hasFlag, statMods, type Stat, type Subject, type TechFlag, type TechId } from '../../core/techs';
 import type { Age, Building, BuildingKind, EntityId, PlayerId, RejectReason, UnitKind } from '../../core/types';
@@ -64,6 +65,7 @@ export function researchBlock(
   const p = world.players.get(owner);
   if (!p) return 'invalid-target';
   const spec = TECHS[tech];
+  if (spec.civ && spec.civ !== p.player.civ) return 'requires';
   if (p.researched.has(tech) || isQueued(world, owner, tech)) return 'researched';
   if (p.age < spec.age) return 'age';
   if (spec.requires?.some((t) => !p.researched.has(t))) return 'requires';
@@ -224,24 +226,24 @@ function playerMods(p: PlayerState): PlayerMods {
 /** `base` with `owner`'s modifiers for unit kind `kind` applied. Cheap: a few map lookups, no allocation once warm. */
 export function unitStat(world: World, owner: PlayerId, kind: UnitKind, stat: Stat, base: number): number {
   const p = world.players.get(owner);
-  if (!p || p.researched.size === 0) return base;
+  if (!p || (p.researched.size === 0 && !p.player.civ)) return base;
   const c = playerMods(p);
   let byStat = c.units.get(kind);
   if (!byStat) c.units.set(kind, (byStat = new Map()));
   let m = byStat.get(stat);
-  if (!m) byStat.set(stat, (m = statMods(p.researched, { unit: kind }, stat)));
+  if (!m) byStat.set(stat, (m = statMods(p.researched, { unit: kind }, stat, p.player.civ ? CIVS[p.player.civ].bonuses : [])));
   return (base + m.add) * m.mul;
 }
 
 /** `base` with `owner`'s modifiers for building kind `kind` applied. */
 export function buildingStat(world: World, owner: PlayerId, kind: BuildingKind, stat: Stat, base: number): number {
   const p = world.players.get(owner);
-  if (!p || p.researched.size === 0) return base;
+  if (!p || (p.researched.size === 0 && !p.player.civ)) return base;
   const c = playerMods(p);
   let byStat = c.buildings.get(kind);
   if (!byStat) c.buildings.set(kind, (byStat = new Map()));
   let m = byStat.get(stat);
-  if (!m) byStat.set(stat, (m = statMods(p.researched, { building: kind }, stat)));
+  if (!m) byStat.set(stat, (m = statMods(p.researched, { building: kind }, stat, p.player.civ ? CIVS[p.player.civ].bonuses : [])));
   return (base + m.add) * m.mul;
 }
 
@@ -252,10 +254,10 @@ export function buildingStat(world: World, owner: PlayerId, kind: BuildingKind, 
 export function statOf(world: World, owner: PlayerId, subject: Subject, stat: Stat, base: number): number {
   if (subject === 'player') {
     const p = world.players.get(owner);
-    if (!p || p.researched.size === 0) return base;
+    if (!p || (p.researched.size === 0 && !p.player.civ)) return base;
     const c = playerMods(p);
     let m = c.player.get(stat);
-    if (!m) c.player.set(stat, (m = statMods(p.researched, 'player', stat)));
+    if (!m) c.player.set(stat, (m = statMods(p.researched, 'player', stat, p.player.civ ? CIVS[p.player.civ].bonuses : [])));
     return (base + m.add) * m.mul;
   }
   return 'unit' in subject

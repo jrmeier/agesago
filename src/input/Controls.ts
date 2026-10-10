@@ -324,7 +324,7 @@ export class Controls {
     const trainer = this.rallyBuilding();
     if (trainer) {
       for (const code of TRAIN_SLOT_KEYS) {
-        const unit = plain(code) ? kindForSlotKey(trainer.kind, code) : null;
+        const unit = plain(code) ? kindForSlotKey(trainer.kind, code, world.players.get(trainer.owner)?.player.civ) : null;
         if (!unit || ageLockText(unitAge(unit), world.players.get(world.localPlayer)?.age ?? 0)) continue;
         const n = trainBatch(!!input.keyMods(code)?.shift);
         for (let i = 0; i < n; i++) world.dispatch({ type: 'train', buildingId: trainer.id, unit });

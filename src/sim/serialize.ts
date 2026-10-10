@@ -1,3 +1,5 @@
+import type { MapOptions } from '../core/maps';
+import { civFor } from '../core/civilizations';
 import { BUILDINGS, MARKET } from '../core/buildings';
 import { TECHS } from '../core/techs';
 import type { Age, Building, EntityId, Heightfield, MarketResource, Player, PlayerId, ResourceNode, Stockpile, TechId, Unit } from '../core/types';
@@ -19,6 +21,7 @@ export interface SaveData {
   version: number;
   seed: number;
   playerCount: number;
+  mapOptions?: MapOptions;
   width: number;
   depth: number;
   players: {
@@ -101,6 +104,7 @@ export function serializeWorld(world: World): SaveData {
     version: SAVE_VERSION,
     seed: world.seed,
     playerCount: world.players.size,
+    mapOptions: world.mapOptions,
     width: world.hf.width,
     depth: world.hf.depth,
     players: [...world.players.values()].map(({ player, stock, visibility, researched, age, prices }) => ({
@@ -158,12 +162,14 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   if (!Number.isSafeInteger(data.clocks.nextId) || data.clocks.nextId < 1
     || savedIds.some((id) => !Number.isSafeInteger(id) || id < 1 || id >= data.clocks.nextId)
     || new Set(savedIds).size !== savedIds.length) throw new Error('Invalid save: entity ids or nextId');
+  for (const p of data.players) if(p.player.civ !== undefined && !civFor(p.player.civ)) throw new Error('Invalid save: civilization');
   const saved = copy(data);
-  const generated = generateMap(saved.seed, saved.playerCount);
+  const generated = generateMap(saved.seed, saved.playerCount, saved.mapOptions);
   const terrain = hf ?? generated.hf;
   if (terrain.width !== saved.width || terrain.depth !== saved.depth) throw new Error('Invalid save: terrain dimensions differ');
   const world = new World(terrain, generated.layout, saved.players.map((p) => p.player));
   world.seed = saved.seed;
+  world.mapOptions = saved.mapOptions ?? {};
   // Initial entities emit no events; drop their footprints before replacing the maps.
   for (const id of world.buildings.keys()) world.nav.removeRect(id);
   restoreMap(world.units, saved.units.map((u) => [u.id, u]));

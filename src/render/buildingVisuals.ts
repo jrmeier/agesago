@@ -1,3 +1,4 @@
+import { CIVS, type CivId } from '../core/civilizations';
 import * as THREE from 'three';
 import { BUILDINGS, FARM_FOOD, footprint } from '../core/buildings';
 import { SEA_LEVEL, type BuildingKind, type Heightfield, type Vec2 } from '../core/types';
@@ -59,7 +60,7 @@ export function footprintMinY(hf: Heightfield, kind: BuildingKind, pos: Vec2, ro
   return min === Infinity ? SEA_LEVEL : min;
 }
 
-export function createBuildingVisual(kind: BuildingKind, color?: number, tier = 0): BuildingVisual {
+export function createBuildingVisual(kind: BuildingKind, color?: number, tier = 0, civ?: CivId): BuildingVisual {
   const root = new THREE.Group();
   root.name = kind === 'townCenter' ? 'town-center' : `building:${kind}`;
   let currentTier = modelTier(kind, tier);
@@ -68,6 +69,8 @@ export function createBuildingVisual(kind: BuildingKind, color?: number, tier = 
   foundation.name = 'foundation';
   ownMaterials(foundation);
   let finished = finishedFor(kind, color, currentTier);
+  paintArchitecture(foundation,civ,kind);
+  paintArchitecture(finished,civ,kind);
   const bar = progressBar();
   const top = modelTop(finished);
   bar.position.y = top + 0.55;
@@ -98,6 +101,8 @@ export function createBuildingVisual(kind: BuildingKind, color?: number, tier = 
       foundation.name = 'foundation';
       ownMaterials(foundation);
       finished = finishedFor(kind, color, t);
+      paintArchitecture(foundation,civ,kind);
+      paintArchitecture(finished,civ,kind);
       root.add(foundation, finished);
       bar.position.y = modelTop(finished) + 0.55;
       visual.setProgress(lastProgress, lastComplete);
@@ -385,4 +390,25 @@ function modelTop(object: THREE.Object3D): number {
 
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+/** Clone shared buffers once at construction; recolour existing masonry/roof faces only. */
+function paintArchitecture(root:THREE.Object3D,civ:CivId|undefined,kind:BuildingKind):void {
+  if(!civ || kind==='farm') return;
+  const tint=new THREE.Color(CIVS[civ].architecture), sample=new THREE.Color();
+  root.traverse(object=> {
+    if(!(object instanceof THREE.Mesh)) return;
+    const color=object.geometry.getAttribute('color');if(!color)return;
+    const geometry=object.geometry.clone(); delete geometry.userData.shared;
+    const owned=geometry.getAttribute('color');
+    for(let i=0;i<owned.count;i++) {
+      sample.setRGB(owned.getX(i),owned.getY(i),owned.getZ(i));
+      const masonry=Math.max(sample.r,sample.g,sample.b)-Math.min(sample.r,sample.g,sample.b)<.23;
+      if(masonry) sample.lerp(tint,.42);
+      else if(sample.r>sample.g*1.35 && sample.g>sample.b*1.15) sample.lerp(tint,.24);
+      owned.setXYZ(i,sample.r,sample.g,sample.b);
+    }
+    object.geometry=geometry;
+  });
+  root.userData.civilization=civ;
 }

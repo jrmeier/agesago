@@ -12,7 +12,9 @@
     "e2e": "playwright test",
     "bench:pacing": "vite-node scripts/bench-pacing.ts",
     "build:relay": "vite build --ssr src/network/relay.ts --outDir relay-dist",
-    "relay": "node server/start.mjs"
+    "relay": "node server/start.mjs",
+    "bench:maps": "vite-node scripts/bench-maps.ts",
+    "bench:civilizations": "vite-node scripts/bench-civilizations.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",

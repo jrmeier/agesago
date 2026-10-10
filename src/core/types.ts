@@ -1,3 +1,4 @@
+import type { CivId } from './civilizations';
 /**
  * Shared contract between every module. FROZEN after T1: lanes must not edit this
  * file — request changes from the integrator instead.
@@ -22,6 +23,8 @@ export const GAIA: PlayerId = 0;
 
 export interface Player {
   id: PlayerId;
+  /** Absent in legacy saves: the original neutral roster. */
+  civ?: CivId;
   name: string;
   /** Cloth/banner colour. */
   color: number;
@@ -51,6 +54,10 @@ export type AnimalKind = 'deer' | 'boar' | 'sheep';
 export type UnitKind =
   | 'villager'
   | 'scout'
+  | 'phalangiteGuard'
+  | 'legionary'
+  | 'immortal'
+  | 'raider'
   | 'hoplite'
   | 'swordsman'
   | 'slinger'

@@ -1,3 +1,4 @@
+import type { CivId } from './civilizations';
 import type { Age, BuildingKind, Stockpile, UnitKind } from './types';
 
 /**
@@ -7,6 +8,8 @@ import type { Age, BuildingKind, Stockpile, UnitKind } from './types';
 export type UnitClass = 'villager' | 'infantry' | 'archer' | 'cavalry' | 'wildlife';
 
 export interface UnitSpec {
+  /** Unique to this civilization; hidden and rejected for other rosters. */
+  civ?: CivId;
   name: string;
   unitClass: UnitClass;
   hp: number;
@@ -36,6 +39,10 @@ export interface UnitSpec {
 }
 
 export const UNITS: Record<UnitKind, UnitSpec> = {
+  phalangiteGuard: {name:'Phalangite Guard',civ:'hellenes',unitClass:'infantry',hp:65,speed:2.1,sight:6,attack:{melee:6,pierce:0},armor:{melee:1,pierce:1},range:.9,reload:2,bonus:{cavalry:12},cost:{food:60,wood:35},trainTime:14,trainedAt:'barracks',radius:.32,age:1},
+  legionary: {name:'Legionary',civ:'romans',unitClass:'infantry',hp:65,speed:2.3,sight:6,attack:{melee:8,pierce:0},armor:{melee:2,pierce:1},range:.5,reload:2,bonus:{},cost:{food:65,gold:25},trainTime:15,trainedAt:'barracks',radius:.32,age:1},
+  immortal: {name:'Immortal',civ:'persians',unitClass:'archer',hp:40,speed:2.3,sight:8,attack:{melee:0,pierce:5},armor:{melee:0,pierce:1},range:7,reload:2,bonus:{archer:3},projectile:'arrow',cost:{wood:35,gold:55},trainTime:15,trainedAt:'archeryRange',radius:.3,age:1},
+  raider: {name:'Raider',civ:'celts',unitClass:'infantry',hp:55,speed:2.7,sight:7,attack:{melee:8,pierce:0},armor:{melee:1,pierce:1},range:.5,reload:2,bonus:{},cost:{food:60,gold:20},trainTime:14,trainedAt:'barracks',radius:.32,age:1},
   deer: {
     name: 'Deer', unitClass: 'wildlife', hp: 12, speed: 4, sight: 0,
     attack: { melee: 0, pierce: 0 }, armor: { melee: 0, pierce: 0 },
@@ -198,8 +205,8 @@ export function isAnimal(kind: UnitKind): kind is 'deer' | 'boar' | 'sheep' {
 }
 
 /** Units a building can train, in menu order. */
-export function trainable(building: BuildingKind): UnitKind[] {
-  return (Object.keys(UNITS) as UnitKind[]).filter((k) => UNITS[k].trainedAt === building);
+export function trainable(building: BuildingKind, civ?: CivId): UnitKind[] {
+  return (Object.keys(UNITS) as UnitKind[]).filter((k) => UNITS[k].trainedAt === building && (!UNITS[k].civ || UNITS[k].civ === civ));
 }
 
 /**

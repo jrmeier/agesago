@@ -385,7 +385,7 @@ export class Hud {
     this.researchKey = '';
     this.researchHead = null;
     if (!kind) return;
-    for (const e of trainEntries(kind, this.world.stock, this.world.players.get(this.world.localPlayer)?.researched)) {
+    for (const e of trainEntries(kind, this.world.stock, this.world.players.get(this.world.localPlayer)?.researched, this.world.players.get(this.world.localPlayer)?.player.civ)) {
       const btn = tile(`#i-${e.kind}`, e.name, e.cost, e.key, 'Shift-click: queue 5');
       btn.classList.add('train-tile');
       btn.dataset.train = e.kind;
@@ -413,6 +413,7 @@ export class Hud {
       researched: p?.researched ?? new Set(),
       queued,
       stock: this.world.stock,
+      civ:this.world.players.get(local)?.player.civ,
       ageBuildings: ageBuildings(this.world, local, age).length,
       ageBuildingsNeeded: ageBuildingsNeeded(age),
     };

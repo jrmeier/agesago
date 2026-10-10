@@ -37,7 +37,7 @@ function queuedBy(world: World, owner: number): number {
  */
 export function orderTrain(world: World, buildingId: EntityId, unit?: UnitKind): void {
   const b = world.buildings.get(buildingId);
-  const kinds = b ? trainable(b.kind) : [];
+  const kinds = b ? trainable(b.kind, world.players.get(b.owner)?.player.civ) : [];
   const kind = unit ?? kinds[0];
   if (!b || !b.complete || !kind || !kinds.includes(kind)) {
     world.events.emit({ type: 'rejected', reason: 'invalid-target' });

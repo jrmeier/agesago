@@ -1,3 +1,5 @@
+import type { CivId } from '../core/civilizations';
+import type { MapOptions } from '../core/maps';
 import { BUILDINGS, MARKET, MAX_POP, footprintRadius } from '../core/buildings';
 import { EventBus } from '../core/events';
 import { isAnimal } from '../core/units';
@@ -70,9 +72,10 @@ const FOG_INTERVAL = 0.2;
 /** Default player roster: player 1 is the local human, the rest AI opponents. */
 export const PLAYER_COLORS = [0x2f6fb5, 0xb23a32, 0xd4a843, 0x3f8a4a];
 
-export function defaultPlayers(count: number): Player[] {
+export function defaultPlayers(count: number, civs?: readonly CivId[]): Player[] {
   return Array.from({ length: count }, (_, i) => ({
     id: i + 1,
+    ...(civs?.[i] ? { civ: civs[i] } : {}),
     name: i === 0 ? 'You' : `Rival ${i}`,
     color: PLAYER_COLORS[i % PLAYER_COLORS.length],
     team: i + 1,
@@ -111,6 +114,7 @@ export class World {
   victoryClock = 0;
   /** Map identity for saves. Set to the seed passed to generateMap before saving. */
   seed: number | null = null;
+  mapOptions: MapOptions = {};
   /** Navigation grid over the terrain with building footprints blocked. */
   readonly nav: NavGrid;
   private fogClock = 0;

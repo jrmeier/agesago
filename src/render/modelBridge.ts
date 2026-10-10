@@ -101,6 +101,7 @@ const sizeScratch = new THREE.Vector3();
 const PENNANT_Y: Record<UnitKind, number> = {
   villager: 0.92,
   scout: 1.62,
+  phalangiteGuard: 1.2, legionary: 1.2, immortal: 1.15, raider: 1.2,
   hoplite: 1.2,
   swordsman: 1.2,
   slinger: 1.12,

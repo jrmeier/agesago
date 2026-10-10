@@ -1,3 +1,4 @@
+import type { CivId } from '../core/civilizations';
 import { unitLine, type TechId } from '../core/techs';
 import type { Building, BuildingKind, Stance, Stockpile, Unit, UnitKind } from '../core/types';
 import { isAnimal, UNITS, trainable, type UnitSpec } from '../core/units';
@@ -32,8 +33,8 @@ export interface TrainEntry {
 }
 
 /** One training-panel entry per unit the building can train, with its slot key and affordability. */
-export function trainEntries(building: BuildingKind, stock: Stockpile, researched?: ReadonlySet<TechId>): TrainEntry[] {
-  return trainable(building).map((kind, i) => ({
+export function trainEntries(building: BuildingKind, stock: Stockpile, researched?: ReadonlySet<TechId>, civ?: CivId): TrainEntry[] {
+  return trainable(building, civ).map((kind, i) => ({
     kind,
     // Unit-line upgrades rename what the building trains (Hoplite → Veteran Hoplite).
     name: researched ? unitLine(researched, kind).title : UNITS[kind].name,
@@ -44,9 +45,9 @@ export function trainEntries(building: BuildingKind, stock: Stockpile, researche
 }
 
 /** The unit a training slot key trains at `building`, if any. */
-export function kindForSlotKey(building: BuildingKind, code: string): UnitKind | null {
+export function kindForSlotKey(building: BuildingKind, code: string, civ?: CivId): UnitKind | null {
   const i = (TRAIN_SLOT_KEYS as readonly string[]).indexOf(code);
-  return i >= 0 ? (trainable(building)[i] ?? null) : null;
+  return i >= 0 ? (trainable(building, civ)[i] ?? null) : null;
 }
 
 /** Can this building show a training panel right now? */

@@ -123,7 +123,7 @@ export class Military {
   /** The unit to train at `building`: best counter to the enemy's seen mix, kept varied. */
   chooseUnit(building: BuildingKind, s: Snapshot, stock: Stockpile, reserve: Partial<Stockpile>): UnitKind | null {
     const age = ageOf(this.c.world, this.c.player);
-    const opts = trainable(building).filter(
+    const opts = trainable(building, this.c.world.players.get(this.c.player)?.player.civ).filter(
       (k) => k !== 'scout' && k !== 'villager' && (UNITS[k].age ?? 0) <= age && canAfford(stock, UNITS[k].cost, reserve)
     );
     if (!opts.length) return null;

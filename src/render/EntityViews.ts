@@ -87,6 +87,7 @@ const GATHER_POSE: Record<string, VillagerPose> = { wood: 'chop', food: 'forage'
 const UNIT_SCALE: Record<UnitKind, number> = {
   villager: VILLAGER_SCALE,
   scout: SCOUT_SCALE,
+  phalangiteGuard: 1.3, legionary: 1.3, immortal: 1.25, raider: 1.3,
   hoplite: 1.3,
   swordsman: 1.3,
   slinger: 1.25,
@@ -102,6 +103,7 @@ const UNIT_SCALE: Record<UnitKind, number> = {
 const BAR_Y: Record<UnitKind, number> = {
   villager: 1.7,
   scout: 2.45,
+  phalangiteGuard: 1.9, legionary: 1.9, immortal: 1.8, raider: 1.9,
   hoplite: 1.9,
   swordsman: 1.9,
   slinger: 1.75,
@@ -536,7 +538,7 @@ export class EntityViews {
   private mountBuilding(building: Building): void {
     if (this.buildingViews.has(building.id)) return;
     const visual = createBuildingVisual(building.kind, this.ownerColor(building.owner),
-      buildingRenderTier(this.researchedBy(building.owner), building.kind));
+      buildingRenderTier(this.researchedBy(building.owner), building.kind), this.world.players.get(building.owner)?.player.civ);
     visual.object.userData.entityId = building.id;
     this.poseBuilding(visual, building.kind, building.pos, building.rot);
     visual.setProgress(building.buildProgress, building.complete);
