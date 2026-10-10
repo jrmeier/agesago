@@ -107,6 +107,10 @@ test('age-locked build tiles say which age they need', async ({ page }, testInfo
 test('Town Center production stays FIFO and researched capacity reaches HUD and load model', async ({ page }, testInfo) => {
   const phone = testInfo.project.name === 'phone';
   const errors = await boot(page);
+  const repaint = async () => {
+    const frame = await page.evaluate(() => (window as any).game.renderer.webgl.info.render.frame as number);
+    await page.waitForFunction(before => (window as any).game.renderer.webgl.info.render.frame > before, frame, { timeout: 15_000 });
+  };
   await page.evaluate(() => {
     const w = window as any;
     const g = w.game;
@@ -118,6 +122,7 @@ test('Town Center production stays FIFO and researched capacity reaches HUD and 
     for (let i = 0; i < 60; i++) g.world.tick(0.05);
     g.world.dispatch({ type: 'research', buildingId: tc.id, tech: 'wovenTunics' });
   });
+  await repaint();
   await openSheet(page, phone);
   await expect(page.locator('#train-queue .queue-item').first()).toHaveAttribute('title', /Villager.*training/);
   await expect(page.locator('#unit-status')).toHaveText(/Training/);
@@ -125,6 +130,7 @@ test('Town Center production stays FIFO and researched capacity reaches HUD and 
     const world = (window as any).game.world;
     for (let i = 0; i < 120; i++) world.tick(0.05);
   });
+  await repaint();
   await expect(page.locator('#train-queue .queue-item').first()).toHaveAttribute('data-tech', 'wovenTunics');
   await expect(page.locator('#unit-status')).toHaveText(/Researching Woven Tunics/);
   const scale = await page.evaluate(() => {
@@ -140,6 +146,7 @@ test('Town Center production stays FIFO and researched capacity reaches HUD and 
     g.selection.set([unit.id]);
     return g.views.object.children.find((c: any) => c.userData.entityId === unit.id).getObjectByName('carry-wood').scale.x;
   });
+  await repaint();
   await expect(page.locator('#unit-status')).toHaveText('Chopping wood (3/13)');
   expect(scale ** 3).toBeCloseTo(1.3);
   expect(errors).toEqual([]);

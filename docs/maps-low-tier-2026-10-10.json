@@ -386,5 +386,49 @@
       "triangles": 314610,
       "draws": 73
     }
-  ]
+  ],
+  "followUp": {
+    "commit": "b2e90d2",
+    "reason": "Verify the largest Forest and Islands scenes after adding variant ruins/relics",
+    "rows": [
+      {
+        "map": {
+          "size": "giant",
+          "type": "forest"
+        },
+        "quality": "low",
+        "boot": {
+          "mapMs": 170.79999999701977,
+          "terrainMs": 356.69999999552965,
+          "modelsMs": 116.80000000447035,
+          "totalMs": 698
+        },
+        "fps": 59.98659517426274,
+        "medianMs": 16.699999999999818,
+        "p95Ms": 17.400000000000546,
+        "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+        "triangles": 350184,
+        "draws": 129
+      },
+      {
+        "map": {
+          "size": "giant",
+          "type": "islands"
+        },
+        "quality": "low",
+        "boot": {
+          "mapMs": 134.79999999701977,
+          "terrainMs": 356.3999999985099,
+          "modelsMs": 95.29999999701977,
+          "totalMs": 632.3000000044703
+        },
+        "fps": 59.98860551627065,
+        "medianMs": 16.699999999999818,
+        "p95Ms": 17.400000000000546,
+        "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+        "triangles": 314622,
+        "draws": 73
+      }
+    ]
+  }
 }

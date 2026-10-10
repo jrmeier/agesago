@@ -2,7 +2,9 @@ import { chromium } from '@playwright/test';
 import { appendFileSync } from 'node:fs';
 const browser = await chromium.launch({channel:'chrome',headless:false,args:['--mute-audio','--disable-background-timer-throttling','--disable-backgrounding-occluded-windows','--disable-renderer-backgrounding']});
 try {
- for (const size of ['small','medium','large','giant']) for (const type of ['mediterranean','highlands','riverValley','forest','islands']) {
+ const sizes=(process.env.MAP_RENDER_SIZES ?? 'small,medium,large,giant').split(',');
+ const types=(process.env.MAP_RENDER_TYPES ?? 'mediterranean,highlands,riverValley,forest,islands').split(',');
+ for (const size of sizes) for (const type of types) {
   const context=await browser.newContext({viewport:{width:1280,height:800}});
   const page=await context.newPage();
   await page.goto(`${process.env.MAP_RENDER_BASE_URL ?? 'http://localhost:4174'}/?e2e&title=1&debug=1&quality=low`);

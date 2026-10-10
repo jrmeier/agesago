@@ -23,6 +23,7 @@ async function selectVillager(page: Page): Promise<void> {
     g.selection.set([one.id]);
   });
   await expect(page.locator('#selection-panel')).not.toHaveClass(/\bhidden\b/);
+  await expect.poll(() => page.locator('#selection-panel').evaluate(el => el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })), { timeout: 15_000 }).toBe(true);
   await expect.poll(async () => page.locator('#build-grid button').count()).toBeGreaterThan(0);
 }
 

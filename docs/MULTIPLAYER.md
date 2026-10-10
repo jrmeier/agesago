@@ -26,6 +26,8 @@ npx playwright test e2e/multiplayer.e2e.ts --workers=1
 ```
 
 Browser regressions run a private ephemeral relay. Real matches use the same-origin endpoint.
+Vite development and preview servers proxy `/multiplayer` to the local relay on port 8973,
+so starting the relay and opening localhost:5173 or localhost:4174 also supports normal online rooms.
 The tests compare both clients' checkpoint hashes, interrupt/reconnect a seat and finish the
 match by resignation; relay tests cover identity attribution and hash disagreement.
 
