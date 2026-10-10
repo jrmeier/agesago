@@ -77,21 +77,22 @@ void main() {
   vec3 viewDir = normalize(cameraPosition - vWorld);
   float fres = pow(1.0 - clamp(dot(n, viewDir), 0.0, 1.0), 3.2);
   vec3 water = mix(uShallow, uDeep, smoothstep(0.05, 2.6, depth));
-  water *= 0.82 + rip * 0.36;
+  water *= 0.9 + rip * 0.2;
   float skyH = clamp(viewDir.y * 0.85 + 0.15, 0.0, 1.0);
   vec3 sky = mix(uHorizon, uZenith, skyH);
-  vec3 col = mix(water, sky, fres * 0.62);
-  col += vec3(0.7, 0.9, 0.84) * smoothstep(0.68, 0.94, rip) * (1.0 - fres) * 0.28;
+  vec3 col = mix(water, sky, fres * 0.5);
+  col += vec3(0.7, 0.9, 0.84) * smoothstep(0.72, 0.96, rip) * (1.0 - fres) * 0.09;
 
   vec3 halfDir = normalize(normalize(uSunDir) + viewDir);
-  float spec = pow(max(dot(n, halfDir), 0.0), 70.0);
-  col += vec3(1.0, 0.86, 0.58) * spec * 1.05;
+  float spec = pow(max(dot(n, halfDir), 0.0), 90.0);
+  col += vec3(1.0, 0.92, 0.72) * spec * 0.55;
 
-  float shore = smoothstep(0.0, 0.12, depth) * (1.0 - smoothstep(0.2, 1.15, depth));
+  // Shoreline wash: a faint, slow lap rather than bright foam blobs.
+  float shore = smoothstep(0.0, 0.12, depth) * (1.0 - smoothstep(0.12, 0.5, depth));
   shore *= 1.0 - smoothstep(0.02, 0.7, max(bed, 0.0));
-  float pulse = 0.6 + 0.4 * sin(uTime * 1.6 + agNoise(vWorld.xz * 0.31) * 6.283);
-  float band = smoothstep(0.38, 0.8, agNoise(vWorld.xz * 0.85 + vec2(uTime * 0.18, 0.0)));
-  col = mix(col, vec3(0.95, 0.96, 0.93), shore * band * pulse);
+  float pulse = 0.8 + 0.2 * sin(uTime * 1.6 + agNoise(vWorld.xz * 0.31) * 6.283);
+  float band = smoothstep(0.5, 0.88, agNoise(vWorld.xz * 0.85 + vec2(uTime * 0.18, 0.0)));
+  col = mix(col, vec3(0.84, 0.9, 0.88), shore * band * pulse * 0.2);
 
   float inland = smoothstep(0.0, 0.45, bed);
   float alpha = mix(0.22, 0.86, smoothstep(0.0, 1.05, depth));

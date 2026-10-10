@@ -1,0 +1,16 @@
+{
+  "format": "prettify-structural-baseline",
+  "schema": 1,
+  "description": "Portable structural limits for scripts/prettify-benchmark.mjs: render/memory counters of the seeded ?e2e initial scene (every local villager selected) at the original baseline commit. No frame timing and no GPU-specific performance claim; timing needs a same-machine --baseline FILE.",
+  "baselineCommit": "36a80cd",
+  "qualityCeilings": {
+    "low": { "pixelRatio": 1, "shadows": false, "shadowMapSize": 0, "grassDensity": 0, "grassRadius": 0, "fancyWater": false },
+    "medium": { "pixelRatio": 1.5, "shadows": true, "shadowMapSize": 1024, "grassDensity": 3, "grassRadius": 28, "fancyWater": true },
+    "high": { "pixelRatio": 2, "shadows": true, "shadowMapSize": 2048, "grassDensity": 7, "grassRadius": 45, "fancyWater": true }
+  },
+  "scenarios": [
+    { "name": "desktop-low", "render": { "calls": 136, "triangles": 325724 }, "memory": { "geometries": 50, "textures": 10 } },
+    { "name": "desktop-high", "render": { "calls": 393, "triangles": 748194 }, "memory": { "geometries": 57, "textures": 13 } },
+    { "name": "phone-low", "render": { "calls": 75, "triangles": 282968 }, "memory": { "geometries": 42, "textures": 10 } }
+  ]
+}
