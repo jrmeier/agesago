@@ -71,6 +71,7 @@ function chain(ids: readonly TechId[], group: TechGroup, bases: number[], when: 
  * group (0 = never). Chain order and age gates come from researchBlock().
  */
 export const RULES: Rule[] = [
+  ...(['hellenicDiscipline','romanEngineering','royalRoads','woodlandCraft'] as TechId[]).map(tech => ({tech,group:'forge' as const,base:30,when:(f:Facts)=>f.army>=5})),
   // Economy: drop-site techs once enough villagers work that resource.
   ...chain(CHAINS.wood, 'eco', [60, 46, 36], (f) => f.workers.wood >= f.p.ecoWorkers),
   ...chain(CHAINS.mining, 'eco', [55, 40, 30], (f) => f.workers.gold + (f.age ? f.workers.stone : 0) >= f.p.ecoWorkers),

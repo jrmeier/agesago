@@ -1,3 +1,5 @@
+import { CIV_IDS, type CivId } from '../core/civilizations';
+import { normalizeMapOptions, type MapSize, type MapType } from '../core/maps';
 import { deviceQuality, type Quality } from '../core/quality';
 import type { EntityId, Vec2 } from '../core/types';
 import { CameraRig } from '../camera/CameraRig';
@@ -14,7 +16,7 @@ import { TerrainView } from '../render/TerrainView';
 import { BALANCE } from '../sim/balance';
 import { generateMap } from '../sim/mapgen';
 import { deserializeWorld, serializeWorld } from '../sim/serialize';
-import { World } from '../sim/World';
+import { World, defaultPlayers } from '../sim/World';
 import { Endgame } from '../ui/Endgame';
 import { EndgameLog } from '../ui/endgameLog';
 import { Hud } from '../ui/Hud';
@@ -56,6 +58,10 @@ export interface MatchStart {
   seed?: number;
   players?: number;
   fresh?: boolean;
+  civ?: CivId;
+  civs?: CivId[];
+  mapSize?: MapSize;
+  mapType?: MapType;
   /** Practice match. It does not read or write the resume slot. */
   tutorial?: boolean;
 }
@@ -168,14 +174,18 @@ export class Game {
     let resumeFailed = start.fresh || tutorial ? false : loaded.failed;
     let mapSeed = resume?.sim.seed ?? seed;
     let players = resume?.sim.playerCount ?? towns;
+    let mapOptions = normalizeMapOptions();
+    const civs = start.civs ?? (start.civ ? Array.from({length:players},(_,i)=>i===0?start.civ!:CIV_IDS[(CIV_IDS.indexOf(start.civ!)+i)%CIV_IDS.length]) : undefined);
     let generated: ReturnType<typeof generateMap>;
     try {
-      generated = generateMap(mapSeed, players);
+      mapOptions = normalizeMapOptions(resume?.sim.mapOptions ?? {size:start.mapSize,type:start.mapType});
+      generated = generateMap(mapSeed, players, mapOptions);
     } catch {
       resume = null;
       resumeFailed = true;
       mapSeed = seed;
       players = 2;
+      mapOptions = normalizeMapOptions();
       generated = generateMap(seed);
     }
     const { hf, layout } = generated;
@@ -187,13 +197,14 @@ export class Game {
       } catch {
         resume = null;
         resumeFailed = true;
-        world = new World(hf, layout);
+        world = new World(hf, layout, defaultPlayers(players,civs));
         world.seed = mapSeed;
       }
     } else {
-      world = new World(hf, layout);
+      world = new World(hf, layout, defaultPlayers(players,civs));
       world.seed = mapSeed;
     }
+    world.mapOptions = mapOptions;
     const mapMs = performance.now() - tMap;
 
     report('Baking the ground', 0.46);

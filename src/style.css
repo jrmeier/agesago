@@ -3256,3 +3256,6 @@ body.touch.menu-train #market-panel {
     padding: 2px 4px;
   }
 }
+
+.title-field select { color: #eee3cc; background: #252e31; border: 1px solid #77715d; padding: .6rem; border-radius: .3rem; width:100%; min-height:44px; font:inherit; }
+#title-setup { max-height:85dvh; overflow:auto; }

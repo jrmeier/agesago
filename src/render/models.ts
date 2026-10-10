@@ -748,7 +748,7 @@ export function createScout(opts?: { color?: number; cloak?: number; seed?: numb
   return { object, setPose };
 }
 
-export type SoldierKind = 'hoplite' | 'swordsman' | 'slinger' | 'archer' | 'horseman';
+export type SoldierKind = 'phalangiteGuard' | 'legionary' | 'immortal' | 'raider' | 'hoplite' | 'swordsman' | 'slinger' | 'archer' | 'horseman';
 export type SoldierPose = 'idle' | 'walk' | 'attack' | 'die';
 /** Die uses progress 0..1, supplied either directly or as { progress }. */
 export type SoldierPoseExtra = number | { progress?: number };
@@ -829,6 +829,19 @@ function fallingPose(object: THREE.Group, rig: THREE.Group): (progress: number) 
 
 /** Ancient soldiers facing +z, one shared material and no geometry work in setPose. */
 export function createSoldier(kind: SoldierKind, opts?: { color?: number; seed?: number }): SoldierModel {
+  const unique = {phalangiteGuard:'hoplite',legionary:'swordsman',immortal:'archer',raider:'swordsman'} as const;
+  if (kind in unique) {
+    const base = unique[kind as keyof typeof unique];
+    const model = createSoldier(base,opts);
+    model.object.name = kind;
+    // A unique silhouette and finish with no extra draw calls or per-frame work.
+    const emblem = model.object.getObjectByName(base==='hoplite'?'aspis':base==='archer'?'bow':'oval-shield') as THREE.Mesh | undefined;
+    if (emblem) { emblem.scale.set(kind==='phalangiteGuard'?1.2:.8,kind==='legionary'?1.3:1,1); }
+    const crest = model.object.getObjectByName('tunic-head-armor') as THREE.Mesh | undefined;
+    if(crest) crest.scale.y = kind==='raider' ? .95 : 1.06;
+    model.object.userData.civilizationUnit = kind;
+    return model;
+  }
   const seed = Math.abs(Math.trunc(opts?.seed ?? 1));
   const color = opts?.color ?? 0x9e3b26;
   if (kind === 'horseman') {

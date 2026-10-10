@@ -11,6 +11,7 @@ const GATHER_VERB: Record<ResourceType, string> = {
 
 /** Singular / plural display names, in panel order. */
 const UNIT_NAMES: Record<UnitKind, [string, string]> = {
+  phalangiteGuard:['Phalangite Guard','Phalangite Guards'], legionary:['Legionary','Legionaries'], immortal:['Immortal','Immortals'], raider:['Raider','Raiders'],
   villager: ['Villager', 'Villagers'],
   scout: ['Scout', 'Scouts'],
   hoplite: ['Hoplite', 'Hoplites'],

@@ -25,6 +25,9 @@ function reveal(game: Game): void {
   // Seed and town count for a match opened from the title screen, which has no dev hook.
   document.documentElement.dataset.seed = String(game.world.seed ?? '');
   document.documentElement.dataset.players = String(game.world.players.size);
+  document.documentElement.dataset.mapSize = game.world.mapOptions.size ?? 'large';
+  document.documentElement.dataset.mapType = game.world.mapOptions.type ?? 'mediterranean';
+  document.documentElement.dataset.civ = game.world.players.get(game.world.localPlayer)?.player.civ ?? '';
   if (loading) {
     loading.classList.add('is-done');
     loading.addEventListener('transitionend', () => loading.remove(), { once: true });
@@ -64,7 +67,7 @@ if (params.has('e2e') || !title) {
       document.documentElement.classList.remove('show-title');
       void bootMatch({ tutorial: true, players: 2, fresh: true });
     },
-    onStart(seed, players) {
+    onStart(seed, players, options) {
       closeTitle();
       const url = new URL(location.href);
       url.search = `seed=${seed}`;
@@ -72,7 +75,7 @@ if (params.has('e2e') || !title) {
       document.documentElement.classList.remove('show-title');
       void deleteResume(idbResumeStore())
         .catch(() => undefined)
-        .then(() => bootMatch({ seed, players, fresh: true }));
+        .then(() => bootMatch({ seed, players, ...options, fresh: true }));
     },
   });
 }

@@ -1,3 +1,4 @@
+import type { CivId } from '../core/civilizations';
 import { AGE_NAMES, TECHS, techsAt, type Age, type Stat, type TechId } from '../core/techs';
 import type { BuildingSpec } from '../core/buildings';
 import type { Building, BuildingKind, RejectReason, Stockpile, UnitKind } from '../core/types';
@@ -13,6 +14,7 @@ import { combatChips, queueView, type StatChip } from './military';
 
 /** What the player knows that decides how tech tiles look. */
 export interface TechView {
+  civ?: CivId;
   age: Age;
   researched: ReadonlySet<TechId>;
   /** Techs queued at any of the player's buildings. */
@@ -64,9 +66,10 @@ export function lockText(tech: TechId, block: RejectReason | null, v: TechView):
  * queue strip), only the next age-up, and a chained tech only once its predecessor is researched
  * or queued (so "Requires Bronze Axe" shows while Bronze Axe runs).
  */
-export function visibleTechs(kind: BuildingKind, v: Pick<TechView, 'age' | 'researched' | 'queued'>): TechId[] {
+export function visibleTechs(kind: BuildingKind, v: Pick<TechView, 'age' | 'researched' | 'queued' | 'civ'>): TechId[] {
   return techsAt(kind).filter((t) => {
     const spec = TECHS[t];
+    if (spec.civ && spec.civ !== v.civ) return false;
     if (v.researched.has(t) || v.queued.has(t)) return false;
     if (spec.ageUp !== undefined && spec.ageUp !== v.age + 1) return false;
     return !spec.requires || spec.requires.every((r) => v.researched.has(r) || v.queued.has(r));
