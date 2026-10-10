@@ -130,7 +130,7 @@ export type QueueItem =
   | { type: 'unit'; unit: UnitKind; index: number };
 
 /** The queue strip follows the same FIFO order as production in the simulation. */
-export function queueItems(b: Pick<Building, 'kind' | 'queue' | 'queueKinds' | 'progress' | 'research' | 'researchProgress' | 'productionQueue'>): {
+export function queueItems(b: Pick<Building, 'kind' | 'queue' | 'queueKinds' | 'progress' | 'research' | 'researchProgress' | 'productionQueue'>, trainingTime?: number): {
   items: QueueItem[];
   /** Progress 0..1 of the first item. */
   head: number;
@@ -144,7 +144,7 @@ export function queueItems(b: Pick<Building, 'kind' | 'queue' | 'queueKinds' | '
     : { type: 'unit', unit: units.kinds[unitIndex], index: unitIndex++ });
   const head = items[0]?.type === 'tech'
     ? Math.min(1, Math.max(0, (b.researchProgress ?? 0) / TECHS[research[0]].time))
-    : units.head;
+    : trainingTime && trainingTime > 0 ? Math.min(1, Math.max(0, b.progress / trainingTime)) : units.head;
   return { items, head };
 }
 

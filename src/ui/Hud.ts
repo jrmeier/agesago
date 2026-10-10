@@ -6,6 +6,7 @@ import type { Selection } from '../game/Selection';
 import { shownSelection, sightFromState, stepLastSeen, type LastSeenBuilding } from '../render/lastSeen';
 import { BALANCE } from '../sim/balance';
 import { productionOrder } from '../sim/productionQueue';
+import { carryCap } from '../sim/systems/gather';
 import { trainTime } from '../sim/systems/train';
 import { ageBuildings, ageBuildingsNeeded, researchBlock, statOf } from '../sim/systems/research';
 import type { World } from '../sim/World';
@@ -478,7 +479,8 @@ export class Hud {
       const same = kinds.every((k) => k === kinds[0]);
       const line = same ? lineOf(kinds[0]) : null;
       setText(this.el.name, line && line.tier > 0 ? (units.length > 1 ? `${units.length} × ${line.title}` : line.title) : selectionName(kinds));
-      setText(this.el.status, foreign ? this.ownerName(owner) : groupStatus(units, BALANCE.carryCap));
+      const capacity = carryCap(this.world, units[0], units[0].carry?.type ?? units[0].gatherType ?? 'wood');
+      setText(this.el.status, foreign ? this.ownerName(owner) : groupStatus(units, capacity));
       this.setPortrait(`#i-${portraitKind(kinds)}`, units.length > 1 ? String(units.length) : '');
       const hp = totalHp(units);
       this.setHp(hp.hp, hp.maxHp);
@@ -593,7 +595,8 @@ export class Hud {
   private updateQueue(b: Building): void {
     const q = this.el.queue;
     if (!q) return;
-    const view = queueItems(b);
+    const kind = b.queueKinds?.[0];
+    const view = queueItems(b, kind ? trainTime(this.world, b, kind) : undefined);
     const key = `${b.id}|${view.items.map((it) => (it.type === 'tech' ? `t:${it.tech}` : it.unit)).join(',')}`;
     if (key !== this.queueKey) {
       this.queueKey = key;

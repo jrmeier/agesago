@@ -122,6 +122,7 @@ describe('labels', () => {
       { type: 'unit', unit: 'villager', index: 1 },
     ]);
     expect(view.head).toBeCloseTo(3 / UNITS.villager.trainTime);
+    expect(queueItems({ kind: 'townCenter', queue: 1, queueKinds: ['villager'], progress: 3 }, 6).head).toBe(0.5);
   });
 
   it('formats times, progress, toasts and the banner', () => {

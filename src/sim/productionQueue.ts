@@ -1,11 +1,14 @@
 import type { Building } from '../core/types';
 
 export type ProductionKind = 'train' | 'research';
+const EMPTY: readonly ProductionKind[] = [];
 type Queues = Pick<Building, 'queue' | 'research' | 'productionQueue'>;
 
 /** Old v2 saves did not record interleaving: retain their research-first semantics. */
 export function productionOrder(b: Queues): readonly ProductionKind[] {
-  return b.productionQueue ?? [
+  if (b.productionQueue) return b.productionQueue;
+  if (!b.queue && !b.research?.length) return EMPTY;
+  return [
     ...Array<ProductionKind>(b.research?.length ?? 0).fill('research'),
     ...Array<ProductionKind>(b.queue).fill('train'),
   ];
