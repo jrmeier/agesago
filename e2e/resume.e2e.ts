@@ -179,3 +179,89 @@ test('a save survives reload, a newer file does not replace it, and new match st
   if (phone) await expect(page.locator('body')).toHaveClass(/touch/);
   expect(errors).toEqual([]);
 });
+
+test('a finished resume reopens the summary with its chart, group, and selection', async ({ page }, testInfo) => {
+  test.setTimeout(180_000);
+  const phone = testInfo.project.name === 'phone';
+  const errors = await boot(page);
+  if (phone) await expect(page.locator('body')).toHaveClass(/touch/);
+
+  const villagerId = await page.evaluate(() => {
+    const game = (window as any).game;
+    const villager = [...game.world.units.values()].find((u: { kind: string; owner: number }) => u.kind === 'villager' && u.owner === 1);
+    villager.path = [];
+    villager.state = 'idle';
+    villager.gatherNode = null;
+    game.world.stock.food = 123;
+    // The first sample is taken near time 0. Jump past the next interval so this stock is recorded.
+    game.world.time = 30;
+    game.selection.set([villager.id]);
+    return villager.id as number;
+  });
+
+  await page.keyboard.down('Control');
+  await page.keyboard.press('Digit1');
+  await page.keyboard.up('Control');
+  await page.waitForFunction(() => {
+    const samples = (window as any).game.endgameLog?.samples as { food: number }[] | undefined;
+    return !!samples?.some((sample) => sample.food === 123);
+  });
+  await page.evaluate(() => {
+    (window as any).game.world.gameOver = { winners: [2], reason: 'resign' };
+  });
+
+  const downloadPromise = page.waitForEvent('download');
+  await activate(page, '#save-copy', phone);
+  const download = await downloadPromise;
+  const downloadPath = await download.path();
+  expect(downloadPath).toBeTruthy();
+  const file = JSON.parse(await readFile(downloadPath!)) as {
+    selection: number[];
+    groups: [number, number[]][];
+    charts: { food: number }[];
+    sim: { systems: { gameOver: { reason: string } | null } };
+  };
+  expect(file.selection).toContain(villagerId);
+  expect(file.groups.some(([n, ids]) => n === 1 && ids.includes(villagerId))).toBe(true);
+  expect(file.charts.some((sample) => sample.food === 123)).toBe(true);
+  expect(file.sim.systems.gameOver?.reason).toBe('resign');
+  await expect(page.locator('#save-note')).toHaveText('Saved');
+
+  await page.reload();
+  // A finished match paints once and then stops the loop, so the frame counter stays low.
+  await page.waitForFunction(
+    () => (window as any).game?.world?.gameOver && (window as any).game?.renderer?.webgl?.info?.render?.frame > 0,
+    null,
+    { timeout: 30_000 },
+  );
+  await expect(page.locator('#endgame')).toBeVisible();
+  await expect(page.locator('#endgame-title')).toHaveText(/defeat/i);
+  await expect(page.locator('#endgame-reason')).toHaveText(/resign/i);
+  const foodChart = page.locator('.endgame-chart[data-series="food"]');
+  await expect(foodChart.locator('figcaption b')).toHaveText('123');
+  await expect(foodChart.locator('circle, polyline')).toHaveCount(1);
+  const restoredUi = await page.evaluate(() => {
+    const game = (window as any).game;
+    return {
+      selection: [...game.selection.ids] as number[],
+      group: game.controls.groups.get(1) as number[],
+    };
+  });
+  expect(restoredUi.selection).toContain(villagerId);
+  expect(restoredUi.group).toContain(villagerId);
+
+  const loaded = page.waitForEvent('load');
+  await activate(page, '#play-again', phone);
+  await loaded;
+  await waitReady(page);
+  await expect(page.locator('#endgame')).toBeHidden();
+  const fresh = await page.evaluate(() => ({
+    food: (window as any).game.world.stock.food as number,
+    over: (window as any).game.world.gameOver as unknown,
+    time: (window as any).game.world.time as number,
+  }));
+  expect(fresh.food).toBe(0);
+  expect(fresh.over).toBeNull();
+  expect(fresh.time).toBeLessThan(15);
+  expect(errors).toEqual([]);
+});
