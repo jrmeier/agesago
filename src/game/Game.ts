@@ -32,6 +32,7 @@ import {
   type ResumeStore,
 } from './resume';
 import { audioBus } from './audioBus';
+import { MatchMusic } from './musicDirector';
 import { MatchAudio } from './sfxDirector';
 import { matchPlayers, matchSeed } from './matchSetup';
 import { isGameSpeed, simScale, type GameSpeed } from './pace';
@@ -141,6 +142,7 @@ export class Game {
   private tutorial = false;
   private tutorialCoach: TutorialCoach | null = null;
   private readonly matchAudio: MatchAudio;
+  private readonly matchMusic: MatchMusic;
   private noteTimer = 0;
   private readonly onResize = () => this.resize();
   private readonly onHide = () => {
@@ -238,6 +240,7 @@ export class Game {
     const { layout } = parts;
     this.world = parts.world;
     this.matchAudio = new MatchAudio(this.world);
+    this.matchMusic = new MatchMusic(this.world);
     this.quality = parts.quality;
     this.renderer = parts.renderer;
     this.input = parts.input;
@@ -328,6 +331,7 @@ export class Game {
       if (!this.matchOver && this.endgameLog.shouldSample(this.world.time)) this.endgame.sample();
     }
     this.matchAudio.pulse(this.earSamples(), !this.matchOver && !this.paused, dt);
+    this.matchMusic.advance(this.world.time);
 
     this.fog.update(dt);
     this.props.syncFog();
@@ -591,6 +595,7 @@ export class Game {
 
   dispose(): void {
     this.matchAudio.dispose();
+    this.matchMusic.dispose();
     this.tutorialCoach?.dispose();
     this.unsubscribeSettings();
     cancelAnimationFrame(this.raf);

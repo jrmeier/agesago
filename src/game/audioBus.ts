@@ -45,6 +45,13 @@ class AudioBus {
     return { ctx, sfx: this.sfx };
   }
 
+  /** Music destination. The slider on this node is the user's music volume. */
+  musicOut(): { ctx: AudioContext; music: GainNode } | null {
+    const ctx = this.context();
+    if (!ctx || !this.music) return null;
+    return { ctx, music: this.music };
+  }
+
   /** Procedural tick so the effects slider does something before the sound library lands. */
   chime(): void {
     const ctx = this.context();

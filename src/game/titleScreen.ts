@@ -1,6 +1,7 @@
 import { DEFAULT_SEED } from '../core/types';
 import { parseSeed } from './matchSetup';
 import { idbResumeStore, readResume } from './resume';
+import { AUDIO_CREDIT } from './music';
 import { closeSettings, settingsOpen } from './settingsPanel';
 
 export interface TitleHooks {
@@ -19,6 +20,13 @@ export function mountTitle(root: HTMLElement, hooks: TitleHooks): () => void {
   const seedNote = root.querySelector<HTMLElement>('#title-seed-note');
   const continueBtn = root.querySelector<HTMLButtonElement>('#title-continue');
   if (!seedInput || !continueBtn) throw new Error('title screen is missing its fields');
+  const credit = document.createElement('p');
+  credit.id = 'title-audio-credit';
+  credit.className = 'title-copy';
+  credit.textContent = AUDIO_CREDIT;
+  const creditActions = credits.querySelector('.title-actions');
+  if (creditActions) credits.insertBefore(credit, creditActions);
+  else credits.append(credit);
 
   const shared = seedFromLocation();
   seedInput.value = String(shared ?? DEFAULT_SEED);
@@ -98,7 +106,10 @@ export function mountTitle(root: HTMLElement, hooks: TitleHooks): () => void {
     if (hint) hint.hidden = !loaded.failed;
   });
 
-  return () => window.removeEventListener('keydown', onKey);
+  return () => {
+    window.removeEventListener('keydown', onKey);
+    credit.remove();
+  };
 }
 
 function section(root: HTMLElement, id: string): HTMLElement {
