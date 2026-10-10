@@ -6,13 +6,14 @@ import { armyPower, census, makeGame, run } from './harness';
 
 /**
  * M8-16 acceptance: a moderate AI that researches and ages up beats an otherwise identical AI
- * with research switched off (`tune: { research: null }`) in at least 75% of games. Seeds 1–5,
+ * with research switched off (`tune: { research: null }`) in at least 75% of games. Seeds 1–10,
  * each played twice with the sides swapped (player 1 has a sizeable edge on these maps: two
  * control AIs split 4–1 for player 1). Each game is a real fight, capped at 30 sim minutes; a
  * game still running then goes to the higher score (villagers + soldiers + finished buildings).
  * Heavy: about 30 s of wall time per game on a quiet machine.
  */
-const SEEDS = [1, 2, 3, 4, 5];
+// 20 games: 10 was too few for a 75% bar (one game either way moved it across).
+const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const MINUTES = 30;
 const results: boolean[] = [];
 

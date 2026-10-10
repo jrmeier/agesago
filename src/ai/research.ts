@@ -373,7 +373,14 @@ export class Research {
       const short = TYPES.filter((t) => stock[t] < need[t]).sort((a, b) => stock[a] - need[a] - (stock[b] - need[b]))[0];
       // Trading starts once a stock passes the excess mark and goes on until it is down to half
       // of it (or nothing is short), so a glut is actually put to use.
-      const rich = TYPES.filter((t) => t !== short && stock[t] > (this.selling === t ? p.marketExcess / 2 : p.marketExcess)).sort((a, b) => stock[b] - stock[a])[0];
+      // Never sell into a need: a resource saved for the age-up (or a wanted tech) is not surplus,
+      // or the AI sells food it is saving and buys it straight back.
+      const rich = TYPES.filter(
+        (t) =>
+          t !== short &&
+          stock[t] > (this.selling === t ? p.marketExcess / 2 : p.marketExcess) &&
+          stock[t] - need[t] >= LOT
+      ).sort((a, b) => stock[b] - stock[a])[0];
       this.selling = rich ?? null;
       if (!short || !rich) return;
       if (rich !== 'gold' && short === 'gold') {
