@@ -32,8 +32,8 @@ export function generateVariantMap(seed: number, players: number, options: MapOp
     if (type === 'islands') {
       // Land bridges are deliberately wide enough for armies, preserving conquest
       // before transports. Broad sea quadrants support naval trade and fishing.
-      const cross = Math.min(Math.abs(x-width/2), Math.abs(z-width/2));
-      if (cross > 6 && routeDistance(x,z)>6) h = -1;
+      // Bridges end at the towns, leaving an uninterrupted outer sea route.
+      if (Math.hypot(x-width/2,z-width/2)>24 && routeDistance(x,z)>6) h = -1;
     }
     if (type === 'mediterranean') {
       const edge = Math.min(x,z,width-x,width-z);
