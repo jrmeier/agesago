@@ -483,6 +483,9 @@ export class Hud {
       const capacity = carryCap(this.world, units[0], units[0].carry?.type ?? units[0].gatherType ?? 'wood');
       setText(this.el.status, foreign ? this.ownerName(owner) : kinds.every(k => k === 'priest')
         ? (units.some(u => u.relic) ? 'Carrying a relic · Move beside your temple to enshrine' : 'Move to standing stones for relics · Order on ally to heal, enemy to convert')
+        : kinds.every(k => k === 'transport') ? `Passengers ${units.reduce((n, u) => n + (u.passengers?.length ?? 0), 0)}/${units.length * 10} · Order land units onto a ship near shore; Unload then choose a coast`
+        : kinds.every(k => k === 'fishingBoat') ? 'Order onto water fish · Delivers food to your dock'
+        : kinds.every(k => k === 'merchantShip') ? 'Order onto a second own or allied dock to trade for gold'
         : groupStatus(units, capacity));
       this.setPortrait(`#i-${portraitKind(kinds)}`, units.length > 1 ? String(units.length) : '');
       const hp = totalHp(units);
@@ -532,7 +535,9 @@ export class Hud {
     if (!card) return;
     setHidden(card, !own.length);
     if (!own.length) return;
-    const fighters = own.filter((u) => u.kind !== 'villager');
+    const unload = card.querySelector<HTMLButtonElement>('[data-cmd="unloadTransport"]');
+    setHidden(unload, !own.some(u => u.kind === 'transport' && (u.passengers?.length ?? 0) > 0));
+    const fighters = own.filter((u) => isMilitary(u.kind) || u.kind === 'scout');
     card.classList.toggle('no-stances', !fighters.length);
     const stance = sharedStance(fighters);
     for (const { stance: s } of STANCES) {

@@ -95,6 +95,7 @@ const UNIT_SCALE: Record<UnitKind, number> = {
   horseman: 1.15,
   tradeCart: 1.15,
   priest: 1.3,
+  fishingBoat: 1.2, merchantShip: 1.2, trireme: 1.2, transport: 1.2,
   deer: 1.3,
   boar: 1.3,
   sheep: 1.3,
@@ -111,6 +112,7 @@ const BAR_Y: Record<UnitKind, number> = {
   horseman: 2.4,
   tradeCart: 1.6,
   priest: 2.1,
+  fishingBoat: 1.8, merchantShip: 3.0, trireme: 2.5, transport: 2.3,
   deer: 2,
   boar: 1.3,
   sheep: 1.3,
@@ -133,6 +135,7 @@ const BUILDING_HEIGHT: Record<BuildingKind, number> = {
   market: 2.2,
   academy: 3.7,
   temple: 3.6,
+  dock: 2.2,
 };
 /** Extra height of upgraded watch towers (Guard 1, Fortress 2) over BUILDING_HEIGHT. */
 const TOWER_TIER_EXTRA = [0, 1.1, 1.6];

@@ -5,7 +5,7 @@ import type { Age, BuildingKind, Stockpile, UnitKind } from './types';
  * Unit data table — stats, costs and counters for every unit kind. Single source of truth
  * for sim, AI, render sizing and HUD. FROZEN contract (integrator-owned).
  */
-export type UnitClass = 'villager' | 'infantry' | 'archer' | 'cavalry' | 'wildlife';
+export type UnitClass = 'villager' | 'infantry' | 'archer' | 'cavalry' | 'wildlife' | 'ship';
 
 export interface UnitSpec {
   /** Unique to this civilization; hidden and rejected for other rosters. */
@@ -175,6 +175,27 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     radius: 0.55,
     age: 1,
   },
+  fishingBoat: {
+    name: 'Fishing Boat', unitClass: 'ship', hp: 70, speed: 3.2, sight: 8,
+    attack: { melee: 0, pierce: 0 }, armor: { melee: 0, pierce: 1 }, range: 0, reload: 2,
+    bonus: {}, cost: { wood: 75 }, trainTime: 20, trainedAt: 'dock', radius: 0.55,
+  },
+  merchantShip: {
+    name: 'Merchant Ship', unitClass: 'ship', hp: 120, speed: 3.4, sight: 8,
+    attack: { melee: 0, pierce: 0 }, armor: { melee: 0, pierce: 2 }, range: 0, reload: 2,
+    bonus: {}, cost: { wood: 100, gold: 50 }, trainTime: 25, trainedAt: 'dock', radius: 0.65, age: 1,
+  },
+  trireme: {
+    name: 'Trireme', unitClass: 'ship', hp: 180, speed: 3.6, sight: 10,
+    attack: { melee: 0, pierce: 9 }, armor: { melee: 2, pierce: 3 }, range: 6, reload: 2,
+    bonus: { ship: 5 }, projectile: 'arrow', cost: { wood: 150, gold: 80 }, trainTime: 30,
+    trainedAt: 'dock', radius: 0.8, age: 1,
+  },
+  transport: {
+    name: 'Transport', unitClass: 'ship', hp: 140, speed: 3, sight: 8,
+    attack: { melee: 0, pierce: 0 }, armor: { melee: 1, pierce: 2 }, range: 0, reload: 2,
+    bonus: {}, cost: { wood: 125 }, trainTime: 25, trainedAt: 'dock', radius: 0.7,
+  },
   priest: {
     name: 'Priest', unitClass: 'villager', hp: 35, speed: 2.2, sight: 9,
     attack: { melee: 0, pierce: 0 }, armor: { melee: 0, pierce: 0 },
@@ -199,6 +220,10 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     age: 1,
   },
 };
+
+export function isShip(kind: UnitKind): boolean {
+  return kind === 'fishingBoat' || kind === 'merchantShip' || kind === 'trireme' || kind === 'transport';
+}
 
 export function isAnimal(kind: UnitKind): kind is 'deer' | 'boar' | 'sheep' {
   return kind === 'deer' || kind === 'boar' || kind === 'sheep';

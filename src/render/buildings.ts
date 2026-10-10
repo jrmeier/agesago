@@ -456,6 +456,13 @@ export function buildingModel(kind: BuildingKind, opts?: BuildingModelOptions): 
     anchors = forge.anchors;
   } else if (kind === 'market') {
     parts.push(...marketParts(opts?.color ?? 0x9e3b26));
+  } else if (kind === 'dock') {
+    for (let x = -1.8; x <= 1.8; x += 0.4) parts.push(block([0.36, 0.12, 3.9], WOOD, [x, 0.48, 0]));
+    for (const x of [-1.6, 1.6]) for (const z of [-1.5, 0, 1.5]) parts.push(block([0.18, 0.75, 0.18], 0x68472d, [x, 0.38, z]));
+    parts.push(...roofParts(2.2, 1.4, 1.5, 0.6, false, 4));
+    for (const x of [-0.9, 0.9]) for (const z of [-1.5, -0.3]) parts.push(block([0.12, 1.1, 0.12], WOOD, [x, 1.04, z]));
+    parts.push(...crateParts([-1, 0.55, 0.8], 0.5), ...crateParts([1, 0.55, 0.8], 0.45));
+    parts.push(part(new THREE.TorusGeometry(0.27, 0.04, 4, 10), 0xc8b58a, [1.35, 0.65, -0.3], [Math.PI / 2, 0, 0]));
   } else if (kind === 'temple') {
     parts.push(...academyParts());
     parts.push(part(new THREE.OctahedronGeometry(0.34), 0xd7b251, [0, 3.3, 0]));

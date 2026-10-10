@@ -1,5 +1,5 @@
 import type { Building, EntityId, UnitKind, Vec2 } from '../../core/types';
-import { UNITS, trainable } from '../../core/units';
+import { isShip, UNITS, trainable } from '../../core/units';
 import { ensureProductionQueue, productionOrder, removeProduction } from '../productionQueue';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
@@ -99,7 +99,7 @@ export function advanceTraining(world: World, b: Building, dt: number): void {
     b.queue--;
     b.queueKinds?.shift();
     b.progress = 0;
-    const u = world.spawnUnit(kind, spawnPoint(world, b), b.owner);
+    const u = world.spawnUnit(kind, spawnPoint(world, b, kind), b.owner);
     applyRally(world, b, u);
     if (b.owner === world.localPlayer) world.emitStock();
   }
@@ -107,7 +107,8 @@ export function advanceTraining(world: World, b: Building, dt: number): void {
 }
 
 /** A free walkable spot on a ring around the building, preferring the front (+z) and empty ground. */
-export function spawnPoint(world: World, b: Building): Vec2 {
+export function spawnPoint(world: World, b: Building, kind?: UnitKind): Vec2 {
+  const nav = kind && isShip(kind) ? world.waterNav : world.nav;
   const units = [...world.units.values()];
   const steps = 24;
   for (const crowdOk of [false, true]) {
@@ -116,7 +117,7 @@ export function spawnPoint(world: World, b: Building): Vec2 {
       for (let k = 0; k < steps; k++) {
         const a = (k % 2 ? -1 : 1) * Math.ceil(k / 2) * ((2 * Math.PI) / steps);
         const p = { x: b.pos.x + Math.sin(a) * r, z: b.pos.z + Math.cos(a) * r };
-        if (!world.nav.isFree(p)) continue;
+        if (!nav.isFree(p)) continue;
         if (crowdOk || units.every((u) => Math.hypot(u.pos.x - p.x, u.pos.z - p.z) >= 0.6)) return p;
       }
     }

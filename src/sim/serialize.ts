@@ -10,6 +10,7 @@ import type { ExploreState } from './systems/explore';
 import type { GatherState } from './systems/gather';
 import { clearStatCache } from './systems/research';
 import { buildingRect } from './systems/sites';
+import type { NavalJob, Landing } from './systems/naval';
 import type { ExplorationSite, PriestOrder } from './systems/explorationRewards';
 import type { GameResult } from './systems/victory';
 
@@ -39,6 +40,11 @@ export interface SaveData {
   time: number;
   clocks: { fogClock: number; nextId: number };
   systems: {
+    navalJobs?: [EntityId, NavalJob][];
+    boarding?: [EntityId, EntityId][];
+    landings?: [EntityId, Landing][];
+    waterNavExpanded?: number;
+    waterNavVersion?: number;
     exploration?: [string, ExplorationSite][];
     priests?: [EntityId, PriestOrder][];
     gather: [EntityId, GatherState][];
@@ -117,6 +123,8 @@ export function serializeWorld(world: World): SaveData {
     time: world.time,
     clocks: world.saveClocks,
     systems: {
+      navalJobs: [...world.navalJobs], boarding: [...world.boarding], landings: [...world.landings],
+      waterNavExpanded: world.waterNav.expanded, waterNavVersion: world.waterNav.version,
       exploration: [...world.exploration],
       priests: [...world.priestOrders],
       gather: [...world.gatherState],
@@ -178,6 +186,7 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   for (const b of world.buildings.values()) {
     const spec = BUILDINGS[b.kind];
     // A finished gate is open on the shared grid; its foundation still blocks.
+    if (b.kind === 'dock') world.waterNav.addRect(b.id, buildingRect(b));
     if (!spec.walkable || (spec.gate && !b.complete)) world.nav.addRect(b.id, buildingRect(b));
   }
   for (const p of saved.players) {
@@ -209,6 +218,10 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   world.time = saved.time;
   world.restoreClocks(saved.clocks);
   const s = saved.systems;
+  if (s.navalJobs) restoreMap(world.navalJobs, s.navalJobs);
+  if (s.boarding) restoreMap(world.boarding, s.boarding);
+  if (s.landings) restoreMap(world.landings, s.landings);
+  world.waterNav.expanded = s.waterNavExpanded ?? 0; world.waterNav.version = s.waterNavVersion ?? world.waterNav.version;
   if (s.exploration) restoreMap(world.exploration, s.exploration);
   if (s.priests) restoreMap(world.priestOrders, s.priests);
   restoreMap(world.gatherState, s.gather);

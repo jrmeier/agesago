@@ -166,7 +166,7 @@ export class Research {
       workers[v.gatherType]++;
       if (v.gatherNode !== null && world.buildings.has(v.gatherNode)) farmers++;
     }
-    const classes: Record<UnitClass, number> = { villager: 0, infantry: 0, archer: 0, cavalry: 0, wildlife: 0 };
+    const classes: Record<UnitClass, number> = { villager: 0, infantry: 0, archer: 0, cavalry: 0, wildlife: 0, ship: 0 };
     const units: Partial<Record<UnitKind, number>> = {};
     for (const u of s.army) {
       classes[UNITS[u.kind].unitClass]++;

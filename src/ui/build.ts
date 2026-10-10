@@ -27,6 +27,7 @@ export const BUILD_HOTKEYS: Partial<Record<BuildingKind, string>> = {
   market: 'Shift+KeyM',
   academy: 'Shift+KeyJ',
   temple: 'Shift+KeyO',
+  dock: 'Shift+KeyK',
 };
 
 const SHIFT = 'Shift+';
@@ -133,6 +134,7 @@ export function buildingRole(kind: BuildingKind, food?: number, farmFood?: numbe
     return food <= 0 ? 'Exhausted — reseed with villagers' : `Food ${Math.floor(food)}${farmFood ? `/${farmFood}` : ''}`;
   }
   const parts: string[] = [];
+  if (kind === 'dock') parts.push('Shoreline shipyard · Fishing, sea trade and transports');
   if (kind === 'temple') parts.push('Priests heal allies and recover relics for 30 gold/min');
   if (spec.popBonus) parts.push(`+${spec.popBonus} population`);
   if (spec.drop.length && kind !== 'townCenter') parts.push(`Drop site: ${spec.drop.join(', ')}`);

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GRASS_ONLY, type Heightfield, type Unit, type UnitKind, type Vec2 } from '../core/types';
-import { UNITS } from '../core/units';
+import { isShip, UNITS } from '../core/units';
 import { BALANCE } from './balance';
 import { World } from './World';
 import { formationOffset, formationSlots, movementSystem, orderMove, speedOf } from './systems/movement';
@@ -24,9 +24,11 @@ const distance = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.z - b.z);
 describe('formation orders', () => {
   it('keeps legacy public helpers and uses every unit kind’s speed', () => {
     expect(formationOffset(0)).toEqual({ x: 0, z: 0 });
-    const world = worldOn();
+    const world = worldOn(field((x, z) => x < 120 && z >= 100));
+    let land = 0, water = 0;
     for (const kind of Object.keys(UNITS) as UnitKind[]) {
-      const u = world.spawnUnit(kind, { x: 10, z: 10 + world.units.size * 5 });
+      const z = isShip(kind) ? 110 + water++ * 8 : 10 + land++ * 4;
+      const u = world.spawnUnit(kind, { x: 10, z });
       expect(speedOf(u)).toBe(UNITS[kind].speed);
       orderMove(world, [u.id], { x: 100, z: u.pos.z });
     }

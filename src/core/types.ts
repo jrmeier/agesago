@@ -67,6 +67,10 @@ export type UnitKind =
   | 'tradeCart'
   /** Heals allies, converts enemies and carries relics. */
   | 'priest'
+  | 'fishingBoat'
+  | 'merchantShip'
+  | 'trireme'
+  | 'transport'
   | AnimalKind;
 /** Everything a player can build. Data (sizes, costs, build times) lives in core/buildings.ts. */
 export type BuildingKind =
@@ -89,7 +93,8 @@ export type BuildingKind =
   | 'market'
   /** M8: City Age techs (masonry, ballistics, tower upgrades). */
   | 'academy'
-  | 'temple';
+  | 'temple'
+  | 'dock';
 export type EntityKind = UnitKind | NodeKind | BuildingKind;
 
 export const NODE_RESOURCE: Record<NodeKind, ResourceType> = {
@@ -239,6 +244,8 @@ export interface Unit {
   tradeWith?: EntityId;
   /** Relic carried by a priest; dropped on death. */
   relic?: string;
+  /** Transport passengers are garrisoned and travel with this ship. */
+  passengers?: EntityId[];
 }
 
 export interface ResourceNode {
@@ -340,7 +347,10 @@ export type Command =
   /** Trade carts walk between their nearest own market and `marketId` (own or allied) for gold. */
   | { type: 'trade'; unitIds: EntityId[]; marketId: EntityId }
   | { type: 'heal'; unitIds: EntityId[]; targetId: EntityId }
-  | { type: 'convert'; unitIds: EntityId[]; targetId: EntityId };
+  | { type: 'convert'; unitIds: EntityId[]; targetId: EntityId }
+  | { type: 'navalTrade'; unitIds: EntityId[]; dockId: EntityId }
+  | { type: 'loadTransport'; unitIds: EntityId[]; transportId: EntityId }
+  | { type: 'unloadTransport'; transportId: EntityId; target: Vec2 };
 
 /** Resources traded for gold at the market. */
 export type MarketResource = Exclude<ResourceType, 'gold'>;

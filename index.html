@@ -243,6 +243,11 @@
         <path d="M5.6 11v8M9.2 11v8M12 11v8M14.8 11v8M18.4 11v8" stroke="#d8c8a0" stroke-width="1.6" />
         <path d="M5.6 11v8M9.2 11v8M12 11v8M14.8 11v8M18.4 11v8" stroke="#6b5a3a" stroke-width=".4" />
       </symbol>
+      <symbol id="i-b-dock" viewBox="0 0 24 24"><path d="M3 8h18v4H3zM5 12v8m7-8v8m7-8v8M1 22q3-3 6 0t6 0t6 0" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+      <symbol id="i-fishingBoat" viewBox="0 0 48 48"><path d="M5 32h38l-9 11H14z" fill="#8a5e36"/><path d="M24 5v27M24 8L8 28h16z" fill="#dfd3ae" stroke="#745534" stroke-width="2"/><circle cx="34" cy="29" r="5" fill="#bca479"/></symbol>
+      <symbol id="i-merchantShip" viewBox="0 0 48 48"><path d="M3 34h42l-9 10H12z" fill="#8a5e36"/><path d="M24 3v31M9 8h29v23H9z" fill="#dfd3ae" stroke="#745534" stroke-width="2"/><path d="M22 8h5v23h-5z" fill="currentColor"/></symbol>
+      <symbol id="i-trireme" viewBox="0 0 48 48"><path d="M3 31h42l-9 9H12z" fill="#8a5e36"/><path d="M23 4v28M10 10h25v18H10z" fill="currentColor" stroke="#745534" stroke-width="2"/><path d="M9 35l-5 10m12-10l-5 10m13-10l-5 10m13-10l-5 10m13-10l-5 10" stroke="#bca479" stroke-width="2"/></symbol>
+      <symbol id="i-transport" viewBox="0 0 48 48"><path d="M3 32h42l-9 12H12z" fill="#8a5e36"/><path d="M24 5v27M13 9h22v14H13z" fill="#dfd3ae" stroke="#745534" stroke-width="2"/><circle cx="13" cy="27" r="3" fill="currentColor"/><circle cx="34" cy="27" r="3" fill="currentColor"/></symbol>
       <symbol id="i-b-temple" viewBox="0 0 24 24"><path d="M3 9L12 3l9 6M4 10h16M5 20V11m5 9V11m4 9V11m5 9V11M3 21h18" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
       <symbol id="i-priest" viewBox="0 0 48 48"><path d="M14 44l4-22h12l4 22z" fill="#eee0bf"/><circle cx="24" cy="15" r="6" fill="#d7af86"/><path d="M18 7h12v5H18zM36 44V10q0-6 5-6" fill="none" stroke="#b08d3e" stroke-width="3"/><path d="M19 23h10v16H19z" fill="currentColor"/><circle cx="24" cy="27" r="3" fill="#d7b251"/></symbol>
       <symbol id="i-tradeCart" viewBox="0 0 24 24">
@@ -732,6 +737,7 @@
               <button type="button" class="cmd-btn" data-cmd="attackMove" title="Attack-move (Q, or Ctrl+right-click): walk there, fighting on the way" aria-label="Attack-move">
                 <svg aria-hidden="true"><use href="#i-attack-move" /></svg><kbd>Q</kbd>
               </button>
+              <button type="button" class="cmd-btn" data-cmd="unloadTransport" title="Unload: then choose a reachable coast" aria-label="Unload passengers" hidden><span aria-hidden="true">⇩</span><span>Unload</span></button>
               <button type="button" class="cmd-btn" data-cmd="stop" title="Stop (X)" aria-label="Stop">
                 <svg aria-hidden="true"><use href="#i-stop" /></svg><kbd>X</kbd>
               </button>

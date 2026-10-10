@@ -2,7 +2,7 @@ import type { CivId } from '../core/civilizations';
 import type { MapOptions } from '../core/maps';
 import { BUILDINGS, MARKET, MAX_POP, footprintRadius } from '../core/buildings';
 import { EventBus } from '../core/events';
-import { isAnimal } from '../core/units';
+import { isAnimal, isShip } from '../core/units';
 import {
   NODE_RESOURCE,
   GAIA,
@@ -55,6 +55,7 @@ import { orderCancelResearch, orderResearch } from './systems/research';
 import { buildingMaxHp, buildingSight, unitMaxHp, unitSight } from './systems/stats';
 import { marketSystem, orderMarketTrade, orderTrade, orderTribute, releaseTrade } from './systems/market';
 import { resign, victorySystem, type GameResult } from './systems/victory';
+import { waterHeightfield, navalSystem, orderFish, orderNavalTrade, orderLoadTransport, orderUnloadTransport, type NavalJob, type Landing } from './systems/naval';
 import { explorationSites, explorationRewardSystem, orderPriest, type ExplorationSite, type PriestOrder } from './systems/explorationRewards';
 import { wildlifeSystem } from './systems/wildlife';
 
@@ -117,6 +118,10 @@ export class World {
   mapOptions: MapOptions = {};
   /** Navigation grid over the terrain with building footprints blocked. */
   readonly nav: NavGrid;
+  readonly waterNav: NavGrid;
+  readonly navalJobs = new Map<EntityId, NavalJob>();
+  readonly boarding = new Map<EntityId, EntityId>();
+  readonly landings = new Map<EntityId, Landing>();
   private fogClock = 0;
   /** Per-unit gather timer and retarget anchor (system bookkeeping, not rendered). */
   readonly gatherState = new Map<EntityId, GatherState>();
@@ -163,6 +168,7 @@ export class World {
       .map((p) => ({ pos: { ...p.pos }, radius: p.blockRadius }));
     // Circles are static scenery; buildings (Town Centers included) are rectangular footprints.
     this.nav = new NavGrid(hf, scenery);
+    this.waterNav = new NavGrid(waterHeightfield(hf));
     // Town Centers first (player 1's is id 1), then villagers, matching the historical id order.
     const tcs = starts.map((start, i) => this.addTownCenter(start.townCenter, i + 1));
     for (const tc of tcs) this.nav.addRect(tc.id, buildingRect(tc));
@@ -298,7 +304,9 @@ export class World {
    */
   dispatch(cmd: Command, by: PlayerId = this.localPlayer): void {
     cmd = this.ownedOnly(cmd, by);
-    if ('unitIds' in cmd && cmd.type !== 'stance') for (const id of cmd.unitIds) this.priestOrders.delete(id);
+    if ('unitIds' in cmd && cmd.type !== 'stance') for (const id of cmd.unitIds) {
+      this.priestOrders.delete(id); this.navalJobs.delete(id); this.boarding.delete(id); this.landings.delete(id);
+    }
     // Any other unit order supersedes fighting and fleeing.
     if (
       cmd.type === 'move' || cmd.type === 'gather' || cmd.type === 'build' || cmd.type === 'construct' ||
@@ -308,6 +316,12 @@ export class World {
     }
     if ('unitIds' in cmd && cmd.type !== 'trade' && cmd.type !== 'stance') releaseTrade(this, cmd.unitIds);
     switch (cmd.type) {
+      case 'navalTrade':
+        orderNavalTrade(this, cmd.unitIds, cmd.dockId, by); break;
+      case 'loadTransport':
+        orderLoadTransport(this, cmd.unitIds, cmd.transportId, by); break;
+      case 'unloadTransport':
+        orderUnloadTransport(this, cmd.transportId, cmd.target, by); break;
       case 'heal':
       case 'convert':
         orderPriest(this, cmd.unitIds, cmd.type, cmd.targetId, by);
@@ -316,6 +330,11 @@ export class World {
         orderMove(this, cmd.unitIds, cmd.target);
         break;
       case 'gather': {
+        const boats = cmd.unitIds.filter(id => this.units.get(id)?.kind === 'fishingBoat');
+        if (boats.length) orderFish(this, boats, cmd.nodeId);
+        const landIds = cmd.unitIds.filter(id => !isShip(this.units.get(id)!.kind));
+        if (!landIds.length) break;
+        cmd = { ...cmd, unitIds: landIds };
         // A building id means: farm it (or reseed it if fallow), or help build a foundation.
         const b = this.nodes.has(cmd.nodeId) ? undefined : this.buildings.get(cmd.nodeId);
         if (b && (!b.complete || (b.kind === 'farm' && !(b.food! > 0)))) orderConstruct(this, cmd.unitIds, b.id);
@@ -409,6 +428,7 @@ export class World {
     const arrived = movementSystem(this, dt);
     garrisonSystem(this, arrived);
     marketSystem(this, dt, arrived);
+    navalSystem(this, dt);
     gatherSystem(this, dt, arrived);
     buildSystem(this, dt, arrived);
     // After gather/build so units it sends back to work aren't treated as arrivals this tick.
@@ -445,7 +465,7 @@ export class World {
   updateFog(): void {
     const viewers = new Map<PlayerId, Viewer[]>();
     for (const id of this.players.keys()) viewers.set(id, []);
-    for (const u of this.units.values()) if (!isAnimal(u.kind)) viewers.get(u.owner)?.push({ pos: u.pos, sight: unitSight(this, u.owner, u.kind) });
+    for (const u of this.units.values()) if (!isAnimal(u.kind) && u.state !== 'garrisoned') viewers.get(u.owner)?.push({ pos: u.pos, sight: unitSight(this, u.owner, u.kind) });
     for (const b of this.buildings.values()) {
       if (b.complete) viewers.get(b.owner)?.push({ pos: b.pos, sight: buildingSight(this, b.owner, b.kind) });
     }
@@ -525,7 +545,7 @@ export class World {
       hp,
       maxHp: hp,
       target: null,
-      stance: kind === 'villager' || kind === 'tradeCart' || kind === 'priest' || isAnimal(kind) ? 'passive' : 'aggressive',
+      stance: kind === 'villager' || kind === 'tradeCart' || kind === 'priest' || (isShip(kind) && kind !== 'trireme') || isAnimal(kind) ? 'passive' : 'aggressive',
       pos: { ...p },
       prevPos: { ...p },
       facing: 0,

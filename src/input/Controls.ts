@@ -1,6 +1,7 @@
 import type { EntityViews, ScreenRect } from '../render/EntityViews';
 import type { PickIntent } from '../render/picking';
 import type { CameraRig } from '../camera/CameraRig';
+import { isShip } from '../core/units';
 import { BUILDINGS } from '../core/buildings';
 import { GAIA, type Building, type BuildingKind, type Command, type EntityId, type PropPlacement, type Stance, type UnitKind, type Vec2 } from '../core/types';
 import type { Selection } from '../game/Selection';
@@ -133,6 +134,7 @@ export class Controls {
   private readonly rallyEcho = new Map<EntityId, Vec2>();
   /** Attack-move armed: the next ground click / tap attack-moves. */
   private targeting = false;
+  private unloading = false;
   /** Pause menu is up: orders and placement wait. Camera input is skipped by Game. */
   private suspended = false;
   /** Help, placement, or targeting already used Escape this frame, so it must not also pause. */
@@ -205,7 +207,8 @@ export class Controls {
       const btn = (e.target as Element).closest<HTMLElement>('[data-cmd], [data-stance]');
       if (!btn) return;
       btn.blur();
-      if (btn.dataset.cmd === 'attackMove') this.setTargeting(!this.targeting);
+      if (btn.dataset.cmd === 'unloadTransport') { this.setTargeting(true); this.unloading = true; }
+      else if (btn.dataset.cmd === 'attackMove') this.setTargeting(!this.targeting);
       else if (btn.dataset.cmd === 'stop') this.stop();
       else if (btn.dataset.stance) this.setStance(btn.dataset.stance as Stance);
     });
@@ -450,7 +453,8 @@ export class Controls {
           const own = world.units.get(id)?.owner === world.localPlayer;
           const ally = world.units.get(id);
           const healing = own && ally && ally.hp < ally.maxHp && this.ownUnitIds().some(uid => world.units.get(uid)?.kind === 'priest');
-          if (healing) this.order(g.x, g.y, false);
+          const boarding = own && ally?.kind === 'transport' && this.ownUnitIds().some(uid => { const u = world.units.get(uid); return !!u && !isShip(u.kind); });
+          if (healing || boarding) this.order(g.x, g.y, false);
           else if (own) this.selectUnit(id);
           else if (ownUnits) this.order(g.x, g.y, false);
           else selection.set([id]);
@@ -719,6 +723,15 @@ export class Controls {
     const id = this.pickAt(x, y, unitIds.length ? 'order' : 'select');
     const hit = this.hitEntity(id);
     const rally = unitIds.length ? null : this.rallyBuilding();
+    const shipTarget = id !== null ? world.units.get(id) : undefined;
+    if (shipTarget?.kind === 'transport' && shipTarget.owner === world.localPlayer && unitIds.some(uid => !isShip(world.units.get(uid)!.kind))) {
+      world.dispatch({ type: 'loadTransport', unitIds, transportId: shipTarget.id }); return;
+    }
+    const dockTarget = id !== null ? world.buildings.get(id) : undefined;
+    const merchants = unitIds.filter(uid => world.units.get(uid)?.kind === 'merchantShip');
+    if (merchants.length && dockTarget?.kind === 'dock' && !world.areEnemies(world.localPlayer, dockTarget.owner)) {
+      world.dispatch({ type: 'navalTrade', unitIds: merchants, dockId: dockTarget.id }); return;
+    }
     // Priest context orders work with mouse right-click and the same touch order path.
     const priests = unitIds.filter(uid => world.units.get(uid)?.kind === 'priest');
     const targetUnit = id !== null ? world.units.get(id) : undefined;
@@ -770,6 +783,13 @@ export class Controls {
   private targetClick(x: number, y: number, keepArmed: boolean): void {
     const { world, views } = this.deps;
     const unitIds = this.ownUnitIds();
+    if (this.unloading) {
+      const target = this.groundAt(x, y);
+      if (target) for (const id of unitIds) if (world.units.get(id)?.kind === 'transport') {
+        world.dispatch({ type: 'unloadTransport', transportId: id, target }); views.flashMarker(target);
+      }
+      this.setTargeting(false); return;
+    }
     const hit = this.hitEntity(this.pickAt(x, y));
     const attack = resolveTargetOrder({ unitIds, rallyBuildingId: null }, hit, null, (o) => world.areEnemies(world.localPlayer, o));
     const cmd = attack ?? resolveAttackMove(unitIds, this.groundAt(x, y));
@@ -782,7 +802,7 @@ export class Controls {
 
   private setTargeting(on: boolean): void {
     if (on && !this.ownUnitIds().length) on = false;
-    this.targeting = on;
+    this.targeting = on; this.unloading = false;
     document.body.classList.toggle('targeting', on);
     const btn = document.querySelector('#command-card [data-cmd="attackMove"]');
     btn?.setAttribute('aria-pressed', String(on));
