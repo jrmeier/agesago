@@ -18,7 +18,7 @@ architecture changes vertex colours in owned buffers, including upgraded buildin
 | Hellenes | Infantry train 5% faster | Phalangite Guard | Infantry +1 melee armour |
 | Romans | Buildings +5% HP | Legionary | Buildings construct 15% faster |
 | Persians | Villagers gather food 5% faster | Immortal | Villagers and trade carts walk 10% faster |
-| Celts | Villagers gather wood 5% faster | Raider | Wood carry +3, infantry speed +5% |
+| Celts | Villagers gather wood 7% faster | Raider | Wood carry +3, infantry speed +5% |
 
 Map sizes are Small 120, Medium 144, Large 176 and Giant 192 world units square.
 Landscape choices are Mediterranean, Highlands, River Valley, Forest and Islands.
@@ -53,5 +53,6 @@ explicitly labeled `score-cap` and scored by villagers + army + completed buildi
 matching the established AI comparison harness. The output includes each result
 and checks the required 40–60% pairing range. Optional `CIV_BENCH_SHARDS` and
 `CIV_BENCH_SHARD` select disjoint pairing groups for parallel runs; all groups
-append to the same results file. Do not infer that this range has passed
+append to the same results file. `CIV_BENCH_CIV=celts` selects all pairings involving
+one civilization for a complete affected-pair rerun after tuning. Do not infer that this range has passed
 from the existence of the benchmark script; record its actual completed results.
