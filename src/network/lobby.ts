@@ -1,6 +1,18 @@
 import { NetworkSession } from './session';
 import { NETWORK_VERSION, type ServerMessage } from './protocol';
 
+/** Test relays are restricted to loopback pages and loopback endpoints. */
+export function relayOverride(search: string, hostname: string): string | undefined {
+  if (!['localhost', '127.0.0.1', '[::1]'].includes(hostname)) return;
+  const value = new URLSearchParams(search).get('relay');
+  if (!value) return;
+  try {
+    const url = new URL(value);
+    if (url.protocol === 'ws:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) return url.href;
+  } catch { /* Invalid test endpoint. */ }
+  return;
+}
+
 /** Kept separate from single-player setup so joining never discards its resume. */
 export function mountOnline(root: HTMLElement, onStart: (session: NetworkSession, data: Extract<ServerMessage, { type: 'start' }>) => void): () => void {
   const home = root.querySelector<HTMLElement>('#title-home');
@@ -35,7 +47,7 @@ export function mountOnline(root: HTMLElement, onStart: (session: NetworkSession
     if (!join && (!Number.isSafeInteger(seed) || seed < 1 || seed > 1e9)) { note.textContent = 'Enter a seed from 1 to 1000000000.'; return; }
     let token: string | undefined;
     try { const saved = JSON.parse(sessionStorage.getItem('agesago-online') ?? 'null'); if (saved?.code === code) token = saved.token; } catch { /* No saved online seat. */ }
-    const override = (import.meta.env.DEV || new URLSearchParams(location.search).has('e2e')) ? new URLSearchParams(location.search).get('relay') ?? undefined : undefined;
+    const override = relayOverride(location.search, location.hostname);
     session = new NetworkSession(join
       ? { type: 'join', version: NETWORK_VERSION, code, name, ...(token ? { token } : {}) }
       : { type: 'create', version: NETWORK_VERSION, config: { seed, players: Number(field('online-players').value) }, name }, override);

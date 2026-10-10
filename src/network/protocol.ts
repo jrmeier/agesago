@@ -1,3 +1,5 @@
+import { CIV_IDS, type CivId } from '../core/civilizations';
+import { MAP_SIZES, MAP_TYPES, type MapSize, type MapType } from '../core/maps';
 import { BUILDINGS } from '../core/buildings';
 import { TECHS } from '../core/techs';
 import type { Command } from '../core/types';
@@ -7,7 +9,7 @@ export const NETWORK_VERSION = 1;
 export const TICKS_PER_TURN = 4;
 export const HASH_EVERY = 25;
 export const MAX_COMMANDS = 64;
-export interface MatchConfig { seed: number; players: number; mapSize?: number; mapType?: string; civs?: string[] }
+export interface MatchConfig { seed: number; players: number; mapSize?: MapSize; mapType?: MapType; civs?: CivId[] }
 export interface IssuedCommand { player: number; command: Command }
 export interface Turn { turn: number; commands: IssuedCommand[] }
 export interface RosterEntry { player: number; connected: boolean; name: string }
@@ -62,9 +64,9 @@ export function validCommand(v: unknown): v is Command {
 export function validConfig(v: unknown): v is MatchConfig {
   return object(v) && Number.isSafeInteger(v.seed) && Number(v.seed) >= 1 && Number(v.seed) <= 1e9
     && Number.isInteger(v.players) && Number(v.players) >= 2 && Number(v.players) <= 4
-    && (v.mapSize === undefined || [120, 144, 176, 192].includes(Number(v.mapSize)))
-    && (v.mapType === undefined || ['mediterranean', 'highlands', 'riverValley', 'forest', 'islands'].includes(String(v.mapType)))
-    && (v.civs === undefined || Array.isArray(v.civs) && v.civs.length === v.players && v.civs.every(c => ['hellenes', 'romans', 'persians', 'celts'].includes(String(c))));
+    && (v.mapSize === undefined || typeof v.mapSize === 'string' && Object.hasOwn(MAP_SIZES, v.mapSize))
+    && (v.mapType === undefined || MAP_TYPES.includes(v.mapType as MapType))
+    && (v.civs === undefined || Array.isArray(v.civs) && v.civs.length === v.players && v.civs.every(c => CIV_IDS.includes(c as CivId)));
 }
 
 export function validClientMessage(v: unknown): v is ClientMessage {

@@ -26,6 +26,8 @@ export class NetworkSession {
   private reconnectTimer = 0;
   private closed = false;
   private sentTurn = -1;
+  /** A socket send is not an acknowledgement; retain until the relay commits the turn. */
+  private submitted: Extract<ClientMessage, { type: 'input' }> | null = null;
   private readonly url: string;
   private readonly request: Extract<ClientMessage, { type: 'create' | 'join' }>;
 
@@ -62,6 +64,7 @@ export class NetworkSession {
         case 'roster': this.roster = message.roster; break;
         case 'start':
           this.config = message.config; this.started = true;
+          if (this.submitted && this.submitted.turn < message.turn) this.submitted = null;
           if (this.world) {
             const history = new Map(message.history.map(frame => [frame.turn, frame.commands]));
             this.frames = [];
@@ -69,7 +72,10 @@ export class NetworkSession {
             if (!this.frames.length) this.submit();
           } else for (const start of this.starts) start(message);
           break;
-        case 'turn': if (message.turn >= this.turn && !this.frames.some(f => f.turn === message.turn)) this.frames.push(message); break;
+        case 'turn':
+          if (this.submitted?.turn === message.turn) this.submitted = null;
+          if (message.turn >= this.turn && !this.frames.some(f => f.turn === message.turn)) this.frames.push(message);
+          break;
         case 'waiting': this.status = message.text; break;
         case 'desync': this.stopped = true; this.status = `The match paused because the browsers disagreed at turn ${message.turn}. Start a new room after both refresh.`; break;
         case 'error': this.status = message.text; break;
@@ -77,9 +83,13 @@ export class NetworkSession {
       this.changed();
     });
     socket.addEventListener('error', () => { this.status = 'Could not connect to online play.'; this.changed(); });
-    socket.addEventListener('close', () => {
+    socket.addEventListener('close', event => {
       if (this.closed) return;
       this.sentTurn = -1; this.stopped = true;
+      if (event.code === 1008) {
+        this.status = event.reason === 'Session resumed elsewhere' ? 'This seat was resumed in another tab.' : 'This online session has ended. Return to the title screen to join again.';
+        this.changed(); return;
+      }
       this.status = this.token ? 'Disconnected. Reconnecting…' : 'Online play is unavailable. Try again shortly.';
       this.changed();
       if (this.token) this.reconnectTimer = window.setTimeout(() => this.connect(), 1000);
@@ -118,7 +128,8 @@ export class NetworkSession {
     if (!this.world || this.stopped || this.sentTurn === this.turn || this.world.gameOver || this.socket?.readyState !== WebSocket.OPEN) return;
     const hash = this.turn % HASH_EVERY === 0 ? stateHash(this.world) : undefined;
     if (hash) { this.checks.push({ turn: this.turn, hash }); if (this.checks.length > 20) this.checks.shift(); }
-    this.send({ type: 'input', turn: this.turn, commands: this.pending.splice(0), ...(hash ? { hash } : {}) });
+    this.submitted ??= { type: 'input', turn: this.turn, commands: this.pending.splice(0), ...(hash ? { hash } : {}) };
+    this.send(this.submitted);
     this.sentTurn = this.turn;
   }
 

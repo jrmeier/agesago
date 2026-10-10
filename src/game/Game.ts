@@ -187,10 +187,10 @@ export class Game {
     let mapSeed = resume?.sim.seed ?? seed;
     let players = resume?.sim.playerCount ?? towns;
     let mapOptions = normalizeMapOptions();
-    const civs = start.civs ?? (start.civ ? Array.from({length:players},(_,i)=>i===0?start.civ!:CIV_IDS[(CIV_IDS.indexOf(start.civ!)+i)%CIV_IDS.length]) : undefined);
+    const civs = start.online?.data.config.civs ?? start.civs ?? (start.civ ? Array.from({length:players},(_,i)=>i===0?start.civ!:CIV_IDS[(CIV_IDS.indexOf(start.civ!)+i)%CIV_IDS.length]) : undefined);
     let generated: ReturnType<typeof generateMap>;
     try {
-      mapOptions = normalizeMapOptions(resume?.sim.mapOptions ?? {size:start.mapSize,type:start.mapType});
+      mapOptions = normalizeMapOptions(resume?.sim.mapOptions ?? {size:start.online?.data.config.mapSize ?? start.mapSize,type:start.online?.data.config.mapType ?? start.mapType});
       generated = generateMap(mapSeed, players, mapOptions);
     } catch {
       resume = null;
