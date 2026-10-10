@@ -38,6 +38,13 @@ class AudioBus {
     if (ctx && ctx.state === 'suspended') void ctx.resume();
   }
 
+  /** Effects destination. Null when this browser has no AudioContext. */
+  destination(): { ctx: AudioContext; sfx: GainNode } | null {
+    const ctx = this.context();
+    if (!ctx || !this.sfx) return null;
+    return { ctx, sfx: this.sfx };
+  }
+
   /** Procedural tick so the effects slider does something before the sound library lands. */
   chime(): void {
     const ctx = this.context();
@@ -96,3 +103,10 @@ class AudioBus {
 }
 
 export const audioBus = new AudioBus();
+
+/** First pointer unlocks audio. iOS will not start a context without a gesture. */
+export function bindAudioUnlock(bus: { unlock(): void }, target: EventTarget): () => void {
+  const unlock = () => bus.unlock();
+  target.addEventListener('pointerdown', unlock);
+  return () => target.removeEventListener('pointerdown', unlock);
+}

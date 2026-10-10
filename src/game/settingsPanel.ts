@@ -1,5 +1,5 @@
 import { deviceQuality } from '../core/quality';
-import { audioBus } from './audioBus';
+import { audioBus, bindAudioUnlock } from './audioBus';
 import {
   currentSettings,
   graphicsLocked,
@@ -135,13 +135,12 @@ export function mountSettings(): () => void {
   document.getElementById('settings-close')?.addEventListener('click', close);
   document.getElementById('title-settings')?.addEventListener('click', open);
   document.getElementById('pause-settings')?.addEventListener('click', open);
-  const unlock = () => audioBus.unlock();
-  window.addEventListener('pointerdown', unlock);
+  const unlock = bindAudioUnlock(audioBus, window);
 
   return () => {
     root.removeEventListener('change', onChange);
     root.removeEventListener('input', onInput);
-    window.removeEventListener('pointerdown', unlock);
+    unlock();
     openImpl = () => {};
     closeImpl = () => {};
   };

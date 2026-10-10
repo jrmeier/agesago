@@ -1,6 +1,7 @@
 import { deviceQuality, type Quality } from '../core/quality';
 import type { EntityId, Vec2 } from '../core/types';
 import { CameraRig } from '../camera/CameraRig';
+import { yawBasis } from '../camera/FpsCamera';
 import { MAX_DISTANCE, MIN_DISTANCE } from '../camera/RtsCamera';
 import { Controls } from '../input/Controls';
 import { Input } from '../input/Input';
@@ -31,6 +32,7 @@ import {
   type ResumeStore,
 } from './resume';
 import { audioBus } from './audioBus';
+import { MatchAudio } from './sfxDirector';
 import { matchPlayers, matchSeed } from './matchSetup';
 import { isGameSpeed, simScale, type GameSpeed } from './pace';
 import { Selection } from './Selection';
@@ -138,6 +140,7 @@ export class Game {
   /** Practice match. Saves must not replace the resume slot. */
   private tutorial = false;
   private tutorialCoach: TutorialCoach | null = null;
+  private readonly matchAudio: MatchAudio;
   private noteTimer = 0;
   private readonly onResize = () => this.resize();
   private readonly onHide = () => {
@@ -234,6 +237,7 @@ export class Game {
   private constructor(private readonly container: HTMLElement, parts: BootParts) {
     const { layout } = parts;
     this.world = parts.world;
+    this.matchAudio = new MatchAudio(this.world);
     this.quality = parts.quality;
     this.renderer = parts.renderer;
     this.input = parts.input;
@@ -308,6 +312,7 @@ export class Game {
     // Camera keys stay out of the pause menu. The current view still renders below.
     if (!this.matchOver && !this.paused) this.rig.update(dt);
     this.maybePauseKey();
+    this.matchAudio.setEar(this.earPose());
 
     if (!this.matchOver && !this.paused) {
       this.accumulator += dt * simScale(this.speed, this.paused, this.matchOver);
@@ -322,6 +327,7 @@ export class Game {
       // One economy sample about every 10 sim seconds. gameOver records the last one itself.
       if (!this.matchOver && this.endgameLog.shouldSample(this.world.time)) this.endgame.sample();
     }
+    this.matchAudio.pulse(this.earSamples(), !this.matchOver && !this.paused, dt);
 
     this.fog.update(dt);
     this.props.syncFog();
@@ -338,6 +344,35 @@ export class Game {
     this.input.endFrame();
     if (!this.matchOver) this.raf = requestAnimationFrame(this.frame);
   };
+
+  /** Camera position and the ground-right axis, so voices pan with the view. */
+  private earPose(): { at: Vec2; right: Vec2 } {
+    if (this.rig.mode === 'fps') {
+      return { at: { x: this.rig.fps.pos.x, z: this.rig.fps.pos.z }, right: yawBasis(this.rig.fps.yaw).right };
+    }
+    return {
+      at: {
+        x: this.rig.rts.target.x,
+        z: this.rig.rts.target.z + Math.cos(this.rig.rts.pitch) * this.rig.rts.distance,
+      },
+      right: { x: 1, z: 0 },
+    };
+  }
+
+  /** Points the ambience beds sample: the focus and the ground under the view. */
+  private earSamples(): Vec2[] {
+    if (this.rig.mode === 'fps') {
+      const pos = this.rig.fps.pos;
+      return [
+        pos,
+        { x: pos.x + 8, z: pos.z },
+        { x: pos.x - 8, z: pos.z },
+        { x: pos.x, z: pos.z + 8 },
+        { x: pos.x, z: pos.z - 8 },
+      ];
+    }
+    return [this.focus(), ...this.rig.viewFootprint()];
+  }
 
   /** Ground point the player is looking at: shadows, grass and sky follow it. */
   private focus(): Vec2 {
@@ -555,6 +590,7 @@ export class Game {
   }
 
   dispose(): void {
+    this.matchAudio.dispose();
     this.tutorialCoach?.dispose();
     this.unsubscribeSettings();
     cancelAnimationFrame(this.raf);
