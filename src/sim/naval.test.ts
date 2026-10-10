@@ -5,8 +5,10 @@ import { UNITS } from '../core/units';
 import { World } from './World';
 import { deserializeWorld, serializeWorld } from './serialize';
 import { buildingRect } from './systems/sites';
-import { FISHING_CAPACITY, TRANSPORT_CAPACITY } from './systems/naval';
+import { FISHING_CAPACITY, TRANSPORT_CAPACITY, landingAt } from './systems/naval';
 import { killUnit } from './systems/combat';
+import { generateMap } from './mapgen';
+import { spawnPoint } from './systems/train';
 
 const water = (x: number, z: number) => (x >= 30 && x <= 70) || (Math.hypot(x - 85, z - 15) < 4);
 const hf: Heightfield = { width: 100, depth: 80, heightAt: (x,z) => water(x,z) ? -2 : 1, isWater: water,
@@ -25,6 +27,14 @@ function dock(w: World, pos: Vec2, owner = 1): Building {
 function run(w: World, seconds: number) { for (let i=0;i<seconds*20;i++) w.tick(.05); }
 
 describe('water navigation and docks', () => {
+  it('spawns edge-dock ships in free cells and recovers a blocked dock-edge position',()=> {
+    const {hf,layout}=generateMap(9,2,{size:'small',type:'islands'}),w=new World(hf,layout),b=dock(w,{x:4,z:60});
+    for(const kind of ['fishingBoat','merchantShip','transport'] as const){const p=spawnPoint(w,b,kind);expect(w.waterNav.isWalkableCell(p)).toBe(true);w.spawnUnit(kind,p);}
+    // A legacy save or a newly placed dock can leave a ship in its inflated footprint.
+    const edge={x:1.7,z:59}; expect(hf.isWater(edge.x,edge.z)).toBe(true); expect(w.waterNav.regionOfCell(edge)).toBe(0);
+    const ship=w.spawnUnit('transport',edge);
+    expect(landingAt(w,ship,{x:20,z:35})).not.toBeNull();
+  });
   it('builds docks only across shorelines and trains every ship on water', () => {
     const w=world(); expect(w.canPlace('dock',{x:30,z:20},0).ok).toBe(true);
     expect(w.canPlace('dock',{x:15,z:20},0).ok).toBe(false); expect(w.canPlace('dock',{x:50,z:20},0).ok).toBe(false);

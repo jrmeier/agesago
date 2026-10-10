@@ -119,10 +119,11 @@ export function spawnPoint(world: World, b: Building, kind?: UnitKind): Vec2 {
       for (let k = 0; k < steps; k++) {
         const a = (k % 2 ? -1 : 1) * Math.ceil(k / 2) * ((2 * Math.PI) / steps);
         const p = { x: b.pos.x + Math.sin(a) * r, z: b.pos.z + Math.cos(a) * r };
-        if (!nav.isFree(p)) continue;
+        if (!nav.isFree(p) || (kind && isShip(kind) && !nav.isWalkableCell(p))) continue;
         if (crowdOk || units.every((u) => Math.hypot(u.pos.x - p.x, u.pos.z - p.z) >= 0.6)) return p;
       }
     }
   }
-  return { x: b.pos.x, z: b.pos.z + b.radius + BALANCE.villagerRadius + 0.25 };
+  const fallback = { x: b.pos.x, z: b.pos.z + b.radius + BALANCE.villagerRadius + 0.25 };
+  return kind && isShip(kind) ? nav.nearestFreeCell(fallback) ?? fallback : fallback;
 }
