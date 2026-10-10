@@ -3,6 +3,7 @@ import { MAP_SIZES, MAP_TYPES, type MapSize } from '../core/maps';
 import { generateMap } from './mapgen';
 import { World } from './World';
 import { serializeWorld, deserializeWorld } from './serialize';
+import { explorationSites } from './systems/explorationRewards';
 
 describe('map setup variants',()=> {
   it('rejects prototype keys as invalid map identities',()=>{expect(()=>generateMap(1,2,{size:'__proto__' as MapSize})).toThrow('Invalid map size');});
@@ -22,7 +23,20 @@ describe('map setup variants',()=> {
       // Start just outside the TC, so a path check does not begin inside its footprint.
       expect(world.nav.findPath({x:starts[0].townCenter.x,z:starts[0].townCenter.z+6},{x:start.townCenter.x,z:start.townCenter.z+6})?.length ?? 0).toBeGreaterThan(0);
     }
+    if(options.size!=='large'||options.type!=='mediterranean') for(const site of world.exploration.values()) {
+      expect(world.nav.findPath({x:starts[0].townCenter.x,z:starts[0].townCenter.z+6},site.pos)?.length??0).toBeGreaterThan(0);
+    }
   });
+  it('includes two accessible ruin caches and one relic outside every variant starting pad',()=> {
+    for(const size of Object.keys(MAP_SIZES) as MapSize[]) for(const type of MAP_TYPES) for(const players of [1,2,3,4]) {
+      if(size==='large'&&type==='mediterranean')continue; // Retain the original map's scenery and seed contract.
+      const {hf,layout}=generateMap(9,players,{size,type}); const sites=explorationSites(layout.props);
+      expect(sites.filter(s=>s.kind==='treasure'),`${size}/${type}/${players}`).toHaveLength(2);
+      expect(sites.filter(s=>s.kind==='relic'),`${size}/${type}/${players}`).toHaveLength(1);
+      const starts=[layout,...layout.extraStarts!];
+      for(const site of sites){expect(hf.isWalkable(site.pos.x,site.pos.z)).toBe(true);expect(starts.every(s=>Math.hypot(s.townCenter.x-site.pos.x,s.townCenter.z-site.pos.z)>25)).toBe(true);}
+    }
+  },30_000);
   it('island sea lanes remain connected around land bridges',()=>{
     const {hf}=generateMap(1,4,{size:'giant',type:'islands'});
     for(let i=2;i<hf.width-2;i+=2){expect(hf.isWater(i,2)).toBe(true);expect(hf.isWater(i,hf.depth-2)).toBe(true);expect(hf.isWater(2,i)).toBe(true);expect(hf.isWater(hf.width-2,i)).toBe(true);}

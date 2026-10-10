@@ -1,6 +1,7 @@
 import { GRASS_ONLY, type Heightfield, type MapLayout, type NodeKind, type Vec2 } from '../core/types';
 import { MAP_SIZES, type MapOptions, normalizeMapOptions } from '../core/maps';
 import { createSeededRandom } from './terrain';
+import { NavGrid } from './nav';
 
 /** Symmetric economy pads and clear approaches on five distinct landscapes. */
 export function generateVariantMap(seed: number, players: number, options: MapOptions): { hf: Heightfield; layout: MapLayout } {
@@ -84,6 +85,28 @@ export function generateVariantMap(seed: number, players: number, options: MapOp
   for(let z=4;z<width-4;z+=4) for(let x=4;x<width-4;x+=4) if(heightAt(x,z)<0 && [hf.isWalkable(x+2,z),hf.isWalkable(x-2,z),hf.isWalkable(x,z+2),hf.isWalkable(x,z-2)].some(Boolean)) add('fish',{x,z},200);
   for(let z=12;z<width-12;z+=24) for(let x=12;x<width-12;x+=24) {
     if([[x,z],[x-2,z],[x+2,z],[x,z-2],[x,z+2]].every(([sx,sz])=>hf.isWater(sx,sz))) add('fish',{x,z},600);
+  }
+  // Three small, deterministic discoveries outside every starting economy pad.
+  // Keep a clear interaction ring, so dense forests cannot trap a reward.
+  const offsets=[{x:-1.3,z:0},{x:1.3,z:0},{x:0,z:1.3}];
+  const terrainNav=new NavGrid(hf);
+  const candidates:Vec2[]=[];
+  for(let z=6;z<width-6;z+=1) for(let x=6;x<width-6;x+=1) {
+    if(nearPad(x,z)<25.8 || !terrainNav.connected(centers[0],{x,z:z+1.3/3}) || ![{x,z},...offsets.map(o=>({x:x+o.x,z:z+o.z}))].every(p=>nearPad(p.x,p.z)>=25&&hf.isWalkable(p.x,p.z))) continue;
+    candidates.push({x,z});
+  }
+  const discoveries:Vec2[]=[];
+  for(let i=0;i<3;i++) {
+    const angle=(seed%360)*Math.PI/180+i*Math.PI*2/3;
+    const target={x:width/2+Math.cos(angle)*width*.3,z:width/2+Math.sin(angle)*width*.3};
+    const pos=candidates.filter(p=>discoveries.every(q=>Math.hypot(p.x-q.x,p.z-q.z)>=18))
+      .sort((a,b)=>Math.hypot(a.x-target.x,a.z-target.z)-Math.hypot(b.x-target.x,b.z-target.z))[0];
+    if(!pos) continue;
+    discoveries.push(pos);
+    layout.nodes=layout.nodes.filter(n=>Math.hypot(n.pos.x-pos.x,n.pos.z-pos.z)>=5);
+    layout.props=layout.props.filter(p=>Math.hypot(p.pos.x-pos.x,p.pos.z-pos.z)>=5);
+    // These low remnants do not block the narrow shoreline approaches on Islands.
+    for(const [j,o] of offsets.entries()) layout.props.push({kind:i<2?(j===2?'ruinWall':'ruinColumn'):'standingStone',pos:{x:pos.x+o.x,z:pos.z+o.z},rot:angle,scale:.8,blockRadius:0});
   }
   return { hf,layout };
 }
