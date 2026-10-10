@@ -112,6 +112,19 @@ describe('queue strip', () => {
 });
 
 describe('labels', () => {
+  it('shows mixed FIFO order and keeps cancellation indices in their own queues', () => {
+    const view = queueItems({ kind: 'townCenter', queue: 2, queueKinds: ['villager', 'villager'],
+      progress: 3, research: ['wovenTunics'], researchProgress: 0,
+      productionQueue: ['train', 'research', 'train'] });
+    expect(view.items).toEqual([
+      { type: 'unit', unit: 'villager', index: 0 },
+      { type: 'tech', tech: 'wovenTunics', index: 0 },
+      { type: 'unit', unit: 'villager', index: 1 },
+    ]);
+    expect(view.head).toBeCloseTo(3 / UNITS.villager.trainTime);
+    expect(queueItems({ kind: 'townCenter', queue: 1, queueKinds: ['villager'], progress: 3 }, 6).head).toBe(0.5);
+  });
+
   it('formats times, progress, toasts and the banner', () => {
     expect(timeLabel(25)).toBe('25s');
     expect(timeLabel(90)).toBe('1m 30s');

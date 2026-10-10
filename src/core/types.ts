@@ -1,3 +1,4 @@
+import type { CivId } from './civilizations';
 /**
  * Shared contract between every module. FROZEN after T1: lanes must not edit this
  * file — request changes from the integrator instead.
@@ -22,6 +23,8 @@ export const GAIA: PlayerId = 0;
 
 export interface Player {
   id: PlayerId;
+  /** Absent in legacy saves: the original neutral roster. */
+  civ?: CivId;
   name: string;
   /** Cloth/banner colour. */
   color: number;
@@ -51,6 +54,10 @@ export type AnimalKind = 'deer' | 'boar' | 'sheep';
 export type UnitKind =
   | 'villager'
   | 'scout'
+  | 'phalangiteGuard'
+  | 'legionary'
+  | 'immortal'
+  | 'raider'
   | 'hoplite'
   | 'swordsman'
   | 'slinger'
@@ -58,6 +65,12 @@ export type UnitKind =
   | 'horseman'
   /** Walks between markets for gold (M8-12). */
   | 'tradeCart'
+  /** Heals allies, converts enemies and carries relics. */
+  | 'priest'
+  | 'fishingBoat'
+  | 'merchantShip'
+  | 'trireme'
+  | 'transport'
   | AnimalKind;
 /** Everything a player can build. Data (sizes, costs, build times) lives in core/buildings.ts. */
 export type BuildingKind =
@@ -79,7 +92,9 @@ export type BuildingKind =
   /** M8: buy/sell resources, tribute, trade carts. */
   | 'market'
   /** M8: City Age techs (masonry, ballistics, tower upgrades). */
-  | 'academy';
+  | 'academy'
+  | 'temple'
+  | 'dock';
 export type EntityKind = UnitKind | NodeKind | BuildingKind;
 
 export const NODE_RESOURCE: Record<NodeKind, ResourceType> = {
@@ -227,6 +242,10 @@ export interface Unit {
   leashAnchor?: Vec2;
   /** Trade carts only: the market this cart trades with (its home is the nearest own market). */
   tradeWith?: EntityId;
+  /** Relic carried by a priest; dropped on death. */
+  relic?: string;
+  /** Transport passengers are garrisoned and travel with this ship. */
+  passengers?: EntityId[];
 }
 
 export interface ResourceNode {
@@ -259,6 +278,8 @@ export interface Building {
   queue: number;
   /** Kinds of the queued units, same length as `queue` (head first). */
   queueKinds?: UnitKind[];
+  /** FIFO order across training and research; absent in legacy v2 saves. */
+  productionQueue?: ('train' | 'research')[];
   /** Seconds of training completed on the current queue head. */
   progress: number;
   /** Farms only: food remaining in the field. */
@@ -270,8 +291,7 @@ export interface Building {
   /** Seconds until the next defensive volley. */
   cooldown?: number;
   /**
-   * Techs queued for research here, head first (M8). While non-empty the building researches
-   * and its unit queue waits, like AoE.
+   * Techs queued for research here, head first. productionQueue determines when they run.
    */
   research?: TechId[];
   /** Seconds of research completed on research[0]. */
@@ -325,7 +345,12 @@ export type Command =
   /** Send resources to another player; a fee is lost (see MARKET.tributeFee). Needs a finished market. */
   | { type: 'tribute'; to: PlayerId; resource: ResourceType; amount: number }
   /** Trade carts walk between their nearest own market and `marketId` (own or allied) for gold. */
-  | { type: 'trade'; unitIds: EntityId[]; marketId: EntityId };
+  | { type: 'trade'; unitIds: EntityId[]; marketId: EntityId }
+  | { type: 'heal'; unitIds: EntityId[]; targetId: EntityId }
+  | { type: 'convert'; unitIds: EntityId[]; targetId: EntityId }
+  | { type: 'navalTrade'; unitIds: EntityId[]; dockId: EntityId }
+  | { type: 'loadTransport'; unitIds: EntityId[]; transportId: EntityId }
+  | { type: 'unloadTransport'; transportId: EntityId; target: Vec2 };
 
 /** Resources traded for gold at the market. */
 export type MarketResource = Exclude<ResourceType, 'gold'>;
@@ -389,4 +414,7 @@ export type SimEvent =
   /** Resources sent between players (amount is what arrived). */
   | { type: 'tribute'; from: PlayerId; to: PlayerId; resource: ResourceType; amount: number }
   /** A trade cart delivered gold at a market. */
-  | { type: 'traded'; owner: PlayerId; id: EntityId; gold: number };
+  | { type: 'traded'; owner: PlayerId; id: EntityId; gold: number }
+  | { type: 'treasure'; owner: PlayerId; site: string; pos: Vec2; reward: string }
+  | { type: 'relic'; owner: PlayerId; site: string; templeId: EntityId }
+  | { type: 'converted'; owner: PlayerId; id: EntityId; previousOwner: PlayerId };

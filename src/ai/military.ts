@@ -6,7 +6,7 @@ import type { SeenBuilding } from './intel';
 import { ageOf } from '../sim/systems/research';
 
 /** A typical member of each class, for judging matchups. */
-const TYPICAL: Record<UnitClass, UnitKind> = { villager: 'villager', infantry: 'swordsman', archer: 'archer', cavalry: 'horseman', wildlife: 'deer' };
+const TYPICAL: Record<UnitClass, UnitKind> = { villager: 'villager', infantry: 'swordsman', archer: 'archer', cavalry: 'horseman', wildlife: 'deer', ship: 'trireme' };
 const CLASSES: UnitClass[] = ['infantry', 'archer', 'cavalry'];
 /** Enemies this close to the base (or to where we were just hit) are a threat. */
 const BASE_RADIUS = 26;
@@ -123,16 +123,16 @@ export class Military {
   /** The unit to train at `building`: best counter to the enemy's seen mix, kept varied. */
   chooseUnit(building: BuildingKind, s: Snapshot, stock: Stockpile, reserve: Partial<Stockpile>): UnitKind | null {
     const age = ageOf(this.c.world, this.c.player);
-    const opts = trainable(building).filter(
+    const opts = trainable(building, this.c.world.players.get(this.c.player)?.player.civ).filter(
       (k) => k !== 'scout' && k !== 'villager' && (UNITS[k].age ?? 0) <= age && canAfford(stock, UNITS[k].cost, reserve)
     );
     if (!opts.length) return null;
     if (!this.c.profile.counters) return opts[Math.floor(this.c.rng() * opts.length)];
     const seen = this.c.intel.enemyMix();
     // Prior until we've seen something: mostly infantry.
-    const mix: Record<UnitClass, number> = { villager: 0, infantry: seen.infantry + 2, archer: seen.archer + 1, cavalry: seen.cavalry + 1, wildlife: 0 };
+    const mix: Record<UnitClass, number> = { villager: 0, infantry: seen.infantry + 2, archer: seen.archer + 1, cavalry: seen.cavalry + 1, wildlife: 0, ship: 0 };
     const total = mix.infantry + mix.archer + mix.cavalry;
-    const mine: Record<UnitClass, number> = { villager: 0, infantry: 0, archer: 0, cavalry: 0, wildlife: 0 };
+    const mine: Record<UnitClass, number> = { villager: 0, infantry: 0, archer: 0, cavalry: 0, wildlife: 0, ship: 0 };
     for (const u of s.army) mine[UNITS[u.kind].unitClass]++;
     const army = Math.max(1, s.army.length);
     let best: UnitKind | null = null;

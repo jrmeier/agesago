@@ -1,3 +1,10 @@
+import { AIPlayer } from '../ai/AIPlayer';
+import { NetworkSession } from '../network/session';
+import { replay } from '../network/lockstep';
+import type { ServerMessage } from '../network/protocol';
+import { PerfOverlay } from './perfOverlay';
+import { CIV_IDS, type CivId } from '../core/civilizations';
+import { normalizeMapOptions, type MapSize, type MapType } from '../core/maps';
 import { deviceQuality, type Quality } from '../core/quality';
 import type { EntityId, Vec2 } from '../core/types';
 import { CameraRig } from '../camera/CameraRig';
@@ -14,7 +21,7 @@ import { TerrainView } from '../render/TerrainView';
 import { BALANCE } from '../sim/balance';
 import { generateMap } from '../sim/mapgen';
 import { deserializeWorld, serializeWorld } from '../sim/serialize';
-import { World } from '../sim/World';
+import { World, defaultPlayers } from '../sim/World';
 import { Endgame } from '../ui/Endgame';
 import { EndgameLog } from '../ui/endgameLog';
 import { Hud } from '../ui/Hud';
@@ -56,8 +63,13 @@ export interface MatchStart {
   seed?: number;
   players?: number;
   fresh?: boolean;
+  civ?: CivId;
+  civs?: CivId[];
+  mapSize?: MapSize;
+  mapType?: MapType;
   /** Practice match. It does not read or write the resume slot. */
   tutorial?: boolean;
+  online?: { session: NetworkSession; data: Extract<ServerMessage, { type: 'start' }> };
 }
 
 /** Milliseconds spent in each boot stage. `totalMs` ends when the first frame is scheduled. */
@@ -94,6 +106,7 @@ interface BootParts {
   resume: ResumeEnvelope | null;
   resumeFailed: boolean;
   tutorial: boolean;
+  online: MatchStart['online'];
 }
 
 /**
@@ -108,6 +121,11 @@ export class Game {
   readonly quality: Quality;
   readonly boot: BootTimings;
   private readonly input: Input;
+  private readonly online: NetworkSession | null;
+  private readonly ais: AIPlayer[] = [];
+  private readonly perf: PerfOverlay;
+  private onlineStatus: HTMLElement | null = null;
+  private unsubscribeOnline: () => void = () => {};
   private readonly terrain: TerrainView;
   private readonly views: EntityViews;
   private readonly props: PropsView;
@@ -161,21 +179,25 @@ export class Game {
     const tMap = performance.now();
     const store = idbResumeStore();
     const loaded = await readResume(store);
-    const seed = matchSeed(start.seed);
-    const towns = matchPlayers(start.players);
+    const seed = matchSeed(start.online?.data.config.seed ?? start.seed);
+    const towns = matchPlayers(start.online?.data.config.players ?? start.players);
     const tutorial = start.tutorial === true;
-    let resume = start.fresh || tutorial ? null : loaded.envelope;
-    let resumeFailed = start.fresh || tutorial ? false : loaded.failed;
+    let resume = start.fresh || tutorial || start.online ? null : loaded.envelope;
+    let resumeFailed = start.fresh || tutorial || start.online ? false : loaded.failed;
     let mapSeed = resume?.sim.seed ?? seed;
     let players = resume?.sim.playerCount ?? towns;
+    let mapOptions = normalizeMapOptions();
+    const civs = start.online?.data.config.civs ?? start.civs ?? (start.civ ? Array.from({length:players},(_,i)=>i===0?start.civ!:CIV_IDS[(CIV_IDS.indexOf(start.civ!)+i)%CIV_IDS.length]) : undefined);
     let generated: ReturnType<typeof generateMap>;
     try {
-      generated = generateMap(mapSeed, players);
+      mapOptions = normalizeMapOptions(resume?.sim.mapOptions ?? {size:start.online?.data.config.mapSize ?? start.mapSize,type:start.online?.data.config.mapType ?? start.mapType});
+      generated = generateMap(mapSeed, players, mapOptions);
     } catch {
       resume = null;
       resumeFailed = true;
       mapSeed = seed;
       players = 2;
+      mapOptions = normalizeMapOptions();
       generated = generateMap(seed);
     }
     const { hf, layout } = generated;
@@ -187,12 +209,22 @@ export class Game {
       } catch {
         resume = null;
         resumeFailed = true;
-        world = new World(hf, layout);
+        world = new World(hf, layout, defaultPlayers(players,civs));
         world.seed = mapSeed;
       }
     } else {
-      world = new World(hf, layout);
+      world = new World(hf, layout, defaultPlayers(players,civs));
       world.seed = mapSeed;
+    }
+    world.mapOptions = mapOptions;
+    if (start.online) {
+      world.localPlayer = start.online.session.player;
+      for (const state of world.players.values()) {
+        state.player.control = 'human';
+        state.player.name = start.online.session.roster.find(p => p.player === state.player.id)?.name ?? `Player ${state.player.id}`;
+      }
+      report('Rejoining the match', 0.3);
+      await replay(world, start.online.data.history, start.online.data.turn);
     }
     const mapMs = performance.now() - tMap;
 
@@ -207,7 +239,7 @@ export class Game {
     const quality = bootQuality(settings, deviceQuality(), typeof location === 'undefined' ? '' : location.search);
     const renderer = new Renderer(container, quality);
     const input = new Input(renderer.domElement);
-    const aim = resume?.view ?? layout.townCenter;
+    const aim = resume?.view ?? (start.online && world.localPlayer > 1 ? layout.extraStarts?.[world.localPlayer - 2]?.townCenter : undefined) ?? layout.townCenter;
     const rig = new CameraRig(hf, input, { x: aim.x, z: aim.z });
     if (resume) {
       rig.rts.distance = Math.min(MAX_DISTANCE, Math.max(MIN_DISTANCE, resume.view.distance));
@@ -230,7 +262,7 @@ export class Game {
     const game = new Game(container, {
       layout, world, quality, renderer, input, rig, terrain, views, props, grass, fog,
       boot: { mapMs, terrainMs, modelsMs, totalMs: performance.now() - t0 },
-      store, resume, resumeFailed, tutorial,
+      store, resume, resumeFailed, tutorial, online: start.online,
     });
     report('The city stands', 1);
     return game;
@@ -239,6 +271,19 @@ export class Game {
   private constructor(private readonly container: HTMLElement, parts: BootParts) {
     const { layout } = parts;
     this.world = parts.world;
+    this.online = parts.online?.session ?? null;
+    this.perf = new PerfOverlay(container);
+    if (!parts.tutorial && !this.online) {
+      for (const { player } of this.world.players.values()) if (player.control === 'ai') this.ais.push(new AIPlayer(this.world, player.id, { difficulty: 'moderate', seed: (this.world.seed ?? 1) * 10 + player.id }));
+    }
+    if (parts.online) {
+      parts.online.session.bindWorld(this.world, parts.online.data.turn);
+      const status = document.createElement('div');
+      status.id = 'online-status'; status.setAttribute('role', 'status');
+      status.style.cssText = 'position:fixed;top:max(8px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:70;background:#181a16eb;color:#eee7d2;padding:6px 10px;border-radius:4px;font-size:13px;max-width:80vw';
+      container.append(status); this.onlineStatus = status;
+      this.unsubscribeOnline = this.online!.subscribe(() => { status.textContent = `Room ${this.online!.code} · ${this.online!.status}`; });
+    }
     this.matchAudio = new MatchAudio(this.world);
     this.matchMusic = new MatchMusic(this.world);
     this.quality = parts.quality;
@@ -317,10 +362,14 @@ export class Game {
     this.maybePauseKey();
     this.matchAudio.setEar(this.earPose());
 
-    if (!this.matchOver && !this.paused) {
+    if (this.online && !this.matchOver) {
+      this.online.advance();
+      if (!this.matchOver && this.endgameLog.shouldSample(this.world.time)) this.endgame.sample();
+    } else if (!this.matchOver && !this.paused) {
       this.accumulator += dt * simScale(this.speed, this.paused, this.matchOver);
       let steps = 0;
       while (this.accumulator >= STEP && steps < MAX_STEPS_PER_FRAME && !this.matchOver) {
+        for (const ai of this.ais) ai.update(STEP);
         this.world.tick(STEP);
         this.accumulator -= STEP;
         steps++;
@@ -345,6 +394,7 @@ export class Game {
     this.hud.update();
     this.minimap.update(this.elapsed);
     this.renderer.render(this.rig.camera);
+    this.perf.update(now, this);
     this.input.endFrame();
     if (!this.matchOver) this.raf = requestAnimationFrame(this.frame);
   };
@@ -419,7 +469,7 @@ export class Game {
    * must not skip the next. Save copy still downloads when the slot cannot be written.
    */
   private remember(kind: 'quiet' | 'noted'): void {
-    if (this.leaving || this.tutorial) return;
+    if (this.leaving || this.tutorial || this.online) return;
     let envelope: ResumeEnvelope;
     try {
       envelope = this.capture();
@@ -445,6 +495,7 @@ export class Game {
 
   /** A file replaces the slot only after it parses. A bad version leaves the slot alone. */
   private async openFile(file: Blob): Promise<void> {
+    if (this.online) { this.note('Open saved games from the title screen.'); return; }
     let envelope: ResumeEnvelope;
     try {
       envelope = await readResumeFile(file);
@@ -523,6 +574,7 @@ export class Game {
   }
 
   private setSpeed(speed: GameSpeed): void {
+    if (this.online) { this.note('Online matches use the same speed for every player.'); return; }
     this.speed = speed;
     for (const btn of document.querySelectorAll<HTMLButtonElement>('#pause-menu [data-speed]')) {
       btn.setAttribute('aria-pressed', Number(btn.dataset.speed) === speed ? 'true' : 'false');
@@ -594,6 +646,8 @@ export class Game {
   }
 
   dispose(): void {
+    for (const ai of this.ais) ai.dispose();
+    this.unsubscribeOnline(); this.online?.dispose(); this.onlineStatus?.remove(); this.perf.dispose();
     this.matchAudio.dispose();
     this.matchMusic.dispose();
     this.tutorialCoach?.dispose();

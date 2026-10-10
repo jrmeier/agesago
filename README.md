@@ -47,6 +47,14 @@ Then open http://localhost:5173
 | **Explore** button / horse button | Auto-explore / jump to scout |
 | First-person | Left thumb joystick moves, right side drag looks |
 
+## Exploration and naval play
+
+Send any unit to a discovered ruin to claim its one-time resource or technology cache. Build a Temple in Town Age and train a Priest to collect a relic; bring the priest near your temple to earn 30 gold per minute. Order priests onto injured allies to heal or visible enemy land units to channel a conversion.
+
+Choose **Islands** in the match setup for connected sea lanes. Build a **Dock** across a shoreline to train Fishing Boats, Merchant Ships, Triremes and Transports. Order fishing boats onto water fish to deliver food to an own dock. Order a merchant ship onto another own or allied dock to trade between it and your home dock. Triremes attack enemy ships.
+
+Move a transport near shore, then order selected land units onto it to board. Select the loaded transport, press **Unload**, and click or tap a reachable coast. On a phone, ship training is in the **Train** sheet and unloading is in **Orders**.
+
 ## Build & deploy
 
 ```bash

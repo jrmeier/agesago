@@ -1,11 +1,11 @@
 import { BUILDINGS } from '../../core/buildings';
 import type { Building, EntityId, PlayerId, ResourceType, Stance, Unit, UnitKind, UnitState, Vec2 } from '../../core/types';
-import { isAnimal, UNITS } from '../../core/units';
+import { isAnimal, isShip, UNITS } from '../../core/units';
 import { GAIA } from '../../core/types';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
 import { removeBuilding, sendBuilders } from './build';
-import { route } from './passage';
+import { navFor, route, routeForUnit } from './passage';
 import { cancelExplore, settleCancelled } from './explore';
 import { nearestSources, sendToDrop, sendToFarm, sendToNode, sendToSource } from './gather';
 import { formationOffset } from './movement';
@@ -257,7 +257,7 @@ export function orderAttack(world: World, unitIds: EntityId[], targetId: EntityI
   const list = units(world, unitIds);
   const cancelled = clearWork(world, list);
   for (const u of list) {
-    if (isAnimal(u.kind) && u.kind !== 'boar') continue;
+    if ((isAnimal(u.kind) && u.kind !== 'boar') || (UNITS[u.kind].attack.melee + UNITS[u.kind].attack.pierce <= 0)) continue;
     stateOf(world, u).order = 'attack';
     engage(world, u, t, true);
   }
@@ -273,8 +273,8 @@ export function orderAttackMove(world: World, unitIds: EntityId[], target: Vec2)
   list.forEach((u, i) => {
     const o = formationOffset(i);
     let dest = { x: target.x + o.x, z: target.z + o.z };
-    let path = route(world, u.owner, u.pos, dest);
-    if (!path && i > 0) path = route(world, u.owner, u.pos, (dest = { ...target }));
+    let path = routeForUnit(world, u, dest);
+    if (!path && i > 0) path = routeForUnit(world, u, (dest = { ...target }));
     if (!path) return;
     moved++;
     const cs = stateOf(world, u);
@@ -333,6 +333,7 @@ export function applyRally(world: World, b: Building, u: Unit): void {
   if (!r) return;
   if (r.targetId !== undefined) {
     const node = world.nodes.get(r.targetId);
+    if (node && u.kind === 'fishingBoat') { world.dispatch({ type: 'gather', unitIds: [u.id], nodeId: node.id }, u.owner); return; }
     if (node && u.kind === 'villager' && sendToNode(world, u, node)) return;
     const t = targetOf(world, r.targetId);
     if (t && world.areEnemies(u.owner, t.owner)) {
@@ -346,7 +347,7 @@ export function applyRally(world: World, b: Building, u: Unit): void {
       } else if (t.kind === 'farm' && sendToFarm(world, u, t)) return;
     }
   }
-  const path = route(world, u.owner, u.pos, r.pos);
+  const path = routeForUnit(world, u, r.pos);
   if (!path) return;
   u.path = path;
   world.setState(u, 'moving');
@@ -380,7 +381,7 @@ function disengage(world: World, u: Unit, cs: CombatState): void {
     return;
   }
   if (cs.order === 'attackMove' && cs.dest) {
-    const path = route(world, u.owner, u.pos, cs.dest);
+    const path = routeForUnit(world, u, cs.dest);
     if (path) {
       u.path = path;
       world.setState(u, 'moving');
@@ -390,7 +391,7 @@ function disengage(world: World, u: Unit, cs: CombatState): void {
     cs.dest = null;
   }
   if (u.stance === 'defensive' && cs.post && dist(u.pos, cs.post) > 1) {
-    const path = route(world, u.owner, u.pos, cs.post);
+    const path = routeForUnit(world, u, cs.post);
     if (path) {
       u.path = path;
       world.setState(u, 'moving');
@@ -454,7 +455,7 @@ function attackTick(world: World, u: Unit, cs: CombatState, threat: Unit | undef
   const goal = approachOf(u, t);
   if (u.path.length && cs.goal && dist(goal, cs.goal) < BALANCE.repathDistance) return;
   cs.repath = BALANCE.repathInterval;
-  const path = route(world, u.owner, u.pos, goal);
+  const path = routeForUnit(world, u, goal);
   if (!path) {
     disengage(world, u, cs);
     return;
@@ -477,9 +478,9 @@ function kite(world: World, u: Unit, cs: CombatState, threat: Unit): boolean {
     dz /= len;
   }
   const want = { x: u.pos.x + dx * BALANCE.kiteStep, z: u.pos.z + dz * BALANCE.kiteStep };
-  const spot = world.nav.isFree(want) ? want : world.nav.nearestFree(want);
+  const spot = navFor(world, u).isFree(want) ? want : navFor(world, u).nearestFree(want);
   if (!spot || dist(spot, u.pos) < 0.5) return false;
-  const path = route(world, u.owner, u.pos, spot);
+  const path = routeForUnit(world, u, spot);
   if (!path) return false;
   u.path = path;
   cs.goal = spot;
@@ -623,6 +624,17 @@ function resume(world: World, u: Unit): void {
 
 /** Remove a dead unit: 'died' then 'removed', and every system's bookkeeping about it. */
 export function killUnit(world: World, u: Unit): void {
+  // Resign walks a snapshot that can include cargo already removed by a sunk transport.
+  if (!world.units.has(u.id)) return;
+  world.navalJobs.delete(u.id); world.landings.delete(u.id); world.priestOrders.delete(u.id); world.boarding.delete(u.id);
+  for (const [id, ship] of world.boarding) if (ship === u.id) world.boarding.delete(id);
+  for (const [id, order] of world.priestOrders) if (order.target === u.id) world.priestOrders.delete(id);
+  // A sunk transport takes its passengers with it, preventing invisible survivors.
+  for (const id of [...(u.passengers ?? [])]) { const passenger = world.units.get(id); if (passenger) killUnit(world, passenger); }
+  if (u.shelter != null) {
+    const transport = world.units.get(u.shelter);
+    if (transport?.passengers) transport.passengers = transport.passengers.filter(id => id !== u.id);
+  }
   if (u.shelter != null) {
     const b = world.buildings.get(u.shelter);
     const occupants = b?.occupants;
@@ -709,7 +721,7 @@ export function combatSystem(world: World, dt: number, arrived: Unit[]): void {
   }
 
   for (const u of world.units.values()) {
-    if (u.state === 'garrisoned') continue;
+    if (u.state === 'garrisoned' || (isShip(u.kind) && u.kind !== 'trireme') || u.kind === 'priest') continue;
     const cs = world.combatState.get(u.id);
     if (cs) {
       cs.cooldown -= dt;

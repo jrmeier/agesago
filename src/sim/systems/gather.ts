@@ -1,3 +1,4 @@
+import { isShip } from '../../core/units';
 import type { Stat } from '../../core/techs';
 import type { Building, EntityId, ResourceNode, ResourceType, Unit, UnitState, Vec2 } from '../../core/types';
 import { BALANCE } from '../balance';
@@ -149,11 +150,12 @@ function farmSpot(from: Vec2, farm: Building): Vec2 {
 /** Arrivals for toNode / toDrop, then gathering progress. */
 export function gatherSystem(world: World, dt: number, arrived: Unit[]): void {
   for (const u of arrived) {
+    if (isShip(u.kind)) continue;
     if (u.state === 'toNode') arriveAtNode(world, u);
     else if (u.state === 'toDrop') deposit(world, u);
   }
   for (const u of world.units.values()) {
-    if (u.state === 'gathering') gatherTick(world, u, dt);
+    if (!isShip(u.kind) && u.state === 'gathering') gatherTick(world, u, dt);
   }
 }
 

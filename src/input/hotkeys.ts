@@ -26,7 +26,7 @@ export const HOTKEYS = {
 } as const;
 
 /** Training-panel slot keys, left to right. */
-export const TRAIN_SLOT_KEYS = ['KeyZ', 'KeyC', 'KeyV'] as const;
+export const TRAIN_SLOT_KEYS = ['KeyZ', 'KeyC', 'KeyV', 'KeyD'] as const;
 
 /** Control-group keys: Digit1..Digit9 select, with Ctrl / Cmd / Alt they assign. */
 export const GROUP_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9'] as const;

@@ -247,6 +247,16 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     armor: { melee: 1, pierce: 7 },
     age: 1,
   },
+  dock: {
+    name: 'Dock', size: { w: 4, d: 4 }, cost: { wood: 150 }, buildTime: 40,
+    popBonus: 0, drop: ['food'], walkable: false, buildable: true, sight: 8, hp: 1200,
+    armor: { melee: 1, pierce: 7 },
+  },
+  temple: {
+    name: 'Temple', size: { w: 4, d: 4 }, cost: { wood: 180, stone: 80 },
+    buildTime: 50, popBonus: 0, drop: [], walkable: false, buildable: true,
+    sight: 8, hp: 1400, armor: { melee: 1, pierce: 7 }, age: 1,
+  },
   academy: {
     name: 'Academy',
     size: { w: 4.4, d: 4.4 },

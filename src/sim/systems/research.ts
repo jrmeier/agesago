@@ -1,13 +1,14 @@
+import { CIVS } from '../../core/civilizations';
 import { BUILDINGS } from '../../core/buildings';
 import { TECHS, hasFlag, statMods, type Stat, type Subject, type TechFlag, type TechId } from '../../core/techs';
 import type { Age, Building, BuildingKind, EntityId, PlayerId, RejectReason, UnitKind } from '../../core/types';
 import type { PlayerState, World } from '../World';
+import { ensureProductionQueue, productionOrder, removeProduction } from '../productionQueue';
 import { affordable, pay } from './build';
 import { applyResearch } from './upgrades';
 
 /**
- * Research queue (M8-5, integrator contract). A building researches its queue head; while
- * anything is queued its unit training waits. Effects are applied by upgrades.ts
+ * Research shares a FIFO production queue with unit training. Effects are applied by upgrades.ts
  * (applyResearch) and read through statOf().
  */
 
@@ -64,6 +65,7 @@ export function researchBlock(
   const p = world.players.get(owner);
   if (!p) return 'invalid-target';
   const spec = TECHS[tech];
+  if (spec.civ && spec.civ !== p.player.civ) return 'requires';
   if (p.researched.has(tech) || isQueued(world, owner, tech)) return 'researched';
   if (p.age < spec.age) return 'age';
   if (spec.requires?.some((t) => !p.researched.has(t))) return 'requires';
@@ -120,6 +122,7 @@ export function orderResearch(world: World, buildingId: EntityId, tech: TechId):
     return;
   }
   pay(world, spec.cost, 1, b.owner);
+  ensureProductionQueue(b).push('research');
   (b.research ??= []).push(tech);
   if (b.research.length === 1) b.researchProgress = 0;
   if (b.owner === world.localPlayer) world.emitStock();
@@ -134,6 +137,7 @@ export function orderCancelResearch(world: World, buildingId: EntityId, index: n
     world.events.emit({ type: 'rejected', reason: 'invalid-target' });
     return;
   }
+  removeProduction(b, 'research', index);
   const [tech] = q.splice(index, 1);
   if (index === 0) b.researchProgress = 0;
   if (q.length === 0) {
@@ -147,21 +151,25 @@ export function orderCancelResearch(world: World, buildingId: EntityId, index: n
 
 /** Advance each building's research head; on completion record it and apply its effects. */
 export function researchSystem(world: World, dt: number): void {
-  for (const b of world.buildings.values()) {
-    const head = b.research?.[0];
-    if (!head || !b.complete) continue;
-    b.researchProgress = (b.researchProgress ?? 0) + dt;
-    if (b.researchProgress >= TECHS[head].time - 1e-9) {
-      b.research!.shift();
-      b.researchProgress = 0;
-      if (b.research!.length === 0) {
-        delete b.research;
-        delete b.researchProgress;
-      }
-      completeResearch(world, b.owner, head);
-    } else {
-      emitProgress(world, b);
+  for (const b of world.buildings.values()) advanceResearch(world, b, dt);
+}
+
+/** Tick one building only when research owns the shared queue head. */
+export function advanceResearch(world: World, b: Building, dt: number): void {
+  const head = b.research?.[0];
+  if (!head || !b.complete || productionOrder(b)[0] !== 'research') return;
+  b.researchProgress = (b.researchProgress ?? 0) + dt;
+  if (b.researchProgress >= TECHS[head].time - 1e-9) {
+    removeProduction(b, 'research', 0);
+    b.research!.shift();
+    b.researchProgress = 0;
+    if (b.research!.length === 0) {
+      delete b.research;
+      delete b.researchProgress;
     }
+    completeResearch(world, b.owner, head);
+  } else {
+    emitProgress(world, b);
   }
 }
 
@@ -218,24 +226,24 @@ function playerMods(p: PlayerState): PlayerMods {
 /** `base` with `owner`'s modifiers for unit kind `kind` applied. Cheap: a few map lookups, no allocation once warm. */
 export function unitStat(world: World, owner: PlayerId, kind: UnitKind, stat: Stat, base: number): number {
   const p = world.players.get(owner);
-  if (!p || p.researched.size === 0) return base;
+  if (!p || (p.researched.size === 0 && !p.player.civ)) return base;
   const c = playerMods(p);
   let byStat = c.units.get(kind);
   if (!byStat) c.units.set(kind, (byStat = new Map()));
   let m = byStat.get(stat);
-  if (!m) byStat.set(stat, (m = statMods(p.researched, { unit: kind }, stat)));
+  if (!m) byStat.set(stat, (m = statMods(p.researched, { unit: kind }, stat, p.player.civ ? CIVS[p.player.civ].bonuses : [])));
   return (base + m.add) * m.mul;
 }
 
 /** `base` with `owner`'s modifiers for building kind `kind` applied. */
 export function buildingStat(world: World, owner: PlayerId, kind: BuildingKind, stat: Stat, base: number): number {
   const p = world.players.get(owner);
-  if (!p || p.researched.size === 0) return base;
+  if (!p || (p.researched.size === 0 && !p.player.civ)) return base;
   const c = playerMods(p);
   let byStat = c.buildings.get(kind);
   if (!byStat) c.buildings.set(kind, (byStat = new Map()));
   let m = byStat.get(stat);
-  if (!m) byStat.set(stat, (m = statMods(p.researched, { building: kind }, stat)));
+  if (!m) byStat.set(stat, (m = statMods(p.researched, { building: kind }, stat, p.player.civ ? CIVS[p.player.civ].bonuses : [])));
   return (base + m.add) * m.mul;
 }
 
@@ -246,10 +254,10 @@ export function buildingStat(world: World, owner: PlayerId, kind: BuildingKind, 
 export function statOf(world: World, owner: PlayerId, subject: Subject, stat: Stat, base: number): number {
   if (subject === 'player') {
     const p = world.players.get(owner);
-    if (!p || p.researched.size === 0) return base;
+    if (!p || (p.researched.size === 0 && !p.player.civ)) return base;
     const c = playerMods(p);
     let m = c.player.get(stat);
-    if (!m) c.player.set(stat, (m = statMods(p.researched, 'player', stat)));
+    if (!m) c.player.set(stat, (m = statMods(p.researched, 'player', stat, p.player.civ ? CIVS[p.player.civ].bonuses : [])));
     return (base + m.add) * m.mul;
   }
   return 'unit' in subject

@@ -9,7 +9,7 @@ export const SFX_REF_DISTANCE = 12;
 /** Silence past this distance. */
 export const SFX_MAX_DISTANCE = 55;
 
-/** Nothing in the download is a sample. Synthesis runs in the browser. */
+/** No recorded SFX samples. Effects synthesis runs in the browser. */
 export const BUNDLED_AUDIO_BYTES = 0;
 
 export const SFX_KINDS = [

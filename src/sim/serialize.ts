@@ -1,3 +1,5 @@
+import type { MapOptions } from '../core/maps';
+import { civFor } from '../core/civilizations';
 import { BUILDINGS, MARKET } from '../core/buildings';
 import { TECHS } from '../core/techs';
 import type { Age, Building, EntityId, Heightfield, MarketResource, Player, PlayerId, ResourceNode, Stockpile, TechId, Unit } from '../core/types';
@@ -8,6 +10,8 @@ import type { ExploreState } from './systems/explore';
 import type { GatherState } from './systems/gather';
 import { clearStatCache } from './systems/research';
 import { buildingRect } from './systems/sites';
+import type { NavalJob, Landing } from './systems/naval';
+import type { ExplorationSite, PriestOrder } from './systems/explorationRewards';
 import type { GameResult } from './systems/victory';
 
 /** 2: M8 research (researched techs, ages, market prices, building research queues). */
@@ -18,6 +22,7 @@ export interface SaveData {
   version: number;
   seed: number;
   playerCount: number;
+  mapOptions?: MapOptions;
   width: number;
   depth: number;
   players: {
@@ -35,6 +40,13 @@ export interface SaveData {
   time: number;
   clocks: { fogClock: number; nextId: number };
   systems: {
+    navalJobs?: [EntityId, NavalJob][];
+    boarding?: [EntityId, EntityId][];
+    landings?: [EntityId, Landing][];
+    waterNavExpanded?: number;
+    waterNavVersion?: number;
+    exploration?: [string, ExplorationSite][];
+    priests?: [EntityId, PriestOrder][];
     gather: [EntityId, GatherState][];
     build: [EntityId, EntityId][];
     explore: [EntityId, ExploreState][];
@@ -98,6 +110,7 @@ export function serializeWorld(world: World): SaveData {
     version: SAVE_VERSION,
     seed: world.seed,
     playerCount: world.players.size,
+    mapOptions: world.mapOptions,
     width: world.hf.width,
     depth: world.hf.depth,
     players: [...world.players.values()].map(({ player, stock, visibility, researched, age, prices }) => ({
@@ -110,6 +123,10 @@ export function serializeWorld(world: World): SaveData {
     time: world.time,
     clocks: world.saveClocks,
     systems: {
+      navalJobs: [...world.navalJobs], boarding: [...world.boarding], landings: [...world.landings],
+      waterNavExpanded: world.waterNav.expanded, waterNavVersion: world.waterNav.version,
+      exploration: [...world.exploration],
+      priests: [...world.priestOrders],
       gather: [...world.gatherState],
       build: [...world.buildState],
       explore: [...world.exploreState],
@@ -153,12 +170,14 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   if (!Number.isSafeInteger(data.clocks.nextId) || data.clocks.nextId < 1
     || savedIds.some((id) => !Number.isSafeInteger(id) || id < 1 || id >= data.clocks.nextId)
     || new Set(savedIds).size !== savedIds.length) throw new Error('Invalid save: entity ids or nextId');
+  for (const p of data.players) if(p.player.civ !== undefined && !civFor(p.player.civ)) throw new Error('Invalid save: civilization');
   const saved = copy(data);
-  const generated = generateMap(saved.seed, saved.playerCount);
+  const generated = generateMap(saved.seed, saved.playerCount, saved.mapOptions);
   const terrain = hf ?? generated.hf;
   if (terrain.width !== saved.width || terrain.depth !== saved.depth) throw new Error('Invalid save: terrain dimensions differ');
   const world = new World(terrain, generated.layout, saved.players.map((p) => p.player));
   world.seed = saved.seed;
+  world.mapOptions = saved.mapOptions ?? {};
   // Initial entities emit no events; drop their footprints before replacing the maps.
   for (const id of world.buildings.keys()) world.nav.removeRect(id);
   restoreMap(world.units, saved.units.map((u) => [u.id, u]));
@@ -167,6 +186,7 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   for (const b of world.buildings.values()) {
     const spec = BUILDINGS[b.kind];
     // A finished gate is open on the shared grid; its foundation still blocks.
+    if (b.kind === 'dock') world.waterNav.addRect(b.id, buildingRect(b));
     if (!spec.walkable || (spec.gate && !b.complete)) world.nav.addRect(b.id, buildingRect(b));
   }
   for (const p of saved.players) {
@@ -187,11 +207,23 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   }
   for (const b of world.buildings.values()) {
     if (b.research?.some((t) => !Object.hasOwn(TECHS, t))) throw new Error('Invalid save: research queue');
+    if (b.productionQueue !== undefined && (!Array.isArray(b.productionQueue)
+      || b.productionQueue.some((k) => k !== 'train' && k !== 'research')
+      || b.productionQueue.filter((k) => k === 'train').length !== b.queue
+      || b.productionQueue.filter((k) => k === 'research').length !== (b.research?.length ?? 0))) {
+      throw new Error('Invalid save: production queue');
+    }
   }
   clearStatCache(world);
   world.time = saved.time;
   world.restoreClocks(saved.clocks);
   const s = saved.systems;
+  if (s.navalJobs) restoreMap(world.navalJobs, s.navalJobs);
+  if (s.boarding) restoreMap(world.boarding, s.boarding);
+  if (s.landings) restoreMap(world.landings, s.landings);
+  world.waterNav.expanded = s.waterNavExpanded ?? 0; world.waterNav.version = s.waterNavVersion ?? world.waterNav.version;
+  if (s.exploration) restoreMap(world.exploration, s.exploration);
+  if (s.priests) restoreMap(world.priestOrders, s.priests);
   restoreMap(world.gatherState, s.gather);
   restoreMap(world.buildState, s.build);
   restoreMap(world.exploreState, s.explore);

@@ -1,7 +1,9 @@
+import type { CivId } from '../core/civilizations';
 import { AGE_NAMES, TECHS, techsAt, type Age, type Stat, type TechId } from '../core/techs';
 import type { BuildingSpec } from '../core/buildings';
 import type { Building, BuildingKind, RejectReason, Stockpile, UnitKind } from '../core/types';
 import { UNITS, type UnitSpec } from '../core/units';
+import { productionOrder } from '../sim/productionQueue';
 import { AGE_BUILDINGS_NEEDED } from '../sim/systems/research';
 import { missingResources, shortfallText } from './build';
 import { combatChips, queueView, type StatChip } from './military';
@@ -13,6 +15,7 @@ import { combatChips, queueView, type StatChip } from './military';
 
 /** What the player knows that decides how tech tiles look. */
 export interface TechView {
+  civ?: CivId;
   age: Age;
   researched: ReadonlySet<TechId>;
   /** Techs queued at any of the player's buildings. */
@@ -64,9 +67,10 @@ export function lockText(tech: TechId, block: RejectReason | null, v: TechView):
  * queue strip), only the next age-up, and a chained tech only once its predecessor is researched
  * or queued (so "Requires Bronze Axe" shows while Bronze Axe runs).
  */
-export function visibleTechs(kind: BuildingKind, v: Pick<TechView, 'age' | 'researched' | 'queued'>): TechId[] {
+export function visibleTechs(kind: BuildingKind, v: Pick<TechView, 'age' | 'researched' | 'queued' | 'civ'>): TechId[] {
   return techsAt(kind).filter((t) => {
     const spec = TECHS[t];
+    if (spec.civ && spec.civ !== v.civ) return false;
     if (v.researched.has(t) || v.queued.has(t)) return false;
     if (spec.ageUp !== undefined && spec.ageUp !== v.age + 1) return false;
     return !spec.requires || spec.requires.every((r) => v.researched.has(r) || v.queued.has(r));
@@ -128,21 +132,22 @@ export type QueueItem =
   | { type: 'tech'; tech: TechId; index: number }
   | { type: 'unit'; unit: UnitKind; index: number };
 
-/** The queue strip: research first (it runs first and holds training), then units. */
-export function queueItems(b: Pick<Building, 'kind' | 'queue' | 'queueKinds' | 'progress' | 'research' | 'researchProgress'>): {
+/** The queue strip follows the same FIFO order as production in the simulation. */
+export function queueItems(b: Pick<Building, 'kind' | 'queue' | 'queueKinds' | 'progress' | 'research' | 'researchProgress' | 'productionQueue'>, trainingTime?: number): {
   items: QueueItem[];
   /** Progress 0..1 of the first item. */
   head: number;
 } {
   const research = b.research ?? [];
   const units = b.queue > 0 ? queueView(b) : { kinds: [], head: 0 };
-  const items: QueueItem[] = [
-    ...research.map((tech, index) => ({ type: 'tech' as const, tech, index })),
-    ...units.kinds.map((unit, index) => ({ type: 'unit' as const, unit, index })),
-  ];
-  const head = research.length
+  let techIndex = 0;
+  let unitIndex = 0;
+  const items: QueueItem[] = productionOrder(b).map((kind) => kind === 'research'
+    ? { type: 'tech', tech: research[techIndex], index: techIndex++ }
+    : { type: 'unit', unit: units.kinds[unitIndex], index: unitIndex++ });
+  const head = items[0]?.type === 'tech'
     ? Math.min(1, Math.max(0, (b.researchProgress ?? 0) / TECHS[research[0]].time))
-    : units.head;
+    : trainingTime && trainingTime > 0 ? Math.min(1, Math.max(0, b.progress / trainingTime)) : units.head;
   return { items, head };
 }
 

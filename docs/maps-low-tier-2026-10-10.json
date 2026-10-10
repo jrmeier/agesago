@@ -1,0 +1,434 @@
+{
+  "date": "2026-10-10",
+  "commit": "1ec9f2b",
+  "browser": "Google Chrome hardware-backed, headed",
+  "hardware": "Apple M1 Max",
+  "viewport": "1280x800",
+  "sample": "180 consecutive requestAnimationFrame intervals after 2s warmup per combination",
+  "rows": [
+    {
+      "map": {
+        "size": "small",
+        "type": "mediterranean"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 31.400000005960464,
+        "terrainMs": 247.80000000447035,
+        "modelsMs": 106.60000000149012,
+        "totalMs": 432.79999999701977
+      },
+      "fps": 59.99865924783804,
+      "medianMs": 16.699999999999818,
+      "p95Ms": 17.300000000000182,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 142452,
+      "draws": 92
+    },
+    {
+      "map": {
+        "size": "small",
+        "type": "highlands"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 28.19999999552965,
+        "terrainMs": 217.39999999850988,
+        "modelsMs": 101.20000000298023,
+        "totalMs": 408.30000000447035
+      },
+      "fps": 119.9731903485255,
+      "medianMs": 8.300000000000182,
+      "p95Ms": 9.100000000000364,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 131426,
+      "draws": 76
+    },
+    {
+      "map": {
+        "size": "small",
+        "type": "riverValley"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 31.100000001490116,
+        "terrainMs": 233.20000000298023,
+        "modelsMs": 103.79999999701977,
+        "totalMs": 406.1000000014901
+      },
+      "fps": 119.93299832495812,
+      "medianMs": 8.300000000000182,
+      "p95Ms": 9.199999999999818,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 137432,
+      "draws": 90
+    },
+    {
+      "map": {
+        "size": "small",
+        "type": "forest"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 28.600000001490116,
+        "terrainMs": 232.10000000149012,
+        "modelsMs": 111,
+        "totalMs": 425.3999999985099
+      },
+      "fps": 59.99865924783803,
+      "medianMs": 16.699999999999818,
+      "p95Ms": 17.300000000000182,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 168148,
+      "draws": 118
+    },
+    {
+      "map": {
+        "size": "small",
+        "type": "islands"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 37.900000005960464,
+        "terrainMs": 246.39999999850988,
+        "modelsMs": 98.79999999701977,
+        "totalMs": 447.09999999403954
+      },
+      "fps": 60.00469310448862,
+      "medianMs": 16.699999999999818,
+      "p95Ms": 17.400000000000546,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 135114,
+      "draws": 75
+    },
+    {
+      "map": {
+        "size": "medium",
+        "type": "mediterranean"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 40,
+        "terrainMs": 261.29999999701977,
+        "modelsMs": 102.89999999850988,
+        "totalMs": 462.59999999403954
+      },
+      "fps": 60.00067039855194,
+      "medianMs": 16.699999999999818,
+      "p95Ms": 17.599999999999454,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 190596,
+      "draws": 89
+    },
+    {
+      "map": {
+        "size": "medium",
+        "type": "highlands"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 39.399999998509884,
+        "terrainMs": 364.6000000014901,
+        "modelsMs": 141.59999999403954,
+        "totalMs": 595.3999999985099
+      },
+      "fps": 60.00268168409762,
+      "medianMs": 16.699999999999818,
+      "p95Ms": 17.599999999999454,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 181998,
+      "draws": 77
+    },
+    {
+      "map": {
+        "size": "medium",
+        "type": "riverValley"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 43,
+        "terrainMs": 262,
+        "modelsMs": 104.10000000149012,
+        "totalMs": 462
+      },
+      "fps": 59.990615993029024,
+      "medianMs": 16.699999999999818,
+      "p95Ms": 17.599999999999454,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 188554,
+      "draws": 95
+    },
+    {
+      "map": {
+        "size": "medium",
+        "type": "forest"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 38.900000005960464,
+        "terrainMs": 245.60000000149012,
+        "modelsMs": 106.79999999701977,
+        "totalMs": 444.3999999985099
+      },
+      "fps": 59.99865924783804,
+      "medianMs": 16.699999999999818,
+      "p95Ms": 17.5,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 211378,
+      "draws": 116
+    },
+    {
+      "map": {
+        "size": "medium",
+        "type": "islands"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 50.69999999552965,
+        "terrainMs": 264.3999999985099,
+        "modelsMs": 95.10000000149012,
+        "totalMs": 461.20000000298023
+      },
+      "fps": 60.01274013477721,
+      "medianMs": 16.699999999999818,
+      "p95Ms": 17.400000000000546,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 185822,
+      "draws": 74
+    },
+    {
+      "map": {
+        "size": "large",
+        "type": "mediterranean"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 395,
+        "terrainMs": 250.70000000298023,
+        "modelsMs": 117,
+        "totalMs": 828.6999999955297
+      },
+      "fps": 59.99865924783803,
+      "medianMs": 16.699999999999818,
+      "p95Ms": 17.600000000000364,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 325556,
+      "draws": 131
+    },
+    {
+      "map": {
+        "size": "large",
+        "type": "highlands"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 52.399999998509884,
+        "terrainMs": 301.6000000014901,
+        "modelsMs": 107.60000000149012,
+        "totalMs": 514.6000000014901
+      },
+      "fps": 60.00871634986087,
+      "medianMs": 16.699999999999818,
+      "p95Ms": 17.600000000000364,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 263894,
+      "draws": 76
+    },
+    {
+      "map": {
+        "size": "large",
+        "type": "riverValley"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 57.80000000447035,
+        "terrainMs": 322.3999999985099,
+        "modelsMs": 103.60000000149012,
+        "totalMs": 528.3999999985099
+      },
+      "fps": 60.00670465973852,
+      "medianMs": 16.699999999999818,
+      "p95Ms": 17.5,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 270502,
+      "draws": 93
+    },
+    {
+      "map": {
+        "size": "large",
+        "type": "forest"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 51.399999998509884,
+        "terrainMs": 287.29999999701977,
+        "modelsMs": 120.60000000149012,
+        "totalMs": 481.30000000447035
+      },
+      "fps": 119.96514978888818,
+      "medianMs": 8.300000000000182,
+      "p95Ms": 9.199999999999818,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 290370,
+      "draws": 111
+    },
+    {
+      "map": {
+        "size": "large",
+        "type": "islands"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 74.60000000149012,
+        "terrainMs": 333.3999999985099,
+        "modelsMs": 102.20000000298023,
+        "totalMs": 535.5999999940395
+      },
+      "fps": 120.0375536480687,
+      "medianMs": 8.300000000000182,
+      "p95Ms": 9.199999999999818,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 267546,
+      "draws": 72
+    },
+    {
+      "map": {
+        "size": "giant",
+        "type": "mediterranean"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 61.100000001490116,
+        "terrainMs": 324,
+        "modelsMs": 99.79999999701977,
+        "totalMs": 519.1000000014901
+      },
+      "fps": 119.96514978888816,
+      "medianMs": 8.300000000000182,
+      "p95Ms": 9.199999999999818,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 323630,
+      "draws": 94
+    },
+    {
+      "map": {
+        "size": "giant",
+        "type": "highlands"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 60.399999998509884,
+        "terrainMs": 317.20000000298023,
+        "modelsMs": 108.70000000298023,
+        "totalMs": 540.5
+      },
+      "fps": 60.00067039855194,
+      "medianMs": 16.699999999999818,
+      "p95Ms": 17.599999999999454,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 313992,
+      "draws": 84
+    },
+    {
+      "map": {
+        "size": "giant",
+        "type": "riverValley"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 66.5,
+        "terrainMs": 341.6000000014901,
+        "modelsMs": 108.09999999403954,
+        "totalMs": 564.8999999985099
+      },
+      "fps": 59.99865924783803,
+      "medianMs": 16.699999999999818,
+      "p95Ms": 17.600000000000364,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 318714,
+      "draws": 93
+    },
+    {
+      "map": {
+        "size": "giant",
+        "type": "forest"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 59.899999998509884,
+        "terrainMs": 331.79999999701977,
+        "modelsMs": 113.60000000149012,
+        "totalMs": 547.3000000044703
+      },
+      "fps": 59.990615993029024,
+      "medianMs": 16.699999999999818,
+      "p95Ms": 17.400000000000546,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 349690,
+      "draws": 129
+    },
+    {
+      "map": {
+        "size": "giant",
+        "type": "islands"
+      },
+      "quality": "low",
+      "boot": {
+        "mapMs": 89.29999999701977,
+        "terrainMs": 380.59999999403954,
+        "modelsMs": 102.79999999701977,
+        "totalMs": 627.5
+      },
+      "fps": 60.01072817486926,
+      "medianMs": 16.699999999999818,
+      "p95Ms": 17.600000000000364,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+      "triangles": 314610,
+      "draws": 73
+    }
+  ],
+  "followUp": {
+    "commit": "b2e90d2",
+    "reason": "Verify the largest Forest and Islands scenes after adding variant ruins/relics",
+    "rows": [
+      {
+        "map": {
+          "size": "giant",
+          "type": "forest"
+        },
+        "quality": "low",
+        "boot": {
+          "mapMs": 170.79999999701977,
+          "terrainMs": 356.69999999552965,
+          "modelsMs": 116.80000000447035,
+          "totalMs": 698
+        },
+        "fps": 59.98659517426274,
+        "medianMs": 16.699999999999818,
+        "p95Ms": 17.400000000000546,
+        "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+        "triangles": 350184,
+        "draws": 129
+      },
+      {
+        "map": {
+          "size": "giant",
+          "type": "islands"
+        },
+        "quality": "low",
+        "boot": {
+          "mapMs": 134.79999999701977,
+          "terrainMs": 356.3999999985099,
+          "modelsMs": 95.29999999701977,
+          "totalMs": 632.3000000044703
+        },
+        "fps": 59.98860551627065,
+        "medianMs": 16.699999999999818,
+        "p95Ms": 17.400000000000546,
+        "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+        "triangles": 314622,
+        "draws": 73
+      }
+    ]
+  }
+}
