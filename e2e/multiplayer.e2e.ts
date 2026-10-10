@@ -45,8 +45,16 @@ test('two browsers join by code, gather/train in lockstep, reconnect, and comple
     expect(shared.length).toBeGreaterThanOrEqual(2);
     for (const check of shared) expect(check.hash).toBe(checks[1].find(b => b.turn === check.turn)!.hash);
     // Interrupt the transport without altering either simulation, then use the reserved seat.
+    await host.evaluate(() => {
+      const session = (window as any).game.online;
+      const statuses: string[] = [];
+      (window as any).__agesagoDisconnectStatuses = statuses;
+      // A fast reconnect can replace this transient label before a UI poll sees it.
+      session.subscribe(() => statuses.push(session.status));
+    });
     await guest.evaluate(() => (window as any).game.online.socket.close());
-    await expect(host.locator('#online-status')).toContainText('disconnected');
+    await expect.poll(() => host.evaluate(() => (window as any).__agesagoDisconnectStatuses
+      .some((status: string) => status.toLowerCase().includes('disconnected')))).toBe(true);
     await expect(guest.locator('#online-status')).toContainText('Connected', { timeout: 15_000 });
     await guest.evaluate(() => (window as any).game.world.dispatch({ type: 'resign' }));
     for (const page of [host, guest]) await expect.poll(() => page.evaluate(() => (window as any).game.world.gameOver?.winners), { timeout: 15_000 }).toEqual([1]);
