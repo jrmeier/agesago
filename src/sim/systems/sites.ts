@@ -54,7 +54,7 @@ function nodePointInReach(world: World, pos: Vec2, node: ResourceNode): boolean 
 
 /**
  * Route to a work spot, never to an arbitrary nav snap outside resource reach.
- * Try the facing edge first; blocked/disconnected edges fall back to nearby cell centres.
+ * Try the facing edge's route first; invalid routes fall back to nearby cell centres.
  * The local search and endpoint checks use the same enemy-gate mask as the path itself.
  */
 export function nodePath(world: World, u: Unit, node: ResourceNode): Vec2[] | null {
@@ -70,7 +70,9 @@ export function nodePath(world: World, u: Unit, node: ResourceNode): Vec2[] | nu
     const reg = world.nav.regionAt(u.pos);
     const usable = (p: Vec2) => world.nav.isFree(p) && world.nav.isWalkableCell(p)
       && world.nav.regionOfCell(p) === reg;
-    if (preferred && usable(preferred)) {
+    // A free edge can sit in a blocked grid cell. Let the navigator use its nearby
+    // cell and append that exact edge, then validate the actual endpoint.
+    if (preferred) {
       const path = toSpot(preferred);
       if (path) return path;
     }

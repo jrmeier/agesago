@@ -31,6 +31,24 @@ function run(world: World, seconds: number) {
 }
 
 describe('resource work routes', () => {
+  it('preserves a free facing work point when only its containing cell centre is blocked', () => {
+    const { world, worker, rejected } = setup([{ kind: 'tree', pos: { x: 20, z: 20 }, amount: 100 }]);
+    const tree = [...world.nodes.values()][0];
+    world.nav.addRect(999, { x0: 19.45, x1: 19.5, z0: 20.5, z1: 20.6 });
+    const preferred = nodeApproach(world, worker.pos, tree)!;
+    expect(world.nav.isFree(preferred)).toBe(true);
+    expect(world.nav.isWalkableCell(preferred)).toBe(false);
+    // A nearby cell snap can still append this physically free exact work point.
+    const ordinaryPath = world.nav.findPath(worker.pos, preferred)!;
+    expect(ordinaryPath.at(-1)).toEqual(preferred);
+    expect(nodeInReach(world, { ...worker, pos: ordinaryPath.at(-1)! }, tree)).toBe(true);
+    world.dispatch({ type: 'gather', unitIds: [worker.id], nodeId: tree.id });
+    expect(rejected).toEqual([]);
+    expect(worker.path.at(-1)).toEqual(preferred);
+    run(world, 6);
+    expect(tree.amount).toBeLessThan(100);
+  });
+
   it('uses another work side when an obstacle blocks the facing approach', () => {
     const { world, worker, rejected } = setup([{ kind: 'tree', pos: { x: 20, z: 20 }, amount: 100 }]);
     const tree = [...world.nodes.values()][0];
