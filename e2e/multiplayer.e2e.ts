@@ -4,15 +4,16 @@ import { createRelayServer } from '../src/network/relay';
 
 test('two browsers join by code, gather/train in lockstep, reconnect, and complete a match', async ({ browser, baseURL }, testInfo) => {
   test.setTimeout(180_000);
-  const relay = createRelayServer({ origins: [new URL(baseURL!).origin], turnMs: 25, reconnectMs: 3000 });
-  await new Promise<void>(resolve => relay.server.listen(0, '127.0.0.1', resolve));
-  const port = (relay.server.address() as AddressInfo).port;
+  const remote = !['localhost', '127.0.0.1', '[::1]'].includes(new URL(baseURL!).hostname);
+  const relay = remote ? null : createRelayServer({ origins: [new URL(baseURL!).origin], turnMs: 25, reconnectMs: 3000 });
+  if (relay) await new Promise<void>(resolve => relay.server.listen(0, '127.0.0.1', resolve));
+  const port = relay ? (relay.server.address() as AddressInfo).port : null;
   const { viewport, isMobile, hasTouch, deviceScaleFactor, userAgent } = testInfo.project.use;
   const contexts = await Promise.all([browser.newContext({ viewport, isMobile, hasTouch, deviceScaleFactor, userAgent }), browser.newContext({ viewport, isMobile, hasTouch, deviceScaleFactor, userAgent })]);
   const [host, guest] = await Promise.all(contexts.map(context => context.newPage()));
   const errors: string[] = [];
   for (const page of [host, guest]) page.on('pageerror', e => errors.push(e.message));
-  const url = `/?e2e&title=1&quality=low&relay=${encodeURIComponent(`ws://127.0.0.1:${port}/multiplayer`)}`;
+  const url = `/?e2e&title=1&quality=low${port ? `&relay=${encodeURIComponent(`ws://127.0.0.1:${port}/multiplayer`)}` : ''}`;
   try {
     await Promise.all([host.goto(url), guest.goto(url)]);
     await host.getByRole('button', { name: 'Online game', exact: true }).click();
@@ -56,7 +57,7 @@ test('two browsers join by code, gather/train in lockstep, reconnect, and comple
       return game ? { turn: game.online.turn, status: game.online.status, checks: game.online.checks, time: game.world.time } : { booting: true };
     }).catch(() => ({ closed: true })))));
     throw error;
-  } finally { for (const context of contexts) await context.close(); await relay.close(); }
+  } finally { for (const context of contexts) await context.close(); await relay?.close(); }
 });
 
 test('opt-in performance overlay reports frames and collapses without horizontal scroll', async ({ page }) => {
