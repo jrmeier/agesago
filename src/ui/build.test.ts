@@ -63,6 +63,8 @@ describe('build hotkeys', () => {
       'gate',
       'forge',
       'market',
+      'dock',
+      'temple',
       'academy',
     ]);
     const keys = kinds.map((k) => BUILD_HOTKEYS[k]);
