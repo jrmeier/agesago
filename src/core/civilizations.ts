@@ -5,7 +5,7 @@ export interface CivSpec { name: string; description: string; bonuses: Modifier[
 /** Shared by setup, simulation, AI and architecture. Modest bonuses preserve counter play. */
 export const CIVS: Record<CivId, CivSpec> = {
   hellenes: { name:'Hellenes',description:'Infantry train 5% faster. Phalangite Guards and disciplined formations.', bonuses:[{target:'class:infantry',stat:'trainTime',op:'mul',value:.95}],unit:'phalangiteGuard',tech:'hellenicDiscipline',architecture:0xf4e8cb },
-  romans: { name:'Romans',description:'Buildings have 5% more health. Legionaries and engineering.',bonuses:[{target:'allBuildings',stat:'hp',op:'mul',value:1.05}],unit:'legionary',tech:'romanEngineering',architecture:0xd5b6a0 },
+  romans: { name:'Romans',description:'Buildings have 3% more health. Legionaries and engineering.',bonuses:[{target:'allBuildings',stat:'hp',op:'mul',value:1.03}],unit:'legionary',tech:'romanEngineering',architecture:0xd5b6a0 },
   persians:{name:'Persians',description:'Villagers gather food 5% faster. Immortals and royal roads.',bonuses:[{target:'villager',stat:'gather.food',op:'mul',value:1.05}],unit:'immortal',tech:'royalRoads',architecture:0xddc389},
   celts:{name:'Celts',description:'Villagers gather wood 7% faster. Raiders and woodland craft.',bonuses:[{target:'villager',stat:'gather.wood',op:'mul',value:1.07}],unit:'raider',tech:'woodlandCraft',architecture:0x997b52},
 };

@@ -8,12 +8,12 @@ import { census, run } from '../src/ai/harness';
 const output=process.env.CIV_BENCH_OUTPUT ?? '/tmp/agesago-civ-tournament.jsonl';
 const done=existsSync(output)?readFileSync(output,'utf8').trim().split('\n').filter(Boolean).map(line=>JSON.parse(line)):[];
 const score=(world:World,p:number)=>{const c=census(world,p);return c.villagers+c.army+Object.values(c.buildings).reduce((a,b)=>a+b,0)};
-const filter=process.env.CIV_BENCH_CIV;
-if(filter && !civFor(filter))throw new Error(`Unknown CIV_BENCH_CIV: ${filter}`);
+const filters=(process.env.CIV_BENCH_CIV ?? '').split(',').filter(Boolean);
+for(const filter of filters)if(!civFor(filter))throw new Error(`Unknown CIV_BENCH_CIV: ${filter}`);
 let pairIndex=-1;
 const shards=Number(process.env.CIV_BENCH_SHARDS ?? 1), shard=Number(process.env.CIV_BENCH_SHARD ?? 0);
 for(let a=0;a<CIV_IDS.length;a++)for(let b=a+1;b<CIV_IDS.length;b++){
-  if(filter && CIV_IDS[a]!==filter && CIV_IDS[b]!==filter)continue;
+  if(filters.length && !filters.includes(CIV_IDS[a]) && !filters.includes(CIV_IDS[b]))continue;
   pairIndex++;if(pairIndex%shards!==shard)continue;
   for(let seed=1;seed<=10;seed++)for(const swap of [false,true]) {
   const pair=[CIV_IDS[a],CIV_IDS[b]],id=`${pair.join('/')}/${seed}/${swap}`;
@@ -32,7 +32,7 @@ for(let a=0;a<CIV_IDS.length;a++)for(let b=a+1;b<CIV_IDS.length;b++){
 }
 const completed=existsSync(output)?readFileSync(output,'utf8').trim().split('\n').filter(Boolean).map(line=>JSON.parse(line)):[];
 for(let a=0;a<CIV_IDS.length;a++)for(let b=a+1;b<CIV_IDS.length;b++) {
- if(filter && CIV_IDS[a]!==filter && CIV_IDS[b]!==filter)continue;
+ if(filters.length && !filters.includes(CIV_IDS[a]) && !filters.includes(CIV_IDS[b]))continue;
  const pair=[CIV_IDS[a],CIV_IDS[b]],games=completed.filter(r=>r.pair.join('/')===pair.join('/'));
  const rate=games.reduce((sum,r)=>sum+(r.winner===pair[0]?1:r.winner===null?.5:0),0)/games.length;
  console.log(JSON.stringify({pair,games:games.length,firstWinRate:rate,passes:games.length===20&&rate>=.4&&rate<=.6}));
