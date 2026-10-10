@@ -1,4 +1,5 @@
 import type { EntityViews, ScreenRect } from '../render/EntityViews';
+import type { PickIntent } from '../render/picking';
 import type { CameraRig } from '../camera/CameraRig';
 import { BUILDINGS } from '../core/buildings';
 import { GAIA, type Building, type BuildingKind, type Command, type EntityId, type PropPlacement, type Stance, type UnitKind, type Vec2 } from '../core/types';
@@ -442,7 +443,9 @@ export class Controls {
           break;
         }
         const ownUnits = this.ownUnitIds().length > 0;
-        const id = this.unitAt(g.x, g.y);
+        // Selected units can order work through friendly units overlapping the target.
+        const picked = this.pickAt(g.x, g.y, ownUnits ? 'order' : 'select');
+        const id = this.unitFromPick(picked);
         if (id !== null) {
           const own = world.units.get(id)?.owner === world.localPlayer;
           if (own) this.selectUnit(id);
@@ -451,7 +454,7 @@ export class Controls {
           break;
         }
         // With units selected a tap orders them (attack / construct / farm / move); otherwise it selects the building.
-        const b = this.buildingAt(g.x, g.y);
+        const b = this.buildingFromPick(picked);
         if (b !== null && !ownUnits) selection.set([b]);
         else this.order(g.x, g.y, false);
         break;
@@ -493,9 +496,9 @@ export class Controls {
     }
   }
 
-  private pickAt(x: number, y: number): EntityId | null {
+  private pickAt(x: number, y: number, intent: PickIntent = 'select'): EntityId | null {
     const { views, rig, input } = this.deps;
-    return views.pick(toNdc(x, y, input.width, input.height), rig.camera);
+    return views.pick(toNdc(x, y, input.width, input.height), rig.camera, intent);
   }
 
   /** A unit under the pointer: any of ours, or someone else's only where we can see it. */
@@ -509,11 +512,7 @@ export class Controls {
     return u.owner === this.deps.world.localPlayer || this.deps.world.visibility.isVisible(u.pos.x, u.pos.z) ? u.id : null;
   }
 
-  /** A building under the pointer. Enemy buildings count only while their cell is visible. */
-  private buildingAt(x: number, y: number): EntityId | null {
-    return this.buildingFromPick(this.pickAt(x, y));
-  }
-
+  /** Enemy buildings count only while their cell is visible. */
   private buildingFromPick(id: EntityId | null): EntityId | null {
     const b = id !== null ? this.deps.world.buildings.get(id) : undefined;
     if (!b) return null;
@@ -714,7 +713,7 @@ export class Controls {
       }
       return;
     }
-    const id = this.pickAt(x, y);
+    const id = this.pickAt(x, y, unitIds.length ? 'order' : 'select');
     const hit = this.hitEntity(id);
     const rally = unitIds.length ? null : this.rallyBuilding();
     const targetCmd = resolveTargetOrder({ unitIds, rallyBuildingId: rally?.id ?? null }, hit, ground, (owner) =>

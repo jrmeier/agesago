@@ -3,7 +3,7 @@ import type { Building, BuildingKind, ResourceNode, ResourceType, Unit, Vec2, Pl
 import { BALANCE } from '../balance';
 import { NAV_CELL, rectApproach, rectDistance, type Rect } from '../nav';
 import type { World } from '../World';
-import { route } from './passage';
+import { closedGates, route } from './passage';
 
 /** Snap a yaw to the nearest 90° step, in [0, 2π). */
 export function snapRot(rot: number): number {
@@ -41,11 +41,59 @@ export function nodeApproach(world: World, from: Vec2, node: ResourceNode): Vec2
 }
 
 export function nodeInReach(world: World, u: Unit, node: ResourceNode): boolean {
-  const spot = node.kind === 'fish' ? nodeApproach(world, u.pos, node) : node.pos;
+  return world.nav.withMask(closedGates(world, u.owner), () => nodePointInReach(world, u.pos, node));
+}
+
+function nodePointInReach(world: World, pos: Vec2, node: ResourceNode): boolean {
+  const spot = node.kind === 'fish' ? nodeApproach(world, pos, node) : node.pos;
   if (!spot) return false;
   const reach = node.kind === 'fish' ? BALANCE.reach + BALANCE.villagerRadius
     : node.radius + BALANCE.villagerRadius + BALANCE.reach;
-  return world.nav.isFree(u.pos) && Math.hypot(u.pos.x - spot.x, u.pos.z - spot.z) <= reach;
+  return world.nav.isFree(pos) && Math.hypot(pos.x - spot.x, pos.z - spot.z) <= reach;
+}
+
+/**
+ * Route to a work spot, never to an arbitrary nav snap outside resource reach.
+ * Try the facing edge first; blocked/disconnected edges fall back to nearby cell centres.
+ * The local search and endpoint checks use the same enemy-gate mask as the path itself.
+ */
+export function nodePath(world: World, u: Unit, node: ResourceNode): Vec2[] | null {
+  return world.nav.withMask(closedGates(world, u.owner), () => {
+    const preferred = nodeApproach(world, u.pos, node);
+    const toSpot = (spot: Vec2): Vec2[] | null => {
+      const path = world.nav.findPath(u.pos, spot);
+      return path && nodePointInReach(world, path.at(-1) ?? u.pos, node) ? path : null;
+    };
+    // Fishing deliberately reaches a shore rather than the fish's own radius.
+    if (node.kind === 'fish') return preferred && toSpot(preferred);
+
+    const reg = world.nav.regionAt(u.pos);
+    const usable = (p: Vec2) => world.nav.isFree(p) && world.nav.isWalkableCell(p)
+      && world.nav.regionOfCell(p) === reg;
+    if (preferred && usable(preferred)) {
+      const path = toSpot(preferred);
+      if (path) return path;
+    }
+
+    const reach = node.radius + BALANCE.villagerRadius + BALANCE.reach;
+    const spots: Vec2[] = [];
+    const x0 = Math.max(0, Math.floor((node.pos.x - reach) / NAV_CELL));
+    const x1 = Math.min(world.nav.cols - 1, Math.floor((node.pos.x + reach) / NAV_CELL));
+    const z0 = Math.max(0, Math.floor((node.pos.z - reach) / NAV_CELL));
+    const z1 = Math.min(world.nav.rows - 1, Math.floor((node.pos.z + reach) / NAV_CELL));
+    for (let z = z0; z <= z1; z++) {
+      for (let x = x0; x <= x1; x++) {
+        const p = { x: (x + 0.5) * NAV_CELL, z: (z + 0.5) * NAV_CELL };
+        if (Math.hypot(p.x - node.pos.x, p.z - node.pos.z) <= reach && usable(p)) spots.push(p);
+      }
+    }
+    spots.sort((a, b) => Math.hypot(a.x - u.pos.x, a.z - u.pos.z) - Math.hypot(b.x - u.pos.x, b.z - u.pos.z));
+    for (const spot of spots) {
+      const path = toSpot(spot);
+      if (path) return path;
+    }
+    return null;
+  });
 }
 
 /**

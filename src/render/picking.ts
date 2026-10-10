@@ -12,6 +12,17 @@ export const PICK_RANK = {
   townCenter: 1,
 } as const;
 
+/** Orders can reach work targets behind friendly units, while attacks take priority. */
+export const ORDER_PICK_RANK = {
+  attack: 4,
+  node: 3,
+  workBuilding: 2,
+  unit: 1,
+  building: 0,
+} as const;
+
+export type PickIntent = 'select' | 'order';
+
 /**
  * Point-in-rectangle test. Corners may be inverted (a drag box can go up and left).
  * Edges are inclusive.

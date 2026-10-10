@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { BUILDINGS, FARM_FOOD } from '../core/buildings';
 import { detectQuality, type Quality } from '../core/quality';
-import { UNITS } from '../core/units';
+import { isAnimal, UNITS } from '../core/units';
 import {
   SEA_LEVEL,
   type Building,
@@ -46,7 +46,7 @@ import {
   type VillagerPose,
 } from './models';
 import { ENEMY_RING, MOVE_MARKER, SELECTION } from './palette';
-import { choosePick, ndcToCanvas, PICK_RANK, rectContains, type PickCandidate } from './picking';
+import { choosePick, ndcToCanvas, ORDER_PICK_RANK, PICK_RANK, rectContains, type PickCandidate, type PickIntent } from './picking';
 import { ProjectilePool } from './projectiles';
 import { createShadowTexture } from './shadow';
 
@@ -317,25 +317,35 @@ export class EntityViews {
     this.deaths.update(time, (owner, x, z, rubble) => this.ghostShown(owner, x, z, rubble));
   }
 
-  /** Entity under a normalised-device-coordinate point, or null. Units win over nodes, which win over buildings. */
-  pick(ndc: THREE.Vector2, camera: THREE.Camera): EntityId | null {
+  /** Selection favors units; orders favor attack and work targets over friendly units. */
+  pick(ndc: THREE.Vector2, camera: THREE.Camera, intent: PickIntent = 'select'): EntityId | null {
     this.prepareCamera(camera);
     const hits: PickCandidate[] = [];
     for (const unit of this.world.units.values()) {
       if (!this.unitShown(unit)) continue;
       const size = this.sizeOf.get(unit.id);
       if (!size) continue;
-      this.consider(hits, camera, ndc, unit.id, PICK_RANK.villager, unit.pos.x, unit.pos.z, size);
+      const rank = intent === 'select' ? PICK_RANK.villager
+        : this.world.areEnemies(this.world.localPlayer, unit.owner) || isAnimal(unit.kind) ? ORDER_PICK_RANK.attack : ORDER_PICK_RANK.unit;
+      this.consider(hits, camera, ndc, unit.id, rank, unit.pos.x, unit.pos.z, size);
     }
     for (const node of this.world.nodes.values()) {
       if (this.concealed(node.pos.x, node.pos.z)) continue;
       const size = this.sizeOf.get(node.id);
       if (!size) continue;
-      this.consider(hits, camera, ndc, node.id, PICK_RANK.node, node.pos.x, node.pos.z, size);
+      this.consider(hits, camera, ndc, node.id, intent === 'select' ? PICK_RANK.node : ORDER_PICK_RANK.node, node.pos.x, node.pos.z, size);
     }
     for (const building of this.world.buildings.values()) {
       if (!this.buildingTargetable(building)) continue;
-      this.considerBuilding(hits, camera, ndc, building);
+      let rank: number = PICK_RANK.townCenter;
+      if (intent === 'order') {
+        const own = building.owner === this.world.localPlayer;
+        const work = own && (!building.complete || building.kind === 'farm' || !!BUILDINGS[building.kind].garrison);
+        const market = building.kind === 'market' && building.complete && !this.world.areEnemies(this.world.localPlayer, building.owner);
+        rank = this.world.areEnemies(this.world.localPlayer, building.owner) ? ORDER_PICK_RANK.attack
+          : work || market ? ORDER_PICK_RANK.workBuilding : ORDER_PICK_RANK.building;
+      }
+      this.considerBuilding(hits, camera, ndc, building, rank);
     }
     return choosePick(hits);
   }
@@ -806,7 +816,7 @@ export class EntityViews {
     hits.push({ id, rank, depth: toX * toX + dy * dy + toZ * toZ });
   }
 
-  private considerBuilding(hits: PickCandidate[], camera: THREE.Camera, ndc: THREE.Vector2, building: Building): void {
+  private considerBuilding(hits: PickCandidate[], camera: THREE.Camera, ndc: THREE.Vector2, building: Building, rank: number): void {
     const { w, d } = BUILDINGS[building.kind].size;
     const hw = w / 2;
     const hd = d / 2;
@@ -839,7 +849,7 @@ export class EntityViews {
     const dx = camera.position.x - building.pos.x;
     const dy = camera.position.y - (y0 + y1) * 0.5;
     const dz = camera.position.z - building.pos.z;
-    hits.push({ id: building.id, rank: PICK_RANK.townCenter, depth: dx * dx + dy * dy + dz * dz });
+    hits.push({ id: building.id, rank, depth: dx * dx + dy * dy + dz * dz });
   }
 
   private pointInRect(
