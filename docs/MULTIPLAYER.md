@@ -58,6 +58,21 @@ Rollback: restore the previous release symlink and restart `agesago-relay`; for 
 installation, stop/disable the service and restore the saved nginx site file, validate,
 then reload nginx. No database or existing game data is migrated.
 
+First installation completed on 2026-10-10: `agesago-relay` is active on jedm,
+with release `/home/jedmeier/agesago-relay/releases/1ec9f2b`. The pre-relay nginx
+configuration is saved at `/etc/nginx/sites-available/agesago.jedm.dev.before-relay-1ec9f2b`.
+Both local and public health checks passed. The public WebSocket smoke check completed
+two independent client simulations, compared hashes at turns 0 and 25, and ended with
+the same winner on both clients. Reproduce that protocol check with:
+
+```sh
+RELAY_SMOKE_URL=wss://agesago.jedm.dev/multiplayer \
+RELAY_SMOKE_ORIGIN=https://agesago.jedm.dev npx vite-node scripts/smoke-relay.ts
+```
+
+The static-site CI deployment does not restart the relay; relay changes require building
+and installing a new release through the service deployment procedure above.
+
 The relay accepts the production origin, caps connections/rooms/messages/history and expires
 inactive rooms. Limits also cap session length and replay size. It provides deterministic
 coordination, not anti-cheat: participants hold the full simulation state on their browsers.
