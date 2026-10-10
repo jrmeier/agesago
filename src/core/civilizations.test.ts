@@ -23,6 +23,9 @@ describe('civilizations',()=> {
     const restored=deserializeWorld(serializeWorld(world));expect(restored.players.get(1)!.player.civ).toBe(civ);
     expect(TECHS[spec.tech].civ).toBe(civ);
     const model=createSoldier(spec.unit as Parameters<typeof createSoldier>[0]);expect(model.object.name).toBe(spec.unit);expect(model.object.userData.civilizationUnit).toBe(spec.unit);
+    model.setPose('attack',.4);model.setPose('die',.5,{progress:.5});
+    const torso=model.object.getObjectByName('tunic-head-armor') as import('three').Mesh;expect(torso.geometry.getAttribute('position').count).toBeGreaterThan(0);
+    expect(torso.geometry.userData.tintRoles).toBeDefined();
   });
 });
 
