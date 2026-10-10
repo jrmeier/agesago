@@ -27,6 +27,17 @@ function run(world: World): void {
 }
 
 describe('conquest victory', () => {
+  it('keeps a solo practice map running until its player resigns', () => {
+    const w = arena([1]);
+    const events = record(w);
+    run(w);
+    expect(w.gameOver).toBeNull();
+    expect(w.time).toBeGreaterThan(1);
+    expect(events).toEqual([]);
+    w.dispatch({ type: 'resign' }, 1);
+    expect(w.gameOver).toEqual({ winners: [], reason: 'resign' });
+  });
+
   it('requires elimination of both units and buildings, then emits defeat and gameOver once', () => {
     const w = arena();
     const events = record(w);
