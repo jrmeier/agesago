@@ -1,3 +1,4 @@
+import { unitLine, type TechId } from '../core/techs';
 import type { Building, BuildingKind, Stance, Stockpile, Unit, UnitKind } from '../core/types';
 import { isAnimal, UNITS, trainable, type UnitSpec } from '../core/units';
 import { TRAIN_SLOT_KEYS } from '../input/hotkeys';
@@ -31,10 +32,11 @@ export interface TrainEntry {
 }
 
 /** One training-panel entry per unit the building can train, with its slot key and affordability. */
-export function trainEntries(building: BuildingKind, stock: Stockpile): TrainEntry[] {
+export function trainEntries(building: BuildingKind, stock: Stockpile, researched?: ReadonlySet<TechId>): TrainEntry[] {
   return trainable(building).map((kind, i) => ({
     kind,
-    name: UNITS[kind].name,
+    // Unit-line upgrades rename what the building trains (Hoplite → Veteran Hoplite).
+    name: researched ? unitLine(researched, kind).title : UNITS[kind].name,
     cost: UNITS[kind].cost,
     key: TRAIN_SLOT_KEYS[i],
     affordable: canAfford(UNITS[kind].cost, stock),

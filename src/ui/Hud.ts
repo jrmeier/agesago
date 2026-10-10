@@ -144,6 +144,8 @@ export class Hud {
   private popNoteTimer = 0;
   /** Building kind the training grid was built for ('' = none). */
   private trainKind: BuildingKind | '' = '';
+  /** Unit-line tiers the training grid was built for. */
+  private trainLineKey = '';
   /** Building the training grid dispatches to. */
   private trainBuildingId: number | null = null;
   private trainAffordKey = '';
@@ -207,10 +209,6 @@ export class Hud {
       this.onTrain();
     });
     this.el.trainGrid?.addEventListener('click', (e) => {
-      if (this.swallowClick) {
-        this.swallowClick = false;
-        return;
-      }
       const tech = (e.target as Element).closest<HTMLElement>('[data-research]');
       if (tech) {
         tech.blur();
@@ -260,8 +258,22 @@ export class Hud {
   private bindLongPress(grid: HTMLElement | null): void {
     if (!grid) return;
     const clear = () => clearTimeout(this.pressTimer);
+    // A long-press shows the tip instead of activating the tile: eat the click that follows it,
+    // in the capture phase so Controls' own build-grid handler never sees it either.
+    grid.addEventListener(
+      'click',
+      (e) => {
+        if (!this.swallowClick) return;
+        this.swallowClick = false;
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      },
+      { capture: true }
+    );
     grid.addEventListener('pointerdown', (e) => {
       clear();
+      // Each press starts fresh, so a long-press with no follow-up click can't eat a later tap.
+      this.swallowClick = false;
       if (e.pointerType === 'mouse') return;
       const btn = (e.target as Element).closest<HTMLElement>('[data-tip]');
       if (!btn) return;
@@ -370,7 +382,7 @@ export class Hud {
     this.researchKey = '';
     this.researchHead = null;
     if (!kind) return;
-    for (const e of trainEntries(kind, this.world.stock)) {
+    for (const e of trainEntries(kind, this.world.stock, this.world.players.get(this.world.localPlayer)?.researched)) {
       const btn = tile(`#i-${e.kind}`, e.name, e.cost, e.key, 'Shift-click: queue 5');
       btn.classList.add('train-tile');
       btn.dataset.train = e.kind;
@@ -535,9 +547,13 @@ export class Hud {
     const researcher = own && own.complete && techsAt(own.kind).length ? own : undefined;
     const panel = trainer ?? researcher;
     const kind = panel?.kind ?? '';
-    if (kind !== this.trainKind) {
+    // Unit-line upgrades rename tiles (Hoplite → Veteran Hoplite), so they also rebuild the grid.
+    const lineSet = this.world.players.get(this.world.localPlayer)?.researched;
+    const lineKey = kind && lineSet ? trainable(kind).map((k) => unitLine(lineSet, k).tier).join() : '';
+    if (kind !== this.trainKind || lineKey !== this.trainLineKey) {
       // Leaving a building's panel: its new techs have been seen.
-      if (this.trainKind) for (const t of techsAt(this.trainKind)) this.fresh.delete(t);
+      if (kind !== this.trainKind && this.trainKind) for (const t of techsAt(this.trainKind)) this.fresh.delete(t);
+      this.trainLineKey = lineKey;
       this.buildTrainGrid(kind);
     }
     this.trainBuildingId = panel?.id ?? null;
@@ -590,7 +606,8 @@ export class Hud {
           item.title = `${TECHS[it.tech].name}${i === 0 ? ' (researching)' : ''} — click to cancel (refund)`;
         } else {
           const doing = i === 0 ? ' (training)' : it.index === 0 && b.research?.length ? ' (waits for research)' : '';
-          item.title = `${UNITS[it.unit].name}${doing} — click to cancel`;
+          const name = unitLine(this.world.players.get(b.owner)?.researched ?? new Set(), it.unit).title;
+          item.title = `${name}${doing} — click to cancel`;
         }
         item.setAttribute('aria-label', item.title);
         item.addEventListener('click', (e) => {

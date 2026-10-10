@@ -49,6 +49,9 @@ describe('market panel model', () => {
 
   it('lists tribute targets and previews the fee', () => {
     const w = world();
+    // Enemies are never offered; an ally is.
+    expect(tributeTargets(w, 1)).toEqual([]);
+    (w.players.get(2)!.player as { team: number }).team = w.players.get(1)!.player.team;
     expect(tributeTargets(w, 1).map((t) => t.id)).toEqual([2]);
     w.stock.stone = 300;
     expect(tributePreview(w, 1, 'stone', 500)).toEqual({ sent: 300, received: 210, fee: 0.3 });

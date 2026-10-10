@@ -45,6 +45,8 @@ export function isWorkableFarm(b: Building | undefined): boolean {
 
 /** Nobody but `u` is working `farm` (stale claims — the farmer took another order — are dropped). */
 export function farmFree(world: World, farm: Building, u: Unit): boolean {
+  // Only the farm's owner may work it (a gather order on an enemy field must not harvest it).
+  if (farm.owner !== u.owner) return false;
   const id = world.farmers.get(farm.id);
   if (id === undefined || id === u.id) return true;
   const f = world.units.get(id);

@@ -51,11 +51,14 @@ export function marketRows(world: World, owner: PlayerId): MarketRow[] {
   });
 }
 
-/** Players `owner` can send tribute to: everyone else still in the game. */
+/**
+ * Players `owner` can send tribute to from the panel: allies still in the game. Enemies are left
+ * out so one click can't hand resources to the opponent (the sim still accepts any player).
+ */
 export function tributeTargets(world: World, owner: PlayerId): { id: PlayerId; name: string; ally: boolean }[] {
   const out: { id: PlayerId; name: string; ally: boolean }[] = [];
   for (const [id, p] of world.players) {
-    if (id === owner || world.isDefeated(id)) continue;
+    if (id === owner || world.isDefeated(id) || world.areEnemies(owner, id)) continue;
     out.push({ id, name: p.player.name, ally: !world.areEnemies(owner, id) });
   }
   return out;

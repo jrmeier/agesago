@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUILDINGS, FARM_FOOD } from '../core/buildings';
+import { BUILDINGS, FARM_FOOD, MAX_POP, footprintRadius } from '../core/buildings';
 import {
   DEFAULT_SEED,
   GRASS_ONLY,
@@ -373,6 +373,19 @@ describe('NavGrid rectangles', () => {
 });
 
 describe('population', () => {
+  it('never raises the cap past MAX_POP however many houses stand', () => {
+    const w = world(layout([]));
+    for (let i = 0; i < 60; i++) {
+      const id = w.allocId();
+      w.buildings.set(id, {
+        id, kind: 'house', owner: 1, hp: BUILDINGS.house.hp, maxHp: BUILDINGS.house.hp, pos: { x: i % 10, z: Math.floor(i / 10) },
+        rot: 0, radius: footprintRadius('house'), complete: true, buildProgress: 1, queue: 0, progress: 0,
+      });
+    }
+    expect(w.popCapOf(1)).toBe(MAX_POP);
+    expect(MAX_POP).toBe(200);
+  });
+
   it('starts at 4/5 (3 villagers + scout, TC gives 5) and training stops at the cap', () => {
     const { hf, layout: l } = generateMap(DEFAULT_SEED);
     const w = new World(hf, l);
@@ -510,6 +523,24 @@ describe('farms', () => {
     w.dispatch({ type: 'gather', unitIds: [other.id], nodeId: farm.id });
     expect(other.gatherNode).toBe(farm.id);
     expect(w.farmers.get(farm.id)).toBe(other.id);
+  });
+
+  it("won't work another player's farm", () => {
+    const w = new World(field(), { ...layout([{ x: 26, z: 30 }]), extraStarts: [{ townCenter: { x: 56, z: 40 }, villagers: [], scouts: [] }] });
+    w.visibility.state.fill(EXPLORED);
+    w.stock.wood = 1000;
+    const [u] = units(w);
+    w.dispatch({ type: 'build', unitIds: [u.id], kind: 'farm', pos: { x: 26, z: 34 }, rot: 0 });
+    const farm = newest(w);
+    runUntil(w, () => farm.complete);
+    w.dispatch({ type: 'move', unitIds: [u.id], target: { x: 10, z: 10 } });
+    const thief = w.spawnUnit('villager', { x: 22, z: 30 }, 2);
+    const food = farm.food;
+    w.dispatch({ type: 'gather', unitIds: [thief.id], nodeId: farm.id }, 2);
+    run(w, 20);
+    expect(thief.gatherNode).not.toBe(farm.id);
+    expect(w.stockOf(2).food).toBe(0);
+    expect(farm.food).toBeLessThanOrEqual(food!);
   });
 
   it('a group order on a farm fills other free farms nearby', () => {
