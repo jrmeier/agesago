@@ -26,6 +26,15 @@ export function mountTitle(root: HTMLElement, hooks: TitleHooks): () => void {
   credit.id = 'title-audio-credit';
   credit.className = 'title-copy';
   credit.textContent = AUDIO_CREDIT;
+  for (const [label, href] of [
+    ['0 A.D. soundtrack', 'https://play0ad.com/media/music/'],
+    ['Wildfire Games', 'https://www.wildfiregames.com/'],
+    ['CC BY-SA 3.0', 'https://creativecommons.org/licenses/by-sa/3.0/'],
+    ['Track credits and downloads', `${import.meta.env.BASE_URL}audio/0ad/ATTRIBUTION.md`],
+  ]) {
+    const link = document.createElement('a'); link.textContent = label; link.href = href;
+    link.target = '_blank'; link.rel = 'noopener'; credit.append(' · ', link);
+  }
   const creditActions = credits.querySelector('.title-actions');
   if (creditActions) credits.insertBefore(credit, creditActions);
   else credits.append(credit);
