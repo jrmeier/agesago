@@ -42,14 +42,27 @@ export class Endgame {
     private readonly world: World,
     private readonly log: EndgameLog,
     private readonly onDecided: () => void,
+    private readonly onPlayAgain: () => void,
   ) {
     this.root = document.getElementById('endgame');
     this.resignBtn = document.getElementById('resign-btn') as HTMLButtonElement | null;
     const again = document.getElementById('play-again');
     const signal = this.stop.signal;
     this.resignBtn?.addEventListener('click', () => this.world.dispatch({ type: 'resign' }), { signal });
-    again?.addEventListener('click', () => location.reload(), { signal });
+    again?.addEventListener('click', () => this.onPlayAgain(), { signal });
     this.unlisten = this.world.events.on('gameOver', (e) => this.finish(e));
+  }
+
+  /**
+   * A reloaded match that was already over. gameOver is not emitted again, and the
+   * charts are the restored samples rather than a new reading.
+   */
+  showFinished(): void {
+    const over = this.world.gameOver;
+    if (!over || this.done) return;
+    this.done = true;
+    this.onDecided();
+    this.show(over.winners, over.reason);
   }
 
   /** One interval sample. The game loop calls this about every 10 sim seconds. */

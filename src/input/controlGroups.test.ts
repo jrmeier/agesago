@@ -28,6 +28,19 @@ describe('control groups', () => {
     expect(g.get(5)).toEqual([1, 2]);
   });
 
+  it('round-trips groups and drops ids that are no longer alive', () => {
+    const g = new ControlGroups();
+    g.assign(2, [4, 5]);
+    g.assign(1, [1, 2]);
+    const copy = new ControlGroups();
+    copy.restore(g.snapshot(), (id) => id !== 5);
+    expect(copy.snapshot()).toEqual([[2, [4]], [1, [1, 2]]]);
+    copy.restore([[9, [8]], [1, [5]]], (id) => id !== 5);
+    expect(copy.get(9)).toEqual([8]);
+    expect(copy.get(1)).toEqual([]);
+    expect(copy.get(2)).toEqual([]);
+  });
+
   it('drops removed entities everywhere and reports sizes', () => {
     const g = new ControlGroups();
     g.assign(1, [1, 2]);

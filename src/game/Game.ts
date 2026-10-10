@@ -1,6 +1,7 @@
 import { detectQuality, type Quality } from '../core/quality';
-import { DEFAULT_SEED, type Vec2 } from '../core/types';
+import { DEFAULT_SEED, type EntityId, type Vec2 } from '../core/types';
 import { CameraRig } from '../camera/CameraRig';
+import { MAX_DISTANCE, MIN_DISTANCE } from '../camera/RtsCamera';
 import { Controls } from '../input/Controls';
 import { Input } from '../input/Input';
 import { EntityViews } from '../render/EntityViews';
@@ -11,11 +12,24 @@ import { Renderer } from '../render/Renderer';
 import { TerrainView } from '../render/TerrainView';
 import { BALANCE } from '../sim/balance';
 import { generateMap } from '../sim/mapgen';
+import { deserializeWorld, serializeWorld } from '../sim/serialize';
 import { World } from '../sim/World';
 import { Endgame } from '../ui/Endgame';
 import { EndgameLog } from '../ui/endgameLog';
 import { Hud } from '../ui/Hud';
 import { Minimap } from '../ui/Minimap';
+import {
+  AUTOSAVE_MS,
+  RESUME_KEY,
+  RESUME_VERSION,
+  deleteResume,
+  downloadResume,
+  idbResumeStore,
+  readResume,
+  readResumeFile,
+  type ResumeEnvelope,
+  type ResumeStore,
+} from './resume';
 import { Selection } from './Selection';
 
 const STEP = 1 / BALANCE.tickRate;
@@ -51,6 +65,9 @@ interface BootParts {
   grass: GrassField;
   fog: FogOfWar;
   boot: BootTimings;
+  store: ResumeStore;
+  resume: ResumeEnvelope | null;
+  resumeFailed: boolean;
 }
 
 /**
@@ -81,7 +98,19 @@ export class Game {
   private last = 0;
   private elapsed = 0;
   private raf = 0;
+  private readonly store: ResumeStore;
+  private readonly resume: ResumeEnvelope | null;
+  /** Sim time last written, so a quiet tab does not save the same tick twice. */
+  private savedSimTime = -1;
+  private lastSaveWall = 0;
+  private saveChain: Promise<void> = Promise.resolve();
+  /** New match and Open file reload; further saves must not recreate the slot. */
+  private leaving = false;
+  private noteTimer = 0;
   private readonly onResize = () => this.resize();
+  private readonly onHide = () => {
+    if (document.visibilityState === 'hidden' && this.world.time !== this.savedSimTime) this.remember('quiet');
+  };
 
   /**
    * Build the world in stages so a loading screen can paint between them.
@@ -93,8 +122,38 @@ export class Game {
     await afterPaint();
 
     const tMap = performance.now();
-    const { hf, layout } = generateMap(seed);
-    const world = new World(hf, layout);
+    const store = idbResumeStore();
+    const loaded = await readResume(store);
+    let resume = loaded.envelope;
+    let resumeFailed = loaded.failed;
+    let matchSeed = resume?.sim.seed ?? seed;
+    let players = resume?.sim.playerCount ?? 2;
+    let generated: ReturnType<typeof generateMap>;
+    try {
+      generated = generateMap(matchSeed, players);
+    } catch {
+      resume = null;
+      resumeFailed = true;
+      matchSeed = seed;
+      players = 2;
+      generated = generateMap(seed);
+    }
+    const { hf, layout } = generated;
+    let world: World;
+    if (resume) {
+      try {
+        // deserializeWorld regenerates the same seed so scenery matches this heightfield.
+        world = deserializeWorld(resume.sim, hf);
+      } catch {
+        resume = null;
+        resumeFailed = true;
+        world = new World(hf, layout);
+        world.seed = matchSeed;
+      }
+    } else {
+      world = new World(hf, layout);
+      world.seed = matchSeed;
+    }
     const mapMs = performance.now() - tMap;
 
     report('Baking the ground', 0.46);
@@ -103,7 +162,12 @@ export class Game {
     const quality = detectQuality();
     const renderer = new Renderer(container, quality);
     const input = new Input(renderer.domElement);
-    const rig = new CameraRig(hf, input, layout.townCenter);
+    const aim = resume?.view ?? layout.townCenter;
+    const rig = new CameraRig(hf, input, { x: aim.x, z: aim.z });
+    if (resume) {
+      rig.rts.distance = Math.min(MAX_DISTANCE, Math.max(MIN_DISTANCE, resume.view.distance));
+      rig.rts.settle();
+    }
     const terrain = new TerrainView(hf, quality);
     const terrainMs = performance.now() - tTerrain;
 
@@ -121,6 +185,7 @@ export class Game {
     const game = new Game(container, {
       layout, world, quality, renderer, input, rig, terrain, views, props, grass, fog,
       boot: { mapMs, terrainMs, modelsMs, totalMs: performance.now() - t0 },
+      store, resume, resumeFailed,
     });
     report('The city stands', 1);
     return game;
@@ -139,6 +204,10 @@ export class Game {
     this.grass = parts.grass;
     this.fog = parts.fog;
     this.boot = parts.boot;
+    this.store = parts.store;
+    this.resume = parts.resume;
+    this.savedSimTime = parts.world.time;
+    this.lastSaveWall = performance.now();
 
     this.terrain.setFog(this.fog);
     this.props.setFog(this.fog);
@@ -163,9 +232,16 @@ export class Game {
     this.minimap = new Minimap(document.getElementById('hud') ?? container, this.world, this.rig);
     this.endgame = new Endgame(this.world, this.endgameLog, () => {
       this.matchOver = true;
+      this.remember('quiet');
+    }, () => {
+      void this.leave();
     });
+    if (this.resume) this.applyResume(this.resume);
+    if (this.world.gameOver) this.endgame.showFinished();
+    this.bindResume(parts.resumeFailed);
 
     window.addEventListener('resize', this.onResize);
+    document.addEventListener('visibilitychange', this.onHide);
     this.resize();
     this.last = performance.now();
     this.raf = requestAnimationFrame(this.frame);
@@ -177,25 +253,26 @@ export class Game {
   }
 
   private frame = (now: number) => {
-    if (this.matchOver) return;
     const dt = Math.min((now - this.last) / 1000, 0.25);
     this.last = now;
     this.elapsed += dt;
 
-    this.controls.update(dt);
-    this.rig.update(dt);
+    this.controls.update(this.matchOver ? 0 : dt);
+    if (!this.matchOver) this.rig.update(dt);
 
-    this.accumulator += dt;
-    let steps = 0;
-    while (this.accumulator >= STEP && steps < MAX_STEPS_PER_FRAME && !this.matchOver) {
-      this.world.tick(STEP);
-      this.accumulator -= STEP;
-      steps++;
+    if (!this.matchOver) {
+      this.accumulator += dt;
+      let steps = 0;
+      while (this.accumulator >= STEP && steps < MAX_STEPS_PER_FRAME && !this.matchOver) {
+        this.world.tick(STEP);
+        this.accumulator -= STEP;
+        steps++;
+      }
+      if (steps === MAX_STEPS_PER_FRAME) this.accumulator = 0;
+      if (steps > 0 && now - this.lastSaveWall >= AUTOSAVE_MS && this.world.time !== this.savedSimTime) this.remember('quiet');
+      // One economy sample about every 10 sim seconds. gameOver records the last one itself.
+      if (!this.matchOver && this.endgameLog.shouldSample(this.world.time)) this.endgame.sample();
     }
-    if (steps === MAX_STEPS_PER_FRAME) this.accumulator = 0;
-
-    // One economy sample about every 10 sim seconds. gameOver records the last one itself.
-    if (!this.matchOver && this.endgameLog.shouldSample(this.world.time)) this.endgame.sample();
 
     this.fog.update(dt);
     this.props.syncFog();
@@ -225,10 +302,134 @@ export class Game {
     this.rig.setAspect(w / h);
   }
 
+  private alive(id: EntityId): boolean {
+    return this.world.units.has(id) || this.world.buildings.has(id);
+  }
+
+  /** Groups, selection, and charts. The camera was already aimed in start. */
+  private applyResume(resume: ResumeEnvelope): void {
+    this.controls.groups.restore(resume.groups, (id) => this.alive(id));
+    this.selection.set(resume.selection.filter((id) => this.alive(id)));
+    this.endgameLog.replace(resume.charts);
+  }
+
+  private capture(): ResumeEnvelope {
+    return {
+      version: RESUME_VERSION,
+      sim: serializeWorld(this.world),
+      view: { x: this.rig.rts.target.x, z: this.rig.rts.target.z, distance: this.rig.rts.distance },
+      groups: this.controls.groups.snapshot(),
+      selection: [...this.selection.ids],
+      charts: this.endgameLog.samples.map((sample) => ({ ...sample })),
+      savedAt: Date.now(),
+    };
+  }
+
+  /**
+   * Queue a slot write. A previous failure must not skip this one, and a failure here
+   * must not skip the next. Save copy still downloads when the slot cannot be written.
+   */
+  private remember(kind: 'quiet' | 'noted'): void {
+    if (this.leaving) return;
+    let envelope: ResumeEnvelope;
+    try {
+      envelope = this.capture();
+    } catch {
+      this.note('Could not save the resume.');
+      return;
+    }
+    this.savedSimTime = envelope.sim.time;
+    this.lastSaveWall = performance.now();
+    // Download in this turn so the browser still counts the button press as the user gesture.
+    if (kind === 'noted') downloadResume(envelope);
+    this.saveChain = this.saveChain
+      .catch(() => undefined)
+      .then(() => this.store.put(RESUME_KEY, envelope))
+      .then(() => {
+        if (kind === 'noted') this.note('Saved');
+      })
+      .catch(() => {
+        this.savedSimTime = -1;
+        this.note('Could not save the resume.');
+      });
+  }
+
+  /** A file replaces the slot only after it parses. A bad version leaves the slot alone. */
+  private async openFile(file: Blob): Promise<void> {
+    let envelope: ResumeEnvelope;
+    try {
+      envelope = await readResumeFile(file);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      this.note(message.startsWith('Unsupported save version') ? message : 'That file could not be opened.');
+      return;
+    }
+    if (this.leaving) return;
+    this.leaving = true;
+    try {
+      await this.saveChain;
+      await this.store.put(RESUME_KEY, envelope);
+      location.reload();
+    } catch {
+      this.leaving = false;
+      this.note('That file could not be opened.');
+    }
+  }
+
+  /** Drop the slot after any in-flight write, then reload into a new match. */
+  private async leave(): Promise<void> {
+    if (this.leaving) return;
+    this.leaving = true;
+    try {
+      await this.saveChain;
+      await deleteResume(this.store);
+    } catch {
+      // Reload even when the slot cannot be deleted. The next boot starts fresh if it is gone.
+    }
+    location.reload();
+  }
+
+  private note(text: string): void {
+    const el = document.getElementById('save-note');
+    if (!el) return;
+    el.hidden = false;
+    el.textContent = text;
+    window.clearTimeout(this.noteTimer);
+    this.noteTimer = window.setTimeout(() => {
+      el.hidden = true;
+    }, 8000);
+  }
+
+  private bindResume(failed: boolean): void {
+    const input = document.getElementById('open-file-input') as HTMLInputElement | null;
+    const ask = document.getElementById('new-match-ask');
+    document.getElementById('save-copy')?.addEventListener('click', () => this.remember('noted'));
+    document.getElementById('open-file')?.addEventListener('click', () => input?.click());
+    input?.addEventListener('change', () => {
+      const file = input.files?.[0];
+      input.value = '';
+      if (file) void this.openFile(file);
+    });
+    document.getElementById('new-match')?.addEventListener('click', () => {
+      if (!ask) return;
+      ask.hidden = false;
+      document.getElementById('new-match-yes')?.focus();
+    });
+    document.getElementById('new-match-no')?.addEventListener('click', () => {
+      if (ask) ask.hidden = true;
+    });
+    document.getElementById('new-match-yes')?.addEventListener('click', () => {
+      void this.leave();
+    });
+    if (failed) this.note('The resume could not be read.');
+  }
+
   dispose(): void {
     cancelAnimationFrame(this.raf);
+    window.clearTimeout(this.noteTimer);
     this.endgame.dispose();
     window.removeEventListener('resize', this.onResize);
+    document.removeEventListener('visibilitychange', this.onHide);
     this.input.dispose();
     this.minimap.dispose();
     this.props.dispose();

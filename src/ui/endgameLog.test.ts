@@ -36,6 +36,20 @@ describe('endgame sampler', () => {
     expect(log.samples.map((s) => s.time)).toEqual([0, SAMPLE_EVERY, SAMPLE_EVERY + 2]);
   });
 
+  it('replaces the log from a resume and schedules the next sample after the last one', () => {
+    const log = new EndgameLog();
+    log.record(at(0, 1));
+    const restored = at(40, 9);
+    log.replace([restored]);
+    restored.food = 0;
+    expect(log.samples).toEqual([at(40, 9)]);
+    expect(log.shouldSample(40 + SAMPLE_EVERY - 0.01)).toBe(false);
+    expect(log.shouldSample(40 + SAMPLE_EVERY)).toBe(true);
+    log.replace([]);
+    expect(log.samples).toEqual([]);
+    expect(log.shouldSample(0)).toBe(true);
+  });
+
   it('copies samples so a later mutation does not change the log', () => {
     const log = new EndgameLog();
     const sample = at(0, 3);

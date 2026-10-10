@@ -243,6 +243,64 @@ body {
   outline-offset: 2px;
 }
 
+/* Resume controls. They sit in the top bar; the phone layout wraps them onto a second row. */
+.match-actions {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-width: 0;
+}
+
+.match-btn {
+  flex: none;
+  height: 36px;
+  padding: 0 10px;
+  pointer-events: auto;
+  cursor: pointer;
+  border-radius: 4px;
+  font-family: var(--title);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--ink);
+  background: var(--bronze-face);
+  border: 1px solid var(--bronze-lo);
+  box-shadow:
+    var(--trim),
+    0 2px 6px rgba(0, 0, 0, 0.4);
+  touch-action: manipulation;
+}
+
+.match-btn:hover {
+  filter: brightness(1.08);
+}
+
+.match-btn:active {
+  transform: translateY(1px);
+}
+
+.match-btn:focus-visible {
+  outline: 2px solid var(--gilt);
+  outline-offset: 2px;
+}
+
+#save-note[hidden] {
+  display: none !important;
+}
+
+#save-note {
+  pointer-events: none;
+  font-family: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gilt);
+}
+
 /* ---- Bottom row ---- */
 
 .hud-bottom {
@@ -835,6 +893,7 @@ body.touch .hud-hint {
 
 body.touch .hud-top {
   justify-content: center;
+  flex-wrap: wrap;
   gap: 12px;
   padding: max(6px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 6px
     max(12px, env(safe-area-inset-left));
@@ -844,6 +903,29 @@ body.touch .help-btn {
   width: 44px;
   height: 44px;
   font-size: 20px;
+}
+
+body.touch .logo-text {
+  display: none;
+}
+
+body.touch .match-actions {
+  order: 2;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+body.touch .match-btn {
+  min-width: 44px;
+  min-height: 44px;
+  height: auto;
+  padding: 0 12px;
+}
+
+body.touch #save-note {
+  flex: 1 0 100%;
+  text-align: center;
 }
 
 body.touch .resource-bar {
@@ -923,12 +1005,12 @@ body.touch .unit-info p {
   text-overflow: ellipsis;
 }
 
-/* Touch: the minimap moves to the top-right, under the resource bar. */
+/* Touch: the minimap moves to the top-right, under the resource bar and the resume row. */
 body.touch .minimap {
   left: auto;
   bottom: auto;
   right: max(10px, env(safe-area-inset-right));
-  top: calc(max(6px, env(safe-area-inset-top)) + 64px);
+  top: calc(max(6px, env(safe-area-inset-top)) + 128px);
   width: 128px;
   padding: 4px;
 }
@@ -1041,7 +1123,7 @@ body.touch .explore-btn .eicon {
 /* Short landscape phones: tighter bars so the map stays visible. */
 @media (max-height: 460px) {
   body.touch .minimap {
-    top: calc(max(6px, env(safe-area-inset-top)) + 58px);
+    top: calc(max(6px, env(safe-area-inset-top)) + 120px);
     width: 112px;
   }
 
@@ -2305,6 +2387,32 @@ body.touch.menu-orders .cmd-btn svg {
   width: 26px;
   height: 26px;
 }
+/* New match confirm. Above the hotkey list, below the end-of-match sheet. */
+.confirm[hidden] {
+  display: none !important;
+}
+
+.confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 29;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  overflow: hidden;
+  background: rgba(18, 10, 4, 0.72);
+  pointer-events: auto;
+}
+
+.confirm-copy {
+  margin: 0;
+  font-family: var(--text);
+  font-size: 16px;
+  line-height: 1.4;
+}
+
 /* ---- Hotkey list. Below the end-of-match sheet so a finished game still covers it. ---- */
 
 .hotkey-help[hidden] {
@@ -2496,9 +2604,9 @@ body.touch.menu-orders .cmd-btn svg {
   transform: translateY(1px);
 }
 
-/* Touch: the minimap owns the top-right (about 64px down, ~150px tall), so resign sits just under it. */
+/* Touch: the minimap owns the top-right (about 128px down, ~160px tall), so resign sits just under it. */
 body.touch .resign-btn {
-  top: calc(max(6px, env(safe-area-inset-top)) + 230px);
+  top: calc(max(6px, env(safe-area-inset-top)) + 310px);
   right: max(10px, env(safe-area-inset-right));
   min-height: 44px;
   min-width: 44px;
