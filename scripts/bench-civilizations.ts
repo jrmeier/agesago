@@ -8,7 +8,11 @@ import { census, run } from '../src/ai/harness';
 const output=process.env.CIV_BENCH_OUTPUT ?? '/tmp/agesago-civ-tournament.jsonl';
 const done=existsSync(output)?readFileSync(output,'utf8').trim().split('\n').filter(Boolean).map(line=>JSON.parse(line)):[];
 const score=(world:World,p:number)=>{const c=census(world,p);return c.villagers+c.army+Object.values(c.buildings).reduce((a,b)=>a+b,0)};
-for(let a=0;a<CIV_IDS.length;a++)for(let b=a+1;b<CIV_IDS.length;b++)for(let seed=1;seed<=10;seed++)for(const swap of [false,true]) {
+let pairIndex=-1;
+const shards=Number(process.env.CIV_BENCH_SHARDS ?? 1), shard=Number(process.env.CIV_BENCH_SHARD ?? 0);
+for(let a=0;a<CIV_IDS.length;a++)for(let b=a+1;b<CIV_IDS.length;b++){
+  pairIndex++;if(pairIndex%shards!==shard)continue;
+  for(let seed=1;seed<=10;seed++)for(const swap of [false,true]) {
   const pair=[CIV_IDS[a],CIV_IDS[b]],id=`${pair.join('/')}/${seed}/${swap}`;
   if(done.some(r=>r.id===id))continue;
   const civs=(swap?[pair[1],pair[0]]:pair) as CivId[];
@@ -22,8 +26,10 @@ for(let a=0;a<CIV_IDS.length;a++)for(let b=a+1;b<CIV_IDS.length;b++)for(let seed
   const row={id,pair,seed,swap,civs,winner:winner?civs[winner-1]:null,resolution:world.gameOver?'conquest':'score-cap',scores,simSeconds:world.time,wallMs:performance.now()-started};
   appendFileSync(output,JSON.stringify(row)+'\n');done.push(row);console.log(JSON.stringify(row));ais.forEach(ai=>ai.dispose());
 }
+}
+const completed=existsSync(output)?readFileSync(output,'utf8').trim().split('\n').filter(Boolean).map(line=>JSON.parse(line)):[];
 for(let a=0;a<CIV_IDS.length;a++)for(let b=a+1;b<CIV_IDS.length;b++) {
- const pair=[CIV_IDS[a],CIV_IDS[b]],games=done.filter(r=>r.pair.join('/')===pair.join('/'));
+ const pair=[CIV_IDS[a],CIV_IDS[b]],games=completed.filter(r=>r.pair.join('/')===pair.join('/'));
  const rate=games.reduce((sum,r)=>sum+(r.winner===pair[0]?1:r.winner===null?.5:0),0)/games.length;
  console.log(JSON.stringify({pair,games:games.length,firstWinRate:rate,passes:games.length===20&&rate>=.4&&rate<=.6}));
 }

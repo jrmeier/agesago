@@ -51,5 +51,7 @@ to `/tmp/agesago-civ-tournament.jsonl`, or `CIV_BENCH_OUTPUT`. Each game runs up
 30 sim minutes. A conquest winner is used when present; remaining games are
 explicitly labeled `score-cap` and scored by villagers + army + completed buildings,
 matching the established AI comparison harness. The output includes each result
-and checks the required 40–60% pairing range. Do not infer that this range has passed
+and checks the required 40–60% pairing range. Optional `CIV_BENCH_SHARDS` and
+`CIV_BENCH_SHARD` select disjoint pairing groups for parallel runs; all groups
+append to the same results file. Do not infer that this range has passed
 from the existence of the benchmark script; record its actual completed results.
