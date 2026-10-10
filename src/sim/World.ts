@@ -53,6 +53,7 @@ import { orderCancelResearch, orderResearch } from './systems/research';
 import { buildingMaxHp, buildingSight, unitMaxHp, unitSight } from './systems/stats';
 import { marketSystem, orderMarketTrade, orderTrade, orderTribute, releaseTrade } from './systems/market';
 import { resign, victorySystem, type GameResult } from './systems/victory';
+import { explorationSites, explorationRewardSystem, orderPriest, type ExplorationSite, type PriestOrder } from './systems/explorationRewards';
 import { wildlifeSystem } from './systems/wildlife';
 
 /**
@@ -133,6 +134,8 @@ export class World {
   readonly lastAlert = new Map<PlayerId, number>();
   /** Ticks run by the combat system (staggers target scans). */
   combatTicks = 0;
+  readonly exploration = new Map<string, ExplorationSite>();
+  readonly priestOrders = new Map<EntityId, PriestOrder>();
   private nextId = 1;
 
   constructor(
@@ -178,6 +181,11 @@ export class World {
       for (const p of start.scouts) this.addUnit('scout', p, i + 1);
     });
     for (const animal of layout.animals ?? []) this.addUnit(animal.kind, animal.pos, GAIA);
+    for (const site of explorationSites(layout.props)) {
+      // The ruin centre may be blocked by its scenery. A reachable approach keeps rewards playable.
+      site.pos = this.nav.nearestFree(site.pos) ?? site.pos;
+      this.exploration.set(site.id, site);
+    }
     this.updateFog();
   }
 
@@ -286,6 +294,7 @@ export class World {
    */
   dispatch(cmd: Command, by: PlayerId = this.localPlayer): void {
     cmd = this.ownedOnly(cmd, by);
+    if ('unitIds' in cmd && cmd.type !== 'stance') for (const id of cmd.unitIds) this.priestOrders.delete(id);
     // Any other unit order supersedes fighting and fleeing.
     if (
       cmd.type === 'move' || cmd.type === 'gather' || cmd.type === 'build' || cmd.type === 'construct' ||
@@ -295,6 +304,10 @@ export class World {
     }
     if ('unitIds' in cmd && cmd.type !== 'trade' && cmd.type !== 'stance') releaseTrade(this, cmd.unitIds);
     switch (cmd.type) {
+      case 'heal':
+      case 'convert':
+        orderPriest(this, cmd.unitIds, cmd.type, cmd.targetId, by);
+        break;
       case 'move':
         orderMove(this, cmd.unitIds, cmd.target);
         break;
@@ -399,6 +412,7 @@ export class World {
     combatSystem(this, dt, arrived);
     exploreSystem(this);
     productionSystem(this, dt);
+    explorationRewardSystem(this, dt);
     this.time += dt;
     this.fogClock -= dt;
     if (this.fogClock <= 0) {
@@ -507,7 +521,7 @@ export class World {
       hp,
       maxHp: hp,
       target: null,
-      stance: kind === 'villager' || kind === 'tradeCart' || isAnimal(kind) ? 'passive' : 'aggressive',
+      stance: kind === 'villager' || kind === 'tradeCart' || kind === 'priest' || isAnimal(kind) ? 'passive' : 'aggressive',
       pos: { ...p },
       prevPos: { ...p },
       facing: 0,

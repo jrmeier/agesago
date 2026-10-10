@@ -480,7 +480,9 @@ export class Hud {
       const line = same ? lineOf(kinds[0]) : null;
       setText(this.el.name, line && line.tier > 0 ? (units.length > 1 ? `${units.length} × ${line.title}` : line.title) : selectionName(kinds));
       const capacity = carryCap(this.world, units[0], units[0].carry?.type ?? units[0].gatherType ?? 'wood');
-      setText(this.el.status, foreign ? this.ownerName(owner) : groupStatus(units, capacity));
+      setText(this.el.status, foreign ? this.ownerName(owner) : kinds.every(k => k === 'priest')
+        ? (units.some(u => u.relic) ? 'Carrying a relic · Move beside your temple to enshrine' : 'Move to standing stones for relics · Order on ally to heal, enemy to convert')
+        : groupStatus(units, capacity));
       this.setPortrait(`#i-${portraitKind(kinds)}`, units.length > 1 ? String(units.length) : '');
       const hp = totalHp(units);
       this.setHp(hp.hp, hp.maxHp);

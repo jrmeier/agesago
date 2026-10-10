@@ -11,6 +11,7 @@ import {
 } from './models';
 import { createSoldier, createTradeCart, projectileGeometry as modelProjectile } from './models';
 import { applyUnitTiers, BASE_TIERS, ownedLambert, sameTiers, Shimmer, type UnitTiers } from './tiers';
+import { createPriest } from './explorationModels';
 import { rubbleGeometry as propsRubble } from './props';
 
 /**
@@ -106,6 +107,7 @@ const PENNANT_Y: Record<UnitKind, number> = {
   archer: 1.15,
   horseman: 1.7,
   tradeCart: 1.12,
+  priest: 1.4,
   deer: 1.3,
   boar: 0.8,
   sheep: 0.8,
@@ -346,6 +348,7 @@ export function createUnitAvatar(kind: UnitKind, color: number, seed: number): U
 }
 
 function createBaseAvatar(kind: UnitKind, color: number, seed: number): Omit<UnitAvatar, 'setTiers' | 'shimmer'> {
+  if (kind === 'priest') return fromSoldier(kind, color, seed, createPriest as unknown as SoldierFactory);
   if (kind === 'tradeCart') return fromSoldier(kind, color, seed, createTradeCart as unknown as SoldierFactory);
   if (kind === 'deer' || kind === 'boar' || kind === 'sheep') {
     const model = createAnimal(kind);

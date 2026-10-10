@@ -448,7 +448,10 @@ export class Controls {
         const id = this.unitFromPick(picked);
         if (id !== null) {
           const own = world.units.get(id)?.owner === world.localPlayer;
-          if (own) this.selectUnit(id);
+          const ally = world.units.get(id);
+          const healing = own && ally && ally.hp < ally.maxHp && this.ownUnitIds().some(uid => world.units.get(uid)?.kind === 'priest');
+          if (healing) this.order(g.x, g.y, false);
+          else if (own) this.selectUnit(id);
           else if (ownUnits) this.order(g.x, g.y, false);
           else selection.set([id]);
           break;
@@ -716,6 +719,15 @@ export class Controls {
     const id = this.pickAt(x, y, unitIds.length ? 'order' : 'select');
     const hit = this.hitEntity(id);
     const rally = unitIds.length ? null : this.rallyBuilding();
+    // Priest context orders work with mouse right-click and the same touch order path.
+    const priests = unitIds.filter(uid => world.units.get(uid)?.kind === 'priest');
+    const targetUnit = id !== null ? world.units.get(id) : undefined;
+    if (priests.length && targetUnit && targetUnit.owner > 0 && world.visibility.isVisible(targetUnit.pos.x, targetUnit.pos.z)) {
+      if (world.areEnemies(world.localPlayer, targetUnit.owner)) {
+        world.dispatch({ type: 'convert', unitIds: priests, targetId: targetUnit.id }); return;
+      }
+      if (targetUnit.hp < targetUnit.maxHp) { world.dispatch({ type: 'heal', unitIds: priests, targetId: targetUnit.id }); return; }
+    }
     const targetCmd = resolveTargetOrder({ unitIds, rallyBuildingId: rally?.id ?? null }, hit, ground, (owner) =>
       world.areEnemies(world.localPlayer, owner)
     );

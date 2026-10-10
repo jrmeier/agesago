@@ -456,6 +456,10 @@ export function buildingModel(kind: BuildingKind, opts?: BuildingModelOptions): 
     anchors = forge.anchors;
   } else if (kind === 'market') {
     parts.push(...marketParts(opts?.color ?? 0x9e3b26));
+  } else if (kind === 'temple') {
+    parts.push(...academyParts());
+    parts.push(part(new THREE.OctahedronGeometry(0.34), 0xd7b251, [0, 3.3, 0]));
+    for (const x of [-1.3, 1.3]) parts.push(part(new THREE.CylinderGeometry(0.18, 0.25, 0.5, 8), 0xd7b251, [x, 0.9, 1.2]));
   } else if (kind === 'academy') {
     parts.push(...academyParts());
   } else if (kind === 'watchTower') {

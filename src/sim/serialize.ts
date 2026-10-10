@@ -8,6 +8,7 @@ import type { ExploreState } from './systems/explore';
 import type { GatherState } from './systems/gather';
 import { clearStatCache } from './systems/research';
 import { buildingRect } from './systems/sites';
+import type { ExplorationSite, PriestOrder } from './systems/explorationRewards';
 import type { GameResult } from './systems/victory';
 
 /** 2: M8 research (researched techs, ages, market prices, building research queues). */
@@ -35,6 +36,8 @@ export interface SaveData {
   time: number;
   clocks: { fogClock: number; nextId: number };
   systems: {
+    exploration?: [string, ExplorationSite][];
+    priests?: [EntityId, PriestOrder][];
     gather: [EntityId, GatherState][];
     build: [EntityId, EntityId][];
     explore: [EntityId, ExploreState][];
@@ -110,6 +113,8 @@ export function serializeWorld(world: World): SaveData {
     time: world.time,
     clocks: world.saveClocks,
     systems: {
+      exploration: [...world.exploration],
+      priests: [...world.priestOrders],
       gather: [...world.gatherState],
       build: [...world.buildState],
       explore: [...world.exploreState],
@@ -198,6 +203,8 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   world.time = saved.time;
   world.restoreClocks(saved.clocks);
   const s = saved.systems;
+  if (s.exploration) restoreMap(world.exploration, s.exploration);
+  if (s.priests) restoreMap(world.priestOrders, s.priests);
   restoreMap(world.gatherState, s.gather);
   restoreMap(world.buildState, s.build);
   restoreMap(world.exploreState, s.explore);

@@ -168,6 +168,12 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     radius: 0.55,
     age: 1,
   },
+  priest: {
+    name: 'Priest', unitClass: 'villager', hp: 35, speed: 2.2, sight: 9,
+    attack: { melee: 0, pierce: 0 }, armor: { melee: 0, pierce: 0 },
+    range: 0, reload: 2, bonus: {}, cost: { gold: 100 }, trainTime: 30,
+    trainedAt: 'temple', radius: 0.32, age: 1,
+  },
   tradeCart: {
     name: 'Trade Cart',
     unitClass: 'villager',

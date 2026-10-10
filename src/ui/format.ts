@@ -19,6 +19,7 @@ const UNIT_NAMES: Record<UnitKind, [string, string]> = {
   archer: ['Archer', 'Archers'],
   horseman: ['Horseman', 'Horsemen'],
   tradeCart: ['Trade Cart', 'Trade Carts'],
+  priest: ['Priest', 'Priests'],
   deer: ['Deer', 'Deer'],
   boar: ['Boar', 'Boars'],
   sheep: ['Sheep', 'Sheep'],
