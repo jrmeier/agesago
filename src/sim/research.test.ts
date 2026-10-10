@@ -112,3 +112,4 @@ describe('research queue', () => {
     expect(researchBlock(w, 1, 'empireAge', true)).toBeNull();
   });
 });
+

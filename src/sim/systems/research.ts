@@ -130,7 +130,7 @@ export function orderResearch(world: World, buildingId: EntityId, tech: TechId):
 export function orderCancelResearch(world: World, buildingId: EntityId, index: number): void {
   const b = world.buildings.get(buildingId);
   const q = b?.research;
-  if (!b || !q || index < 0 || index >= q.length) {
+  if (!b || !q || !Number.isInteger(index) || index < 0 || index >= q.length) {
     world.events.emit({ type: 'rejected', reason: 'invalid-target' });
     return;
   }

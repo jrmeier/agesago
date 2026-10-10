@@ -148,7 +148,7 @@ describe('market buy/sell', () => {
 
 describe('tribute', () => {
   it('needs a market and loses the fee on the way', () => {
-    const w = world();
+    const w = world(true);
     const tributes = on(w, 'tribute');
     w.stock.wood = 1000;
     w.dispatch({ type: 'tribute', to: 2, resource: 'wood', amount: 500 });
@@ -162,7 +162,7 @@ describe('tribute', () => {
   });
 
   it('Coinage lowers the fee', () => {
-    const w = world();
+    const w = world(true);
     addBuilding(w, 'market', 40, 40);
     completeResearch(w, 1, 'coinage');
     w.stock.gold = 1000;
@@ -172,7 +172,7 @@ describe('tribute', () => {
   });
 
   it('clamps to what you have and rejects sending to yourself', () => {
-    const w = world();
+    const w = world(true);
     addBuilding(w, 'market', 40, 40);
     w.stock.stone = 40;
     const before = w.stockOf(2).stone;
@@ -182,6 +182,26 @@ describe('tribute', () => {
     w.stock.food = 300;
     w.dispatch({ type: 'tribute', to: 1, resource: 'food', amount: 100 });
     expect(w.stock.food).toBe(300);
+  });
+
+  it('refuses to pay an enemy', () => {
+    const w = world(false);
+    addBuilding(w, 'market', 40, 40);
+    w.stock.wood = 1000;
+    const before = w.stockOf(2).wood;
+    w.dispatch({ type: 'tribute', to: 2, resource: 'wood', amount: 500 });
+    expect(w.stock.wood).toBe(1000);
+    expect(w.stockOf(2).wood).toBe(before);
+  });
+
+  it('rejects resources that are not real (prototype keys)', () => {
+    const w = world(true);
+    addBuilding(w, 'market', 40, 40);
+    const gold = w.stock.gold;
+    w.dispatch({ type: 'marketTrade', resource: 'constructor' as never, side: 'sell' });
+    w.dispatch({ type: 'tribute', to: 2, resource: 'constructor' as never, amount: 1 });
+    expect(w.stock.gold).toBe(gold);
+    expect(Object.keys(w.stock).sort()).toEqual(['food', 'gold', 'stone', 'wood']);
   });
 });
 

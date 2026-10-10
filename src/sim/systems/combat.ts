@@ -135,14 +135,15 @@ function bucketsOf(world: World): UnitBuckets {
 
 /** How far `u` looks for enemies on its own (−1: never). */
 function acquireRadius(world: World, u: Unit, cs: CombatState | undefined): number {
-  if (cs?.order === 'attackMove') return unitSight(world, u.owner, u.kind);
+  if (cs?.order === 'attackMove') return Math.max(unitSight(world, u.owner, u.kind), unitRange(world, u.owner, u.kind));
   return stanceRadius(world, u, u.stance);
 }
 
 function stanceRadius(world: World, u: Unit, stance: Stance): number {
   switch (stance) {
     case 'aggressive':
-      return unitSight(world, u.owner, u.kind);
+      // Range upgrades can outgrow sight (archers: sight 8, range 10 with Fletching + Barbed Points).
+      return Math.max(unitSight(world, u.owner, u.kind), unitRange(world, u.owner, u.kind));
     case 'defensive':
       return unitSight(world, u.owner, u.kind) / 2;
     case 'standGround':

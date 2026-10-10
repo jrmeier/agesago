@@ -355,6 +355,21 @@ describe('forge', () => {
     expect(a.target).toBe(e.id);
     expect(e.hp).toBeLessThan(UNITS.hoplite.hp);
   });
+
+  it('an aggressive archer engages at its full upgraded range, past its sight', () => {
+    const world = arena();
+    world.players.get(1)!.age = 2;
+    const a = world.spawnUnit('archer', { x: 50, z: 50 }, 1);
+    world.spawnUnit('scout', { x: 54, z: 50 }, 1); // a spotter
+    for (const t of ['fletching', 'barbedPoints', 'compositeArcher'] as const) research(world, 1, t);
+    // Edge distance 9.5: beyond sight 8, inside upgraded range 10.
+    const e = world.spawnUnit('hoplite', { x: 50 + 9.5 + UNITS.archer.radius + UNITS.hoplite.radius, z: 50 }, 2);
+    world.dispatch({ type: 'stance', unitIds: [e.id], stance: 'passive' }, 2);
+    world.updateFog();
+    run(world, 3);
+    expect(a.target).toBe(e.id);
+    expect(e.hp).toBeLessThan(UNITS.hoplite.hp);
+  });
 });
 
 describe('unit lines', () => {

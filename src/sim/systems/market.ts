@@ -57,6 +57,9 @@ export function buyCost(price: number): number {
 }
 
 /** Gold you get for selling 100 at `price`. */
+/** Every resource (allow-list for tribute input). */
+const RESOURCE_TYPES = ['wood', 'food', 'gold', 'stone'] as const;
+
 export function sellGain(price: number): number {
   return Math.round(price * MARKET.sellFactor);
 }
@@ -69,7 +72,7 @@ export function marketTradeBlock(
   side: 'buy' | 'sell'
 ): RejectReason | null {
   const p = world.players.get(owner);
-  if (!p || !(resource in p.prices)) return 'invalid-target';
+  if (!p || !(MARKET_RESOURCES as readonly string[]).includes(resource)) return 'invalid-target';
   if (!hasMarket(world, owner)) return 'requires';
   if (side === 'buy' && p.stock.gold < buyCost(p.prices[resource])) return 'insufficient-resources';
   if (side === 'sell' && p.stock[resource] < LOT) return 'insufficient-resources';
@@ -122,7 +125,11 @@ export function orderMarketTrade(world: World, owner: PlayerId, resource: Market
 export function orderTribute(world: World, from: PlayerId, to: PlayerId, resource: ResourceType, amount: number): void {
   const giver = world.players.get(from);
   const taker = world.players.get(to);
-  if (!giver || !taker || from === to || world.isDefeated(to) || !(resource in giver.stock)) {
+  // Tribute is for allies (the market panel only offers them); an enemy can't be paid off.
+  if (
+    !giver || !taker || from === to || world.isDefeated(to) || world.areEnemies(from, to) ||
+    !(RESOURCE_TYPES as readonly string[]).includes(resource)
+  ) {
     reject(world, from, 'invalid-target');
     return;
   }

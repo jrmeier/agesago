@@ -210,6 +210,16 @@ describe('world save/load', () => {
     expect(() => deserializeWorld(badFog, hf)).toThrow('visibility runs');
   });
 
+  it('rejects prototype-key techs and bad prices instead of crashing later', () => {
+    const a = fresh();
+    const proto = JSON.parse(JSON.stringify(serializeWorld(a)));
+    proto.players[0].researched = ['constructor'];
+    expect(() => deserializeWorld(proto, hf)).toThrow('researched techs');
+    const prices = JSON.parse(JSON.stringify(serializeWorld(a)));
+    prices.players[0].prices.wood = 'lots';
+    expect(() => deserializeWorld(prices, hf)).toThrow('prices');
+  }, 30_000);
+
   it('reports a typical two-player save size with compressed fog', () => {
     const a = fresh();
     run(a, 40);

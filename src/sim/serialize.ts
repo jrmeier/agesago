@@ -1,4 +1,4 @@
-import { BUILDINGS } from '../core/buildings';
+import { BUILDINGS, MARKET } from '../core/buildings';
 import { TECHS } from '../core/techs';
 import type { Age, Building, EntityId, Heightfield, MarketResource, Player, PlayerId, ResourceNode, Stockpile, TechId, Unit } from '../core/types';
 import { generateMap } from './mapgen';
@@ -174,15 +174,19 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
     Object.assign(state.stock, p.stock);
     decode(p.visibility.runs, state.visibility.state);
     state.visibility.version = p.visibility.version;
-    if (!Array.isArray(p.researched) || p.researched.some((t) => !(t in TECHS))) throw new Error('Invalid save: researched techs');
+    if (!Array.isArray(p.researched) || p.researched.some((t) => !Object.hasOwn(TECHS, t))) throw new Error('Invalid save: researched techs');
     if (![0, 1, 2, 3].includes(p.age)) throw new Error('Invalid save: age');
     state.researched.clear();
     for (const t of p.researched) state.researched.add(t);
     state.age = p.age;
-    Object.assign(state.prices, p.prices);
+    for (const r of ['wood', 'food', 'stone'] as const) {
+      const v = p.prices?.[r];
+      if (typeof v !== 'number' || !Number.isFinite(v) || v < MARKET.minPrice || v > MARKET.maxPrice) throw new Error('Invalid save: prices');
+      state.prices[r] = v;
+    }
   }
   for (const b of world.buildings.values()) {
-    if (b.research?.some((t) => !(t in TECHS))) throw new Error('Invalid save: research queue');
+    if (b.research?.some((t) => !Object.hasOwn(TECHS, t))) throw new Error('Invalid save: research queue');
   }
   clearStatCache(world);
   world.time = saved.time;
