@@ -1,3 +1,4 @@
+import { productionSystem } from '../sim/systems/production';
 import { describe,it,expect } from 'vitest';
 import { CIVS,CIV_IDS } from './civilizations';
 import { TECHS } from './techs';
@@ -20,6 +21,11 @@ describe('civilizations',()=> {
       expect(statOf(world,1,subject,effect.stat,100)).toBeCloseTo(effect.op==='mul'?100*effect.value:100+effect.value);
     }
     completeResearch(world,1,spec.tech);expect(world.players.get(1)!.researched.has(spec.tech)).toBe(true);
+    Object.assign(world.stock,{food:1000,wood:1000,gold:1000,stone:1000});
+    const camp={...world.townCenter!,id:world.allocId(),kind:unit.trainedAt!,queue:0,progress:0};world.buildings.set(camp.id,camp);
+    world.dispatch({type:'train',buildingId:camp.id,unit:spec.unit});
+    expect(camp.queueKinds).toEqual([spec.unit]);productionSystem(world,unit.trainTime+1);
+    expect([...world.units.values()].some(u=>u.kind===spec.unit&&u.owner===1)).toBe(true);
     const restored=deserializeWorld(serializeWorld(world));expect(restored.players.get(1)!.player.civ).toBe(civ);
     expect(TECHS[spec.tech].civ).toBe(civ);
     const model=createSoldier(spec.unit as Parameters<typeof createSoldier>[0]);expect(model.object.name).toBe(spec.unit);expect(model.object.userData.civilizationUnit).toBe(spec.unit);
