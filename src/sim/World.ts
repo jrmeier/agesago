@@ -101,7 +101,7 @@ export class World {
   /** Everyone in the game, by id (gaia is not listed). */
   readonly players = new Map<PlayerId, PlayerState>();
   /** The player this client controls and renders for. */
-  readonly localPlayer: PlayerId = 1;
+  localPlayer: PlayerId = 1;
   /** Simulated seconds elapsed. */
   time = 0;
   /** Terminal conquest result; consumers decide when to pause the game loop. */

@@ -1,3 +1,4 @@
+import { mountOnline } from './network/lobby';
 import { devHook } from './game/devHook';
 import { Game, type MatchStart } from './game/Game';
 import { deleteResume, idbResumeStore } from './game/resume';
@@ -50,10 +51,11 @@ const closeSettingsPanel = mountSettings();
 
 const params = new URLSearchParams(location.search);
 const title = document.getElementById('title-screen');
-if (params.has('e2e') || !title) {
+if ((params.has('e2e') && !params.has('title')) || !title) {
   await bootMatch(params.has('tutorial') ? { tutorial: true, players: 2, fresh: true } : {});
 } else {
   let closeTitle = () => {};
+  const closeOnline = mountOnline(title, (session, data) => { closeOnline(); closeTitle(); void bootMatch({ seed: data.config.seed, players: data.config.players, fresh: true, online: { session, data } }); });
   closeTitle = mountTitle(title, {
     onContinue() {
       closeTitle();

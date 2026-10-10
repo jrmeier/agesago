@@ -32,7 +32,7 @@
       // Classic script, so this runs while the document is still parsing, before the game module.
       window.__loadingAt = performance.now();
       // Tests open /?e2e straight into a match. Everyone else sees the title first.
-      if (!new URLSearchParams(location.search).has('e2e')) document.documentElement.classList.add('show-title');
+      if (!new URLSearchParams(location.search).has('e2e') || new URLSearchParams(location.search).has('title')) document.documentElement.classList.add('show-title');
     </script>
     <div id="title-screen">
       <div class="title-card">
