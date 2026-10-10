@@ -16,8 +16,11 @@ import {
   type UnitKind,
   type Vec2,
 } from '../core/types';
+import { BALANCE } from '../sim/balance';
+import { carryCap } from '../sim/systems/gather';
 import type { World } from '../sim/World';
 import type { Visibility } from '../sim/visibility';
+import { ExplorationView } from './ExplorationView';
 import { createBuildingVisual, createGhost, footprintMinY, tintGhost, type BuildingVisual } from './buildingVisuals';
 import { DeathGhosts } from './deaths';
 import { applyFog, createFogDepthMaterial, isConcealed, matrixForConcealment, type FogOfWar } from './fog';
@@ -34,7 +37,7 @@ import { HealthBars } from './hpBars';
 import { SpatialInstances } from './instanceChunks';
 import { berryLodGeometry, goldLodGeometry, stoneLodGeometry, stoneNodeGeometry, treeLodGeometry } from './lod';
 import { createUnitAvatar, type UnitAvatar } from './modelBridge';
-import { buildingRenderTier, unitTiers } from './tiers';
+import { applyCarryCapacity, buildingRenderTier, unitTiers } from './tiers';
 import {
   berryBushGeometry,
   carcassGeometry,
@@ -91,6 +94,8 @@ const UNIT_SCALE: Record<UnitKind, number> = {
   archer: 1.25,
   horseman: 1.15,
   tradeCart: 1.15,
+  priest: 1.3,
+  fishingBoat: 1.2, merchantShip: 1.2, trireme: 1.2, transport: 1.2,
   deer: 1.3,
   boar: 1.3,
   sheep: 1.3,
@@ -106,6 +111,8 @@ const BAR_Y: Record<UnitKind, number> = {
   archer: 1.8,
   horseman: 2.4,
   tradeCart: 1.6,
+  priest: 2.1,
+  fishingBoat: 1.8, merchantShip: 3.0, trireme: 2.5, transport: 2.3,
   deer: 2,
   boar: 1.3,
   sheep: 1.3,
@@ -127,6 +134,8 @@ const BUILDING_HEIGHT: Record<BuildingKind, number> = {
   forge: 2.9,
   market: 2.2,
   academy: 3.7,
+  temple: 3.6,
+  dock: 2.2,
 };
 /** Extra height of upgraded watch towers (Guard 1, Fortress 2) over BUILDING_HEIGHT. */
 const TOWER_TIER_EXTRA = [0, 1.1, 1.6];
@@ -145,6 +154,7 @@ const TOWER_TIER_EXTRA = [0, 1.1, 1.6];
 export class EntityViews {
   readonly object = new THREE.Group();
   private readonly material = modelMaterial();
+  private readonly explorationView: ExplorationView;
   private readonly geometries: Record<NodeKind, THREE.BufferGeometry[]>;
   private readonly lodGeometries: Record<NodeKind, THREE.BufferGeometry>;
   private readonly stumps: SpatialInstances;
@@ -244,6 +254,8 @@ export class EntityViews {
     this.markerMesh.renderOrder = 4;
     this.object.add(this.markerMesh);
 
+    this.explorationView = new ExplorationView(this.world);
+    this.object.add(this.explorationView.object);
     this.bars = new HealthBars(this.object);
     this.projectiles = new ProjectilePool(this.object, quality);
     this.deaths = new DeathGhosts(this.object, quality);
@@ -311,6 +323,7 @@ export class EntityViews {
     this.cullChunks(camera);
     const t = clamp01(alpha);
     this.syncUnits(t, time);
+    this.explorationView.sync();
     this.syncBuildings(camera);
     this.syncHealth(t, camera);
     this.syncRings(t);
@@ -479,6 +492,7 @@ export class EntityViews {
     const color = this.ownerColor(unit.owner);
     const avatar = createUnitAvatar(unit.kind, color, unit.id);
     avatar.setTiers(unitTiers(this.researchedBy(unit.owner), unit.kind));
+    this.updateCarryCapacity(unit, avatar);
     avatar.object.scale.setScalar(UNIT_SCALE[unit.kind]);
     avatar.object.userData.entityId = unit.id;
     avatar.object.traverse((obj) => {
@@ -556,12 +570,21 @@ export class EntityViews {
     for (const [id, view] of this.villagers) {
       const unit = this.world.units.get(id);
       if (!unit || unit.owner !== owner || !view.avatar) continue;
+      this.updateCarryCapacity(unit, view.avatar);
       if (view.avatar.setTiers(unitTiers(researched, unit.kind))) view.avatar.shimmer();
     }
     // Buildings swap on their next live frame, so a fogged enemy tower keeps its last-seen look.
     for (const id of this.buildingViews.keys()) {
       if (this.world.buildings.get(id)?.owner === owner) this.tierDirty.add(id);
     }
+  }
+
+  private updateCarryCapacity(unit: Unit, avatar: UnitAvatar): void {
+    if (unit.kind !== 'villager') return;
+    applyCarryCapacity(avatar.object, {
+      wood: carryCap(this.world, unit, 'wood'), food: carryCap(this.world, unit, 'food'),
+      gold: carryCap(this.world, unit, 'gold'), stone: carryCap(this.world, unit, 'stone'),
+    }, BALANCE.carryCap);
   }
 
   private refreshTier(building: Building, view: BuildingVisual): void {

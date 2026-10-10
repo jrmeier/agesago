@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { qualityTier } from '../core/quality';
+import { currentSettings, initSettings, replaceSettings } from '../game/settings';
 import { BUILDINGS } from '../core/buildings';
 import type { TechId } from '../core/techs';
 import type { BuildingKind } from '../core/types';
@@ -7,7 +9,7 @@ import { buildingModel, foundationModel, modelTier } from './buildings';
 import { createBuildingVisual } from './buildingVisuals';
 import { createUnitAvatar } from './modelBridge';
 import { createSoldier, createTradeCart, createVillager } from './models';
-import { applyUnitTiers, BASE_TIERS, buildingRenderTier, Shimmer, TOOL_TINT, unitTiers } from './tiers';
+import { applyCarryCapacity, applyUnitTiers, BASE_TIERS, buildingRenderTier, Shimmer, TOOL_TINT, unitTiers } from './tiers';
 
 function meshes(object: THREE.Object3D): THREE.Mesh<THREE.BufferGeometry>[] {
   const out: THREE.Mesh<THREE.BufferGeometry>[] = [];
@@ -276,7 +278,44 @@ describe('unit upgrade visuals', () => {
 });
 
 describe('shimmer and reduced motion', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    initSettings({ stored: null, search: '', detected: qualityTier('medium'), reducedMotion: false });
+  });
+
+  it('stays dark with the in-game setting and stops an active shimmer when it changes', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    initSettings({ stored: null, search: '', detected: qualityTier('medium'), reducedMotion: false });
+    const material = new THREE.MeshLambertMaterial();
+    const shimmer = new Shimmer([material]);
+    shimmer.start();
+    shimmer.update(1);
+    shimmer.update(1.3);
+    expect(material.emissive.getHex()).not.toBe(0);
+    replaceSettings({ ...currentSettings(), reducedMotion: true });
+    shimmer.update(1.4);
+    expect(material.emissive.getHex()).toBe(0);
+    shimmer.start();
+    shimmer.update(2);
+    shimmer.update(2.3);
+    expect(material.emissive.getHex()).toBe(0);
+  });
+
+  it('increases the existing load model volume for upgraded resource capacities', () => {
+    const avatar = createUnitAvatar('villager', 0x3366ff, 17);
+    avatar.setPose('walk', 0, 'wood');
+    const before = meshes(avatar.object);
+    const wood = avatar.object.getObjectByName('carry-wood') as THREE.Mesh;
+    const geometry = wood.geometry;
+    applyCarryCapacity(avatar.object, { wood: 13, food: 13, gold: 13, stone: 13 }, 10);
+    expect(wood.scale.x ** 3).toBeCloseTo(1.3);
+    avatar.setPose('walk', 0.4, 'wood');
+    expect(wood.scale.x ** 3).toBeCloseTo(1.3);
+    expect(wood.geometry).toBe(geometry);
+    expect(meshes(avatar.object)).toEqual(before);
+    applyCarryCapacity(avatar.object, { wood: 10, food: 10, gold: 10, stone: 10 }, 10);
+    expect(wood.scale.x).toBe(1);
+  });
 
   it('stays dark when the viewer prefers reduced motion', () => {
     vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('reduce') }));

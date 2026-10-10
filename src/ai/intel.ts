@@ -78,7 +78,7 @@ export class Intel {
 
   /** Recently seen enemy units by class (scouts and villagers excluded). */
   enemyMix(): Record<UnitClass, number> {
-    const mix: Record<UnitClass, number> = { villager: 0, infantry: 0, archer: 0, cavalry: 0, wildlife: 0 };
+    const mix: Record<UnitClass, number> = { villager: 0, infantry: 0, archer: 0, cavalry: 0, wildlife: 0, ship: 0 };
     for (const s of this.seen.values()) if (s.kind !== 'scout') mix[UNITS[s.kind].unitClass]++;
     return mix;
   }

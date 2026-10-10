@@ -1,3 +1,4 @@
+import { isShip } from '../../core/units';
 import { BUILDINGS, FARM_FOOD, footprintRadius } from '../../core/buildings';
 import type {
   Building,
@@ -78,17 +79,22 @@ export function canPlace(world: World, kind: BuildingKind, pos: Vec2, rot: numbe
   const vis = world.visibilityOf(by);
   let water = false;
   let slope = false;
+  let wetSamples = 0, drySamples = 0;
   for (let j = 0; j <= nz; j++) {
     const z = r.z0 + e + ((r.z1 - r.z0 - 2 * e) * j) / nz;
     for (let i = 0; i <= nx; i++) {
       const x = r.x0 + e + ((r.x1 - r.x0 - 2 * e) * i) / nx;
       if (!vis.isExplored(x, z)) return { ok: false, reason: 'unexplored' };
-      if (water || slope) continue;
-      if (hf.isWater(x, z)) water = true;
-      else if (!hf.isWalkable(x, z)) slope = true;
+      if (hf.isWater(x, z)) { water = true; wetSamples++; }
+      else { drySamples++; if (!hf.isWalkable(x, z)) slope = true; }
     }
   }
-  if (water) return { ok: false, reason: 'water' };
+  if (kind === 'dock') {
+    // A dock straddles the coast: builders approach on land, ships spawn on water.
+    const land = world.nav.nearestFree(pos), sea = world.waterNav.nearestFree(pos);
+    if (!wetSamples || !drySamples || !land || !sea || Math.hypot(land.x - pos.x, land.z - pos.z) > 4
+      || Math.hypot(sea.x - pos.x, sea.z - pos.z) > 4) return { ok: false, reason: 'water' };
+  } else if (water) return { ok: false, reason: 'water' };
   if (slope) return { ok: false, reason: 'slope' };
 
   for (const b of world.buildings.values()) if (overlaps(r, buildingRect(b))) return { ok: false, reason: 'occupied' };
@@ -149,9 +155,11 @@ export function layFoundation(world: World, kind: BuildingKind, pos: Vec2, rot: 
 export function blockFootprint(world: World, b: Building): void {
   const rect = buildingRect(b);
   world.nav.addRect(b.id, rect);
+  if (b.kind === 'dock') world.waterNav.addRect(b.id, rect);
   const m = BALANCE.villagerRadius;
   const grown: Rect = { x0: rect.x0 - m, z0: rect.z0 - m, x1: rect.x1 + m, z1: rect.z1 + m };
   for (const u of world.units.values()) {
+    if (isShip(u.kind)) continue;
     if (rectDistance(u.pos, grown) <= 0) {
       const edge = rectApproach(u.pos, rect, m + BALANCE.approachGap);
       const p = world.nav.isFree(edge) ? edge : world.nav.nearestFree(edge);
@@ -340,6 +348,7 @@ export function orderCancelBuild(world: World, buildingId: EntityId): void {
 export function removeBuilding(world: World, b: Building): void {
   world.buildings.delete(b.id);
   world.nav.removeRect(b.id);
+  world.waterNav.removeRect(b.id);
   world.farmers.delete(b.id);
   world.events.emit({ type: 'removed', id: b.id });
   for (const u of buildersOf(world, b.id)) idle(world, u);

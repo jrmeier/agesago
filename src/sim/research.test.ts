@@ -3,6 +3,8 @@ import { BUILDINGS, footprintRadius } from '../core/buildings';
 import { TECHS, TECH_IDS, applyStat, unitLine, type TechId } from '../core/techs';
 import { GRASS_ONLY, type Building, type BuildingKind, type Heightfield, type MapLayout, type SimEvent } from '../core/types';
 import { World } from './World';
+import { UNITS } from '../core/units';
+import { deserializeWorld, serializeWorld } from './serialize';
 import { researchBlock, statOf } from './systems/research';
 
 function flat(): Heightfield {
@@ -102,6 +104,78 @@ describe('research queue', () => {
     expect(tc.queue).toBe(1); // villager waited for the age-up
     run(w, 9);
     expect(tc.queue).toBe(0);
+  });
+
+  it('finishes a partly trained villager before later research, then trains the next villager', () => {
+    const w = world();
+    const tc = w.townCenter!;
+    Object.assign(w.stock, { food: 2000, wood: 2000, gold: 2000 });
+    const start = w.units.size;
+    w.dispatch({ type: 'train', buildingId: tc.id });
+    run(w, 3);
+    w.dispatch({ type: 'research', buildingId: tc.id, tech: 'wovenTunics' });
+    w.dispatch({ type: 'train', buildingId: tc.id });
+    expect(tc.productionQueue).toEqual(['train', 'research', 'train']);
+    run(w, UNITS.villager.trainTime - 3);
+    expect(w.units.size).toBe(start + 1);
+    expect(tc.researchProgress).toBe(0);
+    expect(tc.productionQueue).toEqual(['research', 'train']);
+    run(w, TECHS.wovenTunics.time);
+    expect(w.players.get(1)!.researched.has('wovenTunics')).toBe(true);
+    expect(tc.progress).toBe(0); // no double-spending the completion tick
+    run(w, UNITS.villager.trainTime);
+    expect(w.units.size).toBe(start + 2);
+  });
+
+  it('cancels entries by their payload indices without changing the surviving FIFO order', () => {
+    const w = world();
+    const tc = w.townCenter!;
+    Object.assign(w.stock, { food: 2000, wood: 2000, gold: 2000 });
+    w.dispatch({ type: 'train', buildingId: tc.id });
+    run(w, 3);
+    w.dispatch({ type: 'research', buildingId: tc.id, tech: 'wovenTunics' });
+    w.dispatch({ type: 'train', buildingId: tc.id });
+    const food = w.stock.food;
+    w.dispatch({ type: 'cancelTrain', buildingId: tc.id, index: 1 });
+    expect(w.stock.food).toBe(food + UNITS.villager.cost.food!);
+    expect(tc.progress).toBeCloseTo(3);
+    expect(tc.productionQueue).toEqual(['train', 'research']);
+    w.dispatch({ type: 'cancelTrain', buildingId: tc.id, index: 0 });
+    expect(tc.progress).toBe(0);
+    expect(tc.productionQueue).toEqual(['research']);
+    run(w, 2);
+    w.dispatch({ type: 'train', buildingId: tc.id });
+    w.dispatch({ type: 'cancelResearch', buildingId: tc.id, index: 0 });
+    expect(tc.research).toBeUndefined();
+    expect(tc.productionQueue).toEqual(['train']);
+    run(w, UNITS.villager.trainTime);
+    expect(tc.productionQueue).toEqual([]);
+  });
+
+  it('round-trips mixed queues and preserves research-first order in legacy v2 saves', () => {
+    const w = world();
+    w.seed = 17;
+    const tc = w.townCenter!;
+    Object.assign(w.stock, { food: 2000, wood: 2000, gold: 2000 });
+    w.dispatch({ type: 'train', buildingId: tc.id });
+    run(w, 3);
+    w.dispatch({ type: 'research', buildingId: tc.id, tech: 'wovenTunics' });
+    const saved = JSON.parse(JSON.stringify(serializeWorld(w)));
+    const loaded = deserializeWorld(saved, flat());
+    expect(loaded.townCenter!.productionQueue).toEqual(['train', 'research']);
+    run(loaded, UNITS.villager.trainTime - 3);
+    expect(loaded.townCenter!.queue).toBe(0);
+    expect(loaded.townCenter!.researchProgress).toBe(0);
+    const corrupt = JSON.parse(JSON.stringify(saved));
+    corrupt.buildings.find((b: Building) => b.kind === 'townCenter').productionQueue = ['research'];
+    expect(() => deserializeWorld(corrupt, flat())).toThrow('Invalid save: production queue');
+    for (const b of saved.buildings) delete b.productionQueue;
+    const legacy = deserializeWorld(saved, flat());
+    run(legacy, 1);
+    expect(legacy.townCenter!.progress).toBeCloseTo(3);
+    expect(legacy.townCenter!.researchProgress).toBeCloseTo(1);
+    legacy.dispatch({ type: 'train', buildingId: legacy.townCenter!.id });
+    expect(legacy.townCenter!.productionQueue).toEqual(['research', 'train', 'train']);
   });
 
   it('Empire Age needs only the Academy (the City Age has no second building)', () => {
