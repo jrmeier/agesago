@@ -55,6 +55,12 @@ export class RtsCamera {
   readonly pitch = (52 * Math.PI) / 180;
   /** Height of the focus point; eases toward the surface under the target. */
   focusY: number;
+  /** Edge scroll. Arrow keys still pan when this is off. */
+  edgeScroll = true;
+  /** Multiplier on the edge-scroll speed. Arrow keys stay at the base speed. */
+  edgeSpeed = 1;
+  /** Grab-the-ground pan (mouse and touch) moves the other way. Arrows and edge scroll do not. */
+  invertPan = false;
   /** Wheel zoom (log distance) not yet applied; consumed smoothly. */
   private pendingZoom = 0;
   /** Grab-the-ground pan in progress: the world point held under the cursor. */
@@ -82,17 +88,20 @@ export class RtsCamera {
     this.updateTouch(input);
 
     if (!this.grab && !this.touchGrab) {
-      let sx = 0;
-      let sy = 0;
-      if (input.inside && !input.overHud && !input.touch.active && !input.isDown(LMB) && !input.isDown(RMB)) {
+      let ex = 0;
+      let ey = 0;
+      if (this.edgeScroll && input.inside && !input.overHud && !input.touch.active && !input.isDown(LMB) && !input.isDown(RMB)) {
         const e = edgeScrollDir(input.clientX, input.clientY, input.viewWidth, input.viewHeight);
-        sx += e.x;
-        sy += e.y;
+        ex = e.x;
+        ey = e.y;
       }
-      sx += (input.key('ArrowRight') ? 1 : 0) - (input.key('ArrowLeft') ? 1 : 0);
-      sy += (input.key('ArrowDown') ? 1 : 0) - (input.key('ArrowUp') ? 1 : 0);
+      const ax = (input.key('ArrowRight') ? 1 : 0) - (input.key('ArrowLeft') ? 1 : 0);
+      const ay = (input.key('ArrowDown') ? 1 : 0) - (input.key('ArrowUp') ? 1 : 0);
+      const sx = ex * this.edgeSpeed + ax;
+      const sy = ey * this.edgeSpeed + ay;
       if (sx || sy) {
-        const v = (SCROLL_SPEED * this.distance * dt) / Math.hypot(sx, sy);
+        // Normalise the unscaled directions so a diagonal is not faster, then apply edge speed.
+        const v = (SCROLL_SPEED * this.distance * dt) / Math.hypot(ex + ax, ey + ay);
         this.target.x += sx * v;
         this.target.z += sy * v;
       }
@@ -221,8 +230,9 @@ export class RtsCamera {
   private dragTo(input: Input, point: THREE.Vector3, x: number, y: number): void {
     const now = this.planeHit(input, x, y, point.y);
     if (!now) return;
-    this.target.x += point.x - now.x;
-    this.target.z += point.z - now.z;
+    const sign = this.invertPan ? -1 : 1;
+    this.target.x += sign * (point.x - now.x);
+    this.target.z += sign * (point.z - now.z);
     this.clampTarget();
     this.apply();
   }

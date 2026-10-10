@@ -45,6 +45,13 @@ describe('Water', () => {
 
     fancy.update(1.2);
     low.update(0.4);
+
+    expect(fancy.setFancy(false)).toBe('live');
+    expect(fancy.mesh.material).toBeInstanceOf(THREE.MeshLambertMaterial);
+    expect(fancy.setFancy(true)).toBe('live');
+    expect(fancy.mesh.material).toBeInstanceOf(THREE.ShaderMaterial);
+    expect(low.setFancy(true)).toBe('next');
+    expect(low.mesh.material).toBeInstanceOf(THREE.MeshLambertMaterial);
   });
 
   it('hides the plane on a dry map and still moves vertices', () => {

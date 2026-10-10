@@ -63,6 +63,8 @@ export class Minimap {
   /** Enemy buildings remembered for the map. Not the live building. */
   private snaps = new Map<number, LastSeenBuilding>();
   private readonly colorCache = new Map<number, [string, string]>();
+  /** When set, the local player's dot uses `player.color` instead of the fixed map blue. */
+  private localFromPlayer = false;
 
   constructor(
     container: HTMLElement,
@@ -298,9 +300,15 @@ export class Minimap {
     return [0, ...this.world.players.keys()].filter((id) => id !== local).concat(local);
   }
 
+  /** Paint the local dot from `player.color` (colour-blind palette) or the fixed map blue. */
+  setLocalFromPlayer(on: boolean): void {
+    this.localFromPlayer = on;
+    this.colorCache.clear();
+  }
+
   /** Fill and edge colours for a player's dots (the local player keeps the bright map blue). */
   private colors(owner: number): [string, string] {
-    if (owner === this.world.localPlayer) return [PLAYER, PLAYER_EDGE];
+    if (owner === this.world.localPlayer && !this.localFromPlayer) return [PLAYER, PLAYER_EDGE];
     let c = this.colorCache.get(owner);
     if (!c) {
       const hex = this.world.players.get(owner)?.player.color ?? 0x999999;
@@ -319,6 +327,7 @@ export class Minimap {
       el.style.left = `${(ping.pos.x / this.box.mapW) * 100}%`;
       el.style.top = `${(ping.pos.z / this.box.mapD) * 100}%`;
       el.addEventListener('animationend', () => el.remove());
+      if (document.documentElement.classList.contains('reduce-motion')) window.setTimeout(() => el.remove(), 1200);
       this.frame.append(el);
       while (this.frame.querySelectorAll('.minimap-ping').length > 6) this.frame.querySelector('.minimap-ping')?.remove();
     }

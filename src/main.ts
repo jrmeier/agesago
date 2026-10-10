@@ -1,6 +1,8 @@
 import { devHook } from './game/devHook';
 import { Game, type MatchStart } from './game/Game';
 import { deleteResume, idbResumeStore } from './game/resume';
+import { initSettings } from './game/settings';
+import { mountSettings } from './game/settingsPanel';
 import { mountTitle } from './game/titleScreen';
 
 const containerEl = document.getElementById('game-container');
@@ -43,6 +45,9 @@ async function bootMatch(start: MatchStart): Promise<void> {
   reveal(game);
 }
 
+initSettings();
+const closeSettingsPanel = mountSettings();
+
 const title = document.getElementById('title-screen');
 if (new URLSearchParams(location.search).has('e2e') || !title) {
   await bootMatch({});
@@ -67,5 +72,8 @@ if (new URLSearchParams(location.search).has('e2e') || !title) {
 }
 
 if (import.meta.env.DEV) {
-  import.meta.hot?.dispose(() => running?.dispose());
+  import.meta.hot?.dispose(() => {
+    closeSettingsPanel();
+    running?.dispose();
+  });
 }

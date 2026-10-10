@@ -1,4 +1,4 @@
-import { detectQuality, type Quality } from '../core/quality';
+import { deviceQuality, type Quality } from '../core/quality';
 import type { EntityId, Vec2 } from '../core/types';
 import { CameraRig } from '../camera/CameraRig';
 import { MAX_DISTANCE, MIN_DISTANCE } from '../camera/RtsCamera';
@@ -30,9 +30,19 @@ import {
   type ResumeEnvelope,
   type ResumeStore,
 } from './resume';
+import { audioBus } from './audioBus';
 import { matchPlayers, matchSeed } from './matchSetup';
 import { isGameSpeed, simScale, type GameSpeed } from './pace';
 import { Selection } from './Selection';
+import { closeSettings, settingsOpen } from './settingsPanel';
+import {
+  bootQuality,
+  currentSettings,
+  ensureSettings,
+  paintPlayerColors,
+  subscribeSettings,
+  type Settings,
+} from './settings';
 
 const STEP = 1 / BALANCE.tickRate;
 const MAX_STEPS_PER_FRAME = 3;
@@ -118,6 +128,9 @@ export class Game {
   private saveChain: Promise<void> = Promise.resolve();
   /** New match and Open file reload; further saves must not recreate the slot. */
   private leaving = false;
+  /** Pixel-ratio cap chosen at boot. A later change waits for the next match. */
+  private pixelCap = 1;
+  private unsubscribeSettings: () => void = () => {};
   private noteTimer = 0;
   private readonly onResize = () => this.resize();
   private readonly onHide = () => {
@@ -173,7 +186,12 @@ export class Game {
     report('Baking the ground', 0.46);
     await afterPaint();
     const tTerrain = performance.now();
-    const quality = detectQuality();
+    const settings = ensureSettings();
+    paintPlayerColors(
+      [...world.players.values()].map((state) => state.player),
+      settings.colorblind,
+    );
+    const quality = bootQuality(settings, deviceQuality(), typeof location === 'undefined' ? '' : location.search);
     const renderer = new Renderer(container, quality);
     const input = new Input(renderer.domElement);
     const aim = resume?.view ?? layout.townCenter;
@@ -255,6 +273,9 @@ export class Game {
     if (this.world.gameOver) this.endgame.showFinished();
     this.bindResume(parts.resumeFailed);
     this.bindPause();
+    this.pixelCap = parts.quality.pixelRatio;
+    this.applySettings(ensureSettings(), true);
+    this.unsubscribeSettings = subscribeSettings((settings) => this.applySettings(settings, false));
 
     window.addEventListener('resize', this.onResize);
     document.addEventListener('visibilitychange', this.onHide);
@@ -296,9 +317,10 @@ export class Game {
     this.props.syncFog();
     this.props.update(this.rig.camera);
     const focus = this.focus();
-    this.renderer.update(focus, this.elapsed);
-    this.terrain.update(this.elapsed);
-    this.grass.update(focus, this.elapsed);
+    const decor = currentSettings().reducedMotion ? 0 : this.elapsed;
+    this.renderer.update(focus, decor);
+    this.terrain.update(decor);
+    if (this.grass.object.visible) this.grass.update(focus, decor);
     this.views.sync(this.accumulator / STEP, this.elapsed, this.rig.camera);
     this.hud.update();
     this.minimap.update(this.elapsed);
@@ -421,6 +443,10 @@ export class Game {
   /** Esc toggles pause unless help, placement, targeting, or the new-match confirm used it. */
   private maybePauseKey(): void {
     if (this.matchOver || !this.input.keyPressed('Escape') || this.controls.escapeUsed) return;
+    if (settingsOpen()) {
+      closeSettings();
+      return;
+    }
     const ask = document.getElementById('new-match-ask');
     if (ask && !ask.hidden) {
       ask.hidden = true;
@@ -485,7 +511,37 @@ export class Game {
     if (failed) this.note('The resume could not be read.');
   }
 
+  private applySettings(settings: Settings, boot: boolean): void {
+    this.rig.rts.edgeScroll = settings.edgeScroll;
+    this.rig.rts.edgeSpeed = settings.edgeSpeed;
+    this.rig.rts.invertPan = settings.invertPan;
+    audioBus.setVolumes({ master: settings.master, music: settings.music, sfx: settings.sfx });
+    this.renderer.setShadows(settings.shadows);
+    this.views.setShadows(settings.shadows);
+    this.props.setShadows(settings.shadows);
+    const grassOk = this.grass.setShown(settings.grass);
+    const water = this.terrain.setFancyWater(settings.water);
+    paintPlayerColors(
+      [...this.world.players.values()].map((state) => state.player),
+      settings.colorblind,
+    );
+    this.minimap.setLocalFromPlayer(settings.colorblind);
+    if (boot) return;
+    const notes: string[] = [];
+    if (settings.grass && !grassOk) notes.push('Grass fills in on the next match.');
+    if (settings.water && water === 'next') notes.push('Detailed water starts on the next match.');
+    const wanted = bootQuality(settings, deviceQuality(), typeof location === 'undefined' ? '' : location.search);
+    if (wanted.pixelRatio !== this.pixelCap) notes.push('Pixel density applies on the next match.');
+    if (settings.colorblind) notes.push('New units use these colours. Units already in the match keep their dye.');
+    const note = document.getElementById('settings-note');
+    if (note) {
+      note.hidden = notes.length === 0;
+      note.textContent = notes.join(' ');
+    }
+  }
+
   dispose(): void {
+    this.unsubscribeSettings();
     cancelAnimationFrame(this.raf);
     window.clearTimeout(this.noteTimer);
     this.endgame.dispose();

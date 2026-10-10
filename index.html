@@ -43,6 +43,7 @@
           <div class="title-actions">
             <button id="title-new" class="endgame-btn" type="button">New game</button>
             <button id="title-continue" class="endgame-btn" type="button" disabled>Continue</button>
+            <button id="title-settings" class="endgame-btn" type="button">Settings</button>
             <button id="title-credits" class="endgame-btn" type="button">Credits</button>
           </div>
           <p id="title-continue-hint" class="title-note" hidden>The resume could not be read.</p>
@@ -87,6 +88,44 @@
             <button id="title-discard-no" class="endgame-btn" type="button">Keep the resume</button>
           </div>
         </section>
+      </div>
+    </div>
+    <div id="settings" class="settings" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="hotkey-sheet settings-sheet">
+        <h2 id="settings-title" class="hotkey-title">Settings</h2>
+        <p id="settings-lock-note" class="title-note" hidden></p>
+        <p id="settings-note" class="title-note" hidden></p>
+        <label class="settings-row" for="settings-quality">Graphics
+          <select id="settings-quality">
+            <option value="auto">Auto</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+        <label class="settings-row"><input id="settings-shadows" type="checkbox" /> Shadows</label>
+        <label class="settings-row"><input id="settings-grass" type="checkbox" /> Grass</label>
+        <label class="settings-row"><input id="settings-water" type="checkbox" /> Detailed water</label>
+        <label class="settings-row" for="settings-ui">UI scale
+          <input id="settings-ui" type="range" min="0.85" max="1.3" step="0.15" />
+        </label>
+        <label class="settings-row"><input id="settings-edge" type="checkbox" /> Edge scroll</label>
+        <label class="settings-row" for="settings-edge-speed">Edge speed
+          <input id="settings-edge-speed" type="range" min="0.5" max="2" step="0.5" />
+        </label>
+        <label class="settings-row"><input id="settings-invert" type="checkbox" /> Invert pan</label>
+        <label class="settings-row" for="settings-master">Master volume
+          <input id="settings-master" type="range" min="0" max="1" step="0.05" />
+        </label>
+        <label class="settings-row" for="settings-music">Music
+          <input id="settings-music" type="range" min="0" max="1" step="0.05" />
+        </label>
+        <label class="settings-row" for="settings-sfx">Effects
+          <input id="settings-sfx" type="range" min="0" max="1" step="0.05" />
+        </label>
+        <label class="settings-row"><input id="settings-colorblind" type="checkbox" /> Colour-blind colours</label>
+        <label class="settings-row"><input id="settings-motion" type="checkbox" /> Reduced motion</label>
+        <button id="settings-close" class="endgame-btn" type="button">Close</button>
       </div>
     </div>
     <!-- Icon sprite: referenced with <svg><use href="#i-…"/></svg>. -->
@@ -761,6 +800,7 @@
             <button type="button" class="endgame-btn" data-speed="1.5" aria-pressed="false">1.5×</button>
             <button type="button" class="endgame-btn" data-speed="2" aria-pressed="false">2×</button>
           </div>
+          <button id="pause-settings" class="endgame-btn" type="button">Settings</button>
           <button id="pause-resume" class="endgame-btn" type="button">Resume</button>
         </div>
       </div>

@@ -31,6 +31,7 @@
     radial-gradient(120% 90% at 30% 15%, var(--parch-hi) 0%, var(--parch) 55%, #d4b886 100%);
   --bronze-face: linear-gradient(180deg, #f3d48c 0%, #cf9c4a 38%, #a46e2a 62%, #c99547 100%);
   --trim: 0 0 0 1px var(--wood-dark), inset 0 0 0 1px rgba(255, 228, 160, 0.35);
+  --ui-scale: 1;
 }
 
 * {
@@ -85,6 +86,9 @@ body {
   inset: 0;
   pointer-events: none;
   z-index: 10;
+  zoom: var(--ui-scale);
+  width: calc(100% / var(--ui-scale));
+  height: calc(100% / var(--ui-scale));
 }
 
 /* ---- Top bar: dark timber with bronze rail and a Greek-key frieze ---- */
@@ -2208,7 +2212,8 @@ html:not(.show-title) #title-screen {
 }
 
 .title-card {
-  width: min(440px, 100%);
+  width: min(440px, calc(100% / var(--ui-scale)));
+  zoom: var(--ui-scale);
   padding: 28px 22px 18px;
   text-align: center;
   color: var(--ink);
@@ -3270,6 +3275,81 @@ body.touch .res-age .ricon {
   .age-banner.show {
     animation: none;
   }
+}
+
+html.reduce-motion .toast,
+html.reduce-motion .toast-alert,
+html.reduce-motion .age-banner.show {
+  animation: none;
+}
+
+html.reduce-motion .minimap-ping {
+  animation: none;
+  opacity: 0.9;
+}
+
+.settings[hidden] {
+  display: none !important;
+}
+
+.settings {
+  position: fixed;
+  inset: 0;
+  z-index: 46;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  overflow: hidden;
+  background: rgba(18, 10, 4, 0.72);
+  pointer-events: auto;
+}
+
+.settings-sheet {
+  width: min(440px, calc(100% / var(--ui-scale)));
+  overflow: auto;
+  zoom: var(--ui-scale);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  font-family: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.settings-row select,
+.settings-row input[type='range'] {
+  flex: 1 1 140px;
+  min-height: 44px;
+  min-width: 0;
+}
+
+.settings-row select {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--bronze-lo);
+  background: #f6e7c4;
+  color: var(--ink);
+  font-family: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.settings-row input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+}
+
+#settings-close {
+  min-height: 44px;
 }
 
 /* Research header and tiles inside the training grid. */

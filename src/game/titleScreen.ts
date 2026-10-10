@@ -1,6 +1,7 @@
 import { DEFAULT_SEED } from '../core/types';
 import { parseSeed } from './matchSetup';
 import { idbResumeStore, readResume } from './resume';
+import { closeSettings, settingsOpen } from './settingsPanel';
 
 export interface TitleHooks {
   onContinue(): void;
@@ -75,6 +76,11 @@ export function mountTitle(root: HTMLElement, hooks: TitleHooks): () => void {
   const onKey = (event: KeyboardEvent) => {
     if (event.code !== 'Escape') return;
     if (!document.documentElement.classList.contains('show-title')) return;
+    if (settingsOpen()) {
+      event.preventDefault();
+      closeSettings();
+      return;
+    }
     if (!discard.hidden || !setup.hidden || !credits.hidden) {
       event.preventDefault();
       show('home');
