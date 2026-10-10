@@ -12,7 +12,8 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:4174',
     // Software WebGL so headless CI machines without a GPU can render.
-    launchOptions: { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] },
+    // Online checks keep two independent clients advancing concurrently.
+    launchOptions: { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding'] },
   },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } } },
