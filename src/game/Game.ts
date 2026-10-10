@@ -1,5 +1,5 @@
 import { detectQuality, type Quality } from '../core/quality';
-import { DEFAULT_SEED, type EntityId, type Vec2 } from '../core/types';
+import type { EntityId, Vec2 } from '../core/types';
 import { CameraRig } from '../camera/CameraRig';
 import { MAX_DISTANCE, MIN_DISTANCE } from '../camera/RtsCamera';
 import { Controls } from '../input/Controls';
@@ -30,11 +30,19 @@ import {
   type ResumeEnvelope,
   type ResumeStore,
 } from './resume';
+import { matchPlayers, matchSeed } from './matchSetup';
 import { isGameSpeed, simScale, type GameSpeed } from './pace';
 import { Selection } from './Selection';
 
 const STEP = 1 / BALANCE.tickRate;
 const MAX_STEPS_PER_FRAME = 3;
+
+/** How a match is opened. A resume wins unless `fresh` is set. */
+export interface MatchStart {
+  seed?: number;
+  players?: number;
+  fresh?: boolean;
+}
 
 /** Milliseconds spent in each boot stage. `totalMs` ends when the first frame is scheduled. */
 export interface BootTimings {
@@ -120,7 +128,7 @@ export class Game {
    * Build the world in stages so a loading screen can paint between them.
    * Map generation stays on the main thread: the heightfield is not worker-safe.
    */
-  static async start(container: HTMLElement, report: BootReport = () => {}, seed = DEFAULT_SEED): Promise<Game> {
+  static async start(container: HTMLElement, report: BootReport = () => {}, start: MatchStart = {}): Promise<Game> {
     const t0 = performance.now();
     report('Shaping the terrain', 0.16);
     await afterPaint();
@@ -128,17 +136,19 @@ export class Game {
     const tMap = performance.now();
     const store = idbResumeStore();
     const loaded = await readResume(store);
-    let resume = loaded.envelope;
-    let resumeFailed = loaded.failed;
-    let matchSeed = resume?.sim.seed ?? seed;
-    let players = resume?.sim.playerCount ?? 2;
+    const seed = matchSeed(start.seed);
+    const towns = matchPlayers(start.players);
+    let resume = start.fresh ? null : loaded.envelope;
+    let resumeFailed = start.fresh ? false : loaded.failed;
+    let mapSeed = resume?.sim.seed ?? seed;
+    let players = resume?.sim.playerCount ?? towns;
     let generated: ReturnType<typeof generateMap>;
     try {
-      generated = generateMap(matchSeed, players);
+      generated = generateMap(mapSeed, players);
     } catch {
       resume = null;
       resumeFailed = true;
-      matchSeed = seed;
+      mapSeed = seed;
       players = 2;
       generated = generateMap(seed);
     }
@@ -152,11 +162,11 @@ export class Game {
         resume = null;
         resumeFailed = true;
         world = new World(hf, layout);
-        world.seed = matchSeed;
+        world.seed = mapSeed;
       }
     } else {
       world = new World(hf, layout);
-      world.seed = matchSeed;
+      world.seed = mapSeed;
     }
     const mapMs = performance.now() - tMap;
 

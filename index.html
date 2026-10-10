@@ -31,7 +31,64 @@
     <script>
       // Classic script, so this runs while the document is still parsing, before the game module.
       window.__loadingAt = performance.now();
+      // Tests open /?e2e straight into a match. Everyone else sees the title first.
+      if (!new URLSearchParams(location.search).has('e2e')) document.documentElement.classList.add('show-title');
     </script>
+    <div id="title-screen">
+      <div class="title-card">
+        <section id="title-home">
+          <p class="loading-kicker">Ages Ago</p>
+          <h1>Ages Ago</h1>
+          <p class="title-copy">Raise a city in the ancient world.</p>
+          <div class="title-actions">
+            <button id="title-new" class="endgame-btn" type="button">New game</button>
+            <button id="title-continue" class="endgame-btn" type="button" disabled>Continue</button>
+            <button id="title-credits" class="endgame-btn" type="button">Credits</button>
+          </div>
+          <p id="title-continue-hint" class="title-note" hidden>The resume could not be read.</p>
+        </section>
+        <section id="title-setup" hidden>
+          <p class="loading-kicker">New game</p>
+          <h1>Found a city</h1>
+          <label class="title-field" for="title-seed">Seed
+            <input id="title-seed" inputmode="numeric" autocomplete="off" spellcheck="false" />
+          </label>
+          <p id="title-seed-note" class="title-note" hidden></p>
+          <div class="title-field">
+            <span id="title-rivals-label">Rival towns</span>
+            <div class="rival-row" role="group" aria-labelledby="title-rivals-label">
+              <button type="button" class="endgame-btn" data-players="1" aria-pressed="false">None</button>
+              <button type="button" class="endgame-btn" data-players="2" aria-pressed="true">1</button>
+              <button type="button" class="endgame-btn" data-players="3" aria-pressed="false">2</button>
+              <button type="button" class="endgame-btn" data-players="4" aria-pressed="false">3</button>
+            </div>
+          </div>
+          <p class="title-copy">The map is 176 by 176. Rival towns stand, and do not give orders yet.</p>
+          <div class="title-actions">
+            <button id="title-start" class="endgame-btn" type="button">Start</button>
+            <button id="title-random" class="endgame-btn" type="button">Random seed</button>
+            <button id="title-setup-back" class="endgame-btn" type="button">Back</button>
+          </div>
+        </section>
+        <section id="title-credits-panel" hidden>
+          <p class="loading-kicker">Credits</p>
+          <h1>Ages Ago</h1>
+          <p class="title-copy">A battle in the ancient world, played in the browser.</p>
+          <div class="title-actions">
+            <button id="title-credits-back" class="endgame-btn" type="button">Back</button>
+          </div>
+        </section>
+        <section id="title-discard" hidden>
+          <p class="loading-kicker">New game</p>
+          <h1>New game</h1>
+          <p class="title-copy">Start a new match? The resume in this browser is discarded.</p>
+          <div class="title-actions">
+            <button id="title-discard-yes" class="endgame-btn" type="button">New game</button>
+            <button id="title-discard-no" class="endgame-btn" type="button">Keep the resume</button>
+          </div>
+        </section>
+      </div>
+    </div>
     <!-- Icon sprite: referenced with <svg><use href="#i-…"/></svg>. -->
     <svg class="icon-sprite" aria-hidden="true" focusable="false">
       <defs>

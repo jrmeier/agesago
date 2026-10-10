@@ -2180,6 +2180,132 @@ body.touch .cmd-btn {
   transition: transform 0.25s ease;
 }
 
+/* Title screen. An inline script adds show-title unless the page is /?e2e. */
+html.show-title #loading {
+  display: none !important;
+}
+
+html:not(.show-title) #title-screen {
+  display: none !important;
+}
+
+#title-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  overflow: auto;
+  background:
+    radial-gradient(90% 70% at 50% 18%, #f3dfb0 0%, #c49255 42%, #6a4324 100%);
+}
+
+#title-screen[hidden],
+#title-screen section[hidden] {
+  display: none !important;
+}
+
+.title-card {
+  width: min(440px, 100%);
+  padding: 28px 22px 18px;
+  text-align: center;
+  color: var(--ink);
+  background: var(--papyrus);
+  border: 1px solid var(--bronze-lo);
+  box-shadow:
+    var(--trim),
+    0 18px 40px rgba(33, 20, 11, 0.45);
+}
+
+.title-card h1 {
+  margin: 8px 0 12px;
+  font-family: var(--title);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.title-copy {
+  margin: 0 0 12px;
+  font-family: var(--text);
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.title-note {
+  margin: 8px 0 0;
+  font-family: var(--text);
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.title-note[hidden] {
+  display: none !important;
+}
+
+.title-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.title-actions .endgame-btn,
+.rival-row .endgame-btn {
+  margin-top: 0;
+  min-height: 44px;
+}
+
+.endgame-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.title-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px;
+  text-align: left;
+  font-family: var(--title);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#title-seed {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--bronze-lo);
+  background: #f6e7c4;
+  color: var(--ink);
+  font-family: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.rival-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rival-row .endgame-btn {
+  flex: 1 1 64px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.rival-row .endgame-btn[aria-pressed='true'] {
+  outline: 2px solid var(--gilt);
+  outline-offset: 2px;
+}
+
 body.touch .cmd-btn kbd {
   display: none;
 }
