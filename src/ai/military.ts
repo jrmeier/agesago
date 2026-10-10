@@ -22,8 +22,20 @@ function matchup(k: UnitKind, c: UnitClass): number {
   const foe = UNITS[TYPICAL[c]];
   const out = damage(k, c, foe.armor) / me.reload;
   const into = damage(TYPICAL[c], me.unitClass, me.armor) / foe.reload;
-  const cost = (me.cost.food ?? 0) + (me.cost.wood ?? 0) + 1.3 * (me.cost.gold ?? 0) + 1.1 * (me.cost.stone ?? 0);
-  return (out * me.hp) / into / cost;
+  return (out * me.hp) / into / unitCost(k);
+}
+
+/** Resource weights when pricing a unit: gold and stone are scarcer. */
+const PRICE: Stockpile = { food: 1, wood: 1, gold: 1.3, stone: 1.1 };
+
+/** A unit's price; with `stock`, a resource piling up (over 400) counts for much less. */
+function unitCost(k: UnitKind, stock?: Stockpile): number {
+  let n = 0;
+  for (const [r, v] of Object.entries(UNITS[k].cost) as [keyof Stockpile, number][]) {
+    const glut = stock && stock[r] > 400 ? Math.max(0.25, 400 / stock[r]) : 1;
+    n += v * PRICE[r] * glut;
+  }
+  return Math.max(1, n);
 }
 const MATCHUP = new Map<string, number>();
 for (const k of Object.keys(UNITS) as UnitKind[]) for (const c of CLASSES) MATCHUP.set(`${k}/${c}`, matchup(k, c));
@@ -86,7 +98,12 @@ export class Military {
     const { world, player, profile } = this.c;
     const stock = world.stockOf(player);
     // Villagers come first while the economy is still growing.
-    const reserve: Partial<Stockpile> = s.villagers.length < profile.targetVillagers && s.tc ? { food: 50 } : {};
+    // Saving for an age or a tech holds the army back, unless outgunned, raided or still
+    // short of a first wave's worth of defenders.
+    const free = this.c.armyFirst || (ageOf(world, player) > 0 && s.army.length < profile.firstWave);
+    const reserve: Partial<Stockpile> = free ? {} : { ...this.c.reserve };
+    if (!free) for (const [r, n] of Object.entries(this.c.techReserve) as [keyof Stockpile, number][]) reserve[r] = (reserve[r] ?? 0) + n;
+    if (s.villagers.length < profile.targetVillagers && s.tc) reserve.food = (reserve.food ?? 0) + 50;
     for (const b of s.buildings) {
       if (!b.complete || !PRODUCTION.includes(b.kind)) continue;
       const r = this.rallied.get(b.id);
@@ -123,6 +140,8 @@ export class Military {
     for (const k of opts) {
       let score = 0;
       for (const c of CLASSES) score += (mix[c] / total) * MATCHUP.get(`${k}/${c}`)!;
+      // Spend what piles up: a unit paid in a glut resource is cheaper than its list price.
+      score *= unitCost(k) / unitCost(k, stock);
       // Keep the army mixed: a class over half the army loses appeal.
       const share = mine[UNITS[k].unitClass] / army;
       score *= 1 - Math.max(0, share - 0.5) + 0.15 * this.c.rng();
@@ -200,7 +219,7 @@ export class Military {
     // Big enough for this wave, and (unless maxed out on population) bigger than the army we've seen.
     const maxed = s.popUsed >= Math.min(s.popCap, 200) - 3;
     const enough = home.length >= this.waveSize() && (maxed || !profile.counters || home.length >= intel.enemyArmy() * 1.25);
-    const ready = enough && world.time >= profile.firstAttack && world.time - this.lastWave >= profile.waveGap;
+    const ready = enough && !this.c.aging && world.time >= profile.firstAttack && world.time - this.lastWave >= profile.waveGap;
     if (ready) {
       const from = centroid(home);
       this.target = intel.nearestBuilding(from);
