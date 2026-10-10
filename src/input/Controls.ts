@@ -132,6 +132,10 @@ export class Controls {
   private readonly rallyEcho = new Map<EntityId, Vec2>();
   /** Attack-move armed: the next ground click / tap attack-moves. */
   private targeting = false;
+  /** Pause menu is up: orders and placement wait. Camera input is skipped by Game. */
+  private suspended = false;
+  /** Help, placement, or targeting already used Escape this frame, so it must not also pause. */
+  escapeUsed = false;
   private lastClick: { id: EntityId; time: number } | null = null;
   private lastIdleCount = -Infinity;
   private time = 0;
@@ -215,8 +219,23 @@ export class Controls {
     if (unitIds.length) world.dispatch({ type: 'explore', unitIds });
   }
 
+  /**
+   * Freeze orders while the pause menu is open. Drops an in-progress placement or attack-move
+   * so Escape belongs to the menu. Help can still close on its own Escape.
+   */
+  hold(on: boolean): void {
+    this.suspended = on;
+    if (!on) return;
+    if (this.placement.active) this.placement.cancel();
+    if (this.targeting) this.setTargeting(false);
+    this.deps.input.touch.disarmBox();
+    this.touchBox = null;
+    this.showBox(null);
+  }
+
   update(dt: number): void {
     const { input, rig } = this.deps;
+    this.escapeUsed = false;
     this.time += dt;
     this.discoveries.update(this.time);
     this.alerts.update(this.time);
@@ -225,7 +244,14 @@ export class Controls {
     const slash = input.keyMods('Slash');
     if (slash?.shift && !slash.ctrl && !slash.alt) this.help.toggle();
     if (this.help.open) {
-      if (input.keyPressed('Escape')) this.help.close();
+      if (input.keyPressed('Escape')) {
+        this.help.close();
+        this.escapeUsed = true;
+      }
+      this.syncBoxArm();
+      return;
+    }
+    if (this.suspended) {
       this.syncBoxArm();
       return;
     }
@@ -237,6 +263,7 @@ export class Controls {
     if (this.placement.active) {
       if (this.placement.line) this.updateLinePlacement();
       else this.updatePlacement();
+      if (input.keyPressed('Escape')) this.escapeUsed = true;
       this.syncBoxArm();
       return;
     }
@@ -272,7 +299,10 @@ export class Controls {
       const m = input.keyMods(code);
       return !!m && !m.ctrl && !m.alt;
     };
-    if (input.keyPressed(HOTKEYS.cancel) && this.targeting) this.setTargeting(false);
+    if (input.keyPressed(HOTKEYS.cancel) && this.targeting) {
+      this.setTargeting(false);
+      this.escapeUsed = true;
+    }
     if (plain(HOTKEYS.selectAll)) this.selectAllOwn();
     if (input.keyPressed(HOTKEYS.trainVillager)) {
       const tc = world.townCenterOf(world.localPlayer);

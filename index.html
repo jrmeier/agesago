@@ -540,6 +540,7 @@
         <header class="hud-top">
           <button id="help-btn" class="help-btn" type="button" title="Hotkeys (?)" aria-expanded="false" aria-controls="hotkey-help">?</button>
           <div class="match-actions">
+            <button id="pause-match" class="match-btn" type="button" title="Pause (Esc)" aria-pressed="false" aria-controls="pause-menu">Pause</button>
             <button id="save-copy" class="match-btn" type="button" title="Save a copy">Save copy</button>
             <button id="open-file" class="match-btn" type="button" title="Open a save file">Open file</button>
             <button id="new-match" class="match-btn" type="button" title="New match">New match</button>
@@ -691,6 +692,20 @@
             </span>
           </button>
         </footer>
+      </div>
+      <div id="pause-menu" class="pause-menu" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
+        <div class="hotkey-sheet">
+          <h2 id="pause-title" class="hotkey-title">Paused</h2>
+          <p class="confirm-copy">The match clock is stopped. Esc resumes.</p>
+          <p id="pause-speed-label" class="pause-speed-label">Game speed</p>
+          <div class="speed-row" role="group" aria-labelledby="pause-speed-label">
+            <button type="button" class="endgame-btn" data-speed="0.5" aria-pressed="false">0.5×</button>
+            <button type="button" class="endgame-btn" data-speed="1" aria-pressed="true">1×</button>
+            <button type="button" class="endgame-btn" data-speed="1.5" aria-pressed="false">1.5×</button>
+            <button type="button" class="endgame-btn" data-speed="2" aria-pressed="false">2×</button>
+          </div>
+          <button id="pause-resume" class="endgame-btn" type="button">Resume</button>
+        </div>
       </div>
       <div id="new-match-ask" class="confirm" hidden role="dialog" aria-modal="true" aria-labelledby="new-match-title">
         <div class="hotkey-sheet">

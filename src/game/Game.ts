@@ -30,6 +30,7 @@ import {
   type ResumeEnvelope,
   type ResumeStore,
 } from './resume';
+import { isGameSpeed, simScale, type GameSpeed } from './pace';
 import { Selection } from './Selection';
 
 const STEP = 1 / BALANCE.tickRate;
@@ -94,6 +95,9 @@ export class Game {
   private readonly endgame: Endgame;
   /** Set when gameOver fires; the loop stops so the summary matches the last sample. */
   private matchOver = false;
+  /** Pause menu. The sim clock waits; rendering continues so the menu stays live. */
+  private paused = false;
+  private speed: GameSpeed = 1;
   private accumulator = 0;
   private last = 0;
   private elapsed = 0;
@@ -232,6 +236,7 @@ export class Game {
     this.minimap = new Minimap(document.getElementById('hud') ?? container, this.world, this.rig);
     this.endgame = new Endgame(this.world, this.endgameLog, () => {
       this.matchOver = true;
+      this.setPaused(false);
       this.remember('quiet');
     }, () => {
       void this.leave();
@@ -239,6 +244,7 @@ export class Game {
     if (this.resume) this.applyResume(this.resume);
     if (this.world.gameOver) this.endgame.showFinished();
     this.bindResume(parts.resumeFailed);
+    this.bindPause();
 
     window.addEventListener('resize', this.onResize);
     document.addEventListener('visibilitychange', this.onHide);
@@ -257,11 +263,13 @@ export class Game {
     this.last = now;
     this.elapsed += dt;
 
-    this.controls.update(this.matchOver ? 0 : dt);
-    if (!this.matchOver) this.rig.update(dt);
+    this.controls.update(this.matchOver || this.paused ? 0 : dt);
+    // Camera keys stay out of the pause menu. The current view still renders below.
+    if (!this.matchOver && !this.paused) this.rig.update(dt);
+    this.maybePauseKey();
 
-    if (!this.matchOver) {
-      this.accumulator += dt;
+    if (!this.matchOver && !this.paused) {
+      this.accumulator += dt * simScale(this.speed, this.paused, this.matchOver);
       let steps = 0;
       while (this.accumulator >= STEP && steps < MAX_STEPS_PER_FRAME && !this.matchOver) {
         this.world.tick(STEP);
@@ -398,6 +406,49 @@ export class Game {
     this.noteTimer = window.setTimeout(() => {
       el.hidden = true;
     }, 8000);
+  }
+
+  /** Esc toggles pause unless help, placement, targeting, or the new-match confirm used it. */
+  private maybePauseKey(): void {
+    if (this.matchOver || !this.input.keyPressed('Escape') || this.controls.escapeUsed) return;
+    const ask = document.getElementById('new-match-ask');
+    if (ask && !ask.hidden) {
+      ask.hidden = true;
+      return;
+    }
+    this.setPaused(!this.paused);
+  }
+
+  private setPaused(on: boolean): void {
+    if (on && this.matchOver) return;
+    this.paused = on;
+    this.controls.hold(on);
+    const menu = document.getElementById('pause-menu');
+    if (menu) menu.hidden = !on;
+    const btn = document.getElementById('pause-match');
+    if (btn) {
+      btn.textContent = on ? 'Resume' : 'Pause';
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+    if (on) document.getElementById('pause-resume')?.focus();
+  }
+
+  private setSpeed(speed: GameSpeed): void {
+    this.speed = speed;
+    for (const btn of document.querySelectorAll<HTMLButtonElement>('#pause-menu [data-speed]')) {
+      btn.setAttribute('aria-pressed', Number(btn.dataset.speed) === speed ? 'true' : 'false');
+    }
+  }
+
+  private bindPause(): void {
+    document.getElementById('pause-match')?.addEventListener('click', () => this.setPaused(!this.paused));
+    document.getElementById('pause-resume')?.addEventListener('click', () => this.setPaused(false));
+    document.getElementById('pause-menu')?.addEventListener('click', (event) => {
+      const btn = (event.target as Element).closest<HTMLButtonElement>('[data-speed]');
+      if (!btn) return;
+      const speed = Number(btn.dataset.speed);
+      if (isGameSpeed(speed)) this.setSpeed(speed);
+    });
   }
 
   private bindResume(failed: boolean): void {

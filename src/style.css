@@ -2413,6 +2413,53 @@ body.touch.menu-orders .cmd-btn svg {
   line-height: 1.4;
 }
 
+/* Pause sits under the new-match confirm and the hotkey sheet, above the HUD. */
+.pause-menu[hidden] {
+  display: none !important;
+}
+
+.pause-menu {
+  position: absolute;
+  inset: 0;
+  z-index: 27;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  overflow: hidden;
+  background: rgba(18, 10, 4, 0.72);
+  pointer-events: auto;
+}
+
+.pause-speed-label {
+  margin: 8px 0 0;
+  font-family: var(--title);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.speed-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.speed-row .endgame-btn {
+  flex: 1 1 64px;
+  margin-top: 0;
+  min-height: 44px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.speed-row .endgame-btn[aria-pressed='true'] {
+  outline: 2px solid var(--gilt);
+  outline-offset: 2px;
+}
+
 /* ---- Hotkey list. Below the end-of-match sheet so a finished game still covers it. ---- */
 
 .hotkey-help[hidden] {
