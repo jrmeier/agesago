@@ -84,8 +84,14 @@ describe('GrassField', () => {
     });
     expect(count).toBe(collectGrass(hf, cover(3, 4), { x: 8, z: 8 }).length);
 
+    expect(grass.setShown(false)).toBe(true);
+    expect(grass.object.visible).toBe(false);
+    expect(grass.setShown(true)).toBe(true);
+    expect(grass.object.visible).toBe(true);
+
     const bare = new GrassField(hf, cover(0, 0));
     bare.update({ x: 8, z: 8 }, 1);
     expect(bare.object.children).toHaveLength(0);
+    expect(bare.setShown(true)).toBe(false);
   });
 });

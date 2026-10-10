@@ -356,7 +356,6 @@ test('the hotkey sheet fits the viewport and its close button is reachable', asy
   else await page.locator('#help-btn').click();
   await expect(page.locator('#hotkey-help')).toBeVisible();
 
-  // The New match confirm reuses .hotkey-sheet, so scope to the hotkey list.
   const sheet = await page.locator('#hotkey-help .hotkey-sheet').boundingBox();
   const vp = page.viewportSize()!;
   expect(sheet).toBeTruthy();

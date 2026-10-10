@@ -31,7 +31,104 @@
     <script>
       // Classic script, so this runs while the document is still parsing, before the game module.
       window.__loadingAt = performance.now();
+      // Tests open /?e2e straight into a match. Everyone else sees the title first.
+      if (!new URLSearchParams(location.search).has('e2e')) document.documentElement.classList.add('show-title');
     </script>
+    <div id="title-screen">
+      <div class="title-card">
+        <section id="title-home">
+          <p class="loading-kicker">Ages Ago</p>
+          <h1>Ages Ago</h1>
+          <p class="title-copy">Raise a city in the ancient world.</p>
+          <div class="title-actions">
+            <button id="title-new" class="endgame-btn" type="button">New game</button>
+            <button id="title-continue" class="endgame-btn" type="button" disabled>Continue</button>
+            <button id="title-settings" class="endgame-btn" type="button">Settings</button>
+            <button id="title-tutorial" class="endgame-btn" type="button">Tutorial</button>
+            <button id="title-credits" class="endgame-btn" type="button">Credits</button>
+          </div>
+          <p id="title-continue-hint" class="title-note" hidden>The resume could not be read.</p>
+        </section>
+        <section id="title-setup" hidden>
+          <p class="loading-kicker">New game</p>
+          <h1>Found a city</h1>
+          <label class="title-field" for="title-seed">Seed
+            <input id="title-seed" inputmode="numeric" autocomplete="off" spellcheck="false" />
+          </label>
+          <p id="title-seed-note" class="title-note" hidden></p>
+          <div class="title-field">
+            <span id="title-rivals-label">Rival towns</span>
+            <div class="rival-row" role="group" aria-labelledby="title-rivals-label">
+              <button type="button" class="endgame-btn" data-players="1" aria-pressed="false">None</button>
+              <button type="button" class="endgame-btn" data-players="2" aria-pressed="true">1</button>
+              <button type="button" class="endgame-btn" data-players="3" aria-pressed="false">2</button>
+              <button type="button" class="endgame-btn" data-players="4" aria-pressed="false">3</button>
+            </div>
+          </div>
+          <p class="title-copy">The map is 176 by 176. Rival towns stand, and do not give orders yet.</p>
+          <div class="title-actions">
+            <button id="title-start" class="endgame-btn" type="button">Start</button>
+            <button id="title-random" class="endgame-btn" type="button">Random seed</button>
+            <button id="title-setup-back" class="endgame-btn" type="button">Back</button>
+          </div>
+        </section>
+        <section id="title-credits-panel" hidden>
+          <p class="loading-kicker">Credits</p>
+          <h1>Ages Ago</h1>
+          <p class="title-copy">A battle in the ancient world, played in the browser.</p>
+          <div class="title-actions">
+            <button id="title-credits-back" class="endgame-btn" type="button">Back</button>
+          </div>
+        </section>
+        <section id="title-discard" hidden>
+          <p class="loading-kicker">New game</p>
+          <h1>New game</h1>
+          <p class="title-copy">Start a new match? The resume in this browser is discarded.</p>
+          <div class="title-actions">
+            <button id="title-discard-yes" class="endgame-btn" type="button">New game</button>
+            <button id="title-discard-no" class="endgame-btn" type="button">Keep the resume</button>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div id="settings" class="settings" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="hotkey-sheet settings-sheet">
+        <h2 id="settings-title" class="hotkey-title">Settings</h2>
+        <p id="settings-lock-note" class="title-note" hidden></p>
+        <p id="settings-note" class="title-note" hidden></p>
+        <label class="settings-row" for="settings-quality">Graphics
+          <select id="settings-quality">
+            <option value="auto">Auto</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+        <label class="settings-row"><input id="settings-shadows" type="checkbox" /> Shadows</label>
+        <label class="settings-row"><input id="settings-grass" type="checkbox" /> Grass</label>
+        <label class="settings-row"><input id="settings-water" type="checkbox" /> Detailed water</label>
+        <label class="settings-row" for="settings-ui">UI scale
+          <input id="settings-ui" type="range" min="0.85" max="1.3" step="0.15" />
+        </label>
+        <label class="settings-row"><input id="settings-edge" type="checkbox" /> Edge scroll</label>
+        <label class="settings-row" for="settings-edge-speed">Edge speed
+          <input id="settings-edge-speed" type="range" min="0.5" max="2" step="0.5" />
+        </label>
+        <label class="settings-row"><input id="settings-invert" type="checkbox" /> Invert pan</label>
+        <label class="settings-row" for="settings-master">Master volume
+          <input id="settings-master" type="range" min="0" max="1" step="0.05" />
+        </label>
+        <label class="settings-row" for="settings-music">Music
+          <input id="settings-music" type="range" min="0" max="1" step="0.05" />
+        </label>
+        <label class="settings-row" for="settings-sfx">Effects
+          <input id="settings-sfx" type="range" min="0" max="1" step="0.05" />
+        </label>
+        <label class="settings-row"><input id="settings-colorblind" type="checkbox" /> Colour-blind colours</label>
+        <label class="settings-row"><input id="settings-motion" type="checkbox" /> Reduced motion</label>
+        <button id="settings-close" class="endgame-btn" type="button">Close</button>
+      </div>
+    </div>
     <!-- Icon sprite: referenced with <svg><use href="#i-…"/></svg>. -->
     <svg class="icon-sprite" aria-hidden="true" focusable="false">
       <defs>
@@ -540,6 +637,7 @@
         <header class="hud-top">
           <button id="help-btn" class="help-btn" type="button" title="Hotkeys (?)" aria-expanded="false" aria-controls="hotkey-help">?</button>
           <div class="match-actions">
+            <button id="pause-match" class="match-btn" type="button" title="Pause (Esc)" aria-pressed="false" aria-controls="pause-menu">Pause</button>
             <button id="save-copy" class="match-btn" type="button" title="Save a copy">Save copy</button>
             <button id="open-file" class="match-btn" type="button" title="Open a save file">Open file</button>
             <button id="new-match" class="match-btn" type="button" title="New match">New match</button>
@@ -691,6 +789,32 @@
             </span>
           </button>
         </footer>
+      </div>
+      <div id="tutorial" class="tutorial" hidden>
+        <div class="tutorial-card" role="dialog" aria-labelledby="tutorial-objective">
+          <p class="loading-kicker">Founding of the Polis</p>
+          <p id="tutorial-objective" class="tutorial-objective">Select a villager and send them to gather.</p>
+          <p id="tutorial-hint" class="tutorial-hint"></p>
+          <div class="tutorial-actions">
+            <button id="tutorial-dismiss" class="endgame-btn" type="button">Dismiss hint</button>
+            <button id="tutorial-skip" class="endgame-btn" type="button">Skip</button>
+          </div>
+        </div>
+      </div>
+      <div id="pause-menu" class="pause-menu" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
+        <div class="hotkey-sheet">
+          <h2 id="pause-title" class="hotkey-title">Paused</h2>
+          <p class="confirm-copy">The match clock is stopped. Esc resumes.</p>
+          <p id="pause-speed-label" class="pause-speed-label">Game speed</p>
+          <div class="speed-row" role="group" aria-labelledby="pause-speed-label">
+            <button type="button" class="endgame-btn" data-speed="0.5" aria-pressed="false">0.5×</button>
+            <button type="button" class="endgame-btn" data-speed="1" aria-pressed="true">1×</button>
+            <button type="button" class="endgame-btn" data-speed="1.5" aria-pressed="false">1.5×</button>
+            <button type="button" class="endgame-btn" data-speed="2" aria-pressed="false">2×</button>
+          </div>
+          <button id="pause-settings" class="endgame-btn" type="button">Settings</button>
+          <button id="pause-resume" class="endgame-btn" type="button">Resume</button>
+        </div>
       </div>
       <div id="new-match-ask" class="confirm" hidden role="dialog" aria-modal="true" aria-labelledby="new-match-title">
         <div class="hotkey-sheet">

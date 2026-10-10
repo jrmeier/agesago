@@ -1,6 +1,7 @@
-import { detectQuality, type Quality } from '../core/quality';
-import { DEFAULT_SEED, type EntityId, type Vec2 } from '../core/types';
+import { deviceQuality, type Quality } from '../core/quality';
+import type { EntityId, Vec2 } from '../core/types';
 import { CameraRig } from '../camera/CameraRig';
+import { yawBasis } from '../camera/FpsCamera';
 import { MAX_DISTANCE, MIN_DISTANCE } from '../camera/RtsCamera';
 import { Controls } from '../input/Controls';
 import { Input } from '../input/Input';
@@ -30,10 +31,34 @@ import {
   type ResumeEnvelope,
   type ResumeStore,
 } from './resume';
+import { audioBus } from './audioBus';
+import { MatchMusic } from './musicDirector';
+import { MatchAudio } from './sfxDirector';
+import { matchPlayers, matchSeed } from './matchSetup';
+import { isGameSpeed, simScale, type GameSpeed } from './pace';
 import { Selection } from './Selection';
+import { TutorialCoach } from './tutorialCoach';
+import { closeSettings, settingsOpen } from './settingsPanel';
+import {
+  bootQuality,
+  currentSettings,
+  ensureSettings,
+  paintPlayerColors,
+  subscribeSettings,
+  type Settings,
+} from './settings';
 
 const STEP = 1 / BALANCE.tickRate;
 const MAX_STEPS_PER_FRAME = 3;
+
+/** How a match is opened. A resume wins unless `fresh` is set. */
+export interface MatchStart {
+  seed?: number;
+  players?: number;
+  fresh?: boolean;
+  /** Practice match. It does not read or write the resume slot. */
+  tutorial?: boolean;
+}
 
 /** Milliseconds spent in each boot stage. `totalMs` ends when the first frame is scheduled. */
 export interface BootTimings {
@@ -68,6 +93,7 @@ interface BootParts {
   store: ResumeStore;
   resume: ResumeEnvelope | null;
   resumeFailed: boolean;
+  tutorial: boolean;
 }
 
 /**
@@ -94,6 +120,9 @@ export class Game {
   private readonly endgame: Endgame;
   /** Set when gameOver fires; the loop stops so the summary matches the last sample. */
   private matchOver = false;
+  /** Pause menu. The sim clock waits; rendering continues so the menu stays live. */
+  private paused = false;
+  private speed: GameSpeed = 1;
   private accumulator = 0;
   private last = 0;
   private elapsed = 0;
@@ -106,6 +135,14 @@ export class Game {
   private saveChain: Promise<void> = Promise.resolve();
   /** New match and Open file reload; further saves must not recreate the slot. */
   private leaving = false;
+  /** Pixel-ratio cap chosen at boot. A later change waits for the next match. */
+  private pixelCap = 1;
+  private unsubscribeSettings: () => void = () => {};
+  /** Practice match. Saves must not replace the resume slot. */
+  private tutorial = false;
+  private tutorialCoach: TutorialCoach | null = null;
+  private readonly matchAudio: MatchAudio;
+  private readonly matchMusic: MatchMusic;
   private noteTimer = 0;
   private readonly onResize = () => this.resize();
   private readonly onHide = () => {
@@ -116,7 +153,7 @@ export class Game {
    * Build the world in stages so a loading screen can paint between them.
    * Map generation stays on the main thread: the heightfield is not worker-safe.
    */
-  static async start(container: HTMLElement, report: BootReport = () => {}, seed = DEFAULT_SEED): Promise<Game> {
+  static async start(container: HTMLElement, report: BootReport = () => {}, start: MatchStart = {}): Promise<Game> {
     const t0 = performance.now();
     report('Shaping the terrain', 0.16);
     await afterPaint();
@@ -124,17 +161,20 @@ export class Game {
     const tMap = performance.now();
     const store = idbResumeStore();
     const loaded = await readResume(store);
-    let resume = loaded.envelope;
-    let resumeFailed = loaded.failed;
-    let matchSeed = resume?.sim.seed ?? seed;
-    let players = resume?.sim.playerCount ?? 2;
+    const seed = matchSeed(start.seed);
+    const towns = matchPlayers(start.players);
+    const tutorial = start.tutorial === true;
+    let resume = start.fresh || tutorial ? null : loaded.envelope;
+    let resumeFailed = start.fresh || tutorial ? false : loaded.failed;
+    let mapSeed = resume?.sim.seed ?? seed;
+    let players = resume?.sim.playerCount ?? towns;
     let generated: ReturnType<typeof generateMap>;
     try {
-      generated = generateMap(matchSeed, players);
+      generated = generateMap(mapSeed, players);
     } catch {
       resume = null;
       resumeFailed = true;
-      matchSeed = seed;
+      mapSeed = seed;
       players = 2;
       generated = generateMap(seed);
     }
@@ -148,18 +188,23 @@ export class Game {
         resume = null;
         resumeFailed = true;
         world = new World(hf, layout);
-        world.seed = matchSeed;
+        world.seed = mapSeed;
       }
     } else {
       world = new World(hf, layout);
-      world.seed = matchSeed;
+      world.seed = mapSeed;
     }
     const mapMs = performance.now() - tMap;
 
     report('Baking the ground', 0.46);
     await afterPaint();
     const tTerrain = performance.now();
-    const quality = detectQuality();
+    const settings = ensureSettings();
+    paintPlayerColors(
+      [...world.players.values()].map((state) => state.player),
+      settings.colorblind,
+    );
+    const quality = bootQuality(settings, deviceQuality(), typeof location === 'undefined' ? '' : location.search);
     const renderer = new Renderer(container, quality);
     const input = new Input(renderer.domElement);
     const aim = resume?.view ?? layout.townCenter;
@@ -185,7 +230,7 @@ export class Game {
     const game = new Game(container, {
       layout, world, quality, renderer, input, rig, terrain, views, props, grass, fog,
       boot: { mapMs, terrainMs, modelsMs, totalMs: performance.now() - t0 },
-      store, resume, resumeFailed,
+      store, resume, resumeFailed, tutorial,
     });
     report('The city stands', 1);
     return game;
@@ -194,6 +239,8 @@ export class Game {
   private constructor(private readonly container: HTMLElement, parts: BootParts) {
     const { layout } = parts;
     this.world = parts.world;
+    this.matchAudio = new MatchAudio(this.world);
+    this.matchMusic = new MatchMusic(this.world);
     this.quality = parts.quality;
     this.renderer = parts.renderer;
     this.input = parts.input;
@@ -232,6 +279,7 @@ export class Game {
     this.minimap = new Minimap(document.getElementById('hud') ?? container, this.world, this.rig);
     this.endgame = new Endgame(this.world, this.endgameLog, () => {
       this.matchOver = true;
+      this.setPaused(false);
       this.remember('quiet');
     }, () => {
       void this.leave();
@@ -239,6 +287,12 @@ export class Game {
     if (this.resume) this.applyResume(this.resume);
     if (this.world.gameOver) this.endgame.showFinished();
     this.bindResume(parts.resumeFailed);
+    this.bindPause();
+    this.pixelCap = parts.quality.pixelRatio;
+    this.applySettings(ensureSettings(), true);
+    this.unsubscribeSettings = subscribeSettings((settings) => this.applySettings(settings, false));
+    this.tutorial = parts.tutorial;
+    if (parts.tutorial) this.tutorialCoach = new TutorialCoach(this.world);
 
     window.addEventListener('resize', this.onResize);
     document.addEventListener('visibilitychange', this.onHide);
@@ -257,11 +311,14 @@ export class Game {
     this.last = now;
     this.elapsed += dt;
 
-    this.controls.update(this.matchOver ? 0 : dt);
-    if (!this.matchOver) this.rig.update(dt);
+    this.controls.update(this.matchOver || this.paused ? 0 : dt);
+    // Camera keys stay out of the pause menu. The current view still renders below.
+    if (!this.matchOver && !this.paused) this.rig.update(dt);
+    this.maybePauseKey();
+    this.matchAudio.setEar(this.earPose());
 
-    if (!this.matchOver) {
-      this.accumulator += dt;
+    if (!this.matchOver && !this.paused) {
+      this.accumulator += dt * simScale(this.speed, this.paused, this.matchOver);
       let steps = 0;
       while (this.accumulator >= STEP && steps < MAX_STEPS_PER_FRAME && !this.matchOver) {
         this.world.tick(STEP);
@@ -273,14 +330,17 @@ export class Game {
       // One economy sample about every 10 sim seconds. gameOver records the last one itself.
       if (!this.matchOver && this.endgameLog.shouldSample(this.world.time)) this.endgame.sample();
     }
+    this.matchAudio.pulse(this.earSamples(), !this.matchOver && !this.paused, dt);
+    this.matchMusic.advance(this.world.time);
 
     this.fog.update(dt);
     this.props.syncFog();
     this.props.update(this.rig.camera);
     const focus = this.focus();
-    this.renderer.update(focus, this.elapsed);
-    this.terrain.update(this.elapsed);
-    this.grass.update(focus, this.elapsed);
+    const decor = currentSettings().reducedMotion ? 0 : this.elapsed;
+    this.renderer.update(focus, decor);
+    this.terrain.update(decor);
+    if (this.grass.object.visible) this.grass.update(focus, decor);
     this.views.sync(this.accumulator / STEP, this.elapsed, this.rig.camera);
     this.hud.update();
     this.minimap.update(this.elapsed);
@@ -288,6 +348,35 @@ export class Game {
     this.input.endFrame();
     if (!this.matchOver) this.raf = requestAnimationFrame(this.frame);
   };
+
+  /** Camera position and the ground-right axis, so voices pan with the view. */
+  private earPose(): { at: Vec2; right: Vec2 } {
+    if (this.rig.mode === 'fps') {
+      return { at: { x: this.rig.fps.pos.x, z: this.rig.fps.pos.z }, right: yawBasis(this.rig.fps.yaw).right };
+    }
+    return {
+      at: {
+        x: this.rig.rts.target.x,
+        z: this.rig.rts.target.z + Math.cos(this.rig.rts.pitch) * this.rig.rts.distance,
+      },
+      right: { x: 1, z: 0 },
+    };
+  }
+
+  /** Points the ambience beds sample: the focus and the ground under the view. */
+  private earSamples(): Vec2[] {
+    if (this.rig.mode === 'fps') {
+      const pos = this.rig.fps.pos;
+      return [
+        pos,
+        { x: pos.x + 8, z: pos.z },
+        { x: pos.x - 8, z: pos.z },
+        { x: pos.x, z: pos.z + 8 },
+        { x: pos.x, z: pos.z - 8 },
+      ];
+    }
+    return [this.focus(), ...this.rig.viewFootprint()];
+  }
 
   /** Ground point the player is looking at: shadows, grass and sky follow it. */
   private focus(): Vec2 {
@@ -330,7 +419,7 @@ export class Game {
    * must not skip the next. Save copy still downloads when the slot cannot be written.
    */
   private remember(kind: 'quiet' | 'noted'): void {
-    if (this.leaving) return;
+    if (this.leaving || this.tutorial) return;
     let envelope: ResumeEnvelope;
     try {
       envelope = this.capture();
@@ -379,6 +468,10 @@ export class Game {
   /** Drop the slot after any in-flight write, then reload into a new match. */
   private async leave(): Promise<void> {
     if (this.leaving) return;
+    if (this.tutorial) {
+      location.reload();
+      return;
+    }
     this.leaving = true;
     try {
       await this.saveChain;
@@ -398,6 +491,53 @@ export class Game {
     this.noteTimer = window.setTimeout(() => {
       el.hidden = true;
     }, 8000);
+  }
+
+  /** Esc toggles pause unless help, placement, targeting, or the new-match confirm used it. */
+  private maybePauseKey(): void {
+    if (this.matchOver || !this.input.keyPressed('Escape') || this.controls.escapeUsed) return;
+    if (settingsOpen()) {
+      closeSettings();
+      return;
+    }
+    const ask = document.getElementById('new-match-ask');
+    if (ask && !ask.hidden) {
+      ask.hidden = true;
+      return;
+    }
+    this.setPaused(!this.paused);
+  }
+
+  private setPaused(on: boolean): void {
+    if (on && this.matchOver) return;
+    this.paused = on;
+    this.controls.hold(on);
+    const menu = document.getElementById('pause-menu');
+    if (menu) menu.hidden = !on;
+    const btn = document.getElementById('pause-match');
+    if (btn) {
+      btn.textContent = on ? 'Resume' : 'Pause';
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+    if (on) document.getElementById('pause-resume')?.focus();
+  }
+
+  private setSpeed(speed: GameSpeed): void {
+    this.speed = speed;
+    for (const btn of document.querySelectorAll<HTMLButtonElement>('#pause-menu [data-speed]')) {
+      btn.setAttribute('aria-pressed', Number(btn.dataset.speed) === speed ? 'true' : 'false');
+    }
+  }
+
+  private bindPause(): void {
+    document.getElementById('pause-match')?.addEventListener('click', () => this.setPaused(!this.paused));
+    document.getElementById('pause-resume')?.addEventListener('click', () => this.setPaused(false));
+    document.getElementById('pause-menu')?.addEventListener('click', (event) => {
+      const btn = (event.target as Element).closest<HTMLButtonElement>('[data-speed]');
+      if (!btn) return;
+      const speed = Number(btn.dataset.speed);
+      if (isGameSpeed(speed)) this.setSpeed(speed);
+    });
   }
 
   private bindResume(failed: boolean): void {
@@ -424,7 +564,40 @@ export class Game {
     if (failed) this.note('The resume could not be read.');
   }
 
+  private applySettings(settings: Settings, boot: boolean): void {
+    this.rig.rts.edgeScroll = settings.edgeScroll;
+    this.rig.rts.edgeSpeed = settings.edgeSpeed;
+    this.rig.rts.invertPan = settings.invertPan;
+    audioBus.setVolumes({ master: settings.master, music: settings.music, sfx: settings.sfx });
+    this.renderer.setShadows(settings.shadows);
+    this.views.setShadows(settings.shadows);
+    this.props.setShadows(settings.shadows);
+    const grassOk = this.grass.setShown(settings.grass);
+    const water = this.terrain.setFancyWater(settings.water);
+    paintPlayerColors(
+      [...this.world.players.values()].map((state) => state.player),
+      settings.colorblind,
+    );
+    this.minimap.setLocalFromPlayer(settings.colorblind);
+    if (boot) return;
+    const notes: string[] = [];
+    if (settings.grass && !grassOk) notes.push('Grass fills in on the next match.');
+    if (settings.water && water === 'next') notes.push('Detailed water starts on the next match.');
+    const wanted = bootQuality(settings, deviceQuality(), typeof location === 'undefined' ? '' : location.search);
+    if (wanted.pixelRatio !== this.pixelCap) notes.push('Pixel density applies on the next match.');
+    if (settings.colorblind) notes.push('New units use these colours. Units already in the match keep their dye.');
+    const note = document.getElementById('settings-note');
+    if (note) {
+      note.hidden = notes.length === 0;
+      note.textContent = notes.join(' ');
+    }
+  }
+
   dispose(): void {
+    this.matchAudio.dispose();
+    this.matchMusic.dispose();
+    this.tutorialCoach?.dispose();
+    this.unsubscribeSettings();
     cancelAnimationFrame(this.raf);
     window.clearTimeout(this.noteTimer);
     this.endgame.dispose();

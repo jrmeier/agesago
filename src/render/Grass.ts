@@ -140,6 +140,17 @@ export class GrassField {
     this.object.name = 'grass';
   }
 
+  /**
+   * Hide or show the tufts. Returns false when grass was built with no capacity,
+   * so turning it on has to wait for the next match.
+   */
+  setShown(on: boolean): boolean {
+    if (on && this.capacity === 0) return false;
+    this.object.visible = on;
+    if (on) this.windowKey = '';
+    return true;
+  }
+
   /** Fog the tufts and skip any that stand on unexplored ground. */
   setFog(fog: FogOfWar): void {
     this.fog = fog;

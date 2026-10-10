@@ -42,6 +42,8 @@
   --key: linear-gradient(180deg, var(--umber-700) 0%, var(--umber-800) 100%);
   --meander: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M0 .75H12M0 11.25H12M1.5 11.25V3.25H9V8.75H4.5V5.75H6.75' fill='none' stroke='%23d4b27a' stroke-width='1.3'/%3E%3C/svg%3E");
   --meander-ink: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M0 .75H12M0 11.25H12M1.5 11.25V3.25H9V8.75H4.5V5.75H6.75' fill='none' stroke='%238b6436' stroke-width='1.3'/%3E%3C/svg%3E");
+
+  --ui-scale: 1;
 }
 
 /* ---- Base ---- */
@@ -76,16 +78,16 @@ body {
   --edge-r: max(var(--edge), env(safe-area-inset-right));
   --edge-b: max(var(--edge), env(safe-area-inset-bottom));
   --edge-l: max(var(--edge), env(safe-area-inset-left));
-  /* Top padding + 36px controls + 10px frieze band + 1px rule. */
-  --hud-top-h: calc(max(4px, env(safe-area-inset-top)) + 47px);
+  /* Help and match buttons, then a full-width resource row, then the frieze. */
+  --hud-top-h: calc(max(4px, env(safe-area-inset-top)) + 100px);
   --train-w: 220px;
   --focus: var(--bronze-300);
 }
 
 body.touch {
   --edge: 10px;
-  /* The resume row (Save copy / Open file / New match, 44px buttons) wraps under the top bar on touch. */
-  --hud-top-h: calc(max(4px, env(safe-area-inset-top)) + 47px + 52px);
+  /* Help, a wrapped match-action row, then the resource plaques. */
+  --hud-top-h: calc(max(6px, env(safe-area-inset-top)) + 148px);
 }
 
 [hidden] {
@@ -151,6 +153,9 @@ kbd {
   inset: 0;
   pointer-events: none;
   z-index: 10;
+  zoom: var(--ui-scale);
+  width: calc(100% / var(--ui-scale));
+  height: calc(100% / var(--ui-scale));
 }
 
 /* The selection panel reclaims the minimap column when the map is folded or hidden. */
@@ -286,8 +291,11 @@ kbd {
   position: relative;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--s-4);
-  height: var(--hud-top-h);
+  row-gap: 6px;
+  height: auto;
+  min-height: var(--hud-top-h);
   padding: max(4px, env(safe-area-inset-top)) var(--edge-r) 10px var(--edge-l);
   background: var(--bar);
   border-bottom: 1px solid var(--bronze-600);
@@ -438,64 +446,6 @@ kbd {
   font-size: 11px;
   line-height: 1.35;
   color: var(--ink-900);
-}
-
-/* Resume controls. They sit in the top bar; the phone layout wraps them onto a second row. */
-.match-actions {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-  min-width: 0;
-}
-
-.match-btn {
-  flex: none;
-  height: 36px;
-  padding: 0 10px;
-  pointer-events: auto;
-  cursor: pointer;
-  border-radius: 4px;
-  font-family: var(--title);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  line-height: 1;
-  white-space: nowrap;
-  color: var(--ink-900);
-  background: var(--bronze-face);
-  border: 1px solid var(--bronze-800);
-  box-shadow:
-    inset 0 0 0 1px rgb(255 228 160 / 0.35),
-    0 2px 6px rgba(0, 0, 0, 0.4);
-  touch-action: manipulation;
-}
-
-.match-btn:hover {
-  filter: brightness(1.08);
-}
-
-.match-btn:active {
-  transform: translateY(1px);
-}
-
-.match-btn:focus-visible {
-  outline: 2px solid var(--bronze-300);
-  outline-offset: 2px;
-}
-
-#save-note[hidden] {
-  display: none !important;
-}
-
-#save-note {
-  pointer-events: none;
-  font-family: var(--text);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--bronze-300);
 }
 
 /* ---- Bottom row ---- */
@@ -1673,32 +1623,6 @@ body.fps-mode .toasts {
   white-space: nowrap;
 }
 
-/* New match confirm. Above the hotkey list, below the end-of-match sheet. */
-.confirm[hidden] {
-  display: none !important;
-}
-
-.confirm {
-  position: absolute;
-  inset: 0;
-  z-index: 29;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
-    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
-  overflow: hidden;
-  background: rgba(18, 10, 4, 0.72);
-  pointer-events: auto;
-}
-
-.confirm-copy {
-  margin: 0;
-  font-family: var(--text);
-  font-size: 16px;
-  line-height: 1.4;
-}
-
 /* ---- Hotkey list. Below the end-of-match sheet so a finished game still covers it. ---- */
 
 .hotkey-help,
@@ -1972,7 +1896,6 @@ body.touch .hud-hint {
 
 body.touch .hud-top {
   justify-content: center;
-  flex-wrap: wrap;
   gap: var(--s-3);
   height: auto;
   padding: max(6px, env(safe-area-inset-top)) var(--edge-r) 12px var(--edge-l);
@@ -1982,29 +1905,6 @@ body.touch .help-btn {
   width: 44px;
   height: 44px;
   font-size: 20px;
-}
-
-body.touch .logo-text {
-  display: none;
-}
-
-body.touch .match-actions {
-  order: 2;
-  flex: 1 0 100%;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-body.touch .match-btn {
-  min-width: 44px;
-  min-height: 44px;
-  height: auto;
-  padding: 0 12px;
-}
-
-body.touch #save-note {
-  flex: 1 0 100%;
-  text-align: center;
 }
 
 body.touch .resource-bar {
@@ -2251,8 +2151,7 @@ body.touch .minimap {
   left: auto;
   bottom: auto;
   right: var(--edge-r);
-  /* Under the resource bar and the resume row. */
-  top: calc(max(6px, env(safe-area-inset-top)) + 128px);
+  top: calc(var(--hud-top-h) + 8px);
   width: 128px;
   padding: 4px;
 }
@@ -2328,7 +2227,7 @@ body.touch .group-btn.touch-spare {
 
 /* Touch: the minimap owns the top-right (about 64px down, ~150px tall), so resign sits just under it. */
 body.touch .resign-btn {
-  top: calc(max(6px, env(safe-area-inset-top)) + 310px);
+  top: calc(var(--hud-top-h) + 176px);
   right: var(--edge-r);
   min-height: 44px;
   min-width: 44px;
@@ -2543,7 +2442,7 @@ body.touch .resign-btn {
 /* Short landscape phones: tighter bars and rail so the map stays visible. */
 @media (max-height: 460px) {
   body.touch .minimap {
-    top: calc(max(6px, env(safe-area-inset-top)) + 120px);
+    top: calc(var(--hud-top-h) + 4px);
     width: 112px;
   }
 
@@ -2604,7 +2503,7 @@ body.touch .resign-btn {
 
   /* The minimap is shorter and the footer owns the bottom, so resign moves to the top-left. */
   body.touch .resign-btn {
-    top: calc(max(6px, env(safe-area-inset-top)) + 52px);
+    top: calc(var(--hud-top-h) + 8px);
     right: auto;
     left: var(--edge-l);
   }
@@ -2647,18 +2546,461 @@ body.touch .resign-btn {
   }
 }
 
-/* ---- Market panel (M8-12): buy / sell 100 and tribute, for a selected own market ---- */
+/* ---- Match flow grafted onto the museum HUD (title, pause, settings, tutorial, sound credits) ---- */
 
+.match-actions {
+  position: relative;
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Plaques take the next row so Pause stays level with the help button. */
+.resource-bar {
+  order: 6;
+  flex: 1 0 100%;
+  justify-content: center;
+}
+
+.match-btn {
+  flex: none;
+  height: 36px;
+  padding: 0 10px;
+  pointer-events: auto;
+  border-radius: var(--r-1);
+  font-family: var(--title);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--ink-900);
+  background: var(--bronze-face);
+  border: 1px solid var(--bronze-800);
+  box-shadow:
+    inset 0 1px 0 rgb(255 236 200 / 0.25),
+    0 0 0 1px var(--umber-950),
+    var(--elev-1);
+}
+
+.match-btn:hover {
+  filter: brightness(1.08);
+}
+
+.match-btn:active {
+  transform: translateY(1px);
+}
+
+#save-note {
+  pointer-events: none;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bronze-300);
+}
+
+body.touch .match-actions {
+  order: 5;
+  flex: 1 0 100%;
+  flex-wrap: nowrap;
+  justify-content: center;
+}
+
+body.touch .match-btn,
+body.touch #save-note {
+  min-height: 44px;
+}
+
+body.touch .match-btn {
+  flex: 1 1 0;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 6px;
+  font-size: 12px;
+}
+
+body.touch #save-note {
+  flex: 1 0 100%;
+  text-align: center;
+  line-height: 44px;
+}
+
+/* Title screen. An inline script adds show-title unless the page is /?e2e. */
+html.show-title #loading {
+  display: none !important;
+}
+
+html:not(.show-title) #title-screen {
+  display: none !important;
+}
+
+#title-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  overflow: auto;
+  background: radial-gradient(90% 70% at 50% 18%, var(--umber-700) 0%, var(--umber-900) 55%, var(--umber-950) 100%);
+}
+
+.title-card {
+  width: min(440px, calc(100% / var(--ui-scale)));
+  zoom: var(--ui-scale);
+  padding: 28px 22px 18px;
+  text-align: center;
+  color: var(--ink-900);
+  background: var(--sheet);
+  border: 1px solid var(--bronze-600);
+  border-radius: var(--r-2);
+  box-shadow: var(--elev-2);
+}
+
+.title-card h1 {
+  margin: 8px 0 12px;
+  font-family: var(--title);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.title-copy {
+  margin: 0 0 12px;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.title-note {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--ink-700);
+}
+
+.title-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.title-actions .endgame-btn,
+.rival-row .endgame-btn,
+.speed-row .endgame-btn,
+.tutorial-actions .endgame-btn {
+  margin-top: 0;
+  min-height: 44px;
+}
+
+.endgame-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.title-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px;
+  text-align: left;
+  font-family: var(--title);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#title-seed,
+.settings-row select {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: var(--r-2);
+  border: 1px solid var(--bronze-600);
+  background: var(--ivory-50);
+  color: var(--ink-900);
+  font-family: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.rival-row,
+.speed-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rival-row .endgame-btn,
+.speed-row .endgame-btn {
+  flex: 1 1 64px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.rival-row .endgame-btn[aria-pressed='true'],
+.speed-row .endgame-btn[aria-pressed='true'] {
+  outline: 2px solid var(--ink-900);
+  outline-offset: 2px;
+}
+
+/* New-match confirm and pause. Above the HUD, under the end-of-match sheet. */
+.confirm,
+.pause-menu,
+.settings {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  overflow: hidden;
+  background: rgb(22 16 10 / 0.74);
+  pointer-events: auto;
+}
+
+.confirm {
+  z-index: 29;
+}
+
+.pause-menu {
+  z-index: 27;
+}
+
+.settings {
+  position: fixed;
+  z-index: 46;
+}
+
+.confirm-copy {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.pause-menu .hotkey-sheet,
+.confirm .hotkey-sheet {
+  width: min(440px, calc(100% / var(--ui-scale)));
+  zoom: var(--ui-scale);
+}
+
+.pause-speed-label {
+  margin: 8px 0 0;
+  font-family: var(--title);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.settings-sheet {
+  width: min(440px, calc(100% / var(--ui-scale)));
+  max-height: 100%;
+  overflow: auto;
+  zoom: var(--ui-scale);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.settings-row select,
+.settings-row input[type='range'] {
+  flex: 1 1 140px;
+  min-height: 44px;
+  min-width: 0;
+}
+
+.settings-row input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+}
+
+#settings-close {
+  min-height: 44px;
+}
+
+.tutorial {
+  position: absolute;
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  top: calc(var(--hud-top-h) + 8px);
+  z-index: 12;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.tutorial-card {
+  width: min(420px, calc(100% / var(--ui-scale)));
+  zoom: var(--ui-scale);
+  padding: 12px 14px;
+  pointer-events: auto;
+  color: var(--ink-900);
+  background: var(--sheet);
+  border: 1px solid var(--bronze-600);
+  border-radius: var(--r-2);
+  box-shadow: var(--elev-2);
+}
+
+.tutorial-objective {
+  margin: 4px 0;
+  font-family: var(--title);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.tutorial-hint {
+  margin: 0 0 8px;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.tutorial-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tutorial-actions .endgame-btn {
+  flex: 1 1 120px;
+}
+
+/* Age plaque and the "Entered the Town Age" slab. */
+.res-age {
+  position: relative;
+}
+
+#res-age {
+  flex: none;
+  font-weight: 800;
+  letter-spacing: 0;
+  padding-right: 0.3em;
+}
+
+.age-bar {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 2px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgb(0 0 0 / 0.45);
+  overflow: hidden;
+  display: none;
+}
+
+.res-age.advancing .age-bar {
+  display: block;
+}
+
+.age-bar-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--bronze-300);
+}
+
+@media (max-width: 719px) {
+  body.touch #res-age {
+    font-size: 0;
+  }
+
+  body.touch #res-age::after {
+    content: attr(data-short);
+    font-size: 14px;
+  }
+
+  body.touch .res-age {
+    padding: 2px 6px;
+  }
+
+  body.touch .res-age .ricon {
+    display: none;
+  }
+}
+
+.age-banner {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  z-index: 14;
+  max-width: calc(100% - 32px);
+  padding: 10px 28px;
+  border-radius: var(--r-1);
+  pointer-events: none;
+  text-align: center;
+  font-family: var(--title);
+  font-size: clamp(18px, 4vw, 30px);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink-900);
+  background: var(--sheet);
+  border: 1px solid var(--bronze-600);
+  box-shadow: var(--elev-2);
+}
+
+.age-banner.show {
+  animation: age-banner 3.2s ease both;
+}
+
+@keyframes age-banner {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  12%,
+  80% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+html.reduce-motion .toast,
+html.reduce-motion .toast-alert,
+html.reduce-motion .age-banner.show {
+  animation: none;
+}
+
+html.reduce-motion .minimap-ping,
+html.reduce-motion .minimap-ping.ping-death {
+  animation: none;
+  opacity: 0.9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .age-banner.show {
+    animation: none;
+  }
+}
+
+/* Market: buy, sell, and tribute inside the selection sheet. */
 .market-panel {
   flex: 1 0 100%;
-  /* Fill the panel's row without widening it; the other contents set the width. */
   contain: inline-size;
-  min-width: 360px;
+  min-width: min(360px, 100%);
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding-top: 8px;
-  border-top: 1px solid rgba(110, 70, 26, 0.35);
+  border-top: 1px solid var(--ivory-rule);
 }
 
 .market-panel[hidden],
@@ -2688,7 +3030,6 @@ body.touch .resign-btn {
   flex: none;
   width: 24px;
   height: 24px;
-  filter: drop-shadow(0 1px 1px rgba(60, 35, 10, 0.4));
 }
 
 .market-res-text {
@@ -2708,8 +3049,8 @@ body.touch .resign-btn {
 
 .market-prices,
 .market-note {
-  font-size: 11.5px;
-  color: rgba(46, 31, 16, 0.8);
+  font-size: 12px;
+  color: var(--ink-700);
 }
 
 .market-btn {
@@ -2720,21 +3061,17 @@ body.touch .resign-btn {
   min-width: 0;
   min-height: 38px;
   padding: 4px 6px;
-  border-radius: 4px;
-  cursor: pointer;
+  border-radius: var(--r-1);
   pointer-events: auto;
-  touch-action: manipulation;
-  font-family: var(--text);
   color: var(--ink-900);
   background: var(--tile);
-  border: 1px solid var(--bronze-800);
+  border: 1px solid var(--ivory-rule);
   box-shadow:
-    inset 0 1px 0 rgba(255, 250, 230, 0.8),
-    0 2px 4px rgba(60, 35, 10, 0.35);
+    inset 0 1px 0 rgb(255 255 255 / 0.55),
+    0 1px 2px rgb(42 29 18 / 0.18);
 }
 
 .market-btn:hover:not(:disabled) {
-  filter: brightness(1.06);
   border-color: var(--bronze-500);
 }
 
@@ -2745,7 +3082,6 @@ body.touch .resign-btn {
 .market-btn:disabled {
   cursor: not-allowed;
   opacity: 0.55;
-  filter: grayscale(0.7);
 }
 
 .market-btn-label {
@@ -2756,7 +3092,7 @@ body.touch .resign-btn {
 }
 
 .market-btn-sub {
-  font-size: 10.5px;
+  font-size: 11px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2775,13 +3111,13 @@ body.touch .resign-btn {
   min-height: 32px;
   max-width: 100%;
   padding: 2px 4px;
-  border-radius: 4px;
+  border-radius: var(--r-1);
   pointer-events: auto;
   font-family: var(--text);
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--ink-900);
-  background: rgba(255, 248, 228, 0.85);
-  border: 1px solid var(--bronze-800);
+  background: var(--ivory-50);
+  border: 1px solid var(--bronze-600);
 }
 
 .market-send {
@@ -2792,13 +3128,13 @@ body.touch .resign-btn {
   flex: 1 0 100%;
 }
 
-/* Phones: the market lives in the Train sheet, with thumb-sized buttons. */
 body.touch:not(.menu-train) #market-panel {
   display: none;
 }
 
-body.touch .market-btn {
-  min-height: 48px;
+body.touch .market-btn,
+body.touch .market-select {
+  min-height: 44px;
 }
 
 body.touch .market-head {
@@ -2810,133 +3146,9 @@ body.touch .market-send {
   flex: 1 1 40%;
 }
 
-body.touch .market-select {
-  min-height: 44px;
-  font-size: 15px;
-}
-
-body.touch .market-rows {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
-}
-
 body.touch.menu-train #market-panel {
   width: 100%;
   min-width: 0;
-}
-
-/* ---- Research and ages (M8-14 / M8-6) ---- */
-
-/* Age plaque: the age name, with a slim bronze bar along its foot while an age-up runs. */
-.res-age {
-  position: relative;
-  /* Never squeezed by large counts in the other plaques (the age name must stay readable). */
-  flex: none;
-  font-family: var(--title);
-  font-size: 13px;
-  letter-spacing: 0.03em;
-  white-space: nowrap;
-}
-
-/* Cinzel's capitals rise above a 1.2 line box; give the age name room so it isn't clipped. */
-#res-age {
-  line-height: 1.6;
-}
-
-.age-bar {
-  position: absolute;
-  left: 4px;
-  right: 4px;
-  bottom: 2px;
-  height: 3px;
-  border-radius: 2px;
-  background: rgba(0, 0, 0, 0.45);
-  overflow: hidden;
-  display: none;
-}
-
-.res-age.advancing .age-bar {
-  display: block;
-}
-
-.age-bar-fill {
-  display: block;
-  height: 100%;
-  width: 0;
-  background: var(--bronze-face);
-}
-
-/* Phones: the plaque shrinks to a numeral (I–IV) so the bar never scrolls sideways. */
-body.touch .res-age .ricon {
-  display: none;
-}
-
-@media (max-width: 719px) {
-  body.touch #res-age {
-    font-size: 0;
-  }
-
-  body.touch #res-age::after {
-    content: attr(data-short);
-    font-size: 14px;
-  }
-
-  body.touch .res-age {
-    padding: 2px 6px;
-  }
-}
-
-/* "Entered the Town Age": a bronze-lettered slab that fades in and out. */
-.age-banner {
-  position: absolute;
-  left: 50%;
-  top: 22%;
-  transform: translateX(-50%);
-  z-index: 14;
-  max-width: calc(100% - 32px);
-  padding: 10px 28px;
-  border-radius: 3px;
-  pointer-events: none;
-  text-align: center;
-  font-family: var(--title);
-  font-size: clamp(18px, 4vw, 30px);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--ink-900);
-  background: var(--sheet);
-  border: 1px solid #8a6230;
-  box-shadow:
-    0 0 0 2px var(--umber-700),
-    0 0 0 3px var(--bronze-500),
-    0 10px 26px rgba(0, 0, 0, 0.5);
-}
-
-.age-banner[hidden] {
-  display: none;
-}
-
-.age-banner.show {
-  animation: age-banner 3.2s ease both;
-}
-
-@keyframes age-banner {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -10px);
-  }
-  12%,
-  80% {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .age-banner.show {
-    animation: none;
-  }
 }
 
 /* Research header and tiles inside the training grid. */
@@ -2949,11 +3161,7 @@ body.touch .res-age .ricon {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #6b4612;
-}
-
-.research-head[hidden] {
-  display: none;
+  color: var(--bronze-800);
 }
 
 .tech-tile .build-name {
@@ -2975,18 +3183,18 @@ body.touch .res-age .ricon {
 .age-tile {
   border-color: var(--bronze-500);
   box-shadow:
-    inset 0 1px 0 rgba(255, 250, 230, 0.8),
+    inset 0 1px 0 rgb(255 255 255 / 0.55),
     0 0 0 1px var(--bronze-500),
-    0 2px 4px rgba(60, 35, 10, 0.35);
+    0 1px 2px rgb(42 29 18 / 0.18);
 }
 
 .build-lock {
   max-width: 100%;
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 700;
   line-height: 1.1;
   text-align: center;
-  color: #8a1c0c;
+  color: var(--crimson);
 }
 
 .build-lock:empty {
@@ -3004,7 +3212,10 @@ body.touch .res-age .ricon {
   opacity: 0.5;
 }
 
-/* New after an age-up: a small bronze pip in the corner (and on the phone's Train tab). */
+.menu-tab {
+  position: relative;
+}
+
 .tech-tile.fresh::after,
 .menu-tab.has-new::after {
   content: '';
@@ -3014,55 +3225,33 @@ body.touch .res-age .ricon {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #e0a838;
-  box-shadow: 0 0 0 1px #5a3a10;
-}
-
-.menu-tab {
-  position: relative;
+  background: var(--bronze-300);
+  box-shadow: 0 0 0 1px var(--bronze-800);
 }
 
 .queue-item.tech {
-  border-radius: 4px;
-  background: rgba(255, 248, 228, 0.6);
+  border-radius: var(--r-1);
+  background: var(--ivory-50);
 }
 
 .tech-tip {
   flex: 1 0 100%;
   margin: 4px 0 0;
   padding: 5px 8px;
-  border-radius: 3px;
+  border-radius: var(--r-1);
   font-size: 12px;
   line-height: 1.3;
   white-space: normal;
   color: var(--ink-900);
-  background: rgba(255, 248, 228, 0.85);
-  border: 1px solid var(--bronze-800);
-}
-
-.tech-tip[hidden] {
-  display: none;
+  background: var(--ivory-50);
+  border: 1px solid var(--ivory-rule);
 }
 
 .toast-research .toast-icon {
   background: var(--bronze-face);
 }
 
-body.touch .tech-tile .build-lock {
-  font-size: 9px;
-}
-
-/* Desktop: a long research list wraps into rows instead of running under the minimap. */
-body:not(.touch) .selection-panel {
-  max-width: max(420px, min(780px, calc(100% - 540px)));
-}
-
-/* 360px phones: six plaques must fit without sideways scroll. */
 @media (max-width: 380px) {
-  body.touch .resource-bar {
-    gap: 2px;
-  }
-
   body.touch .res-age {
     padding: 2px 4px;
   }

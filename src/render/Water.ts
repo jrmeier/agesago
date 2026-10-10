@@ -115,7 +115,10 @@ export class Water {
   readonly mesh: THREE.Mesh;
   private readonly positions: THREE.BufferAttribute;
   private readonly xz: Float32Array;
+  private readonly plain: THREE.MeshLambertMaterial;
+  private readonly fancy: THREE.ShaderMaterial | null;
   private readonly time?: { value: number };
+  private fogMask: FogOfWar | null = null;
 
   constructor(hf: Heightfield, quality: Quality) {
     const bounds = waterBounds(hf, MARGIN);
@@ -135,12 +138,20 @@ export class Water {
       this.xz[i * 2 + 1] = this.positions.getZ(i);
     }
 
-    const fancy = quality.fancyWater && bounds !== null;
-    let material: THREE.Material;
-    if (fancy && bounds) {
+    this.plain = new THREE.MeshLambertMaterial({
+      color: WATER_COLOR,
+      transparent: true,
+      opacity: 0.62,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -4,
+    });
+    const fancyOn = quality.fancyWater && bounds !== null;
+    if (fancyOn && bounds) {
       this.time = { value: 0 };
       const bed = bakeBed(hf, bounds, quality.tier === 'high' ? 256 : 128);
-      material = new THREE.ShaderMaterial({
+      this.fancy = new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
         opacity: 0.92,
@@ -166,26 +177,36 @@ export class Water {
         fragmentShader,
       });
     } else {
-      material = new THREE.MeshLambertMaterial({
-        color: WATER_COLOR,
-        transparent: true,
-        opacity: 0.62,
-        depthWrite: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -1,
-        polygonOffsetUnits: -4,
-      });
+      this.fancy = null;
     }
 
-    this.mesh = new THREE.Mesh(geo, material);
+    this.mesh = new THREE.Mesh(geo, this.fancy ?? this.plain);
+    this.mesh.name = 'water';
     this.mesh.renderOrder = 2;
     this.mesh.castShadow = false;
     this.mesh.receiveShadow = false;
     this.mesh.visible = bounds !== null;
   }
 
+  /** True when the detailed shader was built and can be shown without a reload. */
+  hasFancy(): boolean {
+    return this.fancy != null;
+  }
+
+  /**
+   * Swap to the cheap plane, or back to the shader when it was built.
+   * `next` means the shader was never constructed, so detailed water waits for the next match.
+   */
+  setFancy(on: boolean): 'live' | 'next' {
+    if (on && !this.fancy) return 'next';
+    this.mesh.material = on && this.fancy ? this.fancy : this.plain;
+    if (this.fogMask) applyFog(this.mesh.material, this.fogMask);
+    return 'live';
+  }
+
   /** Shade the sea with fog of war. Unexplored water becomes the black map, not a hole. */
   setFog(fog: FogOfWar): void {
+    this.fogMask = fog;
     applyFog(this.mesh.material as THREE.Material, fog);
   }
 

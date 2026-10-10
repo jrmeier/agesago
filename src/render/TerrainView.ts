@@ -22,7 +22,7 @@ interface EdgeVert {
 /**
  * Splat-textured terrain mesh plus sea-level water.
  * Vertex weights come from `Heightfield.ground`; the shader adds macro variation,
- * slope rock, and an underwater tint. Public surface: constructor, object, update, setFog.
+ * slope rock, and an underwater tint. Public surface: constructor, object, update, setFog, setFancyWater.
  * `quality` defaults to {@link detectQuality} so the current game loop still picks a tier.
  */
 export class TerrainView {
@@ -47,6 +47,11 @@ export class TerrainView {
   setFog(fog: FogOfWar): void {
     applyFog(this.ground.material as THREE.Material, fog);
     this.water.setFog(fog);
+  }
+
+  /** Show or hide the detailed water shader. `next` means it was never built. */
+  setFancyWater(on: boolean): 'live' | 'next' {
+    return this.water.setFancy(on);
   }
 }
 

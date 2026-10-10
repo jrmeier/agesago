@@ -11,7 +11,7 @@ const SHADOW_EXTENT = 35;
  * `update(focus, time)` follows the camera with the shadow map and drifts the clouds.
  * If a frame reaches `render` without `update`, the sun follows the camera and the
  * sky clock advances on its own so the current game loop still moves.
- * Public: constructor(container, quality?), scene, sun, webgl, domElement, setSize, update, render.
+ * Public: constructor(container, quality?), scene, sun, webgl, domElement, setSize, setShadows, update, render.
  */
 export class Renderer {
   readonly scene = new THREE.Scene();
@@ -57,21 +57,7 @@ export class Renderer {
 
     this.sun = new THREE.DirectionalLight(SUN_COLOR, 2.15);
     this.sun.castShadow = quality.shadows;
-    if (quality.shadows) {
-      this.sun.shadow.intensity = 0.88;
-      this.sun.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize);
-      this.sun.shadow.bias = -0.00035;
-      this.sun.shadow.normalBias = 0.04;
-      this.sun.shadow.radius = 2;
-      const cam = this.sun.shadow.camera as THREE.OrthographicCamera;
-      cam.left = -SHADOW_EXTENT;
-      cam.right = SHADOW_EXTENT;
-      cam.top = SHADOW_EXTENT;
-      cam.bottom = -SHADOW_EXTENT;
-      cam.near = 0.5;
-      cam.far = 220;
-      cam.updateProjectionMatrix();
-    }
+    if (quality.shadows) this.ensureShadowFrustum();
     this.scene.add(this.sun, this.sun.target);
     this.applyFrame();
   }
@@ -82,6 +68,36 @@ export class Renderer {
 
   setSize(width: number, height: number): void {
     this.webgl.setSize(width, height);
+  }
+
+  /**
+   * Turn sun shadows on or off. A tier that booted without a shadow map grows a 1024 map.
+   * Pixel ratio and antialiasing stay as they were at startup.
+   */
+  setShadows(on: boolean): void {
+    if (on) this.ensureShadowFrustum();
+    this.quality.shadows = on;
+    this.webgl.shadowMap.enabled = on;
+    this.sun.castShadow = on;
+    this.webgl.shadowMap.needsUpdate = true;
+  }
+
+  private ensureShadowFrustum(): void {
+    const size = this.quality.shadowMapSize > 0 ? this.quality.shadowMapSize : 1024;
+    this.quality.shadowMapSize = size;
+    this.sun.shadow.intensity = 0.88;
+    this.sun.shadow.mapSize.set(size, size);
+    this.sun.shadow.bias = -0.00035;
+    this.sun.shadow.normalBias = 0.04;
+    this.sun.shadow.radius = 2;
+    const cam = this.sun.shadow.camera as THREE.OrthographicCamera;
+    cam.left = -SHADOW_EXTENT;
+    cam.right = SHADOW_EXTENT;
+    cam.top = SHADOW_EXTENT;
+    cam.bottom = -SHADOW_EXTENT;
+    cam.near = 0.5;
+    cam.far = 220;
+    cam.updateProjectionMatrix();
   }
 
   /** Point the shadow frustum at `focus` and advance clouds. `time` is seconds. */

@@ -157,6 +157,45 @@ describe('RtsCamera touch', () => {
     rts.update(0.5, input);
     expect(rts.target).toEqual({ x: 32, z: 26 });
   });
+
+  it('edge scroll can be switched off, and arrow keys still pan', () => {
+    const rts = new RtsCamera(makeCamera(), testField(true), { x: 32, z: 26 });
+    rts.edgeScroll = false;
+    const edge = Object.assign(fakeInput(), { inside: true, clientX: 2, clientY: 360, viewWidth: W, viewHeight: H });
+    rts.update(0.5, edge);
+    expect(rts.target).toEqual({ x: 32, z: 26 });
+    const arrow = Object.assign(fakeInput(['ArrowRight']), { inside: true, clientX: 2, clientY: 360, viewWidth: W, viewHeight: H });
+    rts.update(0.5, arrow);
+    expect(rts.target.x).toBeGreaterThan(32);
+  });
+
+  it('edge speed scales only the edge scroll', () => {
+    const shift = (speed: number) => {
+      const rts = new RtsCamera(makeCamera(), testField(true), { x: 32, z: 26 });
+      rts.edgeSpeed = speed;
+      const input = Object.assign(fakeInput(), { inside: true, clientX: 2, clientY: 360, viewWidth: W, viewHeight: H });
+      rts.update(0.5, input);
+      return 32 - rts.target.x;
+    };
+    expect(shift(2)).toBeCloseTo(shift(1) * 2, 4);
+  });
+
+  it('invert pan reverses a finger drag and leaves arrow keys alone', () => {
+    const drag = (invert: boolean) => {
+      const rts = new RtsCamera(makeCamera(), testField(true), { x: 32, z: 26 });
+      rts.invertPan = invert;
+      const frame = (gestures: GestureEvent[]) => rts.update(1 / 60, fakeInput([], { gestures, active: true }));
+      frame([{ type: 'panStart', x: 640, y: 360 }]);
+      frame([{ type: 'pan', x: 520, y: 420 }]);
+      return rts.target.x - 32;
+    };
+    expect(Math.sign(drag(true))).toBe(-Math.sign(drag(false)));
+    const rts = new RtsCamera(makeCamera(), testField(true), { x: 32, z: 26 });
+    rts.invertPan = true;
+    const arrow = Object.assign(fakeInput(['ArrowRight']), { inside: false });
+    rts.update(0.5, arrow);
+    expect(rts.target.x).toBeGreaterThan(32);
+  });
 });
 
 describe('edgeScrollDir', () => {

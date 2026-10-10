@@ -27,17 +27,23 @@ const TIERS: Record<QualityTier, Quality> = {
   high: { tier: 'high', pixelRatio: 2, shadows: true, shadowMapSize: 2048, grassDensity: 7, grassRadius: 45, fancyWater: true },
 };
 
-/** `?quality=low|medium|high` overrides detection (handy for testing). */
-export function detectQuality(): Quality {
+/** Device tier. Ignores `?quality=`, which is a per-visit override. */
+export function deviceQuality(): Quality {
   if (typeof window === 'undefined') return TIERS.medium;
-  const forced = new URLSearchParams(window.location.search).get('quality');
-  if (forced === 'low' || forced === 'medium' || forced === 'high') return TIERS[forced];
   const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
   const cores = navigator.hardwareConcurrency ?? 4;
   const small = Math.min(window.screen.width, window.screen.height) < 600;
   if (coarse && (small || cores <= 4)) return TIERS.low;
   if (coarse || cores <= 4) return TIERS.medium;
   return TIERS.high;
+}
+
+/** `?quality=low|medium|high` overrides detection (handy for testing). */
+export function detectQuality(): Quality {
+  if (typeof window === 'undefined') return TIERS.medium;
+  const forced = new URLSearchParams(window.location.search).get('quality');
+  if (forced === 'low' || forced === 'medium' || forced === 'high') return TIERS[forced];
+  return deviceQuality();
 }
 
 export function qualityTier(tier: QualityTier): Quality {
