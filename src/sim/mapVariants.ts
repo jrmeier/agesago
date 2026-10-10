@@ -20,6 +20,7 @@ export function generateVariantMap(seed: number, players: number, options: MapOp
     return Math.hypot(x-width/2-t*dx,z-width/2-t*dz);
   }));
   const heightAt = (x: number, z: number): number => {
+    if(type==='islands' && Math.min(x,z,width-x,width-z)<3) return -1;
     const pad = nearPad(x,z);
     if (pad < 25) return 1;
     let h = 1 + .35 * wave(x,z);
