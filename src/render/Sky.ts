@@ -50,26 +50,27 @@ void main() {
   float t = smoothstep(-0.12, 0.55, h);
   vec3 col = mix(uHorizon, uZenith, t);
   float band = exp(-abs(h) * 3.2);
-  col = mix(col, uHorizon * vec3(1.06, 0.94, 0.78), band * 0.4);
-  float below = smoothstep(-0.02, -0.5, h);
+  col = mix(col, uHorizon * vec3(1.04, 0.99, 0.9), band * 0.35);
+  float below = 1.0 - smoothstep(-0.5, -0.02, h);
   col = mix(col, mix(uHorizon, uZenith, 0.42), below * 0.55);
 
   float sun = dot(dir, normalize(uSunDir));
   float disc = smoothstep(0.9978, 0.9994, sun);
   float glow = pow(max(sun, 0.0), 72.0);
   float halo = pow(max(sun, 0.0), 7.0);
-  col += vec3(1.0, 0.78, 0.42) * halo * 0.32;
-  col += vec3(1.0, 0.86, 0.55) * glow * 0.9;
-  col += vec3(1.0, 0.96, 0.82) * disc;
+  col += vec3(1.0, 0.9, 0.7) * halo * 0.14;
+  col += vec3(1.0, 0.92, 0.74) * glow * 0.5;
+  col += vec3(1.0, 0.97, 0.88) * disc;
 
   float skyMask = smoothstep(-0.06, 0.16, h);
   vec2 cuv = dir.xz / max(h, 0.08);
   vec2 drift = vec2(uTime * 0.012, uTime * 0.004);
   float c = agFbm(cuv * 1.35 + drift);
   float clouds = smoothstep(0.56, 0.78, c) * skyMask;
-  col = mix(col, vec3(0.97, 0.92, 0.84), clouds * 0.72);
+  vec3 cloudLit = mix(uHorizon, vec3(1.0), 0.55);
+  col = mix(col, cloudLit, clouds * 0.62);
   float shade = smoothstep(0.5, 0.7, agFbm(cuv * 1.35 + drift + vec2(0.18, -0.06)));
-  col = mix(col, col * vec3(0.78, 0.74, 0.68), shade * clouds * 0.4);
+  col = mix(col, col * vec3(0.84, 0.84, 0.86), shade * clouds * 0.4);
 
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
@@ -78,7 +79,7 @@ void main() {
 `;
 
 /**
- * Inward sky dome: deep-blue zenith, warm hazy horizon, a sun disc aligned with
+ * Inward sky dome: Aegean blue zenith, pale limestone horizon, a sun disc aligned with
  * {@link sunDirection}, and slow procedural clouds. Follows the camera.
  */
 export class Sky {

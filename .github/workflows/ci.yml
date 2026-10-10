@@ -23,7 +23,8 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npm test
+      # Bound concurrent simulation suites to avoid worker RPC timeouts under runner load.
+      - run: npm test -- --maxWorkers=2
       - run: npm run build
 
       - uses: actions/upload-artifact@v4

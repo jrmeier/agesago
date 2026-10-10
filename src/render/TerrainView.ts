@@ -8,7 +8,8 @@ import { Water } from './Water';
 
 const STEP = 0.5;
 const SKIRT_DROP = 4;
-const APRON_COLOR = 0x15110d;
+/** Matches the fog-of-war shroud so the off-map border and unexplored ground read as one surface. */
+const APRON_COLOR = 0x1b100a;
 
 interface EdgeVert {
   x: number;
@@ -218,11 +219,16 @@ float agNoise(vec2 p) {
   float broad = agNoise(vWorldPos.xz * 0.012);
   float mid = agNoise(vWorldPos.xz * 0.034 + 5.1);
   float macro = broad * 0.62 + mid * 0.38;
-  splatCol *= 0.84 + macro * 0.32;
-  splatCol.r += (broad - 0.5) * 0.04;
+  splatCol *= 0.9 + macro * 0.2;
+  // Reuse the same two noise fields for sun-dried straw and lush sage patches on grass and meadow.
+  float cover = clamp(vSplat0.x + vSplat0.y, 0.0, 1.0);
+  float dry = smoothstep(0.56, 0.82, macro) * cover;
+  float lush = (1.0 - smoothstep(0.18, 0.42, macro)) * cover;
+  splatCol = mix(splatCol, splatCol * vec3(1.2, 1.1, 0.72), dry * 0.75);
+  splatCol = mix(splatCol, splatCol * vec3(0.84, 0.98, 0.82), lush * 0.6);
   float rock = smoothstep(0.2, 0.58, vSlope) * (1.0 - clamp(vSplat1.y, 0.0, 1.0));
   splatCol = mix(splatCol, rockCol, rock);
-  float under = smoothstep(0.08, -1.7, vWorldPos.y);
+  float under = 1.0 - smoothstep(-1.7, 0.08, vWorldPos.y);
   splatCol = mix(splatCol, splatCol * vec3(0.42, 0.55, 0.58) + vec3(0.02, 0.045, 0.06), under);
   splatCol *= 1.0 - clamp(vSplat1.w, 0.0, 0.82);
   diffuseColor.rgb *= splatCol;
@@ -250,7 +256,7 @@ function buildApron(hf: Heightfield): THREE.Mesh {
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  const apron = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: APRON_COLOR, fog: true }));
+  const apron = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: APRON_COLOR, fog: false }));
   apron.name = 'apron';
   return apron;
 }
