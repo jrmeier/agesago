@@ -61,7 +61,11 @@ test('queue cancel, the rally flag, and the idle badge work', async ({ page }, t
   if (phone) {
     await page.locator('#touch-deselect').tap();
     await expect(page.locator('body')).toHaveClass(/touch/);
+  } else {
+    // The villager build panel (15 buildings since M8) reaches the middle of a 1280×800 view.
+    await page.evaluate(() => (window as any).game.selection.set([]));
   }
+  await expect(page.locator('#selection-panel')).toHaveClass(/hidden/);
 
   const tc = await page.evaluate(() => {
     const g = (window as any).game;

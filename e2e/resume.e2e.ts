@@ -131,7 +131,7 @@ test('a save survives reload, a newer file does not replace it, and new match st
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify({
       version: 1,
-      sim: { version: 2 },
+      sim: { version: 999 },
       view: { x: 0, z: 0, distance: 26 },
       groups: [],
       selection: [],
@@ -139,7 +139,7 @@ test('a save survives reload, a newer file does not replace it, and new match st
       savedAt: 1,
     })),
   });
-  await expect(page.locator('#save-note')).toHaveText(/Unsupported save version 2/);
+  await expect(page.locator('#save-note')).toHaveText(/Unsupported save version 999/);
 
   await page.reload();
   await waitReady(page);
