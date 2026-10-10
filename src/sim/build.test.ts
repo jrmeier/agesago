@@ -13,6 +13,7 @@ import {
 import { BALANCE } from './balance';
 import { generateMap } from './mapgen';
 import { NavGrid } from './nav';
+import { nearestDrop } from './systems/sites';
 import { EXPLORED } from './visibility';
 import { World } from './World';
 
@@ -434,6 +435,23 @@ describe('drop sites', () => {
     const wood = w.stock.wood;
     runUntil(w, () => w.stock.wood > wood);
     expect(Math.hypot(u.pos.x - 8, u.pos.z - 40)).toBeLessThan(3);
+  });
+
+  it('picks the drop site with the shortest walk, not the nearest across a river', () => {
+    // A river at x 20–24 with its only ford at the far end (z > 44).
+    const river = (x: number, z: number) => x > 20 && x < 24 && z < 44;
+    const l = { ...layout([]), townCenter: { x: 8, z: 30 } };
+    const w = world(l, field(river));
+    w.dispatch({ type: 'build', unitIds: [], kind: 'storehouse', pos: { x: 28, z: 10 }, rot: 0 });
+    const store = newest(w);
+    store.complete = true;
+    store.buildProgress = 1;
+    const from = { x: 16, z: 10 };
+    // The storehouse is nearer in a straight line, but the walk round by the ford is far longer.
+    expect(Math.hypot(28 - from.x, 10 - from.z)).toBeLessThan(Math.hypot(8 - from.x, 30 - from.z));
+    expect(nearestDrop(w, from, 'wood', 1)?.b.id).toBe(w.townCenter!.id);
+    // On the open bank beside it, the storehouse wins.
+    expect(nearestDrop(w, { x: 32, z: 10 }, 'wood', 1)?.b.id).toBe(store.id);
   });
 
   it('a storehouse next to a forest shortens trips', () => {

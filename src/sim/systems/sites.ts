@@ -49,9 +49,10 @@ export function nodeInReach(world: World, u: Unit, node: ResourceNode): boolean 
 }
 
 /**
- * Nearest complete building accepting `type`, with a path to it from `from`. Ranked by
- * straight-line distance to the footprint (a cheap stand-in for path length; the TC and a
- * handful of camps make this a short loop). Null if none is reachable.
+ * Complete building accepting `type` with the shortest walk from `from`, and that path. Candidates
+ * are tried nearest-first by straight-line distance to the footprint, which is a lower bound on
+ * the walk, so the search stops once no remaining site could beat the best path found (usually
+ * after one A*; more only when, say, the nearest camp is across a river). Null if none is reachable.
  */
 export function nearestDrop(world: World, from: Vec2, type: ResourceType, owner: PlayerId): { b: Building; path: Vec2[] } | null {
   const cands: { b: Building; d: number }[] = [];
@@ -59,9 +60,24 @@ export function nearestDrop(world: World, from: Vec2, type: ResourceType, owner:
     if (b.complete && b.owner === owner && BUILDINGS[b.kind].drop.includes(type)) cands.push({ b, d: rectDistance(from, buildingRect(b)) });
   }
   cands.sort((a, c) => a.d - c.d);
-  for (const { b } of cands) {
+  let best: { b: Building; path: Vec2[]; len: number } | null = null;
+  for (const { b, d } of cands) {
+    if (best && d >= best.len) break;
     const path = route(world, owner, from, siteApproach(from, b));
-    if (path) return { b, path };
+    if (!path) continue;
+    const len = pathLength(from, path);
+    if (!best || len < best.len) best = { b, path, len };
   }
-  return null;
+  return best && { b: best.b, path: best.path };
+}
+
+/** Walking distance along `path` starting at `from`. */
+function pathLength(from: Vec2, path: Vec2[]): number {
+  let len = 0;
+  let p = from;
+  for (const q of path) {
+    len += Math.hypot(q.x - p.x, q.z - p.z);
+    p = q;
+  }
+  return len;
 }
