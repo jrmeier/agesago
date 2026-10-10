@@ -75,6 +75,14 @@ export class EndgameLog {
     return true;
   }
 
+  /** Replace the log with samples from a resume. Later points past the cap are kept. */
+  replace(samples: readonly EndgameSample[]): void {
+    const next = samples.slice(-MAX_SAMPLES).map((sample) => ({ ...sample }));
+    this.samples.splice(0, this.samples.length, ...next);
+    const last = this.samples[this.samples.length - 1];
+    this.nextAt = last ? last.time + SAMPLE_EVERY : 0;
+  }
+
   /** Drop every other point, always keeping the latest, until the log fits. */
   private thin(): void {
     if (this.samples.length <= MAX_SAMPLES) return;

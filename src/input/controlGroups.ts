@@ -45,6 +45,20 @@ export class ControlGroups {
     return Array.from({ length: 9 }, (_, i) => this.get(i + 1).length);
   }
 
+  /** Groups that currently have members, in assign order. */
+  snapshot(): [number, EntityId[]][] {
+    return [...this.groups.entries()].map(([n, ids]) => [n, [...ids]]);
+  }
+
+  /**
+   * Replace every group. `alive` drops ids that are gone; an empty result clears that group.
+   */
+  restore(entries: readonly (readonly [number, readonly EntityId[]])[], alive?: (id: EntityId) => boolean): void {
+    this.groups.clear();
+    this.version++;
+    for (const [n, ids] of entries) this.assign(n, alive ? ids.filter(alive) : ids);
+  }
+
   /** Forget a dead or removed entity everywhere. */
   remove(id: EntityId): void {
     for (const [g, members] of this.groups) {

@@ -84,10 +84,68 @@ function floodFill(hf: Heightfield, layout: MapLayout, step = 0.5): (pos: Vec2) 
   };
 }
 
+/** Town centers on one walkable component. Buildings and scenery do not count as water. */
+function townCentersConnected(hf: Heightfield, centers: Vec2[]): boolean {
+  const step = 0.5;
+  const columns = Math.ceil(hf.width / step);
+  const rows = Math.ceil(hf.depth / step);
+  const walk = new Uint8Array(columns * rows);
+  const visited = new Uint8Array(walk.length);
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      walk[row * columns + column] = hf.isWalkable((column + 0.5) * step, (row + 0.5) * step) ? 1 : 0;
+    }
+  }
+  const queue = new Int32Array(walk.length);
+  const origin = centers[0];
+  const first = Math.floor(origin.z / step) * columns + Math.floor(origin.x / step);
+  if (first < 0 || first >= walk.length || !walk[first]) return false;
+  queue[0] = first;
+  visited[first] = 1;
+  let tail = 1;
+  const dx = [-1, 1, 0, 0];
+  const dz = [0, 0, -1, 1];
+  for (let head = 0; head < tail; head++) {
+    const index = queue[head];
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    for (let d = 0; d < 4; d++) {
+      const x = column + dx[d];
+      const z = row + dz[d];
+      if (x < 0 || z < 0 || x >= columns || z >= rows) continue;
+      const next = z * columns + x;
+      if (visited[next] || !walk[next]) continue;
+      if (!hf.isWalkable((column + 0.5 + dx[d] / 2) * step, (row + 0.5 + dz[d] / 2) * step)) continue;
+      visited[next] = 1;
+      queue[tail++] = next;
+    }
+  }
+  return centers.every((center) => {
+    const column = Math.floor(center.x / step);
+    const row = Math.floor(center.z / step);
+    return hf.isWalkable(center.x, center.z) && column >= 0 && row >= 0 && column < columns && row < rows
+      && visited[row * columns + column] === 1;
+  });
+}
+
+const START_KINDS = ['tree', 'berry', 'gold', 'stone'] as const;
+
+function resourcesInStart(layout: MapLayout, center: Vec2): number[] {
+  const totals = [0, 0, 0, 0];
+  for (const node of layout.nodes) {
+    const kind = START_KINDS.indexOf(node.kind as typeof START_KINDS[number]);
+    if (kind < 0 || distance(node.pos, center) > START_RADIUS) continue;
+    totals[kind] += node.amount;
+  }
+  return totals;
+}
+
 const cases = [1, 2, 3, 4].flatMap((players) => Array.from({ length: 10 }, (_, i) => [players, i + 1] as const));
+const rivalCases = [2, 3, 4].flatMap((players) => Array.from({ length: 20 }, (_, i) => [players, i + 1] as const));
 
 describe('generateMap', () => {
   const maps = new Map<string, ReturnType<typeof generateMap>>();
+  // Forty maps. Each one is allowed 2s while the rest of the suite is running.
   beforeAll(() => {
     for (const [players, seed] of cases) {
       try {
@@ -96,7 +154,7 @@ describe('generateMap', () => {
         throw new Error(`${players} players, seed ${seed}: ${String(error)}`);
       }
     }
-  }, 30000);
+  }, 120_000);
 
   it('defaults to a rival, supports solo play and rejects invalid counts', () => {
     expect(generateMap(1).layout).toEqual(maps.get('2/1')!.layout);
@@ -301,6 +359,27 @@ describe('generateMap', () => {
     expect([layout, ...layout.extraStarts!].flatMap((start) => [...start.villagers, ...start.scouts])
       .filter((pos) => !reachable(pos))).toEqual([]);
   });
+
+  // 700 ms is the desktop target. 2 s matches the other generateMap bound while the suite runs in parallel.
+  it.each(rivalCases)('keeps starting resources within 10% and town centers connected by land for %i players, seed %i', (players, seed) => {
+    const start = performance.now();
+    const { hf, layout } = generateMap(seed, players);
+    expect(performance.now() - start).toBeLessThan(2000);
+    const starts = [layout, ...(layout.extraStarts ?? [])];
+    expect(starts).toHaveLength(players);
+    const totals = starts.map((playerStart) => resourcesInStart(layout, playerStart.townCenter));
+    for (let i = 0; i < totals.length; i++) {
+      for (let j = i + 1; j < totals.length; j++) {
+        for (let kind = 0; kind < START_KINDS.length; kind++) {
+          const a = totals[i][kind];
+          const b = totals[j][kind];
+          expect(a, START_KINDS[kind]).toBeGreaterThan(0);
+          expect(Math.abs(a - b) * 10, START_KINDS[kind]).toBeLessThanOrEqual(Math.min(a, b));
+        }
+      }
+    }
+    expect(townCentersConnected(hf, starts.map((playerStart) => playerStart.townCenter))).toBe(true);
+  }, 20_000);
 
   it('keeps 80k cached ground queries cheap', () => {
     const hf = maps.get('4/1')!.hf;

@@ -57,6 +57,43 @@ describe('formation orders', () => {
     }
   });
 
+  it('keeps melee in front of ranged after a 60-unit move, not only in the ordered slots', () => {
+    const world = worldOn();
+    const meleeKinds: UnitKind[] = ['hoplite', 'swordsman', 'horseman'];
+    const rangedKinds: UnitKind[] = ['archer', 'slinger'];
+    const units: Unit[] = [];
+    // Ranged start closer to the target, so spawn order cannot satisfy the formation.
+    for (let i = 0; i < 30; i++) {
+      units.push(world.spawnUnit(meleeKinds[i % meleeKinds.length], { x: 8 + (i % 6) * 1.6, z: 22 + Math.floor(i / 6) * 1.6 }));
+    }
+    for (let i = 0; i < 30; i++) {
+      units.push(world.spawnUnit(rangedKinds[i % rangedKinds.length], { x: 28 + (i % 6) * 1.6, z: 22 + Math.floor(i / 6) * 1.6 }));
+    }
+    const target = { x: 110, z: 26 };
+    let sx = 0;
+    let sz = 0;
+    for (const u of units) { sx += u.pos.x; sz += u.pos.z; }
+    const forward = { x: target.x - sx / units.length, z: target.z - sz / units.length };
+    const project = (p: Vec2) => p.x * forward.x + p.z * forward.z;
+    const depths = (at: (u: Unit) => Vec2) => ({
+      melee: units.filter((u) => UNITS[u.kind].unitClass !== 'archer').map((u) => project(at(u))),
+      ranged: units.filter((u) => UNITS[u.kind].unitClass === 'archer').map((u) => project(at(u))),
+    });
+    const before = depths((u) => u.pos);
+    expect(Math.min(...before.melee)).toBeLessThan(Math.max(...before.ranged));
+    orderMove(world, units.map((u) => u.id), target);
+    const arrived = new Set<number>();
+    for (let t = 0; t < 1600; t++) {
+      for (const u of movementSystem(world, DT)) arrived.add(u.id);
+      if (arrived.size === units.length) break;
+    }
+    expect(arrived.size).toBe(units.length);
+    expect(run(world, 3)).toEqual([]);
+    const after = depths((u) => u.pos);
+    expect(Math.min(...after.melee)).toBeGreaterThan(Math.max(...after.ranged));
+    for (const u of units) expect(u.state).toBe('idle');
+  });
+
   it('snaps blocked destinations to distinct reachable slots without crossing water or buildings', () => {
     const world = worldOn(field((x) => x >= 40 && x <= 46));
     world.nav.addRect(999, { x0: 32, x1: 35, z0: 20, z1: 28 });
@@ -182,6 +219,6 @@ describe('local steering and jam recovery', () => {
     const ms = (performance.now() - start) / 200;
     console.info(`movement + separation, 200 units: ${ms.toFixed(3)} ms/tick`);
     expect(units.every((u) => u.path.length > 0)).toBe(true);
-    expect(ms).toBeLessThan(12); // generous on CI; desktop target is ~3 ms
+    expect(ms).toBeLessThan(4); // movement tick only; desktop budget
   });
 });

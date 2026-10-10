@@ -5,6 +5,8 @@ export default defineConfig({
   testDir: 'e2e',
   testMatch: '**/*.e2e.ts',
   timeout: 60_000,
+  // A backgrounded desktop page pauses requestAnimationFrame, so one worker in CI.
+  workers: process.env.CI ? 1 : undefined,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {

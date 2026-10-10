@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { classifyRelease, rectBetween } from './Controls';
+import { classifyRelease, rectBetween, resolveLongPress } from './Controls';
 import { DRAG_THRESHOLD_PX, exceedsDragThreshold } from './Input';
 import { pickGround, pickGround3 } from './pickGround';
 import { testField } from './testField';
@@ -55,5 +55,35 @@ describe('pickGround', () => {
     expect(pickGround(down(-5, 10), testField())).toBeNull();
     const up = new THREE.Ray(new THREE.Vector3(10, 50, 10), new THREE.Vector3(0, 1, 0));
     expect(pickGround(up, testField())).toBeNull();
+  });
+});
+
+describe('touch long-press attack-move', () => {
+  const ground = { x: 40, z: 12 };
+  const selected = [
+    { id: 4, kind: 'swordsman' as const },
+    { id: 5, kind: 'archer' as const },
+    { id: 8, kind: 'villager' as const },
+    { id: 9, kind: 'scout' as const },
+  ];
+
+  it('attack-moves the selected soldiers and leaves villagers and scouts', () => {
+    expect(resolveLongPress({ selected, ownUnitId: null, ground })).toEqual({
+      type: 'attackMove',
+      unitIds: [4, 5],
+      target: ground,
+    });
+  });
+
+  it('toggles an own unit under the finger instead of ordering', () => {
+    expect(resolveLongPress({ selected, ownUnitId: 4, ground })).toEqual({ type: 'toggle', id: 4 });
+    expect(resolveLongPress({ selected, ownUnitId: 8, ground })).toEqual({ type: 'toggle', id: 8 });
+  });
+
+  it('orders nothing with no soldiers, or when the press misses the map', () => {
+    expect(resolveLongPress({ selected: [{ id: 8, kind: 'villager' }], ownUnitId: null, ground })).toBeNull();
+    expect(resolveLongPress({ selected: [{ id: 9, kind: 'scout' }], ownUnitId: null, ground })).toBeNull();
+    expect(resolveLongPress({ selected, ownUnitId: null, ground: null })).toBeNull();
+    expect(resolveLongPress({ selected: [], ownUnitId: null, ground })).toBeNull();
   });
 });

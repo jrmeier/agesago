@@ -539,6 +539,13 @@
         <button id="resign-btn" class="resign-btn" type="button" title="Resign the match">Resign</button>
         <header class="hud-top">
           <button id="help-btn" class="help-btn" type="button" title="Hotkeys (?)" aria-expanded="false" aria-controls="hotkey-help">?</button>
+          <div class="match-actions">
+            <button id="save-copy" class="match-btn" type="button" title="Save a copy">Save copy</button>
+            <button id="open-file" class="match-btn" type="button" title="Open a save file">Open file</button>
+            <button id="new-match" class="match-btn" type="button" title="New match">New match</button>
+            <span id="save-note" role="status" hidden></span>
+            <input id="open-file-input" type="file" accept="application/json,.json" hidden>
+          </div>
           <div class="logo">
             <svg class="logo-icon" aria-hidden="true"><use href="#i-shield" /></svg>
             <span class="logo-text">Ages Ago</span>
@@ -684,6 +691,14 @@
             </span>
           </button>
         </footer>
+      </div>
+      <div id="new-match-ask" class="confirm" hidden role="dialog" aria-modal="true" aria-labelledby="new-match-title">
+        <div class="hotkey-sheet">
+          <h2 id="new-match-title" class="hotkey-title">New match</h2>
+          <p class="confirm-copy">Start a new match? The resume in this browser is discarded.</p>
+          <button id="new-match-yes" class="endgame-btn" type="button">New match</button>
+          <button id="new-match-no" class="endgame-btn" type="button">Keep playing</button>
+        </div>
       </div>
       <div id="hotkey-help" class="hotkey-help" hidden role="dialog" aria-modal="true" aria-labelledby="hotkey-help-title">
         <div class="hotkey-sheet">

@@ -1,7 +1,7 @@
 import type { EntityViews, ScreenRect } from '../render/EntityViews';
 import type { CameraRig } from '../camera/CameraRig';
 import { BUILDINGS } from '../core/buildings';
-import { GAIA, type Building, type BuildingKind, type EntityId, type PropPlacement, type Stance, type UnitKind, type Vec2 } from '../core/types';
+import { GAIA, type Building, type BuildingKind, type Command, type EntityId, type PropPlacement, type Stance, type UnitKind, type Vec2 } from '../core/types';
 import type { Selection } from '../game/Selection';
 import type { World } from '../sim/World';
 import { Alerts } from '../ui/Alerts';
@@ -10,7 +10,7 @@ import { ageLockText, unitAge } from '../ui/research';
 import { Discoveries } from '../ui/Discoveries';
 import { explorerIds } from '../ui/format';
 import { HotkeyHelp } from '../ui/hotkeyHelp';
-import { canTrainAt, kindForSlotKey, trainBatch } from '../ui/military';
+import { canTrainAt, isMilitary, kindForSlotKey, trainBatch } from '../ui/military';
 import { RallyFlag } from '../ui/RallyFlag';
 import { SideRail } from '../ui/SideRail';
 import { closeTouchMenus, touchMenuOpen } from '../ui/touchMenus';
@@ -59,6 +59,27 @@ export function rectBetween(ax: number, ay: number, bx: number, by: number): Scr
   return { x0: Math.min(ax, bx), y0: Math.min(ay, by), x1: Math.max(ax, bx), y1: Math.max(ay, by) };
 }
 
+/** A selected own unit considered by a touch long-press. */
+export interface LongPressUnit {
+  id: EntityId;
+  kind: UnitKind;
+}
+
+/**
+ * Completed touch long-press (finger up, no drag). An own unit under the finger toggles.
+ * Otherwise the selected soldiers attack-move to `ground`. Villagers and scouts stay put.
+ * Null when no soldier can be sent or the press missed the map. A drag is a box, not this.
+ */
+export function resolveLongPress(args: {
+  selected: readonly LongPressUnit[];
+  ownUnitId: EntityId | null;
+  ground: Vec2 | null;
+}): { type: 'toggle'; id: EntityId } | Extract<Command, { type: 'attackMove' }> | null {
+  if (args.ownUnitId !== null) return { type: 'toggle', id: args.ownUnitId };
+  const soldiers = args.selected.filter((u) => isMilitary(u.kind)).map((u) => u.id);
+  return resolveAttackMove(soldiers, args.ground);
+}
+
 /**
  * Player intent → sim commands: click / box / A select (RTS only; boxes and A take only the
  * local player's units, a click may inspect a visible enemy), RMB on a visible enemy unit or
@@ -81,8 +102,10 @@ export function rectBetween(ax: number, ay: number, bx: number, by: number): Scr
  * Touch: tap selects a unit, attacks a visible enemy with units selected, orders the selection
  * (gather / construct / farm / move), sets a selected building's rally point, or with no units
  * selected selects the tapped visible building / enemy. A tap while a Build / Train / Orders sheet is
- * open closes it and does not order. Long-press toggles a villager; long-press + drag, or the
- * Box button then a drag, box-selects (a tap cancels Box). #select-same-btn selects every
+ * open closes it and does not order. A long-press on an own unit toggles it; released on the ground,
+ * it attack-moves the selected soldiers. Long-press + drag, or the Box button then a drag,
+ * box-selects (a tap cancels Box). The Orders sheet button only arms the next tap.
+ * #select-same-btn selects every
  * visible own unit of the selected kind. While placing, a tap moves the ghost, a finger on the
  * ghost drags it, and #place-bar's ⟳ / ✕ / ✓ rotate, cancel, confirm.
  * Also binds the touch buttons (#touch-box, #touch-select-all, #touch-deselect, #touch-fps), #explore-btn,
@@ -404,11 +427,26 @@ export class Controls {
         break;
       }
       case 'longPress':
+        // Ring while the finger is down. The order is the release; a drag from here is a box.
         this.pulse(g.x, g.y);
         break;
       case 'longPressTap': {
         const id = this.unitAt(g.x, g.y);
-        if (id !== null && this.isOwnUnit(id)) this.toggle(id);
+        const action = resolveLongPress({
+          selected: this.ownUnitIds().flatMap((unitId) => {
+            const u = world.units.get(unitId);
+            return u ? [{ id: unitId, kind: u.kind }] : [];
+          }),
+          ownUnitId: id !== null && this.isOwnUnit(id) ? id : null,
+          ground: this.groundAt(g.x, g.y),
+        });
+        if (!action) break;
+        if (action.type === 'toggle') this.toggle(action.id);
+        else {
+          world.dispatch(action);
+          this.deps.views.flashMarker(action.target);
+          this.setTargeting(false);
+        }
         break;
       }
       case 'box':
