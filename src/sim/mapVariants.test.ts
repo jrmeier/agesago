@@ -5,6 +5,7 @@ import { World } from './World';
 import { serializeWorld, deserializeWorld } from './serialize';
 
 describe('map setup variants',()=> {
+  it('rejects prototype keys as invalid map identities',()=>{expect(()=>generateMap(1,2,{size:'__proto__' as MapSize})).toThrow('Invalid map size');});
   it.each(Object.keys(MAP_SIZES).flatMap(size=>MAP_TYPES.map(type=>({size:size as MapSize,type}))))('$size $type generates balanced connected four-player starts in under one second', options=> {
     const t=performance.now(); const {hf,layout}=generateMap(9,4,options);
     expect(performance.now()-t).toBeLessThan(1000);

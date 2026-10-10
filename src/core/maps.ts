@@ -5,7 +5,7 @@ export const MAP_TYPES = ['mediterranean', 'highlands', 'riverValley', 'forest',
 export type MapType = typeof MAP_TYPES[number];
 export interface MapOptions { size?: MapSize; type?: MapType }
 export function normalizeMapOptions(options: MapOptions = {}): Required<MapOptions> {
-  if (options.size !== undefined && !(options.size in MAP_SIZES)) throw new RangeError('Invalid map size');
+  if (options.size !== undefined && !Object.hasOwn(MAP_SIZES,options.size)) throw new RangeError('Invalid map size');
   if (options.type !== undefined && !MAP_TYPES.includes(options.type)) throw new RangeError('Invalid map type');
   return { size: options.size ?? 'large', type: options.type ?? 'mediterranean' };
 }
