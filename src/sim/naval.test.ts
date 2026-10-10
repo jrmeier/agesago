@@ -76,6 +76,22 @@ describe('transports and triremes', () => {
     w.dispatch({type:'unloadTransport',transportId:ship.id,target:{x:72,z:45}},2); expect(w.landings.size).toBe(0);
     const aboard=[...ship.passengers!]; killUnit(w,ship); expect(aboard.every(id=>!w.units.has(id))).toBe(true); expect(w.units.size).toBe(2);
   });
+  it('resigning with a loaded transport emits each death once', () => {
+    const w=world(), ship=w.spawnUnit('transport',{x:31,z:45}), passenger=w.spawnUnit('villager',{x:29,z:45});
+    const deaths:number[]=[]; w.events.on('died',e=>deaths.push(e.id));
+    w.dispatch({type:'loadTransport',unitIds:[passenger.id],transportId:ship.id}); w.tick(.05);
+    w.dispatch({type:'resign'});
+    expect(deaths.filter(id=>id===ship.id)).toHaveLength(1); expect(deaths.filter(id=>id===passenger.id)).toHaveLength(1);
+    expect(w.units.size).toBe(0);
+  });
+  it('sinking midway through unload leaves no dangling naval snapshot state', () => {
+    const w=world(), ship=w.spawnUnit('transport',{x:31,z:45}), passenger=w.spawnUnit('villager',{x:29,z:45});
+    w.dispatch({type:'loadTransport',unitIds:[passenger.id],transportId:ship.id}); w.tick(.05);
+    w.dispatch({type:'unloadTransport',transportId:ship.id,target:{x:72,z:45}});
+    const waiting=w.spawnUnit('villager',{x:29,z:46}); w.boarding.set(waiting.id,ship.id);
+    run(w,2); killUnit(w,ship); const state=serializeWorld(w).systems;
+    expect(state.landings).toEqual([]); expect(state.boarding).toEqual([]); expect(state.navalJobs).toEqual([]);
+  });
   it('triremes close on enemy ships using water paths and sink them with projectiles', () => {
     const w=world(); const trireme=w.spawnUnit('trireme',{x:35,z:40}); const enemy=w.spawnUnit('merchantShip',{x:52,z:40},2);
     enemy.stance='passive'; w.updateFog();

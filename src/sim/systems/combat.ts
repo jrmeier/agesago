@@ -624,6 +624,11 @@ function resume(world: World, u: Unit): void {
 
 /** Remove a dead unit: 'died' then 'removed', and every system's bookkeeping about it. */
 export function killUnit(world: World, u: Unit): void {
+  // Resign walks a snapshot that can include cargo already removed by a sunk transport.
+  if (!world.units.has(u.id)) return;
+  world.navalJobs.delete(u.id); world.landings.delete(u.id); world.priestOrders.delete(u.id); world.boarding.delete(u.id);
+  for (const [id, ship] of world.boarding) if (ship === u.id) world.boarding.delete(id);
+  for (const [id, order] of world.priestOrders) if (order.target === u.id) world.priestOrders.delete(id);
   // A sunk transport takes its passengers with it, preventing invisible survivors.
   for (const id of [...(u.passengers ?? [])]) { const passenger = world.units.get(id); if (passenger) killUnit(world, passenger); }
   if (u.shelter != null) {
