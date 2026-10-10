@@ -23,6 +23,33 @@ async function simTime(page: Page): Promise<number> {
   return page.evaluate(() => (window as any).game.world.time as number);
 }
 
+const INPUT_TIMEOUT = 15_000;
+
+/** Hotkeys run in the game frame; wait until it consumes each key before sending the next. */
+async function pressGameKey(page: Page, key: string, code = key): Promise<void> {
+  await page.keyboard.press(key);
+  await expect.poll(
+    () => page.evaluate((code) => (window as any).game.input.keyPressed(code) as boolean, code),
+    { timeout: INPUT_TIMEOUT, message: `${code} should be consumed by a game frame` },
+  ).toBe(false);
+}
+
+async function selectAllOwn(page: Page): Promise<void> {
+  await pressGameKey(page, 'KeyA');
+  const ownIds = await page.evaluate(() => {
+    const g = (window as any).game;
+    return ([...g.world.units.values()] as any[])
+      .filter((unit) => unit.owner === g.world.localPlayer && unit.state !== 'garrisoned')
+      .map((unit) => unit.id as number)
+      .sort((a, b) => a - b);
+  });
+  expect(ownIds.length).toBeGreaterThan(0);
+  await expect.poll(
+    () => page.evaluate(() => ([...(window as any).game.selection.ids] as number[]).sort((a, b) => a - b)),
+    { timeout: INPUT_TIMEOUT, message: 'A should select every own ungarrisoned unit before the next order hotkey' },
+  ).toEqual(ownIds);
+}
+
 test('pause freezes the clock and the speed buttons set 0.5× through 2×', async ({ page }, testInfo) => {
   test.setTimeout(90_000);
   const phone = testInfo.project.name === 'phone';
@@ -78,34 +105,34 @@ test('pause freezes the clock and the speed buttons set 0.5× through 2×', asyn
   await page.waitForFunction((t0) => (window as any).game.world.time > t0, resumed, { timeout: 8_000 });
 
   if (!phone) {
-    await page.keyboard.press('Escape');
+    await pressGameKey(page, 'Escape');
+    await expect(menu).toBeVisible({ timeout: INPUT_TIMEOUT });
+    await pressGameKey(page, 'Shift+Slash', 'Slash');
+    await expect(page.locator('#hotkey-help')).toBeVisible({ timeout: INPUT_TIMEOUT });
+    await pressGameKey(page, 'Escape');
+    await expect(page.locator('#hotkey-help')).toBeHidden({ timeout: INPUT_TIMEOUT });
     await expect(menu).toBeVisible();
-    await page.keyboard.press('Shift+Slash');
-    await expect(page.locator('#hotkey-help')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.locator('#hotkey-help')).toBeHidden();
-    await expect(menu).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(menu).toBeHidden();
+    await pressGameKey(page, 'Escape');
+    await expect(menu).toBeHidden({ timeout: INPUT_TIMEOUT });
 
     await activate(page, '#new-match', false);
     await expect(page.locator('#new-match-ask')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.locator('#new-match-ask')).toBeHidden();
+    await pressGameKey(page, 'Escape');
+    await expect(page.locator('#new-match-ask')).toBeHidden({ timeout: INPUT_TIMEOUT });
     await expect(menu).toBeHidden();
 
-    await page.keyboard.press('KeyA');
-    await page.keyboard.press('KeyQ');
-    await expect(page.locator('body')).toHaveClass(/targeting/);
-    await page.keyboard.press('Escape');
-    await expect(page.locator('body')).not.toHaveClass(/targeting/);
+    await selectAllOwn(page);
+    await pressGameKey(page, 'KeyQ');
+    await expect(page.locator('body')).toHaveClass(/targeting/, { timeout: INPUT_TIMEOUT });
+    await pressGameKey(page, 'Escape');
+    await expect(page.locator('body')).not.toHaveClass(/targeting/, { timeout: INPUT_TIMEOUT });
     await expect(menu).toBeHidden();
 
-    await page.keyboard.press('KeyA');
-    await page.keyboard.press('KeyH');
-    await expect(page.locator('body')).toHaveClass(/placing/);
-    await page.keyboard.press('Escape');
-    await expect(page.locator('body')).not.toHaveClass(/placing/);
+    await selectAllOwn(page);
+    await pressGameKey(page, 'KeyH');
+    await expect(page.locator('body')).toHaveClass(/placing/, { timeout: INPUT_TIMEOUT });
+    await pressGameKey(page, 'Escape');
+    await expect(page.locator('body')).not.toHaveClass(/placing/, { timeout: INPUT_TIMEOUT });
     await expect(menu).toBeHidden();
   }
 
