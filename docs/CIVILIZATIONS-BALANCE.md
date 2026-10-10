@@ -28,4 +28,25 @@ The threshold and draw handling are unchanged. Tuning `b181b17` increases Celts'
 wood gathering bonus from 5% to 7%; `e943a06` reduces Romans' building HP bonus
 from 5% to 3%. Both apply to the entire civilization. The rerun covers all five
 pairings involving Romans or Celts (100 new games); Hellenes / Persians is
-unchanged. Final rerun evidence is pending.
+unchanged. The first rerun completed all 100 unique expected games.
+
+
+## First tuning: one pairing still fails
+
+[Raw 100-game rerun](verification/civilizations-tuning-e943a06.jsonl), source `e943a06`.
+All games reached the score cap, with no draws. Five pairing workers ran from
+17:20 to 17:34 America/Denver on 2026-10-10.
+
+| Pairing | First civ wins | Games | First civ score win rate | 40–60% |
+| --- | ---: | ---: | ---: | --- |
+| Hellenes / Romans | 7 | 20 | 35% | Fail |
+| Hellenes / Celts | 9 | 20 | 45% | Pass |
+| Romans / Persians | 11 | 20 | 55% | Pass |
+| Romans / Celts | 8 | 20 | 40% | Pass |
+| Persians / Celts | 10 | 20 | 50% | Pass |
+
+Hellenes / Persians retains its unchanged baseline 50%. The next global tuning
+increases Hellenes' infantry training bonus from 5% to 7%. All three Hellenic
+pairings will run again; Roman / Persian, Roman / Celt and Persian / Celt results
+remain valid because their civilization data is unchanged. This second rerun
+is pending.

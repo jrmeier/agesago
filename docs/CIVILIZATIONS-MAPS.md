@@ -15,7 +15,7 @@ architecture changes vertex colours in owned buffers, including upgraded buildin
 
 | Civilization | Starting bonus | Unique soldier | Unique research |
 | --- | --- | --- | --- |
-| Hellenes | Infantry train 5% faster | Phalangite Guard | Infantry +1 melee armour |
+| Hellenes | Infantry train 7% faster | Phalangite Guard | Infantry +1 melee armour |
 | Romans | Buildings +3% HP | Legionary | Buildings construct 15% faster |
 | Persians | Villagers gather food 5% faster | Immortal | Villagers and trade carts walk 10% faster |
 | Celts | Villagers gather wood 7% faster | Raider | Wood carry +3, infantry speed +5% |
