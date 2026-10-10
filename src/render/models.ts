@@ -838,7 +838,25 @@ export function createSoldier(kind: SoldierKind, opts?: { color?: number; seed?:
     const emblem = model.object.getObjectByName(base==='hoplite'?'aspis':base==='archer'?'bow':'oval-shield') as THREE.Mesh | undefined;
     if (emblem) { emblem.scale.set(kind==='phalangiteGuard'?1.2:.8,kind==='legionary'?1.3:1,1); }
     const crest = model.object.getObjectByName('tunic-head-armor') as THREE.Mesh | undefined;
-    if(crest) crest.scale.y = kind==='raider' ? .95 : 1.06;
+    if(crest) {
+      crest.scale.y = kind==='raider' ? .95 : 1.06;
+      const trim = opts?.color ?? 0x9e3b26;
+      const details = kind==='phalangiteGuard' ? [part(new THREE.BoxGeometry(.03,.08,.23),trim,[0,.61,-.01])] :
+        kind==='legionary' ? [part(new THREE.BoxGeometry(.035,.10,.24),trim,[0,.64,-.01]),part(new THREE.BoxGeometry(.27,.035,.22),0xb3a06d,[0,.31,0])] :
+        kind==='immortal' ? [part(new THREE.BoxGeometry(.26,.32,.04),trim,[0,.19,-.15]),part(new THREE.BoxGeometry(.18,.13,.035),0xbca466,[0,.43,.09])] :
+        [part(new THREE.BoxGeometry(.29,.28,.035),0x4f6242,[0,.17,-.15]),part(new THREE.BoxGeometry(.30,.025,.04),0xd2c19b,[0,.27,-.16])];
+      const roles=crest.geometry.userData.tintRoles;
+      crest.geometry=merge([crest.geometry,...details]);
+      // Base vertices stay first, so their existing upgrade role offsets remain valid.
+      crest.geometry.userData.tintRoles=roles;
+    }
+    const weapon = model.object.getObjectByName(kind==='phalangiteGuard'?'long-spear':'short-sword');
+    if(weapon && kind==='phalangiteGuard')weapon.scale.z=1.4;
+    if(weapon && kind==='raider')weapon.scale.y=1.15;
+    if(emblem && kind==='legionary') {
+      emblem.geometry.dispose();
+      emblem.geometry=merge([part(new THREE.BoxGeometry(.32,.48,.035),opts?.color ?? 0x9e3b26,[0,-.17,.14]),part(new THREE.BoxGeometry(.34,.49,.015),0xb9a275,[0,-.17,.12]),part(new THREE.IcosahedronGeometry(.045,0),0xb9a275,[0,-.17,.17])]);
+    }
     model.object.userData.civilizationUnit = kind;
     return model;
   }
