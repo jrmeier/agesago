@@ -48,15 +48,21 @@ async function bootMatch(start: MatchStart): Promise<void> {
 initSettings();
 const closeSettingsPanel = mountSettings();
 
+const params = new URLSearchParams(location.search);
 const title = document.getElementById('title-screen');
-if (new URLSearchParams(location.search).has('e2e') || !title) {
-  await bootMatch({});
+if (params.has('e2e') || !title) {
+  await bootMatch(params.has('tutorial') ? { tutorial: true, players: 2, fresh: true } : {});
 } else {
   let closeTitle = () => {};
   closeTitle = mountTitle(title, {
     onContinue() {
       closeTitle();
       void bootMatch({});
+    },
+    onTutorial() {
+      closeTitle();
+      document.documentElement.classList.remove('show-title');
+      void bootMatch({ tutorial: true, players: 2, fresh: true });
     },
     onStart(seed, players) {
       closeTitle();

@@ -34,6 +34,7 @@ import { audioBus } from './audioBus';
 import { matchPlayers, matchSeed } from './matchSetup';
 import { isGameSpeed, simScale, type GameSpeed } from './pace';
 import { Selection } from './Selection';
+import { TutorialCoach } from './tutorialCoach';
 import { closeSettings, settingsOpen } from './settingsPanel';
 import {
   bootQuality,
@@ -52,6 +53,8 @@ export interface MatchStart {
   seed?: number;
   players?: number;
   fresh?: boolean;
+  /** Practice match. It does not read or write the resume slot. */
+  tutorial?: boolean;
 }
 
 /** Milliseconds spent in each boot stage. `totalMs` ends when the first frame is scheduled. */
@@ -87,6 +90,7 @@ interface BootParts {
   store: ResumeStore;
   resume: ResumeEnvelope | null;
   resumeFailed: boolean;
+  tutorial: boolean;
 }
 
 /**
@@ -131,6 +135,9 @@ export class Game {
   /** Pixel-ratio cap chosen at boot. A later change waits for the next match. */
   private pixelCap = 1;
   private unsubscribeSettings: () => void = () => {};
+  /** Practice match. Saves must not replace the resume slot. */
+  private tutorial = false;
+  private tutorialCoach: TutorialCoach | null = null;
   private noteTimer = 0;
   private readonly onResize = () => this.resize();
   private readonly onHide = () => {
@@ -151,8 +158,9 @@ export class Game {
     const loaded = await readResume(store);
     const seed = matchSeed(start.seed);
     const towns = matchPlayers(start.players);
-    let resume = start.fresh ? null : loaded.envelope;
-    let resumeFailed = start.fresh ? false : loaded.failed;
+    const tutorial = start.tutorial === true;
+    let resume = start.fresh || tutorial ? null : loaded.envelope;
+    let resumeFailed = start.fresh || tutorial ? false : loaded.failed;
     let mapSeed = resume?.sim.seed ?? seed;
     let players = resume?.sim.playerCount ?? towns;
     let generated: ReturnType<typeof generateMap>;
@@ -217,7 +225,7 @@ export class Game {
     const game = new Game(container, {
       layout, world, quality, renderer, input, rig, terrain, views, props, grass, fog,
       boot: { mapMs, terrainMs, modelsMs, totalMs: performance.now() - t0 },
-      store, resume, resumeFailed,
+      store, resume, resumeFailed, tutorial,
     });
     report('The city stands', 1);
     return game;
@@ -276,6 +284,8 @@ export class Game {
     this.pixelCap = parts.quality.pixelRatio;
     this.applySettings(ensureSettings(), true);
     this.unsubscribeSettings = subscribeSettings((settings) => this.applySettings(settings, false));
+    this.tutorial = parts.tutorial;
+    if (parts.tutorial) this.tutorialCoach = new TutorialCoach(this.world);
 
     window.addEventListener('resize', this.onResize);
     document.addEventListener('visibilitychange', this.onHide);
@@ -370,7 +380,7 @@ export class Game {
    * must not skip the next. Save copy still downloads when the slot cannot be written.
    */
   private remember(kind: 'quiet' | 'noted'): void {
-    if (this.leaving) return;
+    if (this.leaving || this.tutorial) return;
     let envelope: ResumeEnvelope;
     try {
       envelope = this.capture();
@@ -419,6 +429,10 @@ export class Game {
   /** Drop the slot after any in-flight write, then reload into a new match. */
   private async leave(): Promise<void> {
     if (this.leaving) return;
+    if (this.tutorial) {
+      location.reload();
+      return;
+    }
     this.leaving = true;
     try {
       await this.saveChain;
@@ -541,6 +555,7 @@ export class Game {
   }
 
   dispose(): void {
+    this.tutorialCoach?.dispose();
     this.unsubscribeSettings();
     cancelAnimationFrame(this.raf);
     window.clearTimeout(this.noteTimer);

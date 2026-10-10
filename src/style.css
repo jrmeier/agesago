@@ -3352,6 +3352,66 @@ html.reduce-motion .minimap-ping {
   min-height: 44px;
 }
 
+.tutorial[hidden] {
+  display: none !important;
+}
+
+.tutorial {
+  position: absolute;
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  top: 58px;
+  z-index: 12;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.tutorial-card {
+  width: min(420px, 100%);
+  padding: 12px 14px;
+  pointer-events: auto;
+  color: var(--ink);
+  background: var(--papyrus);
+  border: 1px solid var(--bronze-lo);
+  box-shadow: var(--trim), 0 10px 24px rgba(33, 20, 11, 0.4);
+}
+
+.tutorial-objective {
+  margin: 4px 0;
+  font-family: var(--title);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.tutorial-hint {
+  margin: 0 0 8px;
+  font-family: var(--text);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.tutorial-hint[hidden] {
+  display: none !important;
+}
+
+.tutorial-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tutorial-actions .endgame-btn {
+  flex: 1 1 120px;
+  margin-top: 0;
+  min-height: 44px;
+}
+
+#tutorial-dismiss[hidden] {
+  display: none !important;
+}
+
 /* Research header and tiles inside the training grid. */
 .research-head {
   flex: 1 0 100%;

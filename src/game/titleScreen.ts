@@ -6,6 +6,7 @@ import { closeSettings, settingsOpen } from './settingsPanel';
 export interface TitleHooks {
   onContinue(): void;
   onStart(seed: number, players: number): void;
+  onTutorial(): void;
 }
 
 /** Wire the title screen. Returns a disposer that drops the Escape listener. */
@@ -49,6 +50,7 @@ export function mountTitle(root: HTMLElement, hooks: TitleHooks): () => void {
   root.querySelector('#title-discard-no')?.addEventListener('click', () => show('home'));
   root.querySelector('#title-setup-back')?.addEventListener('click', () => show('home'));
   root.querySelector('#title-credits')?.addEventListener('click', () => show('credits'));
+  root.querySelector('#title-tutorial')?.addEventListener('click', () => hooks.onTutorial());
   root.querySelector('#title-credits-back')?.addEventListener('click', () => show('home'));
   continueBtn.addEventListener('click', () => {
     if (!continueBtn.disabled) hooks.onContinue();

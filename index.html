@@ -44,6 +44,7 @@
             <button id="title-new" class="endgame-btn" type="button">New game</button>
             <button id="title-continue" class="endgame-btn" type="button" disabled>Continue</button>
             <button id="title-settings" class="endgame-btn" type="button">Settings</button>
+            <button id="title-tutorial" class="endgame-btn" type="button">Tutorial</button>
             <button id="title-credits" class="endgame-btn" type="button">Credits</button>
           </div>
           <p id="title-continue-hint" class="title-note" hidden>The resume could not be read.</p>
@@ -788,6 +789,17 @@
             </span>
           </button>
         </footer>
+      </div>
+      <div id="tutorial" class="tutorial" hidden>
+        <div class="tutorial-card" role="dialog" aria-labelledby="tutorial-objective">
+          <p class="loading-kicker">Founding of the Polis</p>
+          <p id="tutorial-objective" class="tutorial-objective">Select a villager and send them to gather.</p>
+          <p id="tutorial-hint" class="tutorial-hint"></p>
+          <div class="tutorial-actions">
+            <button id="tutorial-dismiss" class="endgame-btn" type="button">Dismiss hint</button>
+            <button id="tutorial-skip" class="endgame-btn" type="button">Skip</button>
+          </div>
+        </div>
       </div>
       <div id="pause-menu" class="pause-menu" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
         <div class="hotkey-sheet">
