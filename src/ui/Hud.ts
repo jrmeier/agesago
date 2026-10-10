@@ -5,6 +5,8 @@ import { UNITS, trainable } from '../core/units';
 import type { Selection } from '../game/Selection';
 import { shownSelection, sightFromState, stepLastSeen, type LastSeenBuilding } from '../render/lastSeen';
 import { BALANCE } from '../sim/balance';
+import { productionOrder } from '../sim/productionQueue';
+import { trainTime } from '../sim/systems/train';
 import { ageBuildings, ageBuildingsNeeded, researchBlock, statOf } from '../sim/systems/research';
 import type { World } from '../sim/World';
 import {
@@ -79,7 +81,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * world.events and selection changes.
  * M8: the training grid also lists the selected building's techs under a "Research" header
  * (click queues `research`; locked tiles say why; long-press on touch shows the tooltip), the
- * queue strip mixes research (first) with units, #age-plaque shows the age with a slim bar
+ * queue strip mixes research with units in command order, #age-plaque shows the age with a slim bar
  * while an age-up runs, #age-banner announces a new age, and age-locked build / train tiles
  * are greyed with "Requires Town Age".
  * Owned by the HUD lane. Public surface FROZEN: constructor, update.
@@ -576,11 +578,11 @@ export class Hud {
       setText(this.el.status, constructionLabel(b.buildProgress));
       const w = `${(Math.min(1, Math.max(0, b.buildProgress)) * 100).toFixed(1)}%`;
       if (this.progressFill && this.progressFill.style.width !== w) this.progressFill.style.width = w;
-    } else if (panel && panel.research?.length) {
+    } else if (panel && panel.research?.length && productionOrder(panel)[0] === 'research') {
       setText(this.el.status, researchLabel(panel.research[0], panel.researchProgress ?? 0, panel.research.length));
     } else if (trainer && b.queue > 0) {
       const head = b.queueKinds?.[0];
-      const total = head ? UNITS[head].trainTime : BALANCE.trainTime;
+      const total = head ? trainTime(this.world, b, head) : BALANCE.trainTime;
       setText(this.el.status, trainLabel(b.queue, b.progress, total, 0, true));
     } else {
       setText(this.el.status, buildingRole(b.kind, b.food, FARM_FOOD, b.occupants?.length ?? 0));
@@ -605,7 +607,7 @@ export class Hud {
           item.dataset.tech = it.tech;
           item.title = `${TECHS[it.tech].name}${i === 0 ? ' (researching)' : ''} — click to cancel (refund)`;
         } else {
-          const doing = i === 0 ? ' (training)' : it.index === 0 && b.research?.length ? ' (waits for research)' : '';
+          const doing = i === 0 ? ' (training)' : ' (queued)';
           const name = unitLine(this.world.players.get(b.owner)?.researched ?? new Set(), it.unit).title;
           item.title = `${name}${doing} — click to cancel`;
         }

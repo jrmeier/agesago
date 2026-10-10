@@ -259,6 +259,8 @@ export interface Building {
   queue: number;
   /** Kinds of the queued units, same length as `queue` (head first). */
   queueKinds?: UnitKind[];
+  /** FIFO order across training and research; absent in legacy v2 saves. */
+  productionQueue?: ('train' | 'research')[];
   /** Seconds of training completed on the current queue head. */
   progress: number;
   /** Farms only: food remaining in the field. */
@@ -270,8 +272,7 @@ export interface Building {
   /** Seconds until the next defensive volley. */
   cooldown?: number;
   /**
-   * Techs queued for research here, head first (M8). While non-empty the building researches
-   * and its unit queue waits, like AoE.
+   * Techs queued for research here, head first. productionQueue determines when they run.
    */
   research?: TechId[];
   /** Seconds of research completed on research[0]. */

@@ -1,5 +1,6 @@
 import type { Building, EntityId, UnitKind, Vec2 } from '../../core/types';
 import { UNITS, trainable } from '../../core/units';
+import { ensureProductionQueue, productionOrder, removeProduction } from '../productionQueue';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
 import { affordable, pay } from './build';
@@ -59,6 +60,7 @@ export function orderTrain(world: World, buildingId: EntityId, unit?: UnitKind):
     return;
   }
   pay(world, cost, 1, b.owner);
+  ensureProductionQueue(b).push('train');
   b.queue++;
   (b.queueKinds ??= []).push(kind);
   if (b.owner === world.localPlayer) world.emitStock();
@@ -69,10 +71,11 @@ export function orderTrain(world: World, buildingId: EntityId, unit?: UnitKind):
 export function orderCancelTrain(world: World, buildingId: EntityId, index: number): void {
   const b = world.buildings.get(buildingId);
   const kinds = b?.queueKinds;
-  if (!b || !kinds || index < 0 || index >= kinds.length) {
+  if (!b || !kinds || !Number.isInteger(index) || index < 0 || index >= kinds.length) {
     world.events.emit({ type: 'rejected', reason: 'invalid-target' });
     return;
   }
+  removeProduction(b, 'train', index);
   const [kind] = kinds.splice(index, 1);
   b.queue = kinds.length;
   if (index === 0) b.progress = 0;
@@ -83,21 +86,24 @@ export function orderCancelTrain(world: World, buildingId: EntityId, index: numb
 
 /** Advance every training queue; spawn the head unit beside the building when it completes. */
 export function trainSystem(world: World, dt: number): void {
-  for (const b of world.buildings.values()) {
-    // Research (including aging up) holds the unit queue, like AoE.
-    if (b.queue <= 0 || b.research?.length) continue;
-    const kind = b.queueKinds?.[0] ?? 'villager';
-    b.progress += dt;
-    if (b.progress >= trainTime(world, b, kind) - 1e-9) {
-      b.queue--;
-      b.queueKinds?.shift();
-      b.progress = 0;
-      const u = world.spawnUnit(kind, spawnPoint(world, b), b.owner);
-      applyRally(world, b, u);
-      if (b.owner === world.localPlayer) world.emitStock();
-    }
-    emitProgress(world, b);
+  for (const b of world.buildings.values()) advanceTraining(world, b, dt);
+}
+
+/** Tick one building only when training owns the shared queue head. */
+export function advanceTraining(world: World, b: Building, dt: number): void {
+  if (!b.complete || b.queue <= 0 || productionOrder(b)[0] !== 'train') return;
+  const kind = b.queueKinds?.[0] ?? 'villager';
+  b.progress += dt;
+  if (b.progress >= trainTime(world, b, kind) - 1e-9) {
+    removeProduction(b, 'train', 0);
+    b.queue--;
+    b.queueKinds?.shift();
+    b.progress = 0;
+    const u = world.spawnUnit(kind, spawnPoint(world, b), b.owner);
+    applyRally(world, b, u);
+    if (b.owner === world.localPlayer) world.emitStock();
   }
+  emitProgress(world, b);
 }
 
 /** A free walkable spot on a ring around the building, preferring the front (+z) and empty ground. */

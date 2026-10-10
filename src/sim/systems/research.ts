@@ -2,12 +2,12 @@ import { BUILDINGS } from '../../core/buildings';
 import { TECHS, hasFlag, statMods, type Stat, type Subject, type TechFlag, type TechId } from '../../core/techs';
 import type { Age, Building, BuildingKind, EntityId, PlayerId, RejectReason, UnitKind } from '../../core/types';
 import type { PlayerState, World } from '../World';
+import { ensureProductionQueue, productionOrder, removeProduction } from '../productionQueue';
 import { affordable, pay } from './build';
 import { applyResearch } from './upgrades';
 
 /**
- * Research queue (M8-5, integrator contract). A building researches its queue head; while
- * anything is queued its unit training waits. Effects are applied by upgrades.ts
+ * Research shares a FIFO production queue with unit training. Effects are applied by upgrades.ts
  * (applyResearch) and read through statOf().
  */
 
@@ -120,6 +120,7 @@ export function orderResearch(world: World, buildingId: EntityId, tech: TechId):
     return;
   }
   pay(world, spec.cost, 1, b.owner);
+  ensureProductionQueue(b).push('research');
   (b.research ??= []).push(tech);
   if (b.research.length === 1) b.researchProgress = 0;
   if (b.owner === world.localPlayer) world.emitStock();
@@ -134,6 +135,7 @@ export function orderCancelResearch(world: World, buildingId: EntityId, index: n
     world.events.emit({ type: 'rejected', reason: 'invalid-target' });
     return;
   }
+  removeProduction(b, 'research', index);
   const [tech] = q.splice(index, 1);
   if (index === 0) b.researchProgress = 0;
   if (q.length === 0) {
@@ -147,21 +149,25 @@ export function orderCancelResearch(world: World, buildingId: EntityId, index: n
 
 /** Advance each building's research head; on completion record it and apply its effects. */
 export function researchSystem(world: World, dt: number): void {
-  for (const b of world.buildings.values()) {
-    const head = b.research?.[0];
-    if (!head || !b.complete) continue;
-    b.researchProgress = (b.researchProgress ?? 0) + dt;
-    if (b.researchProgress >= TECHS[head].time - 1e-9) {
-      b.research!.shift();
-      b.researchProgress = 0;
-      if (b.research!.length === 0) {
-        delete b.research;
-        delete b.researchProgress;
-      }
-      completeResearch(world, b.owner, head);
-    } else {
-      emitProgress(world, b);
+  for (const b of world.buildings.values()) advanceResearch(world, b, dt);
+}
+
+/** Tick one building only when research owns the shared queue head. */
+export function advanceResearch(world: World, b: Building, dt: number): void {
+  const head = b.research?.[0];
+  if (!head || !b.complete || productionOrder(b)[0] !== 'research') return;
+  b.researchProgress = (b.researchProgress ?? 0) + dt;
+  if (b.researchProgress >= TECHS[head].time - 1e-9) {
+    removeProduction(b, 'research', 0);
+    b.research!.shift();
+    b.researchProgress = 0;
+    if (b.research!.length === 0) {
+      delete b.research;
+      delete b.researchProgress;
     }
+    completeResearch(world, b.owner, head);
+  } else {
+    emitProgress(world, b);
   }
 }
 

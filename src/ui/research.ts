@@ -2,6 +2,7 @@ import { AGE_NAMES, TECHS, techsAt, type Age, type Stat, type TechId } from '../
 import type { BuildingSpec } from '../core/buildings';
 import type { Building, BuildingKind, RejectReason, Stockpile, UnitKind } from '../core/types';
 import { UNITS, type UnitSpec } from '../core/units';
+import { productionOrder } from '../sim/productionQueue';
 import { AGE_BUILDINGS_NEEDED } from '../sim/systems/research';
 import { missingResources, shortfallText } from './build';
 import { combatChips, queueView, type StatChip } from './military';
@@ -128,19 +129,20 @@ export type QueueItem =
   | { type: 'tech'; tech: TechId; index: number }
   | { type: 'unit'; unit: UnitKind; index: number };
 
-/** The queue strip: research first (it runs first and holds training), then units. */
-export function queueItems(b: Pick<Building, 'kind' | 'queue' | 'queueKinds' | 'progress' | 'research' | 'researchProgress'>): {
+/** The queue strip follows the same FIFO order as production in the simulation. */
+export function queueItems(b: Pick<Building, 'kind' | 'queue' | 'queueKinds' | 'progress' | 'research' | 'researchProgress' | 'productionQueue'>): {
   items: QueueItem[];
   /** Progress 0..1 of the first item. */
   head: number;
 } {
   const research = b.research ?? [];
   const units = b.queue > 0 ? queueView(b) : { kinds: [], head: 0 };
-  const items: QueueItem[] = [
-    ...research.map((tech, index) => ({ type: 'tech' as const, tech, index })),
-    ...units.kinds.map((unit, index) => ({ type: 'unit' as const, unit, index })),
-  ];
-  const head = research.length
+  let techIndex = 0;
+  let unitIndex = 0;
+  const items: QueueItem[] = productionOrder(b).map((kind) => kind === 'research'
+    ? { type: 'tech', tech: research[techIndex], index: techIndex++ }
+    : { type: 'unit', unit: units.kinds[unitIndex], index: unitIndex++ });
+  const head = items[0]?.type === 'tech'
     ? Math.min(1, Math.max(0, (b.researchProgress ?? 0) / TECHS[research[0]].time))
     : units.head;
   return { items, head };

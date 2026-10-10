@@ -187,6 +187,12 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   }
   for (const b of world.buildings.values()) {
     if (b.research?.some((t) => !Object.hasOwn(TECHS, t))) throw new Error('Invalid save: research queue');
+    if (b.productionQueue !== undefined && (!Array.isArray(b.productionQueue)
+      || b.productionQueue.some((k) => k !== 'train' && k !== 'research')
+      || b.productionQueue.filter((k) => k === 'train').length !== b.queue
+      || b.productionQueue.filter((k) => k === 'research').length !== (b.research?.length ?? 0))) {
+      throw new Error('Invalid save: production queue');
+    }
   }
   clearStatCache(world);
   world.time = saved.time;

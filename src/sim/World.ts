@@ -47,8 +47,9 @@ import { exploreSystem, orderExplore, type ExploreState } from './systems/explor
 import { gatherSystem, orderFarm, orderGather, type GatherState } from './systems/gather';
 import { buildingRect } from './systems/sites';
 import { movementSystem, orderMove } from './systems/movement';
-import { orderCancelTrain, orderTrain, trainSystem } from './systems/train';
-import { orderCancelResearch, orderResearch, researchSystem } from './systems/research';
+import { orderCancelTrain, orderTrain } from './systems/train';
+import { productionSystem } from './systems/production';
+import { orderCancelResearch, orderResearch } from './systems/research';
 import { buildingMaxHp, buildingSight, unitMaxHp, unitSight } from './systems/stats';
 import { marketSystem, orderMarketTrade, orderTrade, orderTribute, releaseTrade } from './systems/market';
 import { resign, victorySystem, type GameResult } from './systems/victory';
@@ -397,8 +398,7 @@ export class World {
     wildlifeSystem(this, dt);
     combatSystem(this, dt, arrived);
     exploreSystem(this);
-    researchSystem(this, dt);
-    trainSystem(this, dt);
+    productionSystem(this, dt);
     this.time += dt;
     this.fogClock -= dt;
     if (this.fogClock <= 0) {
