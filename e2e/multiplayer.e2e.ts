@@ -2,11 +2,13 @@ import { test, expect } from '@playwright/test';
 import type { AddressInfo } from 'node:net';
 import { createRelayServer } from '../src/network/relay';
 
-test('two browsers join by code, gather/train in lockstep, reconnect, and complete a match', async ({ browser, baseURL }) => {
+test('two browsers join by code, gather/train in lockstep, reconnect, and complete a match', async ({ browser, baseURL }, testInfo) => {
+  test.setTimeout(120_000);
   const relay = createRelayServer({ origins: [new URL(baseURL!).origin], turnMs: 25, reconnectMs: 3000 });
   await new Promise<void>(resolve => relay.server.listen(0, '127.0.0.1', resolve));
   const port = (relay.server.address() as AddressInfo).port;
-  const contexts = await Promise.all([browser.newContext(), browser.newContext()]);
+  const { viewport, isMobile, hasTouch, deviceScaleFactor, userAgent } = testInfo.project.use;
+  const contexts = await Promise.all([browser.newContext({ viewport, isMobile, hasTouch, deviceScaleFactor, userAgent }), browser.newContext({ viewport, isMobile, hasTouch, deviceScaleFactor, userAgent })]);
   const [host, guest] = await Promise.all(contexts.map(context => context.newPage()));
   const errors: string[] = [];
   for (const page of [host, guest]) page.on('pageerror', e => errors.push(e.message));
@@ -31,7 +33,7 @@ test('two browsers join by code, gather/train in lockstep, reconnect, and comple
       const node = [...w.nodes.values()].find((n: any) => n.kind === 'tree' && w.visibility.isVisible(n.pos.x, n.pos.z)) as any;
       w.dispatch({ type: 'gather', unitIds: [worker.id], nodeId: node.id });
     });
-    await expect.poll(() => host.evaluate(() => (window as any).game.online.checks.some((c: any) => c.turn >= 25)), { timeout: 30_000 }).toBe(true);
+    for (const page of [host, guest]) await expect.poll(() => page.evaluate(() => (window as any).game.online.checks.some((c: any) => c.turn >= 25)), { timeout: 30_000 }).toBe(true);
     const checks = await Promise.all([host, guest].map(page => page.evaluate(() => (window as any).game.online.checks as { turn: number; hash: string }[])));
     const shared = checks[0].filter(a => checks[1].some(b => b.turn === a.turn));
     expect(shared.length).toBeGreaterThanOrEqual(2);

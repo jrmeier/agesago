@@ -72,7 +72,7 @@ if ((params.has('e2e') && !params.has('title')) || !title) {
     onStart(seed, players, options) {
       closeTitle();
       const url = new URL(location.href);
-      url.search = `seed=${seed}`;
+      url.searchParams.set('seed', String(seed));
       history.replaceState(null, '', url);
       document.documentElement.classList.remove('show-title');
       void deleteResume(idbResumeStore())
