@@ -130,6 +130,8 @@ evidence is in local `before-final.json` / `after-final.json`.
 
 - Production build/typecheck pass.
 - 53 unit files / 771 tests pass cleanly with `npm test -- --maxWorkers=2`.
+  The CI unit-test command also uses two workers after the default pool reproduced
+  a worker RPC timeout despite all assertions passing.
 - Full production browser suite passes: 31 tests, seven intentional project
   skips. It covers gathering, building, fog exploration, queues/rally, walls,
   touch orders, first-person, help, endgame, low/high quality and new layout checks.
