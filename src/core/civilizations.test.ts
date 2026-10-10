@@ -38,3 +38,13 @@ it('architecture palettes keep draw counts and shared base colours unchanged',as
   expect(colors(roman.object).length).toBe(before.length);
   roman.setTier(1);expect(roman.object.getObjectByName('finished')?.userData.civilization ?? roman.object.children.some(c=>c.userData.civilization==='romans')).toBeTruthy();
 });
+
+
+it('implicit barracks training uses an available basic unit before the unique unit age',()=> {
+  const g=generateMap(4,1,{size:'small',type:'forest'});
+  const w=new World(g.hf,g.layout,defaultPlayers(1,['hellenes']));
+  Object.assign(w.stock,{food:100,wood:100});
+  const barracks={...w.townCenter!,id:w.allocId(),kind:'barracks' as const,queue:0,progress:0};w.buildings.set(barracks.id,barracks);
+  w.dispatch({type:'train',buildingId:barracks.id});expect(barracks.queueKinds).toEqual(['hoplite']);
+  w.dispatch({type:'train',buildingId:barracks.id,unit:'phalangiteGuard'});expect(barracks.queueKinds).toEqual(['hoplite']);
+});
