@@ -173,7 +173,8 @@ export function homeMarket(world: World, u: Unit, exclude: EntityId | undefined)
 
 /** Gold a cart earns per round trip between two markets. */
 export function tradeGold(home: Building, target: Building): number {
-  return Math.round(MARKET.goldPerDistance * Math.hypot(home.pos.x - target.pos.x, home.pos.z - target.pos.z));
+  const d = Math.hypot(home.pos.x - target.pos.x, home.pos.z - target.pos.z);
+  return Math.round((MARKET.goldPerDistance * d * d) / MARKET.tradeRefDistance);
 }
 
 const gap = (u: Unit, b: Building) => rectDistance(u.pos, buildingRect(b));

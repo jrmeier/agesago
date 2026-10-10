@@ -232,6 +232,12 @@ describe('trade carts', () => {
     expect(far.gold / far.trips).toBeGreaterThan(near.gold / near.trips);
   });
 
+  it('earns more gold per minute on longer routes', () => {
+    const perMinute = [20, 40, 80].map((d) => (income(d, 300).gold / 300) * 60);
+    expect(perMinute[1]).toBeGreaterThan(perMinute[0]);
+    expect(perMinute[2]).toBeGreaterThan(perMinute[1]);
+  }, 60_000);
+
   it('can trade between two of your own markets', () => {
     expect(income(40, 90, false).trips).toBeGreaterThan(0);
   });

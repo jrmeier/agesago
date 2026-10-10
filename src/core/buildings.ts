@@ -295,6 +295,11 @@ export const MARKET = {
   sellFactor: 0.7,
   /** Fraction of a tribute lost in transit (modified by 'tributeFee'). */
   tributeFee: 0.3,
-  /** Trade cart gold per trip ≈ goldPerDistance × distance between the two markets. */
+  /**
+   * Trade cart gold per trip = goldPerDistance × d² / tradeRefDistance, d = distance between the
+   * markets. Quadratic, like AoE, so gold per minute grows with distance (trip time is linear) and
+   * long, exposed routes pay; a trip of tradeRefDistance pays goldPerDistance × d.
+   */
   goldPerDistance: 0.6,
+  tradeRefDistance: 40,
 } as const;
