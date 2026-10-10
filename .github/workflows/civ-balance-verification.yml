@@ -1,0 +1,46 @@
+name: Temporary civilization balance verification
+
+on:
+  push:
+    branches: [codex/civ-balance-ci]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: civ-balance-verification-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tournament:
+    name: Hellenic pairing shard ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        shard: [0, 1, 2]
+    env:
+      CIV_BENCH_CIV: hellenes
+      CIV_BENCH_SHARDS: 3
+      CIV_BENCH_SHARD: ${{ matrix.shard }}
+      CIV_BENCH_OUTPUT: ${{ github.workspace }}/civilizations-shard-${{ matrix.shard }}.jsonl
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Run all ten seeds on both sides
+        run: npx vite-node scripts/bench-civilizations.ts | tee civilizations-shard-${{ matrix.shard }}.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: civilizations-shard-${{ matrix.shard }}
+          path: |
+            civilizations-shard-${{ matrix.shard }}.jsonl
+            civilizations-shard-${{ matrix.shard }}.log
+          if-no-files-found: error
+          retention-days: 7
