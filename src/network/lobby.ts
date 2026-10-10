@@ -1,4 +1,6 @@
 import { NetworkSession } from './session';
+import { CIVS, CIV_IDS } from '../core/civilizations';
+import { MAP_SIZES, MAP_TYPES, type MapSize, type MapType } from '../core/maps';
 import { NETWORK_VERSION, type ServerMessage } from './protocol';
 
 /** Test relays are restricted to loopback pages and loopback endpoints. */
@@ -27,6 +29,9 @@ export function mountOnline(root: HTMLElement, onStart: (session: NetworkSession
     <label class="title-field">Room code <input id="online-code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
     <label class="title-field">Seed <input id="online-seed" type="number" min="1" max="1000000000" value="1"></label>
     <label class="title-field">Players <select id="online-players"><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+    <label class="title-field">Map size <select id="online-size">${Object.keys(MAP_SIZES).map(size => `<option value="${size}"${size === 'large' ? ' selected' : ''}>${size[0].toUpperCase() + size.slice(1)}</option>`).join('')}</select></label>
+    <label class="title-field">Map type <select id="online-map">${MAP_TYPES.map(type => `<option value="${type}">${type === 'riverValley' ? 'River Valley' : type[0].toUpperCase() + type.slice(1)}</option>`).join('')}</select></label>
+    <p class="title-copy">Civilizations by seat: ${CIV_IDS.map(id => CIVS[id].name).join(', ')}.</p>
     <p class="title-copy">All players join before the host starts. A disconnected player has 30 seconds to rejoin.</p>
     <p id="online-note" class="title-note" role="status"></p><ul id="online-roster"></ul>
     <div class="title-actions"><button id="online-create" class="endgame-btn" type="button">Create room</button><button id="online-join" class="endgame-btn" type="button">Join room</button><button id="online-start" class="endgame-btn" type="button" hidden>Start match</button><button id="online-back" class="endgame-btn" type="button">Back</button></div>`;
@@ -50,7 +55,7 @@ export function mountOnline(root: HTMLElement, onStart: (session: NetworkSession
     const override = relayOverride(location.search, location.hostname);
     session = new NetworkSession(join
       ? { type: 'join', version: NETWORK_VERSION, code, name, ...(token ? { token } : {}) }
-      : { type: 'create', version: NETWORK_VERSION, config: { seed, players: Number(field('online-players').value) }, name }, override);
+      : { type: 'create', version: NETWORK_VERSION, config: { seed, players: Number(field('online-players').value), mapSize: field('online-size').value as MapSize, mapType: field('online-map').value as MapType, civs: CIV_IDS.slice(0, Number(field('online-players').value)) }, name }, override);
     const current = session;
     unsubscribe = session.subscribe(() => {
       note.textContent = current.code ? `Room ${current.code} · ${current.status}` : current.status;

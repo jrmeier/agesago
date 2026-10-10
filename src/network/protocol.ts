@@ -57,6 +57,9 @@ export function validCommand(v: unknown): v is Command {
     case 'marketTrade': return ['wood', 'food', 'stone'].includes(String(v.resource)) && ['buy', 'sell'].includes(String(v.side));
     case 'tribute': return id(v.to) && Number(v.to) <= 4 && resource(v.resource) && typeof v.amount === 'number' && Number.isFinite(v.amount) && v.amount > 0 && v.amount <= 1e8;
     case 'trade': return ids(v.unitIds) && id(v.marketId);
+    case 'navalTrade': return ids(v.unitIds) && id(v.dockId);
+    case 'loadTransport': return ids(v.unitIds) && id(v.transportId);
+    case 'unloadTransport': return id(v.transportId) && point(v.target);
     default: return false;
   }
 }
