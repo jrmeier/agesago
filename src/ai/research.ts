@@ -3,7 +3,7 @@ import { CHAINS, TECHS, TECH_IDS, type TechId } from '../core/techs';
 import type { Age, Building, BuildingKind, MarketResource, ResourceType, Stockpile, UnitKind, UnitState, Vec2 } from '../core/types';
 import { isAnimal, UNITS, type UnitClass } from '../core/units';
 import { buyCost, LOT, sellGain } from '../sim/systems/market';
-import { AGE_BUILDINGS_NEEDED, ageBuildings, ageOf, isQueued, researchBlock } from '../sim/systems/research';
+import { ageBuildingsNeeded, ageBuildings, ageOf, isQueued, researchBlock } from '../sim/systems/research';
 import { canAfford, dist, type Ctx, type Snapshot } from './context';
 import { norm, type Economy } from './economy';
 import type { ResearchProfile, TechGroup } from './profile';
@@ -214,9 +214,9 @@ export class Research {
     // The two current-age buildings: add one if it lacks them (counting ones going up).
     const have = new Set(ageBuildings(world, player, f.age));
     for (const b of s.buildings) if (!b.complete && !NOT_AGE_BUILDINGS.has(b.kind) && (BUILDINGS[b.kind].age ?? 0) === f.age) have.add(b.kind);
-    if (have.size < AGE_BUILDINGS_NEEDED) this.addAgeBuilding(s, f.age, have);
+    if (have.size < ageBuildingsNeeded(f.age)) this.addAgeBuilding(s, f.age, have);
 
-    if (f.villagers < need || world.time < earliest || have.size < AGE_BUILDINGS_NEEDED) return;
+    if (f.villagers < need || world.time < earliest || have.size < ageBuildingsNeeded(f.age)) return;
     // Save for it: villagers, army, buildings and other research leave this alone.
     this.c.reserve = { ...TECHS[tech].cost };
     this.c.aging = true;
