@@ -26,6 +26,8 @@ export function victorySystem(world: World, dt: number, reason: GameResult['reas
   for (const id of world.players.keys()) if (!present.has(id)) defeat(world, id, 'conquest');
 
   const winners = [...world.players.keys()].filter((id) => !world.isDefeated(id));
+  // A match started without rival towns is a playable practice map.
+  if (world.players.size === 1 && winners.length === 1) return;
   // With zero survivors the terminal result is a draw.
   if (winners.some((a, i) => winners.slice(i + 1).some((b) => world.areEnemies(a, b)))) return;
   world.gameOver = { winners, reason };

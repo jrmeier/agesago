@@ -1,3 +1,5 @@
+import { normalizeMapOptions, type MapOptions } from '../core/maps';
+import { generateVariantMap } from './mapVariants';
 import { MAP_D, MAP_W, type Heightfield, type MapLayout, type NodeKind, type PropKind, type StartLayout, type Vec2 } from '../core/types';
 import { createSeededRandom, generateTerrain, terrainFeatures } from './terrain';
 
@@ -99,8 +101,10 @@ export const START_RADIUS = 24;
 export const BUILD_RING_RADIUS = 12;
 
 /** Rich ancient countryside; spatial spacing and connected-land filtering keep placement cheap. */
-export function generateMap(seed: number, players = 2): { hf: Heightfield; layout: MapLayout } {
+export function generateMap(seed: number, players = 2, options: MapOptions = {}): { hf: Heightfield; layout: MapLayout } {
   if (!Number.isInteger(players) || players < 1 || players > 4) throw new RangeError('players must be 1, 2, 3 or 4');
+  const identity = normalizeMapOptions(options);
+  if (identity.size !== 'large' || identity.type !== 'mediterranean') return generateVariantMap(seed, players, identity);
   const features = terrainFeatures(seed);
   const startRandom = createSeededRandom(seed ^ 0x6a09e667);
   const phase = Math.PI + (startRandom() - 0.5) * 0.06;

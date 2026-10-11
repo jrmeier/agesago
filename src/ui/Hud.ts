@@ -5,6 +5,9 @@ import { UNITS, trainable } from '../core/units';
 import type { Selection } from '../game/Selection';
 import { shownSelection, sightFromState, stepLastSeen, type LastSeenBuilding } from '../render/lastSeen';
 import { BALANCE } from '../sim/balance';
+import { productionOrder } from '../sim/productionQueue';
+import { carryCap } from '../sim/systems/gather';
+import { trainTime } from '../sim/systems/train';
 import { ageBuildings, ageBuildingsNeeded, researchBlock, statOf } from '../sim/systems/research';
 import type { World } from '../sim/World';
 import {
@@ -79,7 +82,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * world.events and selection changes.
  * M8: the training grid also lists the selected building's techs under a "Research" header
  * (click queues `research`; locked tiles say why; long-press on touch shows the tooltip), the
- * queue strip mixes research (first) with units, #age-plaque shows the age with a slim bar
+ * queue strip mixes research with units in command order, #age-plaque shows the age with a slim bar
  * while an age-up runs, #age-banner announces a new age, and age-locked build / train tiles
  * are greyed with "Requires Town Age".
  * Owned by the HUD lane. Public surface FROZEN: constructor, update.
@@ -382,7 +385,7 @@ export class Hud {
     this.researchKey = '';
     this.researchHead = null;
     if (!kind) return;
-    for (const e of trainEntries(kind, this.world.stock, this.world.players.get(this.world.localPlayer)?.researched)) {
+    for (const e of trainEntries(kind, this.world.stock, this.world.players.get(this.world.localPlayer)?.researched, this.world.players.get(this.world.localPlayer)?.player.civ)) {
       const btn = tile(`#i-${e.kind}`, e.name, e.cost, e.key, 'Shift-click: queue 5');
       btn.classList.add('train-tile');
       btn.dataset.train = e.kind;
@@ -410,6 +413,7 @@ export class Hud {
       researched: p?.researched ?? new Set(),
       queued,
       stock: this.world.stock,
+      civ:this.world.players.get(local)?.player.civ,
       ageBuildings: ageBuildings(this.world, local, age).length,
       ageBuildingsNeeded: ageBuildingsNeeded(age),
     };
@@ -476,7 +480,13 @@ export class Hud {
       const same = kinds.every((k) => k === kinds[0]);
       const line = same ? lineOf(kinds[0]) : null;
       setText(this.el.name, line && line.tier > 0 ? (units.length > 1 ? `${units.length} × ${line.title}` : line.title) : selectionName(kinds));
-      setText(this.el.status, foreign ? this.ownerName(owner) : groupStatus(units, BALANCE.carryCap));
+      const capacity = carryCap(this.world, units[0], units[0].carry?.type ?? units[0].gatherType ?? 'wood');
+      setText(this.el.status, foreign ? this.ownerName(owner) : kinds.every(k => k === 'priest')
+        ? (units.some(u => u.relic) ? 'Carrying a relic · Move beside your temple to enshrine' : 'Move to standing stones for relics · Order on ally to heal, enemy to convert')
+        : kinds.every(k => k === 'transport') ? `Passengers ${units.reduce((n, u) => n + (u.passengers?.length ?? 0), 0)}/${units.length * 10} · Order land units onto a ship near shore; Unload then choose a coast`
+        : kinds.every(k => k === 'fishingBoat') ? 'Order onto water fish · Delivers food to your dock'
+        : kinds.every(k => k === 'merchantShip') ? 'Order onto a second own or allied dock to trade for gold'
+        : groupStatus(units, capacity));
       this.setPortrait(`#i-${portraitKind(kinds)}`, units.length > 1 ? String(units.length) : '');
       const hp = totalHp(units);
       this.setHp(hp.hp, hp.maxHp);
@@ -525,7 +535,9 @@ export class Hud {
     if (!card) return;
     setHidden(card, !own.length);
     if (!own.length) return;
-    const fighters = own.filter((u) => u.kind !== 'villager');
+    const unload = card.querySelector<HTMLButtonElement>('[data-cmd="unloadTransport"]');
+    setHidden(unload, !own.some(u => u.kind === 'transport' && (u.passengers?.length ?? 0) > 0));
+    const fighters = own.filter((u) => isMilitary(u.kind) || u.kind === 'scout');
     card.classList.toggle('no-stances', !fighters.length);
     const stance = sharedStance(fighters);
     for (const { stance: s } of STANCES) {
@@ -576,11 +588,11 @@ export class Hud {
       setText(this.el.status, constructionLabel(b.buildProgress));
       const w = `${(Math.min(1, Math.max(0, b.buildProgress)) * 100).toFixed(1)}%`;
       if (this.progressFill && this.progressFill.style.width !== w) this.progressFill.style.width = w;
-    } else if (panel && panel.research?.length) {
+    } else if (panel && panel.research?.length && productionOrder(panel)[0] === 'research') {
       setText(this.el.status, researchLabel(panel.research[0], panel.researchProgress ?? 0, panel.research.length));
     } else if (trainer && b.queue > 0) {
       const head = b.queueKinds?.[0];
-      const total = head ? UNITS[head].trainTime : BALANCE.trainTime;
+      const total = head ? trainTime(this.world, b, head) : BALANCE.trainTime;
       setText(this.el.status, trainLabel(b.queue, b.progress, total, 0, true));
     } else {
       setText(this.el.status, buildingRole(b.kind, b.food, FARM_FOOD, b.occupants?.length ?? 0));
@@ -591,7 +603,8 @@ export class Hud {
   private updateQueue(b: Building): void {
     const q = this.el.queue;
     if (!q) return;
-    const view = queueItems(b);
+    const kind = b.queueKinds?.[0];
+    const view = queueItems(b, kind ? trainTime(this.world, b, kind) : undefined);
     const key = `${b.id}|${view.items.map((it) => (it.type === 'tech' ? `t:${it.tech}` : it.unit)).join(',')}`;
     if (key !== this.queueKey) {
       this.queueKey = key;
@@ -605,7 +618,7 @@ export class Hud {
           item.dataset.tech = it.tech;
           item.title = `${TECHS[it.tech].name}${i === 0 ? ' (researching)' : ''} — click to cancel (refund)`;
         } else {
-          const doing = i === 0 ? ' (training)' : it.index === 0 && b.research?.length ? ' (waits for research)' : '';
+          const doing = i === 0 ? ' (training)' : ' (queued)';
           const name = unitLine(this.world.players.get(b.owner)?.researched ?? new Set(), it.unit).title;
           item.title = `${name}${doing} — click to cancel`;
         }

@@ -11,6 +11,7 @@ const GATHER_VERB: Record<ResourceType, string> = {
 
 /** Singular / plural display names, in panel order. */
 const UNIT_NAMES: Record<UnitKind, [string, string]> = {
+  phalangiteGuard:['Phalangite Guard','Phalangite Guards'], legionary:['Legionary','Legionaries'], immortal:['Immortal','Immortals'], raider:['Raider','Raiders'],
   villager: ['Villager', 'Villagers'],
   scout: ['Scout', 'Scouts'],
   hoplite: ['Hoplite', 'Hoplites'],
@@ -19,6 +20,11 @@ const UNIT_NAMES: Record<UnitKind, [string, string]> = {
   archer: ['Archer', 'Archers'],
   horseman: ['Horseman', 'Horsemen'],
   tradeCart: ['Trade Cart', 'Trade Carts'],
+  priest: ['Priest', 'Priests'],
+  fishingBoat: ['Fishing Boat', 'Fishing Boats'],
+  merchantShip: ['Merchant Ship', 'Merchant Ships'],
+  trireme: ['Trireme', 'Triremes'],
+  transport: ['Transport', 'Transports'],
   deer: ['Deer', 'Deer'],
   boar: ['Boar', 'Boars'],
   sheep: ['Sheep', 'Sheep'],

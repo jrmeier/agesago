@@ -1,0 +1,24 @@
+[Unit]
+Description=Ages Ago multiplayer command relay
+After=network.target
+
+[Service]
+Type=simple
+User=jedmeier
+Group=staff
+WorkingDirectory=/home/jedmeier/agesago-relay/current
+ExecStart=/usr/local/bin/node server/start.mjs
+Environment=RELAY_HOST=127.0.0.1
+Environment=RELAY_PORT=8973
+Environment=RELAY_ORIGINS=https://agesago.jedm.dev
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/jedmeier/agesago-relay
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

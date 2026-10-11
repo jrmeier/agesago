@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { buildingTier, chainTier, CHAINS, unitLine, type TechId } from '../core/techs';
-import type { BuildingKind, UnitKind } from '../core/types';
+import { currentSettings } from '../game/settings';
+import type { BuildingKind, ResourceType, UnitKind } from '../core/types';
 import { UNITS } from '../core/units';
 
 /**
@@ -189,8 +190,17 @@ function clampTier(tier: number, max: number): number {
   return Number.isFinite(tier) ? Math.max(0, Math.min(max, Math.trunc(tier))) : 0;
 }
 
-/** True when the viewer asked the OS for reduced motion (no matchMedia → false). */
+/** Scale the existing load mesh volume to match its researched capacity, with no extra draws. */
+export function applyCarryCapacity(root: THREE.Object3D, capacities: Record<ResourceType, number>, base: number): void {
+  for (const resource of ['wood', 'food', 'gold', 'stone'] as const) {
+    const mesh = root.getObjectByName(`carry-${resource}`);
+    mesh?.scale.setScalar(Math.cbrt(capacities[resource] / base));
+  }
+}
+
+/** Respect the live in-game preference and the OS preference. */
 export function prefersReducedMotion(): boolean {
+  if (currentSettings().reducedMotion) return true;
   try {
     return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   } catch {
@@ -219,6 +229,13 @@ export class Shimmer {
   }
 
   update(time: number): void {
+    if (prefersReducedMotion()) {
+      this.armed = false;
+      this.startAt = null;
+      if (this.active) for (const m of this.materials) m.emissive.setRGB(0, 0, 0);
+      this.active = false;
+      return;
+    }
     if (this.armed) {
       this.startAt = time;
       this.armed = false;

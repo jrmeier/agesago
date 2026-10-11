@@ -3,3 +3,5 @@ dist
 *.local
 test-results/
 playwright-report/
+
+relay-dist/

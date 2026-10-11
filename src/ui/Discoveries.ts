@@ -51,6 +51,12 @@ export class Discoveries {
     this.root.dataset.hudInteractive = '';
     this.root.setAttribute('aria-live', 'polite');
     container.append(this.root);
+    world.events.on('treasure', e => {
+      if (e.owner === world.localPlayer) this.rewardToast(`Treasure recovered: ${e.reward}`, e.pos);
+    });
+    world.events.on('relic', e => {
+      if (e.owner === world.localPlayer) { const b = world.buildings.get(e.templeId); if (b) this.rewardToast('Relic enshrined: +30 gold/min', b.pos); }
+    });
   }
 
   /** Call every frame with elapsed seconds. */
@@ -69,6 +75,15 @@ export class Discoveries {
     this.root.remove();
   }
 
+  private rewardToast(label: string, pos: Vec2): void {
+    const toast = document.createElement('button'); toast.type = 'button'; toast.className = 'toast';
+    toast.textContent = label; toast.title = 'Show reward on the map';
+    toast.addEventListener('click', () => { this.focusOn(pos); toast.remove(); });
+    this.root.append(toast);
+    while (this.root.childElementCount > MAX_SHOWN) this.root.firstElementChild?.remove();
+    setTimeout(() => toast.remove(), TOAST_LIFE * 1000);
+  }
+
   private show(site: Site): void {
     const toast = document.createElement('button');
     toast.type = 'button';
@@ -81,7 +96,8 @@ export class Discoveries {
     use.setAttribute('href', ICON[site.kind]);
     icon.append(use);
     const text = document.createElement('span');
-    text.textContent = discoveryText(site.kind, this.home, site.pos);
+    const hint = site.kind === 'ruins' ? ' · Move a unit here to claim treasure' : site.kind === 'stones' ? ' · Send a priest to recover a relic' : '';
+    text.textContent = discoveryText(site.kind, this.home, site.pos) + hint;
     toast.append(icon, text);
     const dismiss = () => {
       if (!toast.isConnected) return;

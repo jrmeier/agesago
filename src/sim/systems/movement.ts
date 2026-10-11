@@ -1,10 +1,10 @@
 import type { EntityId, Unit, Vec2 } from '../../core/types';
-import { UNITS } from '../../core/units';
+import { isShip, UNITS } from '../../core/units';
 import { BALANCE } from '../balance';
 import { NAV_CELL } from '../nav';
 import type { NavGrid, Rect } from '../nav';
 import type { World } from '../World';
-import { closedGates, route } from './passage';
+import { closedGates, navFor, routeForUnit } from './passage';
 import { unitSpeed } from './stats';
 import { cancelExplore, settleCancelled } from './explore';
 
@@ -122,15 +122,18 @@ function steeringOf(world: World): Steering {
 export function orderMove(world: World, unitIds: EntityId[], target: Vec2): void {
   const units = [...new Set(unitIds)].map((id) => world.units.get(id)).filter((u): u is Unit => !!u);
   if (!units.length) return;
+  const land = units.filter(u => !isShip(u.kind)), ships = units.filter(u => isShip(u.kind));
+  if (land.length && ships.length) { orderMove(world, land.map(u => u.id), target); orderMove(world, ships.map(u => u.id), target); return; }
+  const nav = navFor(world, units[0]);
   const st = steeringOf(world);
   const cancelled = cancelExplore(world, units);
-  const slots = formationSlots(world.nav, units, target);
+  const slots = formationSlots(nav, units, target);
   const speed = Math.min(...units.map((u) => speedOf(u, world)));
   const forward = direction(units, target);
   let moved = 0;
   units.forEach((u, i) => {
     const slot = slots[i];
-    const path = slot && route(world, u.owner, u.pos, slot);
+    const path = slot && routeForUnit(world, u, slot);
     if (!path) return;
     moved++;
     u.path = path;
@@ -173,6 +176,7 @@ function separation(world: World, st: Steering): void {
         for (const j of bucket) {
           if (j <= i) continue;
           const b = bodies[j];
+          if (isShip(a.u.kind) !== isShip(b.u.kind)) continue;
           if (!a.moving && !b.moving) continue;
           let dx = a.x - b.x;
           let dz = a.z - b.z;
@@ -246,7 +250,7 @@ export function movementSystem(world: World, dt: number): Unit[] {
         const scale = Math.min(1, speedOf(u, world) / (Math.hypot(vx, vz) || 1));
         const next = rest && d <= 0.001 && !body.pushX && !body.pushZ ? rest.slot
           : { x: u.pos.x + vx * scale * dt, z: u.pos.z + vz * scale * dt };
-        u.pos = safeStep(world.nav, u.pos, next, maskFor(u.owner));
+        u.pos = safeStep(navFor(world, u), u.pos, next, isShip(u.kind) ? [] : maskFor(u.owner));
       }
       continue;
     }
@@ -274,7 +278,7 @@ export function movementSystem(world: World, dt: number): Unit[] {
       const cap = Math.min(1, speed * time / (Math.hypot(mx, mz) || 1));
       mx *= cap;
       mz *= cap;
-      const next = safeStep(world.nav, u.pos, finish ? wp : { x: u.pos.x + mx, z: u.pos.z + mz }, maskFor(u.owner));
+      const next = safeStep(navFor(world, u), u.pos, finish ? wp : { x: u.pos.x + mx, z: u.pos.z + mz }, isShip(u.kind) ? [] : maskFor(u.owner));
       const advance = Math.hypot(next.x - u.pos.x, next.z - u.pos.z);
       if (advance > 1e-6) u.facing = Math.atan2(next.x - u.pos.x, next.z - u.pos.z);
       u.pos = next;
@@ -313,7 +317,7 @@ export function movementSystem(world: World, dt: number): Unit[] {
     const progress = st.progress.get(u);
     if (!progress || progress.stalled < JAM_SECONDS || !u.path.length) continue;
     const end = u.path[u.path.length - 1];
-    const path = route(world, u.owner, u.pos, end, 1.2);
+    const path = routeForUnit(world, u, end, 1.2);
     progress.stalled = 0;
     if (path) {
       u.path = path;

@@ -231,9 +231,9 @@ describe('positional sound', () => {
     expect(n).toBe(2);
   });
 
-  it('ships no audio files', () => {
+  it('ships no recorded sound effects', () => {
     expect(BUNDLED_AUDIO_BYTES).toBe(0);
-    const audio = import.meta.glob('../../**/*.{mp3,ogg,wav,flac,m4a,aac,opus}');
+    const audio = import.meta.glob(['../../public/**/*.{mp3,ogg,wav,flac,m4a,aac,opus}', '!../../public/audio/0ad/**']);
     expect(Object.keys(audio)).toEqual([]);
   });
 });

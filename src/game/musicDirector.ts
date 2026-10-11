@@ -1,7 +1,7 @@
 import { EventBus } from '../core/events';
 import type { Building, EntityId, PlayerId, SimEvent, Unit } from '../core/types';
 import { MusicEngine, type MusicSink } from './music';
-import { ProceduralMusic, audioNow } from './musicPlayer';
+import { RecordedMusic, audioNow } from './musicPlayer';
 
 /** The slice of the world the score reads. */
 export interface MusicWorld {
@@ -21,7 +21,7 @@ export class MatchMusic {
   private readonly off: Array<() => void> = [];
 
   constructor(world: MusicWorld, sink?: MusicSink) {
-    this.engine = new MusicEngine(sink ?? new ProceduralMusic());
+    this.engine = new MusicEngine(sink ?? new RecordedMusic());
     const bus = world.events;
     this.off.push(bus.on('attacked', (event) => {
       if (event.owner === world.localPlayer) this.engine.hit(world.time);
@@ -41,7 +41,7 @@ export class MatchMusic {
     }));
   }
 
-  /** Keep the phrase queued and the crossfade current. */
+  /** Keep the playlist advancing and the crossfade current. */
   advance(simTime: number, now = audioNow()): void {
     this.engine.advance(simTime, now);
   }

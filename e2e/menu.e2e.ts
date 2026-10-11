@@ -35,7 +35,7 @@ test('the title screen starts a seeded match and continue reopens it', async ({ 
   await activate(page, '#title-credits', phone);
   await expect(page.locator('#title-credits-panel')).toBeVisible();
   await expect(page.locator('#title-audio-credit')).toContainText('synthesised');
-  await expect(page.locator('#title-audio-credit')).toContainText('No recorded soundtrack');
+  await expect(page.locator('#title-audio-credit')).toContainText('0 A.D. soundtrack');
   if (!phone) await page.keyboard.press('Escape');
   else await activate(page, '#title-credits-back', phone);
   await expect(page.locator('#title-home')).toBeVisible();

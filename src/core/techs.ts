@@ -1,3 +1,4 @@
+import type { CivId } from './civilizations';
 import type { BuildingKind, ResourceType, Stockpile, UnitKind } from './types';
 import { UNITS, type UnitClass } from './units';
 
@@ -67,6 +68,7 @@ export type TechFlag =
   | 'machicolations';
 
 export interface TechSpec {
+  civ?: CivId;
   name: string;
   /** One line for tooltips, in plain words. */
   description: string;
@@ -95,6 +97,10 @@ const armor = (target: ModTarget, m: number, p: number): Modifier[] => [add(targ
 const DEFENCES: BuildingKind[] = ['watchTower', 'townCenter'];
 
 const table = {
+  hellenicDiscipline:{name:'Hellenic Discipline',description:'Infantry +1 melee armour.',at:'forge',cost:{food:175,gold:100},time:45,age:1,civ:'hellenes',effects:armor('class:infantry',1,0)},
+  romanEngineering:{name:'Roman Engineering',description:'Buildings construct 15% faster.',at:'forge',cost:{food:175,gold:100},time:45,age:1,civ:'romans',effects:[mul('allBuildings','buildRate',1.15)]},
+  royalRoads:{name:'Royal Roads',description:'Villagers and trade carts walk 10% faster.',at:'forge',cost:{food:175,gold:100},time:45,age:1,civ:'persians',effects:[mul('villager','speed',1.1),mul('tradeCart','speed',1.1)]},
+  woodlandCraft:{name:'Woodland Craft',description:'Villagers carry 3 more wood; infantry walk 5% faster.',at:'forge',cost:{food:175,gold:100},time:45,age:1,civ:'celts',effects:[add('villager','carry.wood',3),mul('class:infantry','speed',1.05)]},
   // ---- Ages (Town Center) ----
   townAge: {
     name: 'Town Age', description: 'Advance to the Town Age: archery range, stable, towers, forge and market.',
@@ -413,11 +419,11 @@ function matches(target: ModTarget, subject: Subject): boolean {
 }
 
 /** Sum of adds and product of muls from `researched` for one stat. */
-export function statMods(researched: Iterable<TechId>, subject: Subject, stat: Stat): { add: number; mul: number } {
+export function statMods(researched: Iterable<TechId>, subject: Subject, stat: Stat, bonuses: readonly Modifier[] = []): { add: number; mul: number } {
   let a = 0;
   let m = 1;
-  for (const id of researched) {
-    for (const e of TECHS[id].effects) {
+  for (const effects of [bonuses, ...Array.from(researched, id => TECHS[id].effects)]) {
+    for (const e of effects) {
       if (e.stat !== stat || !matches(e.target, subject)) continue;
       if (e.op === 'add') a += e.value;
       else m *= e.value;

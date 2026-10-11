@@ -24,6 +24,7 @@ const ACTION_LABEL: Record<string, string> = {
   trainSlot1: 'Train the first unit in the training panel',
   trainSlot2: 'Train the second unit in the training panel',
   trainSlot3: 'Train the third unit in the training panel',
+  trainSlot4: 'Train the fourth unit in the training panel',
 };
 
 /** Printable name for a KeyboardEvent.code. */

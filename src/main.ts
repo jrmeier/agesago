@@ -1,3 +1,4 @@
+import { mountOnline } from './network/lobby';
 import { devHook } from './game/devHook';
 import { Game, type MatchStart } from './game/Game';
 import { deleteResume, idbResumeStore } from './game/resume';
@@ -25,6 +26,9 @@ function reveal(game: Game): void {
   // Seed and town count for a match opened from the title screen, which has no dev hook.
   document.documentElement.dataset.seed = String(game.world.seed ?? '');
   document.documentElement.dataset.players = String(game.world.players.size);
+  document.documentElement.dataset.mapSize = game.world.mapOptions.size ?? 'large';
+  document.documentElement.dataset.mapType = game.world.mapOptions.type ?? 'mediterranean';
+  document.documentElement.dataset.civ = game.world.players.get(game.world.localPlayer)?.player.civ ?? '';
   if (loading) {
     loading.classList.add('is-done');
     loading.addEventListener('transitionend', () => loading.remove(), { once: true });
@@ -50,10 +54,11 @@ const closeSettingsPanel = mountSettings();
 
 const params = new URLSearchParams(location.search);
 const title = document.getElementById('title-screen');
-if (params.has('e2e') || !title) {
+if ((params.has('e2e') && !params.has('title')) || !title) {
   await bootMatch(params.has('tutorial') ? { tutorial: true, players: 2, fresh: true } : {});
 } else {
   let closeTitle = () => {};
+  const closeOnline = mountOnline(title, (session, data) => { closeOnline(); closeTitle(); void bootMatch({ seed: data.config.seed, players: data.config.players, fresh: true, online: { session, data } }); });
   closeTitle = mountTitle(title, {
     onContinue() {
       closeTitle();
@@ -64,15 +69,15 @@ if (params.has('e2e') || !title) {
       document.documentElement.classList.remove('show-title');
       void bootMatch({ tutorial: true, players: 2, fresh: true });
     },
-    onStart(seed, players) {
+    onStart(seed, players, options) {
       closeTitle();
       const url = new URL(location.href);
-      url.search = `seed=${seed}`;
+      url.searchParams.set('seed', String(seed));
       history.replaceState(null, '', url);
       document.documentElement.classList.remove('show-title');
       void deleteResume(idbResumeStore())
         .catch(() => undefined)
-        .then(() => bootMatch({ seed, players, fresh: true }));
+        .then(() => bootMatch({ seed, players, ...options, fresh: true }));
     },
   });
 }

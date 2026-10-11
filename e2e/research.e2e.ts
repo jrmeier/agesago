@@ -103,3 +103,51 @@ test('age-locked build tiles say which age they need', async ({ page }, testInfo
   expect(overflow).toBeLessThanOrEqual(0);
   expect(errors).toEqual([]);
 });
+
+test('Town Center production stays FIFO and researched capacity reaches HUD and load model', async ({ page }, testInfo) => {
+  const phone = testInfo.project.name === 'phone';
+  const errors = await boot(page);
+  const repaint = async () => {
+    const frame = await page.evaluate(() => (window as any).game.renderer.webgl.info.render.frame as number);
+    await page.waitForFunction(before => (window as any).game.renderer.webgl.info.render.frame > before, frame, { timeout: 15_000 });
+  };
+  await page.evaluate(() => {
+    const w = window as any;
+    const g = w.game;
+    g.paused = true; // Keep the render loop alive while advancing the sim explicitly.
+    w.dev.give({ food: 2000, wood: 2000, gold: 2000 });
+    const tc = g.world.townCenter;
+    g.selection.set([tc.id]);
+    g.world.dispatch({ type: 'train', buildingId: tc.id });
+    for (let i = 0; i < 60; i++) g.world.tick(0.05);
+    g.world.dispatch({ type: 'research', buildingId: tc.id, tech: 'wovenTunics' });
+  });
+  await repaint();
+  await openSheet(page, phone);
+  await expect(page.locator('#train-queue .queue-item').first()).toHaveAttribute('title', /Villager.*training/);
+  await expect(page.locator('#unit-status')).toHaveText(/Training/);
+  await page.evaluate(() => {
+    const world = (window as any).game.world;
+    for (let i = 0; i < 120; i++) world.tick(0.05);
+  });
+  await repaint();
+  await expect(page.locator('#train-queue .queue-item').first()).toHaveAttribute('data-tech', 'wovenTunics');
+  await expect(page.locator('#unit-status')).toHaveText(/Researching Woven Tunics/);
+  const scale = await page.evaluate(() => {
+    const w = window as any;
+    const g = w.game;
+    w.dev.fastForward(26);
+    g.world.dispatch({ type: 'research', buildingId: g.world.townCenter.id, tech: 'donkeyPacks' });
+    w.dev.fastForward(51);
+    const unit = [...g.world.units.values()].find((u: any) => u.kind === 'villager' && u.owner === g.world.localPlayer) as any;
+    unit.carry = { type: 'wood', amount: 3 };
+    unit.gatherType = 'wood';
+    unit.state = 'gathering';
+    g.selection.set([unit.id]);
+    return g.views.object.children.find((c: any) => c.userData.entityId === unit.id).getObjectByName('carry-wood').scale.x;
+  });
+  await repaint();
+  await expect(page.locator('#unit-status')).toHaveText('Chopping wood (3/13)');
+  expect(scale ** 3).toBeCloseTo(1.3);
+  expect(errors).toEqual([]);
+});

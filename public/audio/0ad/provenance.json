@@ -1,0 +1,36 @@
+{
+  "upstreamRevision": "61a3b9507d974084e6badb88a0826bd89a6d5b8b",
+  "license": "CC BY-SA 3.0",
+  "author": "Wildfire Games",
+  "composer": "Omri Lahav",
+  "conversion": "ffmpeg: MP3 stereo, 96 kbit/s; no edits or cuts",
+  "tracks": [
+    {
+      "title": "Sunrise",
+      "file": "sunrise.mp3",
+      "source": "https://raw.githubusercontent.com/0ad/0ad/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/audio/music/Sunrise.ogg",
+      "sourceSha256": "5487816dcde1b07cf019c43571fa26f5f264f4139185035bfd0e5ac9e6641b85",
+      "sha256": "7f8120c8393108e39c80c727bd0885f7fcfc7556b84af03acdc7d121c9e7910e",
+      "bytes": 1698865,
+      "seconds": 141.5
+    },
+    {
+      "title": "Peaks of Atlas",
+      "file": "peaks-of-atlas.mp3",
+      "source": "https://raw.githubusercontent.com/0ad/0ad/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/audio/music/Peaks_of_Atlas.ogg",
+      "sourceSha256": "a71c1667f5ea916cdf73f8f80bbf7d9d12c2bed3deb266c92d6da392592f39b5",
+      "sha256": "dad3012f231609b1e3a17b9595c7ba394eb0cb2944859aacc01ec4c3004a84f3",
+      "bytes": 2146506,
+      "seconds": 178.783379
+    },
+    {
+      "title": "Honor Bound (0 A.D. Main Theme)",
+      "file": "honor-bound.mp3",
+      "source": "https://raw.githubusercontent.com/0ad/0ad/61a3b9507d974084e6badb88a0826bd89a6d5b8b/binaries/data/mods/public/audio/music/Honor_Bound.ogg",
+      "sourceSha256": "6fbaf3324cb24c6bfcdca5511ae7f32b093d8325f9818cac07c6b36dff42c434",
+      "sha256": "eb9fb9d1e11d72914ae9f569ab916ba2a4e8898a55a566e8986ae66b762e2b40",
+      "bytes": 1992871,
+      "seconds": 166.0
+    }
+  ]
+}

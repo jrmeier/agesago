@@ -11,6 +11,9 @@ import {
 } from './models';
 import { createSoldier, createTradeCart, projectileGeometry as modelProjectile } from './models';
 import { applyUnitTiers, BASE_TIERS, ownedLambert, sameTiers, Shimmer, type UnitTiers } from './tiers';
+import { createShip } from './navalModels';
+import { isShip } from '../core/units';
+import { createPriest } from './explorationModels';
 import { rubbleGeometry as propsRubble } from './props';
 
 /**
@@ -100,12 +103,15 @@ const sizeScratch = new THREE.Vector3();
 const PENNANT_Y: Record<UnitKind, number> = {
   villager: 0.92,
   scout: 1.62,
+  phalangiteGuard: 1.2, legionary: 1.2, immortal: 1.15, raider: 1.2,
   hoplite: 1.2,
   swordsman: 1.2,
   slinger: 1.12,
   archer: 1.15,
   horseman: 1.7,
   tradeCart: 1.12,
+  priest: 1.4,
+  fishingBoat: 1.3, merchantShip: 2.5, trireme: 1.7, transport: 1.7,
   deer: 1.3,
   boar: 0.8,
   sheep: 0.8,
@@ -346,6 +352,8 @@ export function createUnitAvatar(kind: UnitKind, color: number, seed: number): U
 }
 
 function createBaseAvatar(kind: UnitKind, color: number, seed: number): Omit<UnitAvatar, 'setTiers' | 'shimmer'> {
+  if (isShip(kind)) return fromSoldier(kind, color, seed, createShip as unknown as SoldierFactory);
+  if (kind === 'priest') return fromSoldier(kind, color, seed, createPriest as unknown as SoldierFactory);
   if (kind === 'tradeCart') return fromSoldier(kind, color, seed, createTradeCart as unknown as SoldierFactory);
   if (kind === 'deer' || kind === 'boar' || kind === 'sheep') {
     const model = createAnimal(kind);

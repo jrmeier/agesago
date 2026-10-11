@@ -78,6 +78,10 @@ test('queue cancel, the rally flag, and the idle badge work', async ({ page }, t
   if (phone) await page.touchscreen.tap(town.x, town.y);
   else await page.mouse.click(town.x, town.y);
 
+  // Canvas input is consumed in the next game frame, unlike direct HUD handlers.
+  const clickedFrame = await page.evaluate(() => (window as any).game.renderer.webgl.info.render.frame as number);
+  await page.waitForFunction(frame => (window as any).game.renderer.webgl.info.render.frame > frame, clickedFrame, { timeout: 15_000 });
+
   await expect.poll(() => page.evaluate(() => [...(window as any).game.selection.ids])).toEqual([tc.id]);
 
   // A ground point that is on the map, clear of units, and not covered by a HUD control.
