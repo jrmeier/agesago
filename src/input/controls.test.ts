@@ -166,6 +166,16 @@ describe('orders through overlapping friendly villagers', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   for (const mode of ['desktop', 'touch'] as const) {
+    it(`${mode} assigns construction when a nearby tree overlaps the foundation`, () => {
+      const s = orderScene('house');
+      const tree = { id: 101, kind: 'tree' as const, type: 'wood' as const, pos: { x: 30, z: 27 }, amount: 100, radius: 0.5 };
+      // The tree stands outside the footprint, but its canopy covers the same screen pixel.
+      s.world.nodes.set(tree.id, tree);
+      s.world.events.emit({ type: 'spawned', id: tree.id, kind: tree.kind });
+      s.click(mode);
+      expect(s.commands).toEqual([{ type: 'construct', unitIds: [s.selected.id], buildingId: s.targetId }]);
+    });
+
     for (const target of ['tree', 'farm', 'house'] as const) {
       it(`${mode} orders the ${target} instead of moving or selecting the villager`, () => {
         const s = orderScene(target);

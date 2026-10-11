@@ -227,6 +227,26 @@ describe('build command', () => {
     expect(w.visibility.isVisible(16, 16 + BUILDINGS.house.sight + 1)).toBe(false);
   });
 
+  it('a build order replaces wood gathering and stays assigned until construction finishes', () => {
+    const w = world(layout([{ x: 12, z: 12 }], [{ kind: 'tree', pos: { x: 8, z: 12 }, amount: 100 }]));
+    const [u] = units(w);
+    const tree = [...w.nodes.values()][0];
+    w.dispatch({ type: 'gather', unitIds: [u.id], nodeId: tree.id });
+    run(w, 4);
+    expect(u.carry?.amount).toBeGreaterThan(0);
+    const remainingWood = tree.amount;
+
+    w.dispatch({ type: 'build', unitIds: [u.id], kind: 'house', pos: { x: 16, z: 16 }, rot: 0 });
+    const house = newest(w);
+    expect(u.state).toBe('toBuild');
+    expect(u.gatherNode).toBeNull();
+    expect(w.gatherState.has(u.id)).toBe(false);
+    runUntil(w, () => house.complete);
+    expect(tree.amount).toBe(remainingWood);
+    expect(u.state).toBe('idle');
+    expect(w.buildState.has(u.id)).toBe(false);
+  });
+
   it('progress per second scales as builders^0.75 / buildTime', () => {
     const rate = (n: number) => {
       const starts = Array.from({ length: n }, (_, i) => ({ x: 14 + i * 0.8, z: 13 }));
