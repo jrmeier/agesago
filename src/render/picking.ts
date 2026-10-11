@@ -12,9 +12,10 @@ export const PICK_RANK = {
   townCenter: 1,
 } as const;
 
-/** Orders can reach work targets behind friendly units, while attacks take priority. */
+/** Orders reach foundations through tree canopies and work targets through friendly units. */
 export const ORDER_PICK_RANK = {
-  attack: 4,
+  attack: 5,
+  foundation: 4,
   node: 3,
   workBuilding: 2,
   unit: 1,
