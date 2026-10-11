@@ -48,5 +48,29 @@ All games reached the score cap, with no draws. Five pairing workers ran from
 Hellenes / Persians retains its unchanged baseline 50%. The next global tuning
 increases Hellenes' infantry training bonus from 5% to 7%. All three Hellenic
 pairings will run again; Roman / Persian, Roman / Celt and Persian / Celt results
-remain valid because their civilization data is unchanged. This second rerun
-is pending.
+remain valid because their civilization data is unchanged. The second rerun completed all 60 unique expected games on GitHub runners.
+
+
+## Second tuning: one Celtic pairing still fails
+
+[Raw 60-game Hellenic rerun](verification/civilizations-hellenes-8af05a9.jsonl),
+source `8af05a9`. [Temporary verification run](https://github.com/jrmeier/agesago/actions/runs/38096576652)
+used three isolated Ubuntu / Node 20 jobs with no deployment. All 60 expected
+seed/side IDs were verified, and all games reached the score cap with no draws.
+
+| Pairing | First civ wins | Games | First civ score win rate | 40–60% |
+| --- | ---: | ---: | ---: | --- |
+| Hellenes / Romans | 9 | 20 | 45% | Pass |
+| Hellenes / Persians | 12 | 20 | 60% | Pass |
+| Hellenes / Celts | 7 | 20 | 35% | Fail |
+
+The local attempt on the same source was stopped after nine completed games
+because of host memory churn. Its [nine partial rows](verification/civilizations-local-partial-8af05a9.jsonl)
+are separate from acceptance coverage. All nine overlapping IDs exactly match
+the remote winners, scores, result labels and simulation time, despite the local
+Node 26 / Apple Silicon runtime and remote Node 20 / Linux runtime.
+
+Roman / Persian remains 55%, Roman / Celt 40%, and Persian / Celt 50% from the
+first tuning. The next global adjustment reduces Celts' wood gathering bonus
+from 7% to 6%; all three Celtic pairings will be rerun. Final acceptance remains
+pending.
