@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   tournament:
-    name: Hellenic pairing shard ${{ matrix.shard }}
+    name: Celtic pairing shard ${{ matrix.shard }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -22,7 +22,7 @@ jobs:
       matrix:
         shard: [0, 1, 2]
     env:
-      CIV_BENCH_CIV: hellenes
+      CIV_BENCH_CIV: celts
       CIV_BENCH_SHARDS: 3
       CIV_BENCH_SHARD: ${{ matrix.shard }}
       CIV_BENCH_OUTPUT: ${{ github.workspace }}/civilizations-shard-${{ matrix.shard }}.jsonl
