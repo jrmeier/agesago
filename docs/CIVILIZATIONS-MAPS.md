@@ -18,7 +18,7 @@ architecture changes vertex colours in owned buffers, including upgraded buildin
 | Hellenes | Infantry train 7% faster | Phalangite Guard | Infantry +1 melee armour |
 | Romans | Buildings +3% HP | Legionary | Buildings construct 15% faster |
 | Persians | Villagers gather food 5% faster | Immortal | Villagers and trade carts walk 10% faster |
-| Celts | Villagers gather wood 7% faster | Raider | Wood carry +3, infantry speed +5% |
+| Celts | Villagers gather wood 6% faster | Raider | Wood carry +3, infantry speed +5% |
 
 Map sizes are Small 120, Medium 144, Large 176 and Giant 192 world units square.
 Landscape choices are Mediterranean, Highlands, River Valley, Forest and Islands.
