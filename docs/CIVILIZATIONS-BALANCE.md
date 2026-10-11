@@ -110,3 +110,31 @@ The table validates the specified band under this explicitly capped AI benchmark
 it does not establish a conquest-only win-rate band. No threshold was relaxed,
 and the Persian / Celt draw contributes half a win. This final evidence update
 changes documentation and data only; the tested source table stays at `a95d627`.
+
+## Applicability to the integrated product source
+
+Product source `d2c5eee` has identical `src/core` and `src/ai` trees to `a95d627`,
+but its `src/sim` tree differs. The exact tree match stated above applies to the
+temporary verification helper, not to the entire integrated product. Reviewing
+`git diff a95d627 d2c5eee -- src/sim` found four production changes and accompanying
+tests:
+
+- Exploration points and nearby clearance are added in `mapVariants.ts`.
+  The benchmark calls `generateMap(seed, 2)` with default Large Mediterranean
+  options, which bypasses this generator.
+- Ship spawn positions gain water-cell checks and a corrected fallback.
+  These branches require a ship kind; the benchmark AI trains land units only.
+- Unit death clears naval, boarding and priest orders and ignores already
+  removed units. Those order maps remain empty in this benchmark. Normal land
+  combat resolves targets from the current unit map, stale spatial candidates
+  are filtered, and building occupant deaths recheck that map. The duplicate
+  cargo/resignation death path is unused: this AI has no ships, priests or
+  resignation commands.
+- Victory remains open for a match whose player roster has size one. The
+  benchmark roster has two players throughout, including after defeat.
+
+These reviewed changes do not alter the state transitions exercised by the
+legacy two-player land benchmark, so its retained results apply to the integrated
+source under those conditions. This is a scoped source applicability review,
+not a claim that the simulation trees are identical or that the tournament was
+rerun on `d2c5eee`.
