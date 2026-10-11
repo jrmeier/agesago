@@ -1,0 +1,157 @@
+{
+  "sourceRevision": "a95d627",
+  "helperHead": "10042b9",
+  "games": 120,
+  "coverage": {
+    "mapSeeds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "swappedSides": [
+      false,
+      true
+    ],
+    "uniqueIds": 120
+  },
+  "scoreCapSimMinutes": 30,
+  "score": "villagers + army + completed buildings",
+  "drawCredit": 0.5,
+  "acceptedBand": [
+    0.4,
+    0.6
+  ],
+  "resolutionCounts": {
+    "score-cap": 118,
+    "conquest": 2
+  },
+  "pairings": [
+    {
+      "pair": [
+        "hellenes",
+        "romans"
+      ],
+      "games": 20,
+      "firstWins": 9,
+      "draws": 0,
+      "firstWinRate": 0.45,
+      "passes": true,
+      "sourceRevision": "8af05a9",
+      "runtime": "Ubuntu / Node 20",
+      "workflowRun": 38096576652
+    },
+    {
+      "pair": [
+        "hellenes",
+        "persians"
+      ],
+      "games": 20,
+      "firstWins": 12,
+      "draws": 0,
+      "firstWinRate": 0.6,
+      "passes": true,
+      "sourceRevision": "8af05a9",
+      "runtime": "Ubuntu / Node 20",
+      "workflowRun": 38096576652
+    },
+    {
+      "pair": [
+        "hellenes",
+        "celts"
+      ],
+      "games": 20,
+      "firstWins": 10,
+      "draws": 0,
+      "firstWinRate": 0.5,
+      "passes": true,
+      "sourceRevision": "a95d627",
+      "runtime": "Ubuntu / Node 20",
+      "workflowRun": 38097537489
+    },
+    {
+      "pair": [
+        "romans",
+        "persians"
+      ],
+      "games": 20,
+      "firstWins": 11,
+      "draws": 0,
+      "firstWinRate": 0.55,
+      "passes": true,
+      "sourceRevision": "e943a06",
+      "runtime": "macOS Apple Silicon / Node 26",
+      "workflowRun": null
+    },
+    {
+      "pair": [
+        "romans",
+        "celts"
+      ],
+      "games": 20,
+      "firstWins": 10,
+      "draws": 0,
+      "firstWinRate": 0.5,
+      "passes": true,
+      "sourceRevision": "a95d627",
+      "runtime": "Ubuntu / Node 20",
+      "workflowRun": 38097537489
+    },
+    {
+      "pair": [
+        "persians",
+        "celts"
+      ],
+      "games": 20,
+      "firstWins": 8,
+      "draws": 1,
+      "firstWinRate": 0.425,
+      "passes": true,
+      "sourceRevision": "a95d627",
+      "runtime": "Ubuntu / Node 20",
+      "workflowRun": 38097537489
+    }
+  ],
+  "conquests": [
+    {
+      "id": "persians/celts/5/true",
+      "winner": "celts",
+      "scores": [
+        171,
+        0
+      ],
+      "simSeconds": 1674.0499999990252
+    },
+    {
+      "id": "romans/persians/1/true",
+      "winner": "persians",
+      "scores": [
+        170,
+        1
+      ],
+      "simSeconds": 1606.049999999087
+    }
+  ],
+  "localRemoteOverlap": {
+    "games": 9,
+    "mismatches": 0,
+    "fields": [
+      "winner",
+      "scores",
+      "resolution",
+      "simSeconds"
+    ]
+  },
+  "assembledSha256": "5d211120dd805eee31fc52903db91479b9711b07105b19c1c76abbc71f3f7293",
+  "sourceTrees": {
+    "src/core": "a99451e6ad24be78635c4b95a7463d8ee2902cd1",
+    "src/ai": "e028dfae0025a3e80f17a22f72adb07300dc9ce3",
+    "src/sim": "23509e666890c1e74199132a82b0f81a31d30e5c"
+  }
+}

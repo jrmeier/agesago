@@ -57,3 +57,9 @@ append to the same results file. `CIV_BENCH_CIV=celts` selects all pairings invo
 one civilization for a complete affected-pair rerun after tuning. Comma-separated
 IDs select the union, e.g. `CIV_BENCH_CIV=romans,celts`. Do not infer that this range has passed
 from the existence of the benchmark script; record its actual completed results.
+
+
+[Completed balance evidence](CIVILIZATIONS-BALANCE.md) records the baseline,
+failed tuning rounds, final six passing capped benchmark bands, raw seed/side
+results and conquest/score-cap distinction. Use a fresh benchmark output file after simulation
+or tuning changes; resume a partial file only against the same source.
