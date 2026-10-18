@@ -190,8 +190,13 @@ export class Hud {
       btn?.blur();
       toggleTouchMenu(menu);
     });
+    byId('touch-sheet-close')?.addEventListener('click', () => {
+      const open = touchMenuOpen();
+      closeTouchMenus();
+      if (open) this.menuTabs[open]?.focus({ preventScroll: true });
+    });
     this.buildGrid();
-    this.market = new MarketPanel(world, selection, this.el.panel);
+    this.market = new MarketPanel(world, selection, byId('touch-sheet-content') ?? this.el.panel);
     this.setStock(world.stock, world.pop, world.popCap);
     world.events.on('stockpile', (e) => this.setStock(e.stock, e.pop, e.popCap));
     world.events.on('rejected', (e) => {
@@ -511,15 +516,21 @@ export class Hud {
     this.syncTouchMenus(showBuild, showTrain, showOrders, own.length > 0 && own.every((u) => u.kind === own[0].kind));
   }
 
-  /** Show only the tabs whose sheet has something in it, and the These button for a single kind. */
+  /** Show the available sheets and keep selecting similar units in the common action row. */
   private syncTouchMenus(showBuild: boolean, showTrain: boolean, showOrders: boolean, sameKind: boolean): void {
     setHidden(this.menuTabs.build, !showBuild);
     setHidden(this.menuTabs.train, !showTrain);
     setHidden(this.menuTabs.orders, !showOrders);
     setHidden(this.el.menus, !(showBuild || showTrain || showOrders));
+    const menuCount = String(Number(showBuild) + Number(showTrain) + Number(showOrders));
+    if (this.el.menus && this.el.menus.style.getPropertyValue('--menu-count') !== menuCount) {
+      this.el.menus.style.setProperty('--menu-count', menuCount);
+    }
     const open = touchMenuOpen();
     if ((open === 'build' && !showBuild) || (open === 'train' && !showTrain) || (open === 'orders' && !showOrders)) {
       closeTouchMenus();
+    } else if (open) {
+      setText(byId('touch-sheet-title'), this.menuTabs[open]?.textContent ?? open);
     }
     setHidden(this.el.same, !sameKind);
   }
@@ -573,7 +584,7 @@ export class Hud {
     setHidden(this.el.queue, !panel || (panel.queue <= 0 && !panel.research?.length));
     if (!panel) this.menuTabs.train?.classList.remove('has-new');
     if (panel) {
-      setText(this.menuTabs.train, trainable(panel.kind).length ? 'Train' : 'Research');
+      setText(this.menuTabs.train, panel.kind === 'market' ? 'Trade' : trainable(panel.kind).length ? 'Train' : 'Research');
       this.updateTrainAffordable();
       this.updateResearch(panel);
       this.updateQueue(panel);

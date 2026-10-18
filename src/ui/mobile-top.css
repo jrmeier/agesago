@@ -1,0 +1,149 @@
+/* Touch keeps the battlefield close to the top edge. Match administration lives in Menu. */
+body.touch {
+  --mobile-tap: calc(44px / min(1, var(--ui-scale)));
+  --hud-top-h: calc((max(4px, env(safe-area-inset-top)) + 48px) / min(1, var(--ui-scale)));
+}
+
+body.touch .hud-top {
+  flex-wrap: nowrap;
+  justify-content: stretch;
+  gap: 6px;
+  height: var(--hud-top-h);
+  min-height: var(--hud-top-h);
+  padding: max(4px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) 4px max(6px, env(safe-area-inset-left));
+}
+
+body.touch .hud-top::after,
+body.touch .hud-top > .logo {
+  display: none;
+}
+
+body.touch .hud-top > .match-actions {
+  order: 2;
+  flex: 0 0 var(--mobile-tap);
+  align-self: center;
+}
+
+body.touch #pause-match {
+  width: var(--mobile-tap);
+  height: var(--mobile-tap);
+  min-width: var(--mobile-tap);
+  padding: 0;
+  font-family: var(--text);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+body.touch .hud-top > .resource-bar {
+  order: 1;
+  flex: 1 1 0;
+  align-items: stretch;
+  gap: 3px;
+  height: calc(40px / min(1, var(--ui-scale)));
+  min-width: 0;
+  margin: 0;
+}
+
+body.touch .resource-bar .res {
+  flex: 1 1 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  padding: 2px;
+  font-size: 13px;
+  line-height: 1.1;
+}
+
+body.touch .resource-bar .res > [id^='res-'] {
+  min-width: 0;
+}
+
+body.touch .resource-bar .ricon {
+  width: 15px;
+  height: 15px;
+}
+
+body.touch .resource-bar .res-pop {
+  flex: 1.2 0 auto;
+  min-width: calc(7ch + 6px);
+}
+
+body.touch .resource-bar .res-age {
+  flex: 0 0 22px;
+  padding: 2px;
+}
+
+body.touch .resource-bar .res-age .ricon {
+  display: none;
+}
+
+body.touch #res-age {
+  font-size: 0;
+}
+
+body.touch #res-age::after {
+  content: attr(data-short);
+  font-size: 14px;
+}
+
+.pause-match-actions:empty {
+  display: none;
+}
+
+body.touch .pause-menu .hotkey-sheet {
+  flex: 0 1 auto;
+  max-height: calc((100dvh - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom))) / var(--ui-scale));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+body.touch .pause-match-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+
+body.touch .pause-match-actions > button {
+  position: static;
+  width: auto;
+  height: auto;
+  min-width: var(--mobile-tap);
+  min-height: var(--mobile-tap);
+  padding: 10px 8px;
+  font-family: var(--text);
+  font-size: 16px;
+  line-height: 1.1;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: normal;
+  color: var(--ink-900);
+  background: var(--tile);
+  border: 1px solid var(--ivory-rule);
+  border-radius: var(--r-1);
+  box-shadow: var(--elev-1);
+}
+
+body.touch .pause-match-actions > #resign-btn {
+  color: var(--crimson);
+}
+
+body.touch .pause-match-actions > #save-note {
+  grid-column: 1 / -1;
+  min-height: 0;
+  line-height: 1.3;
+  color: var(--ink-700);
+}
+
+body.touch .pause-menu .endgame-btn {
+  min-width: var(--mobile-tap);
+  min-height: var(--mobile-tap);
+}
+
+@media (max-width: 359px) {
+  body.touch .resource-bar .res {
+    font-size: 12px;
+  }
+}

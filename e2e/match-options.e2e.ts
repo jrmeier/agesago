@@ -13,6 +13,7 @@ test('civilization and map controls launch and resume a small island match on de
   await activate('#title-start');
   await page.waitForFunction(()=>document.documentElement.dataset.mapSize==='small'&&document.documentElement.dataset.civ==='persians'&&document.documentElement.dataset.mapType==='islands');
   await expect(page.locator('canvas').first()).toBeVisible();
+  if(info.project.name==='phone')await activate('#pause-match');
   await activate('#save-copy');await expect(page.locator('#save-note')).toHaveText('Saved');
   await page.goto('/');await page.waitForFunction(()=>document.getElementById('title-screen')?.dataset.resume==='yes');await activate('#title-continue');
   await page.waitForFunction(()=>document.documentElement.dataset.mapSize==='small'&&document.documentElement.dataset.civ==='persians'&&document.documentElement.dataset.mapType==='islands');

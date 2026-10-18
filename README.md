@@ -45,6 +45,10 @@ Then open http://localhost:5173
 | Long-press, then drag | Box-select |
 | **All** / **None** / **View** buttons | Select all / deselect / first-person |
 | **Explore** button / horse button | Auto-explore / jump to scout |
+| **Menu** | Pause, settings, help, save / open, new match, or resign |
+| **Map** | Open or fold the minimap; tap or drag it to move the camera |
+| **Groups** | Open control groups; hold a numbered slot to assign the selection |
+| **Build** / **Train** / **Orders** | Open the selected unit or building's actions; **Close** returns to the map |
 | First-person | Left thumb joystick moves, right side drag looks |
 
 ## Exploration and naval play

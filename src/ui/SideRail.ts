@@ -1,8 +1,7 @@
+import { closeTouchMenus, touchMenuOpen } from './touchMenus';
+
 /** Holding a group button this long (ms) assigns the current selection to it. */
 export const ASSIGN_HOLD_MS = 500;
-/** Group buttons always shown on touch (the rest appear once assigned). */
-const TOUCH_GROUPS = 5;
-
 export interface SideRailHandlers {
   /** Idle-villager button: select and centre the next idle villager. */
   idle(): void;
@@ -23,6 +22,8 @@ export class SideRail {
   private readonly idleCount: HTMLElement | null;
   private readonly bar = document.getElementById('group-bar');
   private readonly buttons: HTMLButtonElement[] = [];
+  private groupToggle: HTMLButtonElement | null = null;
+  private groupsOpen = false;
   private idleShown = -1;
   private sizesKey = '';
   private hold = 0;
@@ -36,6 +37,7 @@ export class SideRail {
       this.on.idle();
     });
     this.rail?.addEventListener('contextmenu', (e) => e.preventDefault());
+    this.createGroupChooser();
     for (let n = 1; n <= 9; n++) this.buttons.push(this.groupButton(n));
     this.bar?.append(...this.buttons);
   }
@@ -51,17 +53,74 @@ export class SideRail {
 
   /** Group sizes, index 0 = group 1. */
   setGroups(sizes: readonly number[]): void {
+    if (this.groupsOpen && document.body?.classList.contains('touch') && touchMenuOpen()) this.setGroupsOpen(false);
     const key = sizes.join(',');
     if (key === this.sizesKey) return;
     this.sizesKey = key;
     this.buttons.forEach((btn, i) => {
       const n = sizes[i] ?? 0;
       btn.classList.toggle('empty', n === 0);
-      btn.classList.toggle('touch-spare', n === 0 && i >= TOUCH_GROUPS);
       const count = btn.querySelector('.group-count');
       if (count) count.textContent = n ? String(n) : '';
       btn.title = n ? `Group ${i + 1}: ${n} — tap to select, twice to centre` : `Group ${i + 1} — hold (or Ctrl+${i + 1}) to assign`;
+      btn.setAttribute('aria-label', n
+        ? `Group ${i + 1}, ${n} unit${n === 1 ? '' : 's'} — tap to select, hold to assign`
+        : `Group ${i + 1}, empty — hold to assign selected units`);
     });
+  }
+
+  /** On touch, empty slots live in a chooser; assigned groups remain quick shortcuts. */
+  private createGroupChooser(): void {
+    if (!this.rail || !this.bar) return;
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'groups-toggle';
+    toggle.innerHTML = '<svg aria-hidden="true"><use href="#i-all"></use></svg><span>Groups</span>';
+    toggle.setAttribute('aria-controls', 'group-bar');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.addEventListener('click', () => {
+      toggle.blur();
+      this.setGroupsOpen(!this.groupsOpen);
+    });
+    this.groupToggle = toggle;
+    this.rail.insertBefore(toggle, this.bar);
+
+    const heading = document.createElement('div');
+    heading.className = 'groups-heading';
+    const title = document.createElement('span');
+    title.textContent = 'Control groups';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'groups-close';
+    close.textContent = 'Close';
+    close.setAttribute('aria-label', 'Close control groups');
+    close.addEventListener('click', () => {
+      this.setGroupsOpen(false);
+      toggle.focus();
+    });
+    heading.append(title, close);
+    const hint = document.createElement('p');
+    hint.className = 'groups-hint';
+    hint.textContent = 'Tap to select. Hold to assign selected units.';
+    this.bar.setAttribute('role', 'group');
+    this.bar.setAttribute('aria-label', 'Control groups');
+    this.bar.append(heading, hint);
+    this.rail.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || !this.groupsOpen) return;
+      e.stopPropagation();
+      this.setGroupsOpen(false);
+      toggle.focus();
+    });
+  }
+
+  private setGroupsOpen(open: boolean): void {
+    if (open && document.body?.classList.contains('touch')) {
+      closeTouchMenus();
+      document.querySelector<HTMLButtonElement>('.minimap:not(.collapsed) .minimap-toggle')?.click();
+    }
+    this.groupsOpen = open;
+    this.rail?.classList.toggle('groups-open', open);
+    this.groupToggle?.setAttribute('aria-expanded', String(open));
   }
 
   private groupButton(n: number): HTMLButtonElement {
@@ -77,7 +136,7 @@ export class SideRail {
       this.hold = window.setTimeout(() => {
         this.swallowClick = true;
         this.on.assign(n);
-        btn.animate([{ transform: 'scale(1.18)' }, { transform: 'scale(1)' }], { duration: 220 });
+        btn.animate?.([{ transform: 'scale(1.18)' }, { transform: 'scale(1)' }], { duration: 220 });
         if ('vibrate' in navigator) navigator.vibrate(15);
       }, ASSIGN_HOLD_MS);
     });
@@ -91,7 +150,9 @@ export class SideRail {
         this.swallowClick = false;
         return;
       }
-      this.on.group(n, e.ctrlKey || e.metaKey || e.altKey);
+      const assign = e.ctrlKey || e.metaKey || e.altKey;
+      this.on.group(n, assign);
+      if (!assign) this.setGroupsOpen(false);
     });
     return btn;
   }

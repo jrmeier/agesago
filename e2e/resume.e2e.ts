@@ -16,6 +16,9 @@ async function boot(page: Page): Promise<string[]> {
 /** A mouse click on the phone project clears `body.touch`. Use a tap there. */
 async function activate(page: Page, selector: string, phone: boolean): Promise<void> {
   const loc = page.locator(selector);
+  if (phone && ['#save-copy', '#open-file', '#new-match'].includes(selector) && !(await loc.isVisible())) {
+    await page.locator('#pause-match').tap();
+  }
   if (phone) await loc.tap();
   else await loc.click();
 }
@@ -29,6 +32,7 @@ test('a save survives reload, a newer file does not replace it, and new match st
   const phone = testInfo.project.name === 'phone';
   const errors = await boot(page);
   if (phone) await expect(page.locator('body')).toHaveClass(/touch/);
+  if (phone) await activate(page, '#pause-match', true);
 
   const save = page.locator('#save-copy');
   const open = page.locator('#open-file');
@@ -44,7 +48,7 @@ test('a save survives reload, a newer file does not replace it, and new match st
   const helpBox = await page.locator('#help-btn').boundingBox();
   const saveBox = await save.boundingBox();
   expect(helpBox && saveBox).toBeTruthy();
-  if (phone) expect(saveBox!.y).toBeGreaterThan(helpBox!.y + helpBox!.height - 2);
+  if (phone) expect(saveBox!.y).toBeLessThan(helpBox!.y);
   else expect(Math.abs(saveBox!.y - helpBox!.y)).toBeLessThan(8);
 
   const covered = await page.evaluate(() =>

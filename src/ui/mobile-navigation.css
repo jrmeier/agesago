@@ -1,0 +1,270 @@
+/* Mobile navigation stays at the edges and expands only when requested. */
+.minimap-toggle-label,
+.groups-toggle,
+.groups-heading,
+.groups-hint {
+  display: none;
+}
+
+body.touch {
+  --mobile-nav-wide: max(64px, calc(64px / var(--ui-scale)));
+}
+
+body.touch .minimap {
+  left: auto;
+  right: var(--edge-r);
+  top: calc(var(--hud-top-h) + 8px);
+  bottom: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--mobile-tap, 44px);
+  gap: 4px;
+  width: max(168px, calc(168px / var(--ui-scale)));
+  padding: 4px;
+  pointer-events: none;
+}
+
+body.touch .minimap.collapsed {
+  width: calc(var(--mobile-nav-wide) + var(--mobile-tap, 44px) + 4px);
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+body.touch .minimap-frame {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-self: end;
+  max-width: min(100%, calc((100dvh / var(--ui-scale) - var(--hud-top-h) - var(--mobile-dock-h, 60px) - var(--mobile-tap, 44px) - 50px) * var(--minimap-aspect, 1)));
+  pointer-events: auto;
+}
+
+body.touch .minimap-bar,
+body.touch .minimap.collapsed .minimap-bar {
+  display: contents;
+}
+
+body.touch .minimap-explored {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  min-height: 18px;
+  padding: 1px 0 0;
+  font-size: 11px;
+  text-align: right;
+}
+
+body.touch .minimap.collapsed .minimap-explored {
+  display: none;
+}
+
+body.touch .minimap-toggle,
+body.touch .minimap.collapsed .minimap-toggle {
+  position: static;
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  justify-self: start;
+  width: auto;
+  min-width: var(--mobile-nav-wide);
+  height: var(--mobile-tap, 44px);
+  padding: 0 5px;
+  border-radius: 9px;
+  pointer-events: auto;
+}
+
+body.touch .minimap-toggle svg,
+body.touch .minimap.collapsed .minimap-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+body.touch .minimap-toggle-label {
+  display: inline;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+body.touch .minimap-scout {
+  position: static;
+  grid-column: 2;
+  grid-row: 1;
+  width: var(--mobile-tap, 44px);
+  height: var(--mobile-tap, 44px);
+  padding: 3px;
+  border-radius: 50%;
+  pointer-events: auto;
+}
+
+body.touch .side-rail {
+  top: calc(var(--hud-top-h) + 8px);
+  left: var(--edge-l);
+  display: grid;
+  grid-template-columns: var(--mobile-tap, 44px) var(--mobile-nav-wide);
+  align-items: start;
+  justify-items: start;
+  gap: 6px;
+  width: calc(var(--mobile-tap, 44px) + var(--mobile-nav-wide) + 6px);
+  max-height: none;
+  overflow: visible;
+  transform: none;
+  pointer-events: none;
+}
+
+body.touch .idle-btn {
+  width: var(--mobile-tap, 44px);
+  height: var(--mobile-tap, 44px);
+}
+
+body.touch .idle-count {
+  right: -4px;
+  bottom: -3px;
+  min-width: 20px;
+  padding: 1px 4px;
+  font-size: 11px;
+}
+
+body.touch .groups-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: var(--mobile-nav-wide);
+  height: var(--mobile-tap, 44px);
+  padding: 3px 6px;
+  color: var(--ivory-100);
+  background: var(--bar);
+  border: 1px solid var(--bronze-600);
+  border-radius: 9px;
+  box-shadow: var(--elev-1);
+  font-size: 11px;
+  font-weight: 800;
+  pointer-events: auto;
+}
+
+body.touch .groups-toggle svg {
+  width: 19px;
+  height: 19px;
+  color: var(--bronze-300);
+}
+
+body.touch .groups-toggle[aria-expanded='true'] {
+  color: var(--ink-900);
+  background: var(--bronze-face);
+}
+
+body.touch .groups-toggle[aria-expanded='true'] svg {
+  color: inherit;
+}
+
+body.touch .group-bar {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, var(--mobile-tap, 44px));
+  gap: 6px;
+  max-height: calc(2 * var(--mobile-tap, 44px) + 6px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  pointer-events: none;
+}
+
+body.touch .side-rail .group-btn {
+  width: var(--mobile-tap, 44px);
+  height: var(--mobile-tap, 44px);
+  min-height: var(--mobile-tap, 44px);
+  flex: none;
+}
+
+body.touch .side-rail .group-btn.empty {
+  display: none;
+}
+
+body.touch .side-rail.groups-open .group-bar {
+  grid-template-columns: repeat(3, minmax(var(--mobile-tap, 44px), 1fr));
+  width: max(182px, calc(182px / var(--ui-scale)));
+  max-height: calc(100dvh / var(--ui-scale) - var(--hud-top-h) - var(--mobile-dock-h, 60px) - var(--mobile-tap, 44px) - 26px);
+  padding: 8px;
+  color: var(--ivory-100);
+  background: var(--bar);
+  border: 1px solid var(--bronze-600);
+  border-radius: 10px;
+  box-shadow: var(--elev-2);
+  pointer-events: auto;
+}
+
+body.touch .side-rail.groups-open .group-btn,
+body.touch .side-rail.groups-open .group-btn.empty {
+  display: flex;
+  width: 100%;
+  opacity: 1;
+}
+
+body.touch .side-rail.groups-open .group-btn.empty .group-num {
+  opacity: 0.7;
+}
+
+body.touch .groups-open .groups-heading {
+  grid-column: 1 / -1;
+  position: sticky;
+  top: -8px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--mobile-tap, 44px);
+  background: var(--bar);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+body.touch .groups-close {
+  min-width: var(--mobile-tap, 44px);
+  min-height: var(--mobile-tap, 44px);
+  padding: 0 4px;
+  color: var(--bronze-300);
+  background: transparent;
+  border: 0;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+body.touch .groups-open .groups-hint {
+  grid-column: 1 / -1;
+  display: block;
+  margin: 0 0 2px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ivory-100);
+}
+
+body.touch .minimap.hidden,
+body.touch.fps-mode .minimap,
+body.touch.fps-mode .side-rail {
+  display: none;
+}
+
+/* Expanded navigation keeps the selection intact and returns its summary on Close. */
+body.touch #hud:has(.side-rail.groups-open) #selection-panel,
+body.touch #hud:has(> .minimap:not(.collapsed):not(.hidden)) #selection-panel {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@media (max-height: 460px) {
+  body.touch .minimap:not(.collapsed) {
+    width: max(144px, calc(144px / var(--ui-scale)));
+  }
+
+  body.touch .side-rail:not(.groups-open) .group-bar {
+    max-height: var(--mobile-tap, 44px);
+  }
+
+  /* Groups stays reachable above action sheets; its assigned shortcuts return on Close. */
+  body.touch:is(.menu-build, .menu-train, .menu-orders) .side-rail:not(.groups-open) .group-bar {
+    display: none;
+  }
+}

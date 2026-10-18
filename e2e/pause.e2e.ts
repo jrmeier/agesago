@@ -63,18 +63,25 @@ test('pause freezes the clock and the speed buttons set 0.5× through 2×', asyn
 
   const box = await pause.boundingBox();
   expect(box && box.width >= (phone ? 44 : 36) && box.height >= (phone ? 44 : 36)).toBe(true);
-  const helpBox = await page.locator('#help-btn').boundingBox();
-  const saveBox = await page.locator('#save-copy').boundingBox();
-  expect(helpBox && saveBox && box).toBeTruthy();
-  if (phone) expect(box!.y).toBeGreaterThan(helpBox!.y + helpBox!.height - 2);
-  else expect(Math.abs(box!.y - helpBox!.y)).toBeLessThan(8);
+  if (phone) {
+    await expect(pause).toHaveAccessibleName('Open game menu');
+    const header = await page.locator('.hud-top').boundingBox();
+    expect(header!.height).toBeLessThanOrEqual(56);
+    for (const id of ['help-btn', 'save-copy', 'open-file', 'new-match', 'resign-btn']) {
+      await expect(page.locator(`#${id}`)).toBeHidden();
+    }
+  } else {
+    const helpBox = await page.locator('#help-btn').boundingBox();
+    expect(helpBox && box).toBeTruthy();
+    expect(Math.abs(box!.y - helpBox!.y)).toBeLessThan(8);
+  }
 
   const covered = await page.evaluate(() =>
     ['#pause-match', '#save-copy', '#pause-resume', '#pause-menu [data-speed="2"]'].filter((sel) => {
       const el = document.querySelector(sel);
       if (!el) return sel;
       const r = el.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) return sel === '#pause-resume' || sel.startsWith('#pause-menu') ? '' : sel;
+      if (r.width === 0 || r.height === 0) return '';
       const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
       return hit === el || el.contains(hit) ? '' : sel;
     }).filter(Boolean),
@@ -87,9 +94,37 @@ test('pause freezes the clock and the speed buttons set 0.5× through 2×', asyn
   await activate(page, '#pause-match', phone);
   await expect(menu).toBeVisible();
   await expect(pause).toHaveAttribute('aria-pressed', 'true');
+  await expect(pause).toHaveAttribute('aria-expanded', 'true');
+  if (phone) {
+    for (const id of ['help-btn', 'save-copy', 'open-file', 'new-match', 'resign-btn']) {
+      const action = page.locator(`#pause-match-actions #${id}`);
+      await expect(action).toBeVisible();
+      const target = await action.boundingBox();
+      expect(target!.width).toBeGreaterThanOrEqual(44);
+      expect(target!.height).toBeGreaterThanOrEqual(44);
+    }
+  }
   const frozen = await simTime(page);
   await page.waitForTimeout(400);
   expect(await simTime(page)).toBe(frozen);
+
+  if (phone) {
+    const chooser = page.waitForEvent('filechooser');
+    await activate(page, '#open-file', true);
+    await (await chooser).setFiles({ name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from('{broken') });
+    await expect(page.locator('#save-note')).toHaveText('That file could not be opened.');
+    await activate(page, '#help-btn', true);
+    await expect(page.locator('#hotkey-help')).toBeVisible();
+    await activate(page, '#hotkey-close', true);
+    await expect(page.locator('#hotkey-help')).toBeHidden();
+    await expect(menu).toBeVisible();
+    await activate(page, '#new-match', true);
+    await expect(page.locator('#new-match-ask')).toBeVisible();
+    await activate(page, '#new-match-no', true);
+    await expect(page.locator('#new-match-ask')).toBeHidden();
+    await expect(menu).toBeVisible();
+    expect(await simTime(page)).toBe(frozen);
+  }
 
   for (const speed of ['0.5', '1', '1.5', '2']) {
     await activate(page, `#pause-menu [data-speed="${speed}"]`, phone);

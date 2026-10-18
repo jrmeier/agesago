@@ -1,0 +1,475 @@
+/* Keep the desktop's single flex row, while allowing a compact touch dock and separate sheet. */
+.selection-summary,
+.selection-actions,
+.touch-sheet,
+.touch-sheet-content {
+  display: contents;
+}
+
+.touch-sheet-header,
+.cmd-label {
+  display: none;
+}
+
+body.touch {
+  --mobile-dock-h: calc((60px + env(safe-area-inset-bottom)) / var(--ui-scale));
+  --dock-target: calc(44.1px / var(--ui-scale));
+}
+
+body.touch .hud-bottom {
+  --lift: 0px;
+  height: var(--mobile-dock-h);
+  padding: calc(8px / var(--ui-scale)) calc(max(8px, env(safe-area-inset-right)) / var(--ui-scale)) calc((8px + env(safe-area-inset-bottom)) / var(--ui-scale)) calc(max(8px, env(safe-area-inset-left)) / var(--ui-scale));
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(8px / var(--ui-scale));
+  background: var(--bar);
+  box-shadow: 0 -1px 0 var(--bronze-800);
+}
+
+body.touch .touch-bar {
+  flex: 0 0 auto;
+  gap: calc(4px / var(--ui-scale));
+}
+
+body.touch .touch-btn {
+  width: var(--dock-target);
+  min-width: var(--dock-target);
+  max-width: none;
+  height: var(--dock-target);
+  flex: none;
+  gap: 0;
+  padding: 0;
+  font-size: 12px;
+  line-height: 14px;
+  box-shadow: none;
+}
+
+body.touch .touch-btn .ticon {
+  width: calc(20px / max(1, var(--ui-scale)));
+  height: calc(20px / max(1, var(--ui-scale)));
+}
+
+body.touch .train-btn {
+  flex: 1 1 0;
+  min-width: min(100px, calc(104px / var(--ui-scale)));
+  max-width: 180px;
+  min-height: var(--dock-target);
+  height: var(--dock-target);
+  margin-left: auto;
+  padding: calc(2px / var(--ui-scale)) calc(6px / var(--ui-scale));
+  gap: 0;
+  justify-content: center;
+  box-shadow: none;
+}
+
+body.touch .train-badge {
+  display: none;
+}
+
+body.touch .train-title {
+  font: 800 13px/15px var(--text);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+body.touch .train-sub {
+  font-size: 12px;
+  line-height: 12px;
+}
+
+body.touch #selection-panel {
+  position: absolute;
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  bottom: calc(100% + 4px);
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  max-height: calc(100dvh / var(--ui-scale) - var(--hud-top-h) - var(--mobile-dock-h) - 12px);
+  padding: 6px;
+  gap: 4px;
+  overflow: visible;
+  transform: none;
+  border-radius: 8px;
+}
+
+body.touch #selection-panel.hidden,
+body.touch.placing #selection-panel {
+  transform: translateY(8px);
+}
+
+body.touch .selection-summary {
+  display: flex;
+  align-items: center;
+  flex: none;
+  min-width: 0;
+  min-height: 50px;
+  gap: 10px;
+  padding: 0 4px;
+}
+
+body.touch .unit-portrait {
+  width: 38px;
+  height: 38px;
+}
+
+body.touch .unit-info {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 6px;
+}
+
+body.touch .unit-info h3 {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 700 15px/18px var(--title);
+  letter-spacing: 0.02em;
+}
+
+body.touch .unit-info p {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+body.touch .unit-hp {
+  grid-column: 1;
+  gap: 5px;
+  margin: 0;
+  min-width: 0;
+}
+
+body.touch .unit-hp-bar {
+  width: 64px;
+  height: 5px;
+}
+
+body.touch .unit-hp-text {
+  font-size: 12px;
+  line-height: 14px;
+}
+
+body.touch .unit-stats {
+  grid-column: 2;
+  margin: 0;
+  gap: 5px;
+}
+
+body.touch .stat-chip {
+  font-size: 11px;
+  line-height: 14px;
+}
+
+body.touch .stat-icon {
+  width: 12px;
+  height: 12px;
+}
+
+body.touch .build-progress {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin-top: 3px;
+}
+
+body.touch .selection-actions {
+  display: flex;
+  align-items: stretch;
+  flex: none;
+  min-width: 0;
+  gap: 4px;
+}
+
+/* Common commands and menu buttons share this row, so "Same type" costs no extra row. */
+body.touch #menu-tabs:not([hidden]) {
+  display: flex;
+  flex: var(--menu-count, 1) 1 0;
+  min-width: 0;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+body.touch .selection-actions > .explore-btn,
+body.touch .selection-actions .menu-tab {
+  flex: 1 1 0;
+  min-width: var(--mobile-tap, 44px);
+  min-height: var(--mobile-tap, 44px);
+  padding: 4px;
+  justify-content: center;
+  font: 800 13px/16px var(--text);
+  letter-spacing: 0;
+  white-space: normal;
+  text-align: center;
+  box-shadow: none;
+}
+
+body.touch .selection-actions .explore-btn .eicon {
+  display: none;
+}
+
+body.touch .selection-actions .explore-btn span {
+  display: inline;
+}
+
+body.touch .selection-actions:has(> #menu-tabs[hidden]):not(:has(> .explore-btn:not([hidden]))) {
+  display: none;
+}
+
+body.touch .touch-sheet {
+  display: none;
+  order: -1;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: -6px -6px 2px;
+  border-bottom: 1px solid var(--ivory-rule);
+}
+
+body.touch:is(.menu-build, .menu-train, .menu-orders) .touch-sheet {
+  display: flex;
+  flex-direction: column;
+}
+
+body.touch .touch-sheet-header:not([hidden]) {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 2px 6px 2px 12px;
+  gap: 8px;
+  border-bottom: 1px solid var(--ivory-rule);
+}
+
+body.touch #touch-sheet-title {
+  font: 700 16px/20px var(--title);
+}
+
+body.touch #touch-sheet-close {
+  flex: none;
+  min-width: 80px;
+  min-height: var(--mobile-tap, 44px);
+  padding: 4px 10px;
+  font: 800 14px/18px var(--text);
+  letter-spacing: 0;
+}
+
+body.touch #touch-sheet-close span {
+  padding-left: 6px;
+  font-size: 20px;
+}
+
+body.touch .touch-sheet-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: min(40dvh / var(--ui-scale), 340px);
+  padding: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+}
+
+body.touch #build-grid,
+body.touch #train-grid {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+}
+
+body.touch .build-btn {
+  min-height: 86px;
+  padding: 6px 3px;
+  gap: 3px;
+}
+
+body.touch .build-name {
+  display: block;
+  font-size: 13px;
+  line-height: 15px;
+  white-space: normal;
+  text-align: center;
+}
+
+body.touch .build-cost {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 5px;
+  font-size: 12px;
+  line-height: 14px;
+}
+
+body.touch .build-icon {
+  width: 24px;
+  height: 24px;
+}
+
+body.touch .train-tile {
+  width: auto;
+  min-width: 0;
+  max-width: none;
+}
+
+body.touch .research-head {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+}
+
+body.touch #train-queue {
+  order: -1;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 8px;
+  padding: 4px;
+  overflow: visible;
+}
+
+body.touch .tech-tip {
+  flex: none;
+}
+
+body.touch .place-btn {
+  min-width: var(--mobile-tap, 44px);
+  min-height: var(--mobile-tap, 44px);
+}
+
+body.touch .queue-item,
+body.touch .queue-item.head {
+  width: var(--mobile-tap, 44px);
+  height: var(--mobile-tap, 44px);
+}
+
+body.touch #command-card {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+}
+
+body.touch #command-card .cmd-sep {
+  display: none;
+}
+
+body.touch #command-card .cmd-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: auto;
+  min-width: var(--mobile-tap, 44px);
+  min-height: 54px;
+  height: auto;
+  padding: 4px;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 16px;
+  text-align: center;
+}
+
+body.touch #command-card .cmd-label {
+  display: block;
+}
+
+body.touch #command-card.no-stances .stance-btn,
+body.touch:not(.menu-build) #build-grid,
+body.touch:not(.menu-train) #train-grid,
+body.touch:not(.menu-train) #train-queue,
+body.touch:not(.menu-train) #market-panel,
+body.touch:not(.menu-orders) #command-card {
+  display: none;
+}
+
+body.touch .market-panel {
+  flex: none;
+  width: 100%;
+  min-width: 0;
+  margin-top: 8px;
+}
+
+body.touch .select-hint {
+  bottom: calc(var(--mobile-dock-h) + 126px);
+}
+
+body.touch .place-bar {
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  bottom: calc(100% + 4px);
+  max-width: none;
+}
+
+/* A horizontal selection row keeps short landscape phones clear of the map. */
+@media (max-height: 500px) and (min-width: 520px) {
+  body.touch #selection-panel {
+    display: grid;
+    grid-template-columns: minmax(210px, 1fr) minmax(0, 1.35fr);
+    gap: 4px 10px;
+    padding: 5px 6px;
+  }
+
+  body.touch .selection-summary {
+    min-height: 48px;
+  }
+
+  body.touch .selection-actions {
+    align-self: center;
+  }
+
+  body.touch .touch-sheet {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    /* Leave the top navigation row exposed above the open sheet. */
+    max-height: calc(100dvh / var(--ui-scale) - var(--hud-top-h) - var(--mobile-dock-h) - 134px);
+    margin: -5px -6px 0;
+  }
+
+  body.touch .touch-sheet-content {
+    max-height: none;
+  }
+
+  body.touch .touch-sheet #build-grid,
+  body.touch .touch-sheet #train-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  body.touch .select-hint {
+    bottom: calc(var(--mobile-dock-h) + 74px);
+  }
+}
+
+/* Very short landscape viewports use the sheet itself until Close returns to the summary. */
+@media (max-height: 360px) and (min-width: 520px) {
+  body.touch:is(.menu-build, .menu-train, .menu-orders) .selection-summary,
+  body.touch:is(.menu-build, .menu-train, .menu-orders) .selection-actions {
+    display: none;
+  }
+
+  body.touch .touch-sheet {
+    max-height: calc(100dvh / var(--ui-scale) - var(--hud-top-h) - var(--mobile-dock-h) - 16px);
+  }
+
+  body.touch:is(.menu-build, .menu-train, .menu-orders) .side-rail,
+  body.touch:is(.menu-build, .menu-train, .menu-orders) .minimap {
+    visibility: hidden;
+  }
+}

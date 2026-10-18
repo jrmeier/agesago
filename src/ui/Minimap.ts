@@ -7,6 +7,7 @@ import { nodeAlpha, paintFog } from './fog';
 import { exploredLabel } from './format';
 import { footprintKey, mapToWorld, renderTerrain, worldToMap, type MapBox } from './minimapMath';
 import { takePings } from './pings';
+import { closeTouchMenus, touchMenuOpen } from './touchMenus';
 
 /** Terrain raster resolution in pixels per world unit. */
 const TERRAIN_PX_PER_UNIT = 2;
@@ -77,7 +78,9 @@ export class Minimap {
     this.root = el('div', 'minimap');
     this.root.dataset.hudInteractive = '';
     this.frame = el('div', 'minimap-frame');
+    this.frame.id = 'minimap-chart';
     this.frame.style.aspectRatio = `${hf.width} / ${hf.depth}`;
+    this.frame.style.setProperty?.('--minimap-aspect', String(hf.width / hf.depth));
     this.frame.setAttribute('role', 'img');
     this.frame.setAttribute('aria-label', 'Map — tap or drag to move the view');
 
@@ -110,9 +113,10 @@ export class Minimap {
 
     this.toggle = el('button', 'minimap-toggle');
     this.toggle.type = 'button';
+    this.toggle.setAttribute('aria-controls', this.frame.id);
     this.toggle.setAttribute('aria-label', 'Hide map');
     this.toggle.setAttribute('aria-expanded', 'true');
-    this.toggle.innerHTML = '<svg aria-hidden="true"><use href="#i-map"></use></svg>';
+    this.toggle.innerHTML = '<svg aria-hidden="true"><use href="#i-map"></use></svg><span class="minimap-toggle-label">Map</span>';
     this.toggle.addEventListener('click', (e) => {
       (e.currentTarget as HTMLElement).blur();
       this.setCollapsed(!this.collapsed);
@@ -141,11 +145,14 @@ export class Minimap {
       this.mode = m;
       this.syncVisibility();
     });
-    this.setCollapsed(false);
+    const touch = document.body?.classList.contains('touch') ||
+      (typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches);
+    this.setCollapsed(!!touch);
   }
 
   /** Call every frame with elapsed seconds; redraws layers as needed. */
   update(time: number): void {
+    if (!this.collapsed && document.body?.classList.contains('touch') && touchMenuOpen()) this.setCollapsed(true);
     this.drawPings();
     if (this.mode !== 'rts' || this.collapsed) return;
     const version = this.world.visibility.version;
@@ -179,10 +186,17 @@ export class Minimap {
   }
 
   private setCollapsed(on: boolean): void {
+    if (!on && document.body?.classList.contains('touch')) {
+      closeTouchMenus();
+      document.querySelector<HTMLButtonElement>('.groups-toggle[aria-expanded="true"]')?.click();
+    }
     this.collapsed = on;
     this.root.classList.toggle('collapsed', on);
     this.toggle.setAttribute('aria-expanded', String(!on));
     this.toggle.setAttribute('aria-label', on ? 'Show map' : 'Hide map');
+    const label = this.toggle.querySelector('.minimap-toggle-label');
+    if (label) label.textContent = on ? 'Map' : 'Close';
+    this.observedW = null;
     this.lastView = '';
     this.lastDynamic = -Infinity;
     this.lastExplored = -Infinity;

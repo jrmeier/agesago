@@ -353,8 +353,10 @@ test('the hotkey sheet fits the viewport and its close button is reachable', asy
   const phone = testInfo.project.name === 'phone';
   if (phone) await page.setViewportSize({ width: 360, height: 800 });
   const errors = await boot(page);
-  if (phone) await page.locator('#help-btn').tap();
-  else await page.locator('#help-btn').click();
+  if (phone) {
+    await page.locator('#pause-match').tap();
+    await page.locator('#help-btn').tap();
+  } else await page.locator('#help-btn').click();
   await expect(page.locator('#hotkey-help')).toBeVisible();
 
   const sheet = await page.locator('#hotkey-help .hotkey-sheet').boundingBox();

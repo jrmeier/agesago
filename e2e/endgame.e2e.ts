@@ -16,6 +16,7 @@ test('resign opens the summary and draws every chart', async ({ page }, testInfo
   const phone = testInfo.project.name === 'phone';
   const errors = await boot(page);
   if (phone) await expect(page.locator('body')).toHaveClass(/touch/);
+  if (phone) await page.locator('#pause-match').tap();
 
   const resign = page.locator('#resign-btn');
   await expect(resign).toBeVisible();

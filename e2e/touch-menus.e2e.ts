@@ -79,12 +79,22 @@ test('phone sheets open from tabs, and a group of units can be selected', async 
   expect(open.name).not.toBe('none');
   expect(open.columns).toBe(3);
 
+  await expect(page.locator('#menu-tabs [data-menu="build"]')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#touch-sheet-title')).toHaveText('Build');
+  await page.locator('#touch-sheet-close').tap();
+  await expect(page.locator('body')).not.toHaveClass(/menu-build/);
+  await expect(page.locator('#build-grid')).toBeHidden();
+  await expect(page.locator('#menu-tabs [data-menu="build"]')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#select-same-btn')).toHaveText('Same type');
+
+  await page.locator('#menu-tabs [data-menu="build"]').tap();
+
   await page.locator('#menu-tabs [data-menu="orders"]').tap();
   await expect(page.locator('body')).not.toHaveClass(/menu-build/);
   await expect(page.locator('#command-card')).toBeVisible();
   await expect(page.locator('#build-grid')).toBeHidden();
 
-  // These: every visible villager, not only the one that was selected.
+  // Same type: every visible villager, not only the one that was selected.
   await page.locator('#select-same-btn').tap();
   await expect.poll(async () => page.evaluate(() => (window as any).game.selection.ids.size)).toBeGreaterThan(1);
 

@@ -162,6 +162,8 @@ export class Game {
   private readonly matchAudio: MatchAudio;
   private readonly matchMusic: MatchMusic;
   private noteTimer = 0;
+  private matchActionObserver: MutationObserver | null = null;
+  private restoreMatchActions: (() => void) | null = null;
   private readonly onResize = () => this.resize();
   private readonly onHide = () => {
     if (document.visibilityState === 'hidden' && this.world.time !== this.savedSimTime) this.remember('quiet');
@@ -565,12 +567,20 @@ export class Game {
     this.controls.hold(on);
     const menu = document.getElementById('pause-menu');
     if (menu) menu.hidden = !on;
+    this.updatePauseButton();
+    if (on) document.getElementById('pause-resume')?.focus();
+    else document.getElementById('pause-match')?.focus();
+  }
+
+  private updatePauseButton(): void {
     const btn = document.getElementById('pause-match');
     if (btn) {
-      btn.textContent = on ? 'Resume' : 'Pause';
-      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      const touch = document.body.classList.contains('touch');
+      btn.textContent = touch ? 'Menu' : this.paused ? 'Resume' : 'Pause';
+      btn.setAttribute('aria-label', this.paused ? 'Resume game' : touch ? 'Open game menu' : 'Pause game');
+      btn.setAttribute('aria-pressed', String(this.paused));
+      btn.setAttribute('aria-expanded', String(this.paused));
     }
-    if (on) document.getElementById('pause-resume')?.focus();
   }
 
   private setSpeed(speed: GameSpeed): void {
@@ -585,11 +595,56 @@ export class Game {
     document.getElementById('pause-match')?.addEventListener('click', () => this.setPaused(!this.paused));
     document.getElementById('pause-resume')?.addEventListener('click', () => this.setPaused(false));
     document.getElementById('pause-menu')?.addEventListener('click', (event) => {
+      // Resign dispatches a simulation command; let the next tick consume it.
+      if ((event.target as Element).closest('#resign-btn')) this.setPaused(false);
       const btn = (event.target as Element).closest<HTMLButtonElement>('[data-speed]');
       if (!btn) return;
       const speed = Number(btn.dataset.speed);
       if (isGameSpeed(speed)) this.setSpeed(speed);
     });
+    this.bindMobileMatchActions();
+  }
+
+  /** Use the same controls and listeners in the touch menu and desktop toolbar. */
+  private bindMobileMatchActions(): void {
+    const actions = document.getElementById('pause-match-actions');
+    if (!actions) return;
+    const controls = ['save-copy', 'open-file', 'new-match', 'help-btn', 'resign-btn', 'save-note']
+      .map((id) => {
+        const el = document.getElementById(id);
+        if (!el) return null;
+        const home = document.createComment(`${id} desktop position`);
+        el.before(home);
+        return { el, home };
+      })
+      .filter((entry): entry is { el: HTMLElement; home: Comment } => entry !== null);
+    let wasTouch: boolean | null = null;
+    const sync = () => {
+      const touch = document.body.classList.contains('touch');
+      if (wasTouch === touch) return;
+      wasTouch = touch;
+      for (const { el, home } of controls) {
+        if (touch) actions.append(el);
+        else home.after(el);
+      }
+      const help = document.getElementById('help-btn');
+      if (help) {
+        help.textContent = touch ? 'Help & controls' : '?';
+        help.setAttribute('aria-label', touch ? 'Help and controls' : 'Hotkeys');
+      }
+      this.updatePauseButton();
+    };
+    sync();
+    this.matchActionObserver = new MutationObserver(sync);
+    this.matchActionObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    this.restoreMatchActions = () => {
+      for (const { el, home } of controls) {
+        home.after(el);
+        home.remove();
+      }
+      const help = document.getElementById('help-btn');
+      if (help) help.textContent = '?';
+    };
   }
 
   private bindResume(failed: boolean): void {
@@ -646,6 +701,8 @@ export class Game {
   }
 
   dispose(): void {
+    this.matchActionObserver?.disconnect();
+    this.restoreMatchActions?.();
     for (const ai of this.ais) ai.dispose();
     this.unsubscribeOnline(); this.online?.dispose(); this.onlineStatus?.remove(); this.perf.dispose();
     this.matchAudio.dispose();

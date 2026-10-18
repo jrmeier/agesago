@@ -154,8 +154,9 @@ kbd {
   pointer-events: none;
   z-index: 10;
   zoom: var(--ui-scale);
-  width: calc(100% / var(--ui-scale));
-  height: calc(100% / var(--ui-scale));
+  /* Percentage dimensions already compensate for zoom on this positioned element. */
+  width: 100%;
+  height: 100%;
 }
 
 /* The selection panel reclaims the minimap column when the map is folded or hidden. */

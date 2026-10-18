@@ -23,6 +23,7 @@ test('the hotkey panel lists the bound keys', async ({ page }, testInfo) => {
   const phone = testInfo.project.name === 'phone';
   const errors = await boot(page);
   if (phone) await expect(page.locator('body')).toHaveClass(/touch/);
+  if (phone) await activate(page, '#pause-match', true);
 
   const help = page.locator('#help-btn');
   await expect(help).toBeVisible();

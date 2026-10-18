@@ -67,6 +67,7 @@ test('the title screen starts a seeded match and continue reopens it', async ({ 
   expect(await page.evaluate(() => location.search)).toBe('?seed=42');
 
   await page.setViewportSize(phone ? { width: 412, height: 915 } : { width: 1280, height: 800 });
+  if (phone) await activate(page, '#pause-match', true);
   await activate(page, '#save-copy', phone);
   await expect(page.locator('#save-note')).toHaveText('Saved');
   await page.goto('/');
