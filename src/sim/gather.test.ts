@@ -3,6 +3,7 @@ import { GRASS_ONLY, type Heightfield, type MapLayout, type SimEvent } from '../
 import { BALANCE } from './balance';
 import { World } from './World';
 import { completeBuilding, layFoundation } from './systems/build';
+import { deserializeWorld, serializeWorld } from './serialize';
 import { nodeApproach, nodeInReach } from './systems/sites';
 
 const DT = 1 / BALANCE.tickRate;
@@ -143,7 +144,9 @@ describe('resource work routes', () => {
     world.dispatch({ type: 'gather', unitIds: [worker.id], nodeId: gold.id });
     expect(worker.gatherNode).toBe(gold.id);
     expect(worker.gatherType).toBe('gold');
-    run(world, 4);
+    const carriedWood = worker.carry!.amount;
+    run(world, 18);
+    expect(world.stock.wood).toBe(carriedWood);
     expect(worker.carry?.type).toBe('gold');
     expect(gold.amount).toBeLessThan(100);
     world.dispatch({ type: 'gather', unitIds: [worker.id], nodeId: tree.id });
@@ -194,5 +197,105 @@ describe('resource work routes', () => {
     expect(worker.path.at(-1)).not.toEqual(shore);
     run(world, 30);
     expect(fish.amount).toBeLessThan(100);
+  });
+});
+
+
+describe('chosen villager jobs', () => {
+  it.each([0, undefined])('loads a legacy farm with food %s and produces without wood', (food) => {
+    const { world, worker } = setup([]);
+    const farm = layFoundation(world, 'farm', { x: 15, z: 20 }, 0, worker.owner);
+    completeBuilding(world, farm);
+    farm.food = food;
+    world.seed = 17;
+    const loaded = deserializeWorld(serializeWorld(world), field());
+    loaded.dispatch({ type: 'gather', unitIds: [worker.id], nodeId: farm.id });
+    run(loaded, 60);
+    expect(loaded.stock.food).toBeGreaterThan(0);
+    expect(loaded.stock.wood).toBe(0);
+    expect(loaded.farmers.get(farm.id)).toBe(worker.id);
+  });
+
+  it('keeps the original work area across depletion, deposits and save/load', () => {
+    const { world, worker } = setup([
+      { kind: 'tree', pos: { x: 15, z: 20 }, amount: 1 },
+      { kind: 'tree', pos: { x: 28, z: 20 }, amount: 1 },
+      { kind: 'tree', pos: { x: 41, z: 20 }, amount: 100 },
+    ]);
+    const [first, second, distant] = [...world.nodes.values()];
+    world.dispatch({ type: 'gather', unitIds: [worker.id], nodeId: first.id });
+    for (let i = 0; i < 2000 && worker.gatherNode !== second.id; i++) world.tick(DT);
+    expect(worker.gatherNode).toBe(second.id);
+    expect(world.gatherState.get(worker.id)?.anchor).toEqual(first.pos);
+    world.seed = 17;
+    const loaded = deserializeWorld(serializeWorld(world), field());
+    run(loaded, 100);
+    expect(loaded.units.get(worker.id)?.state).toBe('idle');
+    expect(loaded.nodes.get(distant.id)?.amount).toBe(100);
+    expect(loaded.stock.wood).toBe(2);
+  });
+
+  it('a food order during wood drop-off replaces the old job and never falls back to wood', () => {
+    const { world, worker } = setup([
+      { kind: 'tree', pos: { x: 15, z: 20 }, amount: 100 },
+      { kind: 'berry', pos: { x: 18, z: 23 }, amount: 2 },
+      { kind: 'berry', pos: { x: 50, z: 23 }, amount: 100 },
+    ]);
+    const [tree, berries, distant] = [...world.nodes.values()];
+    world.dispatch({ type: 'gather', unitIds: [worker.id], nodeId: tree.id });
+    for (let i = 0; i < 1000 && worker.state !== 'toDrop'; i++) world.tick(DT);
+    expect(worker.state).toBe('toDrop');
+    const woodLeft = tree.amount;
+    world.dispatch({ type: 'gather', unitIds: [worker.id], nodeId: berries.id });
+    expect(worker.gatherType).toBe('food');
+    expect(worker.gatherNode).toBe(berries.id);
+    run(world, 100);
+    expect(world.stock.wood).toBe(BALANCE.carryCap);
+    expect(world.stock.food).toBe(2);
+    expect(tree.amount).toBe(woodLeft);
+    expect(distant.amount).toBe(100);
+    expect(worker.state).toBe('idle');
+  });
+
+  it('a group farm order stops excess woodcutters and keeps their cargo', () => {
+    const { world, worker, rejected } = setup([{ kind: 'tree', pos: { x: 15, z: 20 }, amount: 100 }]);
+    const tree = [...world.nodes.values()][0];
+    const other = world.spawnUnit('villager', { x: 20, z: 25 }, worker.owner);
+    const farm = layFoundation(world, 'farm', { x: 25, z: 25 }, 0, worker.owner);
+    completeBuilding(world, farm);
+    world.dispatch({ type: 'gather', unitIds: [worker.id], nodeId: tree.id });
+    run(world, 4);
+    const cargo = { ...worker.carry! };
+    expect(cargo.amount).toBeGreaterThan(0);
+    world.dispatch({ type: 'gather', unitIds: [other.id, worker.id], nodeId: farm.id });
+    expect(world.farmers.get(farm.id)).toBe(other.id);
+    expect(worker.state).toBe('idle');
+    expect(worker.gatherNode).toBeNull();
+    expect(worker.carry).toEqual(cargo);
+    expect(rejected).toContainEqual({ type: 'rejected', reason: 'occupied' });
+    const woodLeft = tree.amount;
+    run(world, 30);
+    expect(tree.amount).toBe(woodLeft);
+    expect(worker.state).toBe('idle');
+  });
+
+  it('construction, movement and stop supersede jobs while preserving cargo', () => {
+    const { world, worker } = setup([{ kind: 'tree', pos: { x: 15, z: 20 }, amount: 100 }]);
+    const tree = [...world.nodes.values()][0];
+    world.dispatch({ type: 'gather', unitIds: [worker.id], nodeId: tree.id });
+    run(world, 4);
+    const cargo = { ...worker.carry! };
+    const house = layFoundation(world, 'house', { x: 25, z: 25 }, 0, worker.owner);
+    world.dispatch({ type: 'construct', unitIds: [worker.id], buildingId: house.id });
+    expect(worker.state).toBe('toBuild');
+    expect(worker.gatherNode).toBeNull();
+    expect(worker.carry).toEqual(cargo);
+    world.dispatch({ type: 'move', unitIds: [worker.id], target: { x: 12, z: 25 } });
+    expect(world.buildState.has(worker.id)).toBe(false);
+    world.dispatch({ type: 'stop', unitIds: [worker.id] });
+    run(world, 40);
+    expect(worker.state).toBe('idle');
+    expect(worker.carry).toEqual(cargo);
+    expect(house.buildProgress).toBe(0);
   });
 });

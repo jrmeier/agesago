@@ -301,6 +301,11 @@
         <path d="M14.6 6.6c1.2-2.6 3.2-3.8 5-3.6-1 .6-2 1.6-2.8 3.4" fill="#c8cbd0" stroke="#3d3a36" stroke-width=".7" stroke-linejoin="round" />
       </symbol>
 
+      <symbol id="i-b-corral" viewBox="0 0 24 24">
+        <path d="M3 7v14M21 7v14M3 11h18M3 18h18" fill="none" stroke="#9b713e" stroke-width="2"/>
+        <ellipse cx="12" cy="11" rx="5" ry="3.5" fill="#eee5cf"/>
+        <circle cx="17" cy="10" r="2" fill="#625342"/>
+      </symbol>
       <symbol id="i-b-farm" viewBox="0 0 24 24">
         <path d="M1.6 16.4 7.4 8.8h9.2l5.8 7.6z" fill="#8f6a38" stroke="#4a3418" stroke-width=".9" stroke-linejoin="round" />
         <path d="M4.6 12.6h14.8M3 14.6h18M6 10.6h12" stroke="#5c3d1a" stroke-width=".8" />
@@ -648,6 +653,7 @@
         <header class="hud-top">
           <button id="help-btn" class="help-btn" type="button" title="Hotkeys (?)" aria-expanded="false" aria-controls="hotkey-help">?</button>
           <div class="match-actions">
+            <button id="camera-cycle" class="match-btn" type="button" data-hud-interactive aria-label="Cycle camera view (F)"><span>Overhead</span> <kbd>F</kbd></button>
             <button id="pause-match" class="match-btn" type="button" title="Pause (Esc)" aria-pressed="false" aria-expanded="false" aria-controls="pause-menu">Pause</button>
             <button id="save-copy" class="match-btn" type="button" title="Save a copy">Save copy</button>
             <button id="open-file" class="match-btn" type="button" title="Open a save file">Open file</button>
@@ -685,9 +691,10 @@
             <kbd>LMB</kbd> select / drag-box &nbsp;·&nbsp; <kbd>A</kbd> all &nbsp;·&nbsp;
             <kbd>RMB</kbd> move / gather / attack &nbsp;·&nbsp; <kbd>Q</kbd> attack-move &nbsp;·&nbsp;
             <kbd>Ctrl+1–9</kbd> group &nbsp;·&nbsp; <kbd>,</kbd> idle &nbsp;·&nbsp; <kbd>.</kbd> scout &nbsp;·&nbsp;
-            <kbd>F</kbd> first-person
+            <kbd>F</kbd> camera views
           </div>
         </header>
+        <p id="camera-status" class="camera-status" role="status" aria-live="polite"></p>
         <!-- Left rail: idle-villager badge and control-group buttons (built by Controls). -->
         <nav id="side-rail" class="side-rail" data-hud-interactive aria-label="Idle villagers and control groups">
           <button id="idle-btn" class="idle-btn" type="button" title="Next idle villager (,)" aria-label="Next idle villager">
@@ -719,6 +726,9 @@
             <button id="explore-btn" class="explore-btn" type="button" aria-pressed="false" title="Explore (E)" hidden>
               <svg class="eicon" aria-hidden="true"><use href="#i-compass" /></svg><span>Explore</span><kbd>E</kbd>
             </button>
+            <button id="gate-livestock-btn" class="explore-btn" type="button" hidden>Allow own livestock passage</button>
+            <button id="tend-livestock-btn" class="explore-btn" type="button" hidden>Assign nearest idle villager</button>
+            <details id="livestock-help" hidden><summary>How to tend livestock</summary><p>Move two owned sheep into the marked pasture. Select a villager, then right-click or tap the corral to tend it, or assign an idle villager here. Build palisades and gates around the pasture to contain animals. Open gates to admit your sheep, then block livestock passage. One present worker breeds up to six and harvests surplus for 60 food, keeping two breeders.</p></details>
             <button id="cancel-build-btn" class="explore-btn cancel-build-btn" type="button" title="Cancel the foundation (refunds its cost)" hidden>
               <svg class="eicon" aria-hidden="true"><use href="#i-none" /></svg><span>Cancel</span>
             </button>
@@ -795,8 +805,8 @@
             <button id="touch-deselect" class="touch-btn rts-only" aria-label="Deselect">
               <svg class="ticon" aria-hidden="true"><use href="#i-none" /></svg><span>None</span>
             </button>
-            <button id="touch-fps" class="touch-btn" aria-label="Toggle first-person view" aria-pressed="false">
-              <svg class="ticon" aria-hidden="true"><use href="#i-eye" /></svg><span>View</span>
+            <button id="touch-fps" class="touch-btn" aria-label="Cycle camera view (F)" aria-pressed="false">
+              <svg class="ticon" aria-hidden="true"><use href="#i-eye" /></svg><span>Overhead</span>
             </button>
           </div>
           <button id="train-btn" class="train-btn">

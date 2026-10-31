@@ -1,10 +1,11 @@
 import type { EntityId, Unit, Vec2 } from '../../core/types';
-import { isShip, UNITS } from '../../core/units';
+import { isAnimal, isShip, UNITS } from '../../core/units';
 import { BALANCE } from '../balance';
 import { NAV_CELL } from '../nav';
 import type { NavGrid, Rect } from '../nav';
 import type { World } from '../World';
 import { closedGates, navFor, routeForUnit } from './passage';
+import { clearEconomyJob } from './gather';
 import { unitSpeed } from './stats';
 import { cancelExplore, settleCancelled } from './explore';
 
@@ -136,11 +137,9 @@ export function orderMove(world: World, unitIds: EntityId[], target: Vec2): void
     const path = slot && routeForUnit(world, u, slot);
     if (!path) return;
     moved++;
+    clearEconomyJob(world, u);
     u.path = path;
-    u.target = null;
-    u.gatherNode = null;
-    u.gatherType = null;
-    world.gatherState.delete(u.id);
+    if (u.kind === 'sheep' && u.owner !== 0) u.leashAnchor = { ...(path.at(-1) ?? u.pos) };
     st.progress.delete(u);
     st.resting.delete(u);
     if (units.length > 1) st.members.set(u, { path, speed, facing: Math.atan2(forward.x, forward.z), slot: path.at(-1) ?? u.pos });
@@ -226,9 +225,11 @@ export function movementSystem(world: World, dt: number): Unit[] {
   const st = steeringOf(world);
   separation(world, st);
   const masks = new Map<number, Rect[]>();
-  const maskFor = (owner: number): Rect[] => {
-    let mask = masks.get(owner);
-    if (!mask) masks.set(owner, (mask = closedGates(world, owner)));
+  const maskFor = (unit: Unit): Rect[] => {
+    const animal = isAnimal(unit.kind);
+    const key = unit.owner * 2 + Number(animal);
+    let mask = masks.get(key);
+    if (!mask) masks.set(key, (mask = closedGates(world, unit.owner, animal)));
     return mask;
   };
   for (const body of st.bodies) {
@@ -250,7 +251,7 @@ export function movementSystem(world: World, dt: number): Unit[] {
         const scale = Math.min(1, speedOf(u, world) / (Math.hypot(vx, vz) || 1));
         const next = rest && d <= 0.001 && !body.pushX && !body.pushZ ? rest.slot
           : { x: u.pos.x + vx * scale * dt, z: u.pos.z + vz * scale * dt };
-        u.pos = safeStep(navFor(world, u), u.pos, next, isShip(u.kind) ? [] : maskFor(u.owner));
+        u.pos = safeStep(navFor(world, u), u.pos, next, isShip(u.kind) ? [] : maskFor(u));
       }
       continue;
     }
@@ -278,7 +279,7 @@ export function movementSystem(world: World, dt: number): Unit[] {
       const cap = Math.min(1, speed * time / (Math.hypot(mx, mz) || 1));
       mx *= cap;
       mz *= cap;
-      const next = safeStep(navFor(world, u), u.pos, finish ? wp : { x: u.pos.x + mx, z: u.pos.z + mz }, isShip(u.kind) ? [] : maskFor(u.owner));
+      const next = safeStep(navFor(world, u), u.pos, finish ? wp : { x: u.pos.x + mx, z: u.pos.z + mz }, isShip(u.kind) ? [] : maskFor(u));
       const advance = Math.hypot(next.x - u.pos.x, next.z - u.pos.z);
       if (advance > 1e-6) u.facing = Math.atan2(next.x - u.pos.x, next.z - u.pos.z);
       u.pos = next;

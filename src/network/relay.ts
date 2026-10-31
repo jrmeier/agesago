@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
-import { HASH_EVERY, TICKS_PER_TURN, validClientMessage, type ClientMessage, type MatchConfig, type ServerMessage, type Turn } from './protocol';
+import { HASH_EVERY, NETWORK_VERSION, TICKS_PER_TURN, validClientMessage, type ClientMessage, type MatchConfig, type ServerMessage, type Turn } from './protocol';
 import { BALANCE } from '../sim/balance';
 
 interface Seat { player: number; name: string; token: string; socket: WebSocket | null; input?: Extract<ClientMessage, { type: 'input' }>; dropped: boolean; timer?: ReturnType<typeof setTimeout> }
@@ -16,7 +16,7 @@ export function createRelayServer(options: RelayOptions = {}) {
   const server = createServer((request, response) => {
     if (request.url !== '/multiplayer/health') { response.writeHead(404); response.end(); return; }
     response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-    response.end(JSON.stringify({ ok: true, protocol: 1, rooms: rooms.size }));
+    response.end(JSON.stringify({ ok: true, protocol: NETWORK_VERSION, rooms: rooms.size }));
   });
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 65536, perMessageDeflate: false });
   const send = (socket: WebSocket | null, message: ServerMessage) => {

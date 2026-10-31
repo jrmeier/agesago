@@ -105,6 +105,11 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     hp: 600,
     armor: { melee: 0, pierce: 7 },
   },
+  corral: {
+    name: 'Corral', size: { w: 8, d: 8 }, cost: { wood: 100 }, buildTime: 25,
+    popBonus: 0, drop: [], walkable: true, buildable: true, sight: 6, hp: 600,
+    armor: { melee: 0, pierce: 0 },
+  },
   farm: {
     name: 'Farm',
     size: { w: 4, d: 4 },
@@ -216,7 +221,6 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     sight: 3,
     hp: 650,
     armor: { melee: 1, pierce: 5 },
-    age: 1,
     gate: true,
   },
   forge: {
@@ -273,7 +277,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   },
 };
 
-/** Food a new farm holds. */
+/** Legacy farm capacity and full crop visual scale; farms no longer deplete. */
 export const FARM_FOOD = 250;
 /** Absolute population ceiling regardless of houses. */
 export const MAX_POP = 200;

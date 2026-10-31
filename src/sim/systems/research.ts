@@ -16,7 +16,7 @@ import { applyResearch } from './upgrades';
 export const MAX_RESEARCH_QUEUE = 5;
 
 /** Building kinds that don't count toward the "two buildings from your current age" rule. */
-const NOT_AGE_BUILDINGS = new Set<BuildingKind>(['townCenter', 'house', 'farm', 'palisade', 'stoneWall', 'gate']);
+const NOT_AGE_BUILDINGS = new Set<BuildingKind>(['townCenter', 'house', 'farm', 'corral', 'palisade', 'stoneWall', 'gate']);
 
 export function ageOf(world: World, owner: PlayerId): Age {
   return world.players.get(owner)?.age ?? 0;

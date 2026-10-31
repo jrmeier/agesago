@@ -160,6 +160,15 @@ export class Input {
     this.touch.endFrame();
   }
 
+  /** Abandon mouse presses across a view change; a later release must not become an RTS order. */
+  cancelPointer(): void {
+    this.buttons.clear();
+    this.drags.clear();
+    this.pressedButtons.clear();
+    this.releasedButtons.clear();
+    this.moveX = this.moveY = this.wheel = 0;
+  }
+
   dispose(): void {
     for (const fn of this.off) fn();
     this.off.length = 0;

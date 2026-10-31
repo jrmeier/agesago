@@ -11,7 +11,7 @@ import { buildingMaxHp, unitMaxHp } from './stats';
  * cache is cleared). Everything else is read live through statOf(), so only stored values need
  * refreshing: maxHp of units and buildings whose hp stat changed, keeping each one's HP ratio
  * (a unit at 50% stays at 50%). Foundations keep their ratio too, so construction still ends
- * at full health. Farm food is not topped up: farmFood upgrades apply to new farms and reseeds.
+ * at full health. Farm work speed is read live, so farming research needs no stored update.
  */
 export function applyResearch(world: World, owner: PlayerId, tech: TechId): void {
   if (!TECHS[tech].effects.some((e) => e.stat === 'hp')) return;

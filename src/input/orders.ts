@@ -71,9 +71,9 @@ export function resolveAttackMove(
 export type OrderBuilding = Pick<Building, 'id' | 'kind' | 'complete' | 'food'>;
 
 /**
- * Villager order onto a building: a foundation → help construct it; a complete farm with
- * food → work it (a 'gather' whose nodeId is the farm); an exhausted farm → 'construct'
- * (reseed); a finished shelter (Town Center, watch tower) → garrison. Anything else
+ * Villager order onto a building: a foundation → help construct it; a complete farm
+ * → work it (a 'gather' whose nodeId is the farm); a finished shelter
+ * (Town Center, watch tower) → garrison. Anything else
  * (e.g. a finished house) is not a building order → null, and the caller falls back to
  * selecting it or a plain move.
  */
@@ -81,10 +81,8 @@ export function resolveBuildingOrder(villagerIds: readonly EntityId[], b: OrderB
   if (!villagerIds.length) return null;
   const unitIds = [...villagerIds];
   if (!b.complete) return { type: 'construct', unitIds, buildingId: b.id };
-  if (b.kind === 'farm') {
-    if (b.food === undefined || b.food > 0) return { type: 'gather', unitIds, nodeId: b.id };
-    return { type: 'construct', unitIds, buildingId: b.id };
-  }
+  if (b.kind === 'farm') return { type: 'gather', unitIds, nodeId: b.id };
+  if (b.kind === 'corral') return { type: 'tend', unitIds, buildingId: b.id };
   if (BUILDINGS[b.kind].garrison) return { type: 'garrison', unitIds, buildingId: b.id };
   return null;
 }

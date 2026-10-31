@@ -142,7 +142,7 @@ export class Economy {
     // Food work still wanted beyond the free farms and berry bushes: fields are needed.
     this.foodGap = want('food');
     let free = 0;
-    for (const b of s.buildings) if (b.kind === 'farm' && b.complete && (b.food ?? 0) > 0 && !this.load.get(b.id)) free++;
+    for (const b of s.buildings) if (b.kind === 'farm' && b.complete && !this.load.get(b.id)) free++;
     for (const { n } of this.shortlist('food', s)) free += Math.max(0, MAX_LOAD.food - (this.load.get(n.id) ?? 0));
     this.foodShort = Math.max(this.foodShort, Math.ceil(this.foodGap - free));
   }
@@ -162,25 +162,16 @@ export class Economy {
   }
 
   private pickSource(v: Unit, type: ResourceType, s: Snapshot): Source | null {
-    const { world, player } = this.c;
     if (type === 'food') {
       let best: Building | null = null;
       let bestD = Infinity;
-      let fallow: Building | null = null;
-      let fallowD = Infinity;
       for (const b of s.buildings) {
         if (b.kind !== 'farm' || !b.complete || (this.load.get(b.id) ?? 0) > 0 || this.skipped(b.id)) continue;
         const d = dist(v.pos, b.pos);
-        if ((b.food ?? 0) > 0) {
-          if (d < bestD) [best, bestD] = [b, d];
-        } else if (d < fallowD) [fallow, fallowD] = [b, d];
+        if (d < bestD) [best, bestD] = [b, d];
       }
       if (best) return best;
-      const berry = this.nearestNode(v, 'food', s);
-      if (berry) return berry;
-      // Reseeding a fallow farm costs a new farm's wood.
-      if (fallow && canAfford(world.stockOf(player), BUILDINGS.farm.cost)) return fallow;
-      return null;
+      return this.nearestNode(v, 'food', s);
     }
     return this.nearestNode(v, type, s);
   }

@@ -333,7 +333,7 @@ test('short landscape sheets leave actions clear of the minimap with 44 px targe
   expect(errors).toEqual([]);
 });
 
-test('first person on a phone hides the map and box tools and keeps View reachable', async ({ page }, testInfo) => {
+test('villager views on a phone hide the map and box tools and keeps View reachable', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone', 'phone layout');
   await page.setViewportSize({ width: 360, height: 800 });
   const errors = await boot(page);
@@ -344,7 +344,14 @@ test('first person on a phone hides the map and box tools and keeps View reachab
 
   const fps = await measure(page);
   expect(fps.minimap).toBeNull();
-  expectUsable(fps, '360 first person');
+  expectUsable(fps, '360 villager POV');
+  await expect(page.locator('body')).toHaveAttribute('data-camera-mode', 'pov');
+  await page.locator('#touch-fps').tap();
+  await expect(page.locator('body')).toHaveAttribute('data-camera-mode', 'third');
+  expectUsable(await measure(page), '360 third-person');
+  await page.locator('#touch-fps').tap();
+  await expect(page.locator('body')).toHaveAttribute('data-camera-mode', 'rts');
+  await expect(page.locator('#touch-box')).toBeVisible();
   expectTouchTargets((await measure(page, '.touch-bar')).controls, '360 first-person touch bar');
   expect(errors).toEqual([]);
 });

@@ -46,8 +46,9 @@ import {
   type PendingHit,
 } from './systems/combat';
 import { exploreSystem, orderExplore, type ExploreState } from './systems/explore';
-import { gatherSystem, orderFarm, orderGather, type GatherState } from './systems/gather';
+import { clearEconomyJob, gatherSystem, orderFarm, orderGather, type GatherState } from './systems/gather';
 import { buildingRect } from './systems/sites';
+import { livestockSystem, orderTend, orderGateLivestock, releaseTending } from './systems/livestock';
 import { movementSystem, orderMove } from './systems/movement';
 import { orderCancelTrain, orderTrain } from './systems/train';
 import { productionSystem } from './systems/production';
@@ -326,6 +327,8 @@ export class World {
       case 'convert':
         orderPriest(this, cmd.unitIds, cmd.type, cmd.targetId, by);
         break;
+      case 'tend': orderTend(this, cmd.unitIds, cmd.buildingId, by); break;
+      case 'gateLivestock': orderGateLivestock(this, cmd.buildingId, cmd.open, by); break;
       case 'move':
         orderMove(this, cmd.unitIds, cmd.target);
         break;
@@ -335,9 +338,9 @@ export class World {
         const landIds = cmd.unitIds.filter(id => !isShip(this.units.get(id)!.kind));
         if (!landIds.length) break;
         cmd = { ...cmd, unitIds: landIds };
-        // A building id means: farm it (or reseed it if fallow), or help build a foundation.
+        // A building id means: farm it, or help build a foundation.
         const b = this.nodes.has(cmd.nodeId) ? undefined : this.buildings.get(cmd.nodeId);
-        if (b && (!b.complete || (b.kind === 'farm' && !(b.food! > 0)))) orderConstruct(this, cmd.unitIds, b.id);
+        if (b && !b.complete) orderConstruct(this, cmd.unitIds, b.id);
         else if (b && b.kind === 'farm') orderFarm(this, cmd.unitIds, b);
         else orderGather(this, cmd.unitIds, cmd.nodeId);
         break;
@@ -364,6 +367,10 @@ export class World {
         orderAttackMove(this, cmd.unitIds, cmd.target);
         break;
       case 'stop':
+        for (const id of cmd.unitIds) {
+          const u = this.units.get(id);
+          if (u) clearEconomyJob(this, u);
+        }
         orderStop(this, cmd.unitIds);
         break;
       case 'stance':
@@ -410,6 +417,11 @@ export class World {
         orderTrade(this, cmd.unitIds, cmd.marketId, by);
         break;
     }
+    // A rejected order keeps the existing job; successful transitions supersede it.
+    if ('unitIds' in cmd) for (const id of cmd.unitIds) {
+      const u = this.units.get(id);
+      if (u?.tendingCorral && u.state !== 'toTend' && u.state !== 'tending') releaseTending(this, [id]);
+    }
   }
 
   /** Strip unit ids the issuer doesn't own. */
@@ -432,6 +444,7 @@ export class World {
     gatherSystem(this, dt, arrived);
     buildSystem(this, dt, arrived);
     // After gather/build so units it sends back to work aren't treated as arrivals this tick.
+    livestockSystem(this, dt);
     wildlifeSystem(this, dt);
     combatSystem(this, dt, arrived);
     exploreSystem(this);

@@ -4,7 +4,7 @@ import { GestureRecognizer, type GestureEvent } from './gestures';
 /** Mouse events this soon after a touch are treated as browser compatibility events and ignored. */
 const COMPAT_MOUSE_MS = 800;
 
-export type TouchMode = 'rts' | 'fps';
+export type TouchMode = 'rts' | 'fps' | 'follow';
 
 /**
  * Claims single-finger touches before gesture recognition (e.g. dragging a placement ghost).
@@ -89,8 +89,9 @@ export class TouchInput implements TouchState {
     if (mode === this.mode) return;
     this.frame.push(...this.recognizer.reset());
     this.fps.reset();
+    this.lookX = this.lookY = 0;
     this.ids.clear();
-    if (this.grabbed !== null) this.grabber?.up();
+    // A mode switch abandons a drag; releasing a wall grab would dispatch a build order.
     this.grabbed = null;
     this.mode = mode;
     this.drawStick();
@@ -163,7 +164,8 @@ export class TouchInput implements TouchState {
     }
     if (this.mode === 'rts') this.frame.push(...this.recognizer.down(e.pointerId, x, y, this.lastTouch));
     else {
-      this.fps.down(e.pointerId, x, y, this.dom.clientWidth || window.innerWidth);
+      // Follow views use the whole canvas for look; no movement joystick.
+      this.fps.down(e.pointerId, x, y, this.mode === 'follow' ? 0 : this.dom.clientWidth || window.innerWidth);
       this.drawStick();
     }
   };

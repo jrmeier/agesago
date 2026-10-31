@@ -2,6 +2,7 @@ import { GAIA, type Unit, type Vec2 } from '../../core/types';
 import { isAnimal, UNITS } from '../../core/units';
 import type { World } from '../World';
 import { orderAttack } from './combat';
+import { closedGates } from './passage';
 
 export const WILDLIFE_LEASH = 5;
 const distance = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -14,7 +15,7 @@ function step(world: World, animal: Unit, goal: Vec2, speed: number, dt: number)
     x: animal.pos.x + (goal.x - animal.pos.x) * fraction,
     z: animal.pos.z + (goal.z - animal.pos.z) * fraction,
   };
-  if (!fraction || !world.nav.isFree(next) || !world.nav.lineOfSight(animal.pos, next)) {
+  if (!fraction || !world.nav.withMask(closedGates(world, animal.owner, true), () => world.nav.isFree(next) && world.nav.lineOfSight(animal.pos, next))) {
     world.setState(animal, 'idle');
     return;
   }
@@ -63,7 +64,8 @@ export function wildlifeSystem(world: World, dt: number): void {
     } else {
       // Every six seconds choose a new interior point without mutable RNG state.
       const angle = animal.id * 2.399963 + Math.floor(world.time / 6) * 1.618034;
-      const goal = { x: home.x + Math.sin(angle) * (WILDLIFE_LEASH - 1), z: home.z + Math.cos(angle) * (WILDLIFE_LEASH - 1) };
+      const radius = animal.kind === 'sheep' && animal.owner !== GAIA ? 1 : WILDLIFE_LEASH - 1;
+      const goal = { x: home.x + Math.sin(angle) * radius, z: home.z + Math.cos(angle) * radius };
       step(world, animal, goal, 0.35, dt);
     }
   }

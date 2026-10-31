@@ -545,7 +545,7 @@ describe('farms', () => {
     const food = w.stock.food;
     runUntil(w, () => w.stock.food > food, 60);
     expect(w.stock.food).toBe(food + BALANCE.carryCap);
-    expect(farm.food).toBeLessThanOrEqual(FARM_FOOD - BALANCE.carryCap);
+    expect(farm.food).toBe(FARM_FOOD);
   });
 
   it('takes one farmer at a time', () => {
@@ -597,26 +597,27 @@ describe('farms', () => {
     expect(u2.gatherNode).toBe(b.id);
   });
 
-  it('depletes to a fallow field, and construct reseeds it for its wood cost', () => {
+  it('produces indefinitely without further wood costs, including exhausted legacy farms', () => {
     const { w, u, farm } = farmWorld();
     runUntil(w, () => farm.complete);
-    farm.food = 4;
-    runUntil(w, () => farm.food === 0);
-    expect(w.buildings.has(farm.id)).toBe(true);
-    runUntil(w, () => u.state === 'idle', 60);
-    expect(w.stock.food).toBe(1000 + 4);
-    const wood = w.stock.wood;
-    w.dispatch({ type: 'construct', unitIds: [u.id], buildingId: farm.id });
-    expect(w.stock.wood).toBe(wood - BUILDINGS.farm.cost.wood!);
-    expect(farm.food).toBe(FARM_FOOD);
-    expect(u.gatherNode).toBe(farm.id);
-    // Not affordable: rejected, nothing changes.
-    farm.food = 0;
+    farm.food = 0; // A legacy exhausted save remains usable.
     w.stock.wood = 0;
+    const food = w.stock.food;
     const log = record(w);
     w.dispatch({ type: 'construct', unitIds: [u.id], buildingId: farm.id });
-    expect(log).toEqual([{ type: 'rejected', reason: 'insufficient-resources' }]);
-    expect(farm.food).toBe(0);
+    expect(u.gatherNode).toBe(farm.id);
+    run(w, 600);
+    expect(w.stock.food - food).toBeGreaterThan(FARM_FOOD);
+    expect(w.stock.wood).toBe(0);
+    expect(w.farmers.get(farm.id)).toBe(u.id);
+    expect(log.filter(e => e.type === 'rejected')).toEqual([]);
+    w.dispatch({ type: 'stop', unitIds: [u.id] });
+    const stoppedFood = w.stock.food;
+    run(w, 30);
+    expect(w.stock.food).toBe(stoppedFood);
+    w.dispatch({ type: 'gather', unitIds: [u.id], nodeId: farm.id });
+    runUntil(w, () => w.stock.food > stoppedFood, 60);
+    expect(w.stock.wood).toBe(0);
   });
 
   it('the farmer drops food at a granary when it is nearer than the TC', () => {

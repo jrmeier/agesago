@@ -80,6 +80,7 @@ export type BuildingKind =
   | 'granary'
   | 'miningCamp'
   | 'farm'
+  | 'corral'
   | 'barracks'
   | 'archeryRange'
   | 'stable'
@@ -205,6 +206,8 @@ export type UnitState =
   | 'gathering'
   | 'toDrop'
   | 'exploring'
+  | 'toTend'
+  | 'tending'
   | 'toBuild'
   | 'building'
   /** Walking into a Town Center or tower. */
@@ -240,6 +243,7 @@ export interface Unit {
   shelter?: EntityId | null;
   /** Wildlife's original home, retained through fleeing and save/load. */
   leashAnchor?: Vec2;
+  tendingCorral?: EntityId;
   /** Trade carts only: the market this cart trades with (its home is the nearest own market). */
   tradeWith?: EntityId;
   /** Relic carried by a priest; dropped on death. */
@@ -282,8 +286,12 @@ export interface Building {
   productionQueue?: ('train' | 'research')[];
   /** Seconds of training completed on the current queue head. */
   progress: number;
-  /** Farms only: food remaining in the field. */
+  /** Legacy farm capacity metadata; completed farms produce indefinitely while staffed. */
   food?: number;
+  /** Gates default to keeping livestock in; people retain owner passage. */
+  livestockOpen?: boolean;
+  breedProgress?: number;
+  harvestProgress?: number;
   /** Where newly trained units go: a point, or an entity (a resource to gather, a building to garrison later). */
   rally?: { pos: Vec2; targetId?: EntityId };
   /** Villagers inside this shelter, in entry order. */
@@ -303,6 +311,8 @@ export type Entity = Unit | ResourceNode | Building;
 // ---- Commands in, events out ----
 
 export type Command =
+  | { type: 'tend'; unitIds: EntityId[]; buildingId: EntityId }
+  | { type: 'gateLivestock'; buildingId: EntityId; open: boolean }
   | { type: 'move'; unitIds: EntityId[]; target: Vec2 }
   | { type: 'gather'; unitIds: EntityId[]; nodeId: EntityId }
   /** Train one unit (default: the building's first trainable kind, e.g. a villager at the TC). */
@@ -398,7 +408,7 @@ export type SimEvent =
   | { type: 'gameOver'; winners: PlayerId[]; reason: 'conquest' | 'resign' }
   /** One of `owner`'s units or buildings was hit by an enemy (for "under attack" alerts). */
   | { type: 'attacked'; owner: PlayerId; id: EntityId; pos: Vec2 }
-  /** A farm's remaining food changed (harvest or reseed); 0 = fallow. */
+  /** Legacy farm food metadata changed; completed farms no longer deplete. */
   | { type: 'farmFood'; id: EntityId; food: number }
   | { type: 'unitState'; id: EntityId; state: UnitState }
   | { type: 'trainProgress'; buildingId: EntityId; queue: number; progress: number; total: number }

@@ -67,6 +67,13 @@ describe('online command relay', () => {
     expect(turn.commands).toContainEqual({ player: 2, command: { type: 'resign' } });
   });
   it('rejects unknown kinds, malformed positions, oversized batches and missing check hashes', () => {
+    for (const request of [
+      { type: 'create', config: { seed: 1, players: 2 }, name: 'Host' },
+      { type: 'join', code: 'ABCDEF', name: 'Guest' },
+    ]) {
+      expect(validClientMessage({ ...request, version: NETWORK_VERSION })).toBe(true);
+      expect(validClientMessage({ ...request, version: 1 })).toBe(false);
+    }
     const input = (commands: unknown[]) => ({ type: 'input', turn: 0, commands });
     expect(validClientMessage(input([{ type: 'build', unitIds: [1], kind: '__proto__', pos: { x: 1, z: 1 }, rot: 0 }]))).toBe(false);
     expect(validClientMessage(input([{ type: 'move', unitIds: [1], target: { x: Infinity, z: 1 } }]))).toBe(false);

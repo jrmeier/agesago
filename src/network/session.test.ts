@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Command } from '../core/types';
 import type { World } from '../sim/World';
 import { relayOverride } from './lobby';
-import type { ClientMessage, ServerMessage } from './protocol';
+import { NETWORK_VERSION, type ClientMessage, type ServerMessage } from './protocol';
 import { NetworkSession } from './session';
 
 /** Transport fixture: exercise the actual session/replay code without timing a live socket. */
@@ -34,7 +34,7 @@ function welcome(socket: Socket): void {
   socket.message({ type: 'welcome', code: 'ABCDEF', player: 1, token, host: true, config, roster: [] });
 }
 function fixture() {
-  const session = new NetworkSession({ type: 'join', version: 1, code: 'ABCDEF', name: 'Host', token });
+  const session = new NetworkSession({ type: 'join', version: NETWORK_VERSION, code: 'ABCDEF', name: 'Host', token });
   sessions.push(session);
   const socket = Socket.all[0]; welcome(socket);
   const dispatch = vi.fn();

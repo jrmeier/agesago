@@ -22,8 +22,7 @@ included, with a typical crew of 6–10 villagers on that resource. Bronze Axe s
 
 - It trains villagers without stopping, up to 70. The Town Center stops only while it researches.
 - It builds houses ahead of population (up to 200), drop sites next to the nearest berries, trees,
-  gold and stone (and moves on as they run out), then farms once the berries are gone. Fallow farms
-  get reseeded.
+  gold and stone (and moves on as they run out), then permanent farms once the berries are gone.
 - It splits villagers by the age it is working toward. The Village Age is 55% food and 45% wood.
   Later ages bring in gold and stone. When a resource runs out within reach, its share goes to the
   other resources.
@@ -52,9 +51,8 @@ payback  = research_time + total_cost / gain   (s)
 
 - `total_cost` adds up every resource at face value.
 - Nodes are topped up so neither arm runs dry, which means the difference comes from the tech alone.
-- Farms never empty during the measurement. Instead each food a farm gives costs its reseed:
-  `net food = food × (1 − farm_wood / food_per_field)`. That's how the farm techs' "+N food per
-  field" counts.
+- Farms cost wood only when first built and produce food indefinitely while staffed. Farm
+  research increases work speed; measured income has no recurring reseeding deduction.
 - Carry and speed techs (Donkey Packs, Ox Carts) are measured on a mixed crew, because they help
   every villager.
 
@@ -74,7 +72,8 @@ or trade carts.
 
 ## Results
 
-`npm run bench:pacing` on lane/balance8 (M8 sim, 70 villagers, standing army).
+Historical results from `npm run bench:pacing` on lane/balance8 (M8 sim, 70 villagers,
+standing army), before permanent farms. Rerun the benchmark for current rates and age times.
 
 ### Age times, seeds 1–5
 

@@ -3260,3 +3260,21 @@ body.touch.menu-train #market-panel {
 
 .title-field select { color: #eee3cc; background: #252e31; border: 1px solid #77715d; padding: .6rem; border-radius: .3rem; width:100%; min-height:44px; font:inherit; }
 #title-setup { max-height:85dvh; overflow:auto; }
+
+/* Corral instructions stay collapsed beside the livestock action on small screens. */
+#livestock-help { max-width: 280px; font-size: 13px; pointer-events: auto; }
+#livestock-help summary { cursor: pointer; padding: 8px; }
+#livestock-help p { margin: 4px 8px; line-height: 1.4; }
+body.touch #livestock-help { flex: 1 1 0; min-width: 0; max-width: none; }
+body.touch #livestock-help summary { min-height: 44px; box-sizing: border-box; }
+body.touch #livestock-help[open] { max-height: 180px; overflow-y: auto; }
+
+/* Camera labels remain visible on desktop and phone; status never intercepts look drags. */
+#camera-cycle { pointer-events: auto; padding: 4px 10px; border-radius: 6px; }
+.camera-status { position: absolute; top: calc(var(--hud-top-h) + 6px); left: 50%; transform: translateX(-50%); z-index: 12; max-width: calc(100% - 24px); margin: 0; padding: 6px 10px; border-radius: 6px; color: var(--ink-100, #fff); background: #1d201de8; text-align: center; font-size: 12px; pointer-events: none; }
+.camera-status:empty { display: none; }
+body.touch #touch-fps { font-size: 10px; letter-spacing: 0; line-height: 1.1; }
+
+body.touch #camera-cycle { display: none; }
+
+body.fps-mode #selection-panel { display: none !important; }

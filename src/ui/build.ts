@@ -6,7 +6,7 @@ export const RESOURCE_ORDER: readonly ResourceType[] = ['food', 'wood', 'gold', 
 
 /**
  * Build-menu hotkeys (KeyboardEvent.code). Chosen not to clash with the RTS keys
- * (A all, T train, E explore, F first person, R rotate while placing, "." scout).
+ * (A all, T train, E explore, F camera views, R rotate while placing, "." scout).
  * The alphabet is full, so the M8 buildings use J and Shift chords: "Shift+KeyM" means
  * Shift+M (Market next to the Mining Camp's M; the Academy pairs with the Forge's J).
  */
@@ -16,6 +16,7 @@ export const BUILD_HOTKEYS: Partial<Record<BuildingKind, string>> = {
   granary: 'KeyG',
   miningCamp: 'KeyM',
   farm: 'KeyP',
+  corral: 'Shift+KeyP',
   barracks: 'KeyB',
   archeryRange: 'KeyY',
   stable: 'KeyK',
@@ -127,11 +128,11 @@ export function constructionLabel(progress: number): string {
 }
 
 /** What a complete building does, for the building panel. `occupants` is how many villagers are inside. */
-export function buildingRole(kind: BuildingKind, food?: number, farmFood?: number, occupants?: number): string {
+export function buildingRole(kind: BuildingKind, _food?: number, _farmFood?: number, occupants?: number, workers?: number): string {
   const spec = BUILDINGS[kind];
+  if (kind === 'corral') return 'A villager breeds two owned sheep and harvests surplus; enclose with palisades and gates';
   if (kind === 'farm') {
-    if (food === undefined) return 'Farm';
-    return food <= 0 ? 'Exhausted — reseed with villagers' : `Food ${Math.floor(food)}${farmFood ? `/${farmFood}` : ''}`;
+    return workers === undefined ? 'Renewable food · 1 villager' : `Renewable food · ${workers}/1 villager assigned`;
   }
   const parts: string[] = [];
   if (kind === 'dock') parts.push('Shoreline shipyard · Fishing, sea trade and transports');

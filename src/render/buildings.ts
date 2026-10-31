@@ -496,6 +496,13 @@ export function buildingModel(kind: BuildingKind, opts?: BuildingModelOptions): 
     parts.push(block([1.7, 0.42, 0.56], 0xd4ccb4, [0, 0.95, 0]));
     parts.push(block([1.78, 0.38, 0.62], STONE, [0, 1.35, 0]));
     for (const x of [-0.66, -0.22, 0.22, 0.66]) parts.push(block([0.3, 0.28, 0.62], 0xb7ad92, [x, 1.68, 0]));
+  } else if (kind === 'corral') {
+    // Corner markers define a pasture; palisades and gates can enclose it.
+    parts.push(block([7.8, 0.04, 7.8], 0x889451, [0, 0.03, 0]));
+    for (const x of [-3.7, 3.7]) for (const z of [-3.7, 3.7])
+      parts.push(block([0.18, 0.9, 0.18], WOOD, [x, 0.45, z]));
+    parts.push(block([1.4, 0.4, 0.6], WOOD, [-2.4, 0.2, -2.8]));
+    parts.push(block([1.2, 0.12, 0.45], 0xd6bb69, [-2.4, 0.45, -2.8]));
   } else if (kind === 'gate') {
     // Two piers and a lintel, leaves swung open along local +z (the passage through the wall).
     for (const x of [-0.72, 0.72]) parts.push(block([0.42, 1.7, 0.72], STONE, [x, 0.85, 0]));

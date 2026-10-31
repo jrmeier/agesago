@@ -12,7 +12,7 @@ const ACTION_LABEL: Record<string, string> = {
   selectAll: 'Select all your units',
   trainVillager: 'Train a villager at the Town Center',
   explore: 'Send selected villagers and scouts to explore',
-  firstPerson: 'Toggle first person',
+  firstPerson: 'Cycle Overhead → Villager POV → Third-person. Follows a selected own villager (or first available); work continues.',
   rotate: 'Rotate the building you are placing',
   attackMove: 'Attack-move',
   stop: 'Stop',
@@ -54,10 +54,13 @@ export function hotkeyHelpRows(): HotkeyRow[] {
     { keys: 'LMB', label: 'Select. Drag a box to select several.' },
     { keys: 'Shift+LMB', label: 'Add to the selection, or keep placing buildings.' },
     { keys: 'RMB', label: 'Move, gather, or attack.' },
+    { keys: 'Corral', label: 'Move two owned sheep into the pasture; order a villager onto it to breed and harvest surplus. Enclose with palisades and gates.' },
+    { keys: 'Gate', label: 'Select a gate and use its livestock passage button. Your people always retain passage.' },
     { keys: 'Ctrl+RMB', label: 'Attack-move along the way.' },
   ];
   return [
     ...mouse,
+    { keys: 'Drag / arrows', label: 'In villager views: look / orbit. On phone, drag anywhere on the scene. Wheel adjusts third-person distance. Return Overhead to issue orders.' },
     ...allHotkeys().map(({ code, action }) => ({
       action,
       keys: hotkeyGlyph(code),

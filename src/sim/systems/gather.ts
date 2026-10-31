@@ -13,7 +13,7 @@ import { buildingRect, inReach, nearestDrop, nodeInReach, nodePath } from './sit
 export interface GatherState {
   /** Seconds accumulated toward the next resource unit. */
   timer: number;
-  /** Position of the node last assigned — the centre of the retarget search. */
+  /** Player-chosen work area; automatic retargets never move this centre. */
   anchor: Vec2;
   /** Drop site the unit is walking to while 'toDrop'. */
   drop?: EntityId;
@@ -39,9 +39,9 @@ export function gatherInterval(world: World, u: Unit, type: ResourceType, farm: 
 /** States in which a farmer keeps its claim on a farm. */
 const FARMING: ReadonlySet<UnitState> = new Set(['toNode', 'gathering', 'toDrop']);
 
-/** A complete farm with food left. */
+/** Completed farms produce indefinitely, including exhausted farms from old saves. */
 export function isWorkableFarm(b: Building | undefined): boolean {
-  return !!b && b.kind === 'farm' && b.complete && (b.food ?? 0) > 0;
+  return !!b && b.kind === 'farm' && b.complete;
 }
 
 /** Nobody but `u` is working `farm` (stale claims — the farmer took another order — are dropped). */
@@ -75,29 +75,30 @@ export function orderGather(world: World, unitIds: EntityId[], nodeId: EntityId)
 
 /**
  * 'gather' on a farm: one villager works a farm at a time. The first villager takes this farm;
- * the rest take the nearest other free farms nearby, or ignore the order if there are none.
+ * the rest take nearby free farms, or stop if none are available.
  */
 export function orderFarm(world: World, unitIds: EntityId[], farm: Building): void {
-  const units = unitIds
+  if (!isWorkableFarm(farm)) {
+    world.events.emit({ type: 'rejected', reason: 'invalid-target' });
+    return;
+  }
+  const units = [...new Set(unitIds)]
     .map((id) => world.units.get(id))
-    .filter((u): u is Unit => !!u && u.kind === 'villager');
+    .filter((u): u is Unit => !!u && u.kind === 'villager' && u.owner === farm.owner);
   const cancelled = cancelExplore(world, units);
-  let sent = 0;
+  let unassigned = 0;
   for (const u of units) {
-    if (farmFree(world, farm, u)) {
-      if (sendToFarm(world, u, farm)) sent++;
-      continue;
-    }
-    for (const f of nearestSources(world, 'food', farm.pos, u)) {
-      if (f.kind === 'farm' && sendToFarm(world, u, f)) {
-        sent++;
-        break;
-      }
+    if (sendToFarm(world, u, farm)) continue;
+    const assigned = nearestSources(world, 'food', farm.pos, u)
+      .some(f => !('type' in f) && f.kind === 'farm' && sendToFarm(world, u, f));
+    // The explicit farm order replaces the old job even when every nearby field is busy.
+    if (!assigned) {
+      goIdle(world, u);
+      unassigned++;
     }
   }
   settleCancelled(world, cancelled);
-  // Nobody took it: the farm is busy (or fallow / unreachable) and no other free farm is near.
-  if (unitIds.length && !sent) world.events.emit({ type: 'rejected', reason: 'occupied' });
+  if (unassigned || (unitIds.length && !units.length)) world.events.emit({ type: 'rejected', reason: 'occupied' });
 }
 
 /** Plain move to the edge of `node` (for units that can't gather). False if unreachable. */
@@ -114,6 +115,7 @@ function walkToNode(world: World, u: Unit, node: ResourceNode): boolean {
 
 /** Assign `node` to `u` and path to its edge (scouts just walk there). False (unit untouched) if unreachable. */
 export function sendToNode(world: World, u: Unit, node: ResourceNode): boolean {
+  if (node.amount <= 0) return false;
   if (u.kind !== 'villager') return walkToNode(world, u, node);
   const path = nodePath(world, u, node);
   if (!path) return false;
@@ -121,22 +123,34 @@ export function sendToNode(world: World, u: Unit, node: ResourceNode): boolean {
   return true;
 }
 
-/** Claim `farm` for `u` and walk onto its near edge. False (unit untouched) if taken, fallow or unreachable. */
+/** Claim `farm` for `u` and walk onto its near edge. False (unit untouched) if taken, incomplete or unreachable. */
 export function sendToFarm(world: World, u: Unit, farm: Building): boolean {
   if (u.kind !== 'villager' || !isWorkableFarm(farm) || !farmFree(world, farm, u)) return false;
   const path = route(world, u.owner, u.pos, farmSpot(u.pos, farm));
-  if (!path) return false;
+  if (!path || !inReach({ ...u, pos: path.at(-1) ?? u.pos }, farm)) return false;
   assign(world, u, farm.id, 'food', farm.pos, path);
-  world.farmers.set(farm.id, u.id);
+  if (u.gatherNode === farm.id) world.farmers.set(farm.id, u.id);
   return true;
 }
 
+/** Release the previous economy job without destroying carried resources. */
+export function clearEconomyJob(world: World, u: Unit): void {
+  if (u.gatherNode !== null && world.farmers.get(u.gatherNode) === u.id) world.farmers.delete(u.gatherNode);
+  u.gatherNode = null;
+  u.gatherType = null;
+  u.target = null;
+  world.gatherState.delete(u.id);
+  world.buildState.delete(u.id);
+}
+
 function assign(world: World, u: Unit, id: EntityId, type: ResourceType, anchor: Vec2, path: Vec2[]): void {
+  clearEconomyJob(world, u);
   u.gatherNode = id;
   u.gatherType = type;
   u.path = path;
   world.gatherState.set(u.id, { timer: 0, anchor: { ...anchor } });
   world.setState(u, 'toNode');
+  if (u.carry && u.carry.amount > 0 && u.carry.type !== type) sendToDrop(world, u);
 }
 
 /** Point inside the field nearest to `from`, BALANCE.farmInset in from the edge. */
@@ -191,16 +205,41 @@ function retarget(world: World, u: Unit): void {
   }
   const anchor = world.gatherState.get(u.id)?.anchor ?? u.pos;
   if (u.gatherType) {
-    for (const s of nearestSources(world, u.gatherType, anchor, u)) if (sendToSource(world, u, s)) return;
+    for (const s of nearestSources(world, u.gatherType, anchor, u)) {
+      if (resumeSource(world, u, s, anchor)) return;
+    }
   }
   goIdle(world, u);
 }
 
+/** Restore interrupted work before depositing, so cargo never erases the chosen job. */
+export function resumeGatherJob(world: World, u: Unit, nodeId: EntityId | null, type: ResourceType, anchor: Vec2): void {
+  u.gatherNode = nodeId;
+  u.gatherType = type;
+  world.gatherState.set(u.id, { timer: 0, anchor: { ...anchor } });
+  const node = nodeId !== null ? world.nodes.get(nodeId) : undefined;
+  const farm = nodeId !== null ? world.buildings.get(nodeId) : undefined;
+  if (farm && isWorkableFarm(farm) && farmFree(world, farm, u)) world.farmers.set(farm.id, u.id);
+  if (u.carry && u.carry.amount > 0 && (u.carry.type !== type || u.carry.amount >= carryCap(world, u, type))) {
+    sendToDrop(world, u);
+    return;
+  }
+  if (node && resumeSource(world, u, node, anchor)) return;
+  if (farm && resumeSource(world, u, farm, anchor)) return;
+  retarget(world, u);
+}
+
+/** Resume the current job without turning an automatic trip into a new work area. */
+function resumeSource(world: World, u: Unit, source: ResourceNode | Building, anchor: Vec2): boolean {
+  if (!sendToSource(world, u, source)) return false;
+  const gs = world.gatherState.get(u.id);
+  if (gs) gs.anchor = { ...anchor };
+  return true;
+}
+
 function goIdle(world: World, u: Unit): void {
+  clearEconomyJob(world, u);
   u.path = [];
-  u.gatherNode = null;
-  u.gatherType = null;
-  world.gatherState.delete(u.id);
   world.setState(u, 'idle');
 }
 
@@ -246,8 +285,11 @@ function gatherTick(world: World, u: Unit, dt: number): void {
   const pos = node ? node.pos : farm!.pos;
   const interval = gatherInterval(world, u, type, !node);
   const cap = carryCap(world, u, type);
-  let amount = node ? node.amount : farm!.food!;
-  if (u.carry && u.carry.type !== type) u.carry = null;
+  let amount = node ? node.amount : Infinity;
+  if (u.carry && u.carry.amount > 0 && u.carry.type !== type) {
+    sendToDrop(world, u);
+    return;
+  }
   let gs = world.gatherState.get(u.id);
   if (!gs) world.gatherState.set(u.id, (gs = { timer: 0, anchor: { ...pos } }));
   if (!(u.carry && u.carry.amount >= cap)) {
@@ -265,11 +307,6 @@ function gatherTick(world: World, u: Unit, dt: number): void {
       world.nodes.delete(node.id);
       world.events.emit({ type: 'removed', id: node.id });
     }
-  } else {
-    // A harvested-out farm stays as a fallow field (food 0) until reseeded.
-    farm!.food = amount;
-    world.events.emit({ type: 'farmFood', id: farm!.id, food: amount });
-    if (amount <= 0) world.farmers.delete(farm!.id);
   }
   if ((u.carry && u.carry.amount >= cap) || amount <= 0) {
     gs.timer = 0;
@@ -312,9 +349,10 @@ function deposit(world: World, u: Unit): void {
     if (u.owner === world.localPlayer) world.emitStock();
   }
   const node = u.gatherNode !== null ? world.nodes.get(u.gatherNode) : undefined;
-  if (node && sendToNode(world, u, node)) return;
+  const anchor = gs?.anchor ?? u.pos;
+  if (node && resumeSource(world, u, node, anchor)) return;
   const farm = farmOf(world, u);
-  if (farm && sendToFarm(world, u, farm)) return;
+  if (farm && resumeSource(world, u, farm, anchor)) return;
   if (farm) world.farmers.delete(farm.id);
   retarget(world, u);
 }

@@ -1,3 +1,4 @@
+import { orderTend } from './livestock';
 import { BUILDINGS } from '../../core/buildings';
 import type { Building, EntityId, PlayerId, ResourceType, Stance, Unit, UnitKind, UnitState, Vec2 } from '../../core/types';
 import { isAnimal, isShip, UNITS } from '../../core/units';
@@ -7,11 +8,10 @@ import type { World } from '../World';
 import { removeBuilding, sendBuilders } from './build';
 import { navFor, route, routeForUnit } from './passage';
 import { cancelExplore, settleCancelled } from './explore';
-import { nearestSources, sendToDrop, sendToFarm, sendToNode, sendToSource } from './gather';
+import { resumeGatherJob, sendToDrop, sendToFarm, sendToNode } from './gather';
 import { formationOffset } from './movement';
 import { siteApproach } from './sites';
 import { playerHasFlag } from './research';
-import { carryCap } from './gather';
 import { armorOf, buildingAttack, damageTo, edgeDistance, isRanged, nearestPoint, unitRadius, unitRange, unitSight, unitSpeed } from './stats';
 
 /** Per-unit combat bookkeeping kept off the frozen Unit shape (created on first engagement). */
@@ -36,6 +36,10 @@ export interface CombatState {
 
 /** A villager running from an attacker, and the work it goes back to. */
 export interface FleeState {
+  /** Original work area; optional for old saves. */
+  anchor?: Vec2;
+  /** Corral to return to, if still owned and unstaffed. */
+  tend?: EntityId;
   node: EntityId | null;
   type: ResourceType | null;
   build: EntityId | null;
@@ -67,7 +71,7 @@ function canAttack(world: World, owner: PlayerId, t: Target, attacker?: Unit): b
 }
 
 /** Work states a passive villager drops to run away when hit. */
-const FLEEING_FROM: ReadonlySet<UnitState> = new Set(['idle', 'toNode', 'gathering', 'toDrop', 'toBuild', 'building']);
+const FLEEING_FROM: ReadonlySet<UnitState> = new Set(['idle', 'toNode', 'gathering', 'toDrop', 'toBuild', 'building', 'toTend', 'tending']);
 
 function stateOf(world: World, u: Unit): CombatState {
   let cs = world.combatState.get(u.id);
@@ -581,7 +585,10 @@ function flee(world: World, v: Unit, from: Vec2): void {
   const path = spot && route(world, v.owner, v.pos, spot);
   if (!path) return;
   const working = v.state !== 'idle';
+  const anchor = world.gatherState.get(v.id)?.anchor;
   world.fleeState.set(v.id, {
+    anchor: anchor ? { ...anchor } : undefined,
+    tend: v.tendingCorral,
     node: working ? v.gatherNode : null,
     type: working ? v.gatherType : null,
     build: working ? (world.buildState.get(v.id) ?? null) : null,
@@ -599,23 +606,23 @@ function flee(world: World, v: Unit, from: Vec2): void {
 function resume(world: World, u: Unit): void {
   const fs = world.fleeState.get(u.id)!;
   world.fleeState.delete(u.id);
+  if (fs.tend !== undefined) {
+    orderTend(world, [u.id], fs.tend, u.owner);
+    if (u.tendingCorral !== undefined) return;
+  }
   const site = fs.build !== null ? world.buildings.get(fs.build) : undefined;
   if (site && !site.complete) {
     sendBuilders(world, [u.id], site);
     if (u.state === 'toBuild') return;
   }
-  if (u.carry && u.carry.amount >= carryCap(world, u, u.carry.type)) {
-    sendToDrop(world, u);
-    return;
-  }
-  if (fs.node !== null) {
-    const node = world.nodes.get(fs.node);
-    if (node && sendToNode(world, u, node)) return;
-    const farm = world.buildings.get(fs.node);
-    if (farm && sendToFarm(world, u, farm)) return;
-  }
   if (fs.type) {
-    for (const s of nearestSources(world, fs.type, u.pos, u)) if (sendToSource(world, u, s)) return;
+    const source = fs.node !== null ? world.get(fs.node) : undefined;
+    const anchor = fs.anchor ?? source?.pos;
+    if (anchor) {
+      resumeGatherJob(world, u, fs.node, fs.type, anchor);
+      return;
+    }
+    // An old save may have neither source nor work area: deposit cargo, then idle.
   }
   if (u.carry && u.carry.amount > 0) sendToDrop(world, u);
 }

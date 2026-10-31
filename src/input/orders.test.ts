@@ -35,7 +35,7 @@ describe('orders onto buildings', () => {
     });
   });
 
-  it('farms a complete farm, and reseeds an exhausted one', () => {
+  it('works every complete farm, including exhausted fields from older saves', () => {
     expect(resolveBuildingOrder([1], { id: 8, kind: 'farm', complete: true, food: 120 })).toEqual({
       type: 'gather',
       unitIds: [1],
@@ -43,9 +43,9 @@ describe('orders onto buildings', () => {
     });
     expect(resolveBuildingOrder([1], { id: 8, kind: 'farm', complete: true })).toMatchObject({ type: 'gather' });
     expect(resolveBuildingOrder([1], { id: 8, kind: 'farm', complete: true, food: 0 })).toEqual({
-      type: 'construct',
+      type: 'gather',
       unitIds: [1],
-      buildingId: 8,
+      nodeId: 8,
     });
   });
 

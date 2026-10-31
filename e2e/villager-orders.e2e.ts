@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-for (const target of ['tree', 'farm', 'foundation', 'foundation-canopy'] as const) {
+for (const target of ['tree', 'farm', 'foundation', 'foundation-canopy', 'farm-canopy'] as const) {
   test(`orders a ${target} through an overlapping friendly villager`, async ({ page }, testInfo) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -47,15 +47,15 @@ for (const target of ['tree', 'farm', 'foundation', 'foundation-canopy'] as cons
         w.nodes.set(id, { id, kind: 'tree', type: 'wood', pos: { ...spot }, amount: 100, radius: 0.5 });
         w.events.emit({ type: 'spawned', id, kind: 'tree' });
       } else {
-        const kind = target === 'farm' ? 'farm' : 'house';
+        const kind = target.startsWith('farm') ? 'farm' : 'house';
         w.buildings.set(id, {
           id, kind, owner: w.localPlayer, pos: { ...spot }, radius: 2, rot: 0,
-          hp: 100, maxHp: 100, complete: target === 'farm', buildProgress: target === 'farm' ? 1 : 0.1,
+          hp: 100, maxHp: 100, complete: target.startsWith('farm'), buildProgress: target.startsWith('farm') ? 1 : 0.1,
           food: 100, queue: 0, progress: 0,
         });
         w.events.emit({ type: 'spawned', id, kind });
       }
-      if (target === 'foundation-canopy') {
+      if (target.endsWith('-canopy')) {
         // Its trunk is outside the house footprint; only the canopy overlaps on screen.
         const treeId = 900_002;
         w.nodes.set(treeId, { id: treeId, kind: 'tree', type: 'wood', pos: { x: spot.x, z: spot.z + 3 }, amount: 100, radius: 0.5 });
@@ -97,12 +97,12 @@ for (const target of ['tree', 'farm', 'foundation', 'foundation-canopy'] as cons
           const worker = g.world.units.get(fixture.overlapId);
           g.world.units.delete(worker.id);
           let behind = g.views.pick(ndc, camera);
-          if (fixture.target === 'foundation-canopy' && behind === 900_002) {
+          if (fixture.target.endsWith('-canopy') && behind === 900_002) {
             const tree = g.world.nodes.get(behind);
             g.world.nodes.delete(tree.id);
             behind = g.views.pick(ndc, camera);
             g.world.nodes.set(tree.id, tree);
-          } else if (fixture.target === 'foundation-canopy') {
+          } else if (fixture.target.endsWith('-canopy')) {
             behind = null;
           }
           g.world.units.set(worker.id, worker);

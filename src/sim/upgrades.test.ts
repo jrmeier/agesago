@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUILDINGS, FARM_FOOD } from '../core/buildings';
+import { BUILDINGS } from '../core/buildings';
 import type { TechId } from '../core/techs';
 import {
   GRASS_ONLY,
@@ -18,7 +18,7 @@ import {
 import { UNITS } from '../core/units';
 import { BALANCE } from './balance';
 import { completeBuilding, layFoundation } from './systems/build';
-import { carryCap } from './systems/gather';
+import { carryCap, gatherInterval } from './systems/gather';
 import { completeResearch, statOf } from './systems/research';
 import { unitRange, unitSight, unitSpeed } from './systems/stats';
 import { AIPlayer } from '../ai/AIPlayer';
@@ -141,20 +141,24 @@ describe('economy techs', () => {
     expect(farmed(['oxPlough'], 120) / farmed([], 120)).toBeGreaterThanOrEqual(1.09);
   });
 
-  it('farm food upgrades apply to new farms and reseeds', () => {
+  it('farm research speeds permanent fields without charging to reuse an exhausted legacy field', () => {
     const world = arena({ tc: { x: 30, z: 30 } });
-    research(world, 1, 'oxPlough');
-    const before = building(world, 'farm', { x: 50, z: 50 });
-    expect(before.food).toBe(FARM_FOOD + 75);
-    research(world, 1, 'ironPloughshare');
-    expect(before.food).toBe(FARM_FOOD + 75); // not topped up
-    const after = building(world, 'farm', { x: 60, z: 50 });
-    expect(after.food).toBe(FARM_FOOD + 200);
-    // Reseed a fallow field.
-    before.food = 0;
+    const farm = building(world, 'farm', { x: 50, z: 50 });
     const v = world.spawnUnit('villager', { x: 50, z: 53 }, 1);
-    world.dispatch({ type: 'gather', unitIds: [v.id], nodeId: before.id });
-    expect(before.food).toBe(FARM_FOOD + 200);
+    let interval = gatherInterval(world, v, 'food', true);
+    for (const tech of ['oxPlough', 'ironPloughshare', 'cropRotation'] as const) {
+      research(world, 1, tech);
+      const next = gatherInterval(world, v, 'food', true);
+      expect(next).toBeLessThan(interval);
+      interval = next;
+    }
+    farm.food = 0;
+    world.stock.wood = 0;
+    world.dispatch({ type: 'gather', unitIds: [v.id], nodeId: farm.id });
+    run(world, 8);
+    expect(v.gatherNode).toBe(farm.id);
+    expect(v.carry?.type).toBe('food');
+    expect(world.stock.wood).toBe(0);
   });
 
   it('Woven Tunics raises villager HP, keeping a wounded villager at the same ratio', () => {

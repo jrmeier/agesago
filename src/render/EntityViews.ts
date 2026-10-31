@@ -34,7 +34,7 @@ import {
   type Sight,
 } from './lastSeen';
 import { HealthBars } from './hpBars';
-import { SpatialInstances } from './instanceChunks';
+import { chunkCoord, SpatialInstances } from './instanceChunks';
 import { berryLodGeometry, goldLodGeometry, stoneLodGeometry, stoneNodeGeometry, treeLodGeometry } from './lod';
 import { createUnitAvatar, type UnitAvatar } from './modelBridge';
 import { applyCarryCapacity, buildingRenderTier, unitTiers } from './tiers';
@@ -118,6 +118,7 @@ const BAR_Y: Record<UnitKind, number> = {
   sheep: 1.3,
 };
 const BUILDING_HEIGHT: Record<BuildingKind, number> = {
+  corral: 1.6,
   townCenter: 4.2,
   house: 2.3,
   storehouse: 2.4,
@@ -158,6 +159,35 @@ export class EntityViews {
   private readonly geometries: Record<NodeKind, THREE.BufferGeometry[]>;
   private readonly lodGeometries: Record<NodeKind, THREE.BufferGeometry>;
   private readonly stumps: SpatialInstances;
+  private cameraHiddenUnit: EntityId | null = null;
+  private readonly cameraRay = new THREE.Raycaster();
+
+  /** Only rendered building geometry can obstruct a follow boom; never reveals hidden structures. */
+  cameraObstacleDistance(from: THREE.Vector3, to: THREE.Vector3): number {
+    const distance = from.distanceTo(to);
+    this.cameraRay.set(from, to.clone().sub(from).normalize());
+    this.cameraRay.near = 0.05;
+    this.cameraRay.far = distance + 0.2;
+    let nearest = Infinity;
+    for (const views of [this.buildingViews, this.memoryViews]) {
+      for (const [id, view] of views) {
+        const kind = this.world.buildings.get(id)?.kind ?? this.lastSeen.get(id)?.kind;
+        if (kind && BUILDINGS[kind].walkable) continue;
+        if (!view.object.visible || view.object.position.distanceTo(from) > distance + 12) continue;
+        view.object.updateWorldMatrix(true, true);
+        const hit = this.cameraRay.intersectObject(view.object, true)[0];
+        if (hit) nearest = Math.min(nearest, hit.distance);
+      }
+    }
+    return nearest;
+  }
+
+  /** Local camera presentation only; never changes fog or unit state. */
+  setCameraHiddenUnit(id: EntityId | null): void {
+    this.cameraHiddenUnit = id;
+    this.refreshUnitVisibility();
+  }
+
   private readonly villagers = new Map<EntityId, UnitView>();
   private readonly pools = new Map<string, SpatialInstances>();
   private readonly nodePool = new Map<EntityId, SpatialInstances>();
@@ -336,6 +366,8 @@ export class EntityViews {
   pick(ndc: THREE.Vector2, camera: THREE.Camera, intent: PickIntent = 'select'): EntityId | null {
     this.prepareCamera(camera);
     const hits: PickCandidate[] = [];
+    const raycaster = intent === 'order' ? new THREE.Raycaster() : null;
+    raycaster?.setFromCamera(ndc, camera);
     for (const unit of this.world.units.values()) {
       if (!this.unitShown(unit)) continue;
       const size = this.sizeOf.get(unit.id);
@@ -348,7 +380,13 @@ export class EntityViews {
       if (this.concealed(node.pos.x, node.pos.z)) continue;
       const size = this.sizeOf.get(node.id);
       if (!size) continue;
-      this.consider(hits, camera, ndc, node.id, intent === 'select' ? PICK_RANK.node : ORDER_PICK_RANK.node, node.pos.x, node.pos.z, size);
+      const rank = intent === 'select' ? PICK_RANK.node
+        : node.kind === 'tree' ? ORDER_PICK_RANK.tree : ORDER_PICK_RANK.node;
+      const before = hits.length;
+      this.consider(hits, camera, ndc, node.id, rank, node.pos.x, node.pos.z, size);
+      // A canopy-sized rectangle includes empty ground beside the trunk. Keep the
+      // forgiving selection bounds, but wood orders must hit the displayed tree.
+      if (raycaster && node.kind === 'tree' && hits.length > before && !this.treeHit(node, raycaster)) hits.pop();
     }
     for (const building of this.world.buildings.values()) {
       if (!this.buildingTargetable(building)) continue;
@@ -546,7 +584,7 @@ export class EntityViews {
     visual.object.userData.entityId = building.id;
     this.poseBuilding(visual, building.kind, building.pos, building.rot);
     visual.setProgress(building.buildProgress, building.complete);
-    if (building.kind === 'farm') visual.setFarmFood(building.food ?? (building.complete ? FARM_FOOD : 0));
+    if (building.kind === 'farm') visual.setFarmFood(building.complete ? FARM_FOOD : 0);
     this.applyBuildingShadows(visual.object);
     this.object.add(visual.object);
     this.buildingViews.set(building.id, visual);
@@ -708,8 +746,7 @@ export class EntityViews {
       this.poseBuilding(view, building.kind, building.pos, building.rot);
       view.setProgress(building.buildProgress, building.complete);
       if (building.kind === 'farm') {
-        const food = building.food !== undefined ? building.food : building.complete ? FARM_FOOD : 0;
-        view.setFarmFood(food);
+        view.setFarmFood(building.complete ? FARM_FOOD : 0);
       }
       const showBar = !building.complete || this.selected.has(building.id);
       view.setBar(showBar, building.buildProgress, camera);
@@ -799,6 +836,20 @@ export class EntityViews {
     this.markerMat.opacity = 0.95 * (1 - k);
     this.markerMesh.position.set(this.markerPos.x, this.groundY(this.markerPos.x, this.markerPos.z) + 0.08, this.markerPos.z);
     this.markerMesh.visible = true;
+  }
+
+  /** Narrow phase for tree orders, using the same instance transform and LOD as rendering. */
+  private treeHit(node: ResourceNode, raycaster: THREE.Raycaster): boolean {
+    const { cx, cz } = chunkCoord(node.pos.x, node.pos.z);
+    const chunk = this.nodePool.get(node.id)?.chunks.get(`${cx}:${cz}`);
+    const index = chunk?.indexOf.get(node.id);
+    if (!chunk || index === undefined) return false;
+    const rendered = chunk.farLod ? chunk.far : chunk.near;
+    const mesh = new THREE.Mesh(rendered.geometry, this.material);
+    mesh.matrixWorld.copy(chunk.bases[index]);
+    const hits: THREE.Intersection[] = [];
+    mesh.raycast(raycaster, hits);
+    return hits.length > 0;
   }
 
   private consider(
@@ -978,7 +1029,7 @@ export class EntityViews {
 
   /** Local units always draw. Everyone else draws only in a currently visible cell. Garrisoned units are inside. */
   private unitShown(unit: Unit): boolean {
-    if (unit.state === 'garrisoned') return false;
+    if (unit.state === 'garrisoned' || unit.id === this.cameraHiddenUnit) return false;
     return unitMayShow(unit.owner === this.world.localPlayer, this.cellSight(unit.pos.x, unit.pos.z));
   }
 

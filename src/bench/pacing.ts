@@ -3,7 +3,7 @@ import { TECHS, type Age, type TechId } from '../core/techs';
 import type { Building, BuildingKind, ResourceNode, ResourceType, Stockpile, Unit, Vec2 } from '../core/types';
 import { BALANCE } from '../sim/balance';
 import { generateMap } from '../sim/mapgen';
-import { completeBuilding, farmFood, layFoundation } from '../sim/systems/build';
+import { completeBuilding, layFoundation } from '../sim/systems/build';
 import { farmFree } from '../sim/systems/gather';
 import { completeResearch, researchBlock } from '../sim/systems/research';
 import { EXPLORED } from '../sim/visibility';
@@ -490,15 +490,10 @@ class BuildOrder {
       }
     }
     const farms = this.mine('farm').sort((a, b) => dist(a.pos, u.pos) - dist(b.pos, u.pos));
-    const free = farms.find((f) => f.complete && (f.food ?? 0) > 0 && farmFree(this.world, f, u));
+    const free = farms.find((f) => f.complete && farmFree(this.world, f, u));
     if (free) {
       this.world.dispatch({ type: 'gather', unitIds: [u.id], nodeId: free.id }, ME);
       return u.gatherNode === free.id;
-    }
-    const fallow = farms.find((f) => f.complete && !(f.food! > 0) && farmFree(this.world, f, u));
-    if (fallow && this.stock.wood >= BUILDINGS.farm.cost.wood!) {
-      this.world.dispatch({ type: 'gather', unitIds: [u.id], nodeId: fallow.id }, ME);
-      return u.gatherNode === fallow.id;
     }
     const foundation = farms.find((f) => !f.complete && ![...this.world.buildState.values()].includes(f.id));
     if (foundation) {
@@ -579,7 +574,7 @@ export function runPacing(seed: number, opts: PacingOptions = {}, inspect?: (w: 
 // Economy-tech payback: a controlled experiment on the same map
 // ------------------------------------------------------------------------------------------
 
-/** Where a scenario puts its workers. 'farm' = one villager per farm, reseeding as they run out. */
+/** Where a scenario puts its workers. 'farm' = one villager per permanent farm. */
 export type WorkSite = 'wood' | 'gold' | 'stone' | 'berry' | 'farm';
 
 export interface EcoTechCase {
@@ -616,10 +611,9 @@ export interface RateOptions {
 }
 
 /**
- * Net resources per second a crew brings in on map `seed` with `techs` researched: deposits
- * minus the wood farms cost to reseed (charged per food: farm wood ÷ food per field). Nodes and
- * fields are topped up so nothing runs dry mid-measurement: both arms work the same spots and the
- * difference is the tech alone.
+ * Resources per second a crew brings in on map `seed` with `techs` researched.
+ * Nodes are topped up so nothing runs dry mid-measurement; farms are permanent.
+ * Both arms work the same spots and the difference is the tech alone.
  */
 export function crewRate(seed: number, techs: TechId[], crew: EcoTechCase['crew'], opts: RateOptions = {}): number {
   const warmup = opts.warmup ?? 30;
@@ -654,8 +648,6 @@ export function crewRate(seed: number, techs: TechId[], crew: EcoTechCase['crew'
     if (site === 'farm') {
       const granary = place('granary', tc.pos, 6, 16, 2);
       const farms = Array.from({ length: n }, () => place('farm', granary.pos, 3, 16, 1.5));
-      // Fields never run out; reseeding is charged per food below instead (smooth, no 60-wood steps).
-      for (const f of farms) f.food = 100000;
       const vs = spawn(n, granary);
       vs.forEach((v, i) => world.dispatch({ type: 'gather', unitIds: [v.id], nodeId: farms[i].id }, ME));
       continue;
@@ -671,12 +663,10 @@ export function crewRate(seed: number, techs: TechId[], crew: EcoTechCase['crew'
     vs.forEach((v, i) => world.dispatch({ type: 'gather', unitIds: [v.id], nodeId: near[i % near.length].id }, ME));
   }
 
-  // A farm's food costs its reseed: farm wood / food per field (which the farm techs raise).
-  const seedCost = crew.farm ? BUILDINGS.farm.cost.wood! / farmFood(world, ME) : 0;
   let got = 0;
   let measuring = false;
-  const tick = tickGathered(world, ME, (r, k) => {
-    if (measuring) got += r === 'food' ? k * (1 - seedCost) : k;
+  const tick = tickGathered(world, ME, (_r, k) => {
+    if (measuring) got += k;
   });
   const perSecond = Math.round(1 / DT);
   const steps = Math.round((warmup + window) / DT);

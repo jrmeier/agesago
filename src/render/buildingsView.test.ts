@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { BUILDINGS, FARM_FOOD } from '../core/buildings';
 import { GRASS_ONLY, type Building, type BuildingKind, type Heightfield, type ResourceNode, type Vec2 } from '../core/types';
 import { World } from '../sim/World';
-import { CROP_RIPE, CROP_THIN, footprintMinY, GHOST_INVALID, GHOST_VALID, SOIL_FALLOW, SOIL_TILLED } from './buildingVisuals';
+import { CROP_RIPE, footprintMinY, GHOST_INVALID, GHOST_VALID, SOIL_TILLED } from './buildingVisuals';
 import { EntityViews } from './EntityViews';
 import { CHUNK_SIZE } from './instanceChunks';
 
@@ -158,7 +158,7 @@ describe('buildings, ghost and picking', () => {
     expect(tower.id).not.toBe(forge.id);
   });
 
-  it('tracks farm crops with food remaining and goes fallow at zero', () => {
+  it('keeps permanent farms planted even with exhausted legacy food values', () => {
     const world = makeWorld(field(() => 1));
     const views = new EntityViews(world);
     const farm = place(world, 'farm', { x: 40, z: 24 }, 0, true, 1, FARM_FOOD);
@@ -173,19 +173,19 @@ describe('buildings, ghost and picking', () => {
 
     farm.food = FARM_FOOD / 2;
     views.sync(0, 0.1, camera);
-    expect(crops.scale.y).toBeCloseTo(0.5, 5);
+    expect(crops.scale.y).toBeCloseTo(1, 5);
     expect((crops.children[0] as THREE.Mesh).material).toBeTruthy();
     const cropMat = (crops.children[0] as THREE.Mesh).material as THREE.MeshLambertMaterial;
     expect(cropMat.color.getHex()).toBe(CROP_RIPE);
 
     farm.food = FARM_FOOD * 0.2;
     views.sync(0, 0.2, camera);
-    expect(cropMat.color.getHex()).toBe(CROP_THIN);
+    expect(cropMat.color.getHex()).toBe(CROP_RIPE);
 
     farm.food = 0;
     views.sync(0, 0.3, camera);
-    expect(crops.visible).toBe(false);
-    expect((soil.material as THREE.MeshLambertMaterial).color.getHex()).toBe(SOIL_FALLOW);
+    expect(crops.visible).toBe(true);
+    expect((soil.material as THREE.MeshLambertMaterial).color.getHex()).toBe(SOIL_TILLED);
   });
 
   it('shows and hides a tinted placement ghost on the terrain', () => {

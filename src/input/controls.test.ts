@@ -10,7 +10,7 @@ import { type CameraRig } from '../camera/CameraRig';
 import { classifyRelease, Controls, rectBetween, resolveLongPress } from './Controls';
 import { DRAG_THRESHOLD_PX, exceedsDragThreshold, LMB, RMB, type Input } from './Input';
 import { type GestureEvent } from './gestures';
-import { pickGround, pickGround3 } from './pickGround';
+import { pickGround, pickGround3, screenRay } from './pickGround';
 import { testField } from './testField';
 
 describe('click vs drag', () => {
@@ -152,7 +152,7 @@ function orderScene(target: 'tree' | BuildingKind) {
   const commands: Command[] = [];
   vi.spyOn(world, 'dispatch').mockImplementation((cmd) => { commands.push(cmd); });
   return {
-    world, views, camera, ndc, selected, overlapping, targetId, selection, commands,
+    world, views, camera, ndc, point, selected, overlapping, targetId, selection, commands,
     click(mode: 'desktop' | 'touch' | 'select') {
       if (mode === 'touch') gestures.push({ type: 'tap', ...point });
       else button = mode === 'desktop' ? RMB : LMB;
@@ -174,6 +174,51 @@ describe('orders through overlapping friendly villagers', () => {
       s.world.events.emit({ type: 'spawned', id: tree.id, kind: tree.kind });
       s.click(mode);
       expect(s.commands).toEqual([{ type: 'construct', unitIds: [s.selected.id], buildingId: s.targetId }]);
+    });
+
+    it(`${mode} assigns a completed farm through a nearer tree canopy`, () => {
+      const s = orderScene('farm');
+      const tree = { id: 101, kind: 'tree' as const, type: 'wood' as const, pos: { x: 30, z: 27 }, amount: 100, radius: 0.5 };
+      s.world.nodes.set(tree.id, tree);
+      s.world.events.emit({ type: 'spawned', id: tree.id, kind: tree.kind });
+      s.world.units.delete(s.overlapping.id);
+      // Selection still sees the tree rectangle, but a work order must reach the farm.
+      expect(s.views.pick(s.ndc, s.camera)).toBe(tree.id);
+      s.click(mode);
+      expect(s.commands).toEqual([{ type: 'gather', unitIds: [s.selected.id], nodeId: s.targetId }]);
+    });
+
+    it(`${mode} moves on empty ground inside a tree bounding rectangle`, () => {
+      const s = orderScene('tree');
+      s.world.units.delete(s.overlapping.id);
+      // The wide lower corner is empty: the canopy is high above the narrow trunk.
+      const p = new THREE.Vector3(30.8, 1.1, 24).project(s.camera);
+      s.ndc.set(p.x, p.y);
+      s.point.x = (p.x + 1) * 400;
+      s.point.y = (1 - p.y) * 400;
+      expect(s.views.pick(s.ndc, s.camera)).toBe(s.targetId);
+      s.click(mode);
+      const ground = pickGround(screenRay(s.camera, s.point.x, s.point.y, 800, 800), s.world.hf);
+      expect(s.commands).toEqual([{ type: 'move', unitIds: [s.selected.id], target: ground }]);
+    });
+
+    it(`${mode} gathers berries through a tree canopy`, () => {
+      const s = orderScene('tree');
+      const tree = s.world.nodes.get(s.targetId)!;
+      const berry = { id: 102, kind: 'berry' as const, type: 'food' as const, pos: { ...tree.pos }, amount: 100, radius: 0.5 };
+      s.world.nodes.set(berry.id, berry);
+      s.world.events.emit({ type: 'spawned', id: berry.id, kind: berry.kind });
+      s.click(mode);
+      expect(s.commands).toEqual([{ type: 'gather', unitIds: [s.selected.id], nodeId: berry.id }]);
+    });
+
+    it(`${mode} still gathers when directly clicking a tree crown`, () => {
+      const s = orderScene('tree');
+      const p = new THREE.Vector3(30, 3, 24).project(s.camera);
+      s.point.x = (p.x + 1) * 400;
+      s.point.y = (1 - p.y) * 400;
+      s.click(mode);
+      expect(s.commands).toEqual([{ type: 'gather', unitIds: [s.selected.id], nodeId: s.targetId }]);
     });
 
     for (const target of ['tree', 'farm', 'house'] as const) {

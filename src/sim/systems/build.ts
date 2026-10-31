@@ -17,7 +17,7 @@ import { BALANCE } from '../balance';
 import { rectApproach, rectDistance, type Rect } from '../nav';
 import type { World } from '../World';
 import { cancelExplore, settleCancelled } from './explore';
-import { isWorkableFarm, nearestSources, orderFarm, sendToFarm, sendToSource } from './gather';
+import { clearEconomyJob, nearestSources, orderFarm, sendToFarm, sendToSource } from './gather';
 import { route } from './passage';
 import { buildingRect, footprintRect, inReach, snapRot } from './sites';
 import { wallSegments } from './walls';
@@ -31,7 +31,7 @@ export function ageLocked(world: World, kind: BuildingKind, by: PlayerId): boole
   return (BUILDINGS[kind].age ?? 0) > ageOf(world, by);
 }
 
-/** Food a new or reseeded farm of `owner` holds (FARM_FOOD plus research). */
+/** Legacy food metadata for new farms; permanent production does not consume this value. */
 export function farmFood(world: World, owner: PlayerId): number {
   return Math.round(buildingStat(world, owner, 'farm', 'farmFood', FARM_FOOD));
 }
@@ -246,10 +246,8 @@ export function sendBuilders(world: World, unitIds: EntityId[], b: Building): vo
     const path = route(world, u.owner, u.pos, builderSpot(b, c, i));
     if (!path) return;
     sent++;
+    clearEconomyJob(world, u);
     u.path = path;
-    u.gatherNode = null;
-    u.gatherType = null;
-    world.gatherState.delete(u.id);
     world.buildState.set(u.id, b.id);
     world.setState(u, 'toBuild');
   });
@@ -257,14 +255,10 @@ export function sendBuilders(world: World, unitIds: EntityId[], b: Building): vo
   if (unitIds.length && !sent) reject(world, 'unreachable');
 }
 
-/**
- * 'construct' command: help build a foundation. On a complete farm it means "farm it"; on a
- * fallow farm (food 0) it reseeds: pays the farm's cost again, refills it to FARM_FOOD at once,
- * and the first villager starts farming.
- */
+/** Help build a foundation, or staff a completed permanent farm. */
 export function orderConstruct(world: World, unitIds: EntityId[], buildingId: EntityId): void {
   const b = world.buildings.get(buildingId);
-  // Only the owner's villagers build, farm or reseed it.
+  // Only the owner's villagers build or farm it.
   unitIds = unitIds.filter((id) => world.units.get(id)?.owner === b?.owner);
   if (!b || !unitIds.length) {
     reject(world, 'invalid-target');
@@ -277,22 +271,6 @@ export function orderConstruct(world: World, unitIds: EntityId[], buildingId: En
   if (b.kind !== 'farm') {
     reject(world, 'invalid-target');
     return;
-  }
-  if (!isWorkableFarm(b)) {
-    const villagers = unitIds.some((id) => world.units.get(id)?.kind === 'villager');
-    if (!villagers) {
-      reject(world, 'invalid-target');
-      return;
-    }
-    const cost = BUILDINGS.farm.cost;
-    if (!affordable(world, cost, b.owner)) {
-      reject(world, 'insufficient-resources');
-      return;
-    }
-    pay(world, cost, 1, b.owner);
-    b.food = farmFood(world, b.owner);
-    world.events.emit({ type: 'farmFood', id: b.id, food: b.food });
-    world.emitStock();
   }
   orderFarm(world, unitIds, b);
 }

@@ -5,7 +5,8 @@ import { TECHS } from '../core/techs';
 import type { Command } from '../core/types';
 import { UNITS } from '../core/units';
 
-export const NETWORK_VERSION = 1;
+/** Permanent farms and livestock change deterministic simulation and command support. */
+export const NETWORK_VERSION = 2;
 export const TICKS_PER_TURN = 4;
 export const HASH_EVERY = 25;
 export const MAX_COMMANDS = 64;
@@ -47,7 +48,8 @@ export function validCommand(v: unknown): v is Command {
     case 'stance': return ids(v.unitIds) && ['aggressive', 'defensive', 'standGround', 'passive'].includes(String(v.stance));
     case 'train': return id(v.buildingId) && (v.unit === undefined || typeof v.unit === 'string' && Object.hasOwn(UNITS, v.unit));
     case 'cancelTrain': case 'cancelResearch': return id(v.buildingId) && index(v.index);
-    case 'construct': case 'garrison': return ids(v.unitIds) && id(v.buildingId);
+    case 'gateLivestock': return id(v.buildingId) && typeof v.open === 'boolean';
+    case 'tend': case 'construct': case 'garrison': return ids(v.unitIds) && id(v.buildingId);
     case 'cancelBuild': case 'ungarrison': return id(v.buildingId);
     case 'resign': case 'townBell': return true;
     case 'rally': return id(v.buildingId) && point(v.pos) && (v.targetId === undefined || id(v.targetId));

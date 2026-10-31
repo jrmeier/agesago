@@ -6,6 +6,7 @@ import type { Selection } from '../game/Selection';
 import { shownSelection, sightFromState, stepLastSeen, type LastSeenBuilding } from '../render/lastSeen';
 import { BALANCE } from '../sim/balance';
 import { productionOrder } from '../sim/productionQueue';
+import { corralSheep, corralWorker, HERD_CAP } from '../sim/systems/livestock';
 import { carryCap } from '../sim/systems/gather';
 import { trainTime } from '../sim/systems/train';
 import { ageBuildings, ageBuildingsNeeded, researchBlock, statOf } from '../sim/systems/research';
@@ -560,6 +561,7 @@ export class Hud {
 
   /** Building panel: foundation progress, training grid + queue for own trainers, role text. */
   private updateBuilding(b: Building | undefined, own: Building | undefined): void {
+    this.updateLivestock(own);
     const foundation = !!own && !own.complete;
     const shelter = !!own && own.complete && (BUILDINGS[own.kind].garrison ?? 0) > 0;
     setHidden(this.el.progress, !foundation);
@@ -599,6 +601,12 @@ export class Hud {
       setText(this.el.status, constructionLabel(b.buildProgress));
       const w = `${(Math.min(1, Math.max(0, b.buildProgress)) * 100).toFixed(1)}%`;
       if (this.progressFill && this.progressFill.style.width !== w) this.progressFill.style.width = w;
+    } else if (b.kind === 'corral' && own) {
+      const worker = corralWorker(this.world, b);
+      const count = corralSheep(this.world, b).length;
+      setText(this.el.status, `${count}/${HERD_CAP} sheep · ${!worker ? 'Assign a villager' : worker.state === 'toTend' ? 'Worker arriving' : count < 2 ? 'Needs two owned sheep' : 'Breeding & harvesting surplus'}`);
+    } else if (b.kind === 'gate') {
+      setText(this.el.status, b.livestockOpen ? 'Your livestock may pass' : 'Livestock blocked · your people may pass');
     } else if (panel && panel.research?.length && productionOrder(panel)[0] === 'research') {
       setText(this.el.status, researchLabel(panel.research[0], panel.researchProgress ?? 0, panel.research.length));
     } else if (trainer && b.queue > 0) {
@@ -606,7 +614,35 @@ export class Hud {
       const total = head ? trainTime(this.world, b, head) : BALANCE.trainTime;
       setText(this.el.status, trainLabel(b.queue, b.progress, total, 0, true));
     } else {
-      setText(this.el.status, buildingRole(b.kind, b.food, FARM_FOOD, b.occupants?.length ?? 0));
+      const farmer = own ? this.world.units.get(this.world.farmers.get(b.id) ?? -1) : undefined;
+      const staffed = farmer?.gatherNode === b.id && ['toNode', 'gathering', 'toDrop'].includes(farmer.state);
+      setText(this.el.status, buildingRole(b.kind, b.food, FARM_FOOD, b.occupants?.length ?? 0, own ? (staffed ? 1 : 0) : undefined));
+    }
+  }
+
+  /** Plain buttons remain available in the summary on desktop and touch. */
+  private updateLivestock(b: Building | undefined): void {
+    const gate = document.getElementById('gate-livestock-btn') as HTMLButtonElement | null;
+    const tend = document.getElementById('tend-livestock-btn') as HTMLButtonElement | null;
+    const note = document.getElementById('livestock-help');
+    const isGate = b?.kind === 'gate' && b.complete;
+    const isCorral = b?.kind === 'corral' && b.complete;
+    setHidden(gate, !isGate); setHidden(tend, !isCorral); setHidden(note, !isCorral);
+    if (gate && isGate) {
+      gate.textContent = b.livestockOpen ? 'Block livestock passage' : 'Allow own livestock passage';
+      gate.setAttribute('aria-pressed', String(b.livestockOpen === true));
+      gate.onclick = () => this.world.dispatch({ type: 'gateLivestock', buildingId: b.id, open: !b.livestockOpen });
+    }
+    if (tend && isCorral) {
+      const worker = corralWorker(this.world, b);
+      const idle = [...this.world.units.values()].filter(u => u.owner === b.owner && u.kind === 'villager' && u.state === 'idle')
+        .sort((a, c) => Math.hypot(a.pos.x - b.pos.x, a.pos.z - b.pos.z) - Math.hypot(c.pos.x - b.pos.x, c.pos.z - b.pos.z) || a.id - c.id)[0];
+      tend.textContent = worker ? 'Release tending villager' : 'Assign nearest idle villager';
+      tend.disabled = !worker && !idle;
+      tend.onclick = () => {
+        if (worker) this.world.dispatch({ type: 'stop', unitIds: [worker.id] });
+        else if (idle) this.world.dispatch({ type: 'tend', unitIds: [idle.id], buildingId: b.id });
+      };
     }
   }
 

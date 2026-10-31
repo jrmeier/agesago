@@ -20,7 +20,7 @@ export const AGE_NAMES = ['Village Age', 'Town Age', 'City Age', 'Empire Age'] a
  * - gather.X: multiplier on gather speed for resource X (base 1); gather.farm for farms only.
  * - carry.X: carry capacity for resource X (base BALANCE.carryCap).
  * - buildRate: multiplier on construction speed of that building kind (base 1).
- * - farmFood: food a new or reseeded farm holds (base FARM_FOOD).
+ * - farmFood: legacy farm capacity metadata (base FARM_FOOD).
  */
 export type Stat =
   | 'hp'
@@ -191,19 +191,19 @@ const table = {
 
   // ---- Granary ----
   oxPlough: {
-    name: 'Ox Plough', description: 'Farms hold 75 more food and are worked 15% faster.',
+    name: 'Ox Plough', description: 'Villagers work farms 15% faster.',
     at: 'granary', cost: { food: 75, wood: 75 }, time: 25, age: 0,
-    effects: [add('farm', 'farmFood', 75), mul('villager', 'gather.farm', 1.15)],
+    effects: [mul('villager', 'gather.farm', 1.15)],
   },
   ironPloughshare: {
-    name: 'Iron Ploughshare', description: 'Farms hold 125 more food and are worked 15% faster.',
+    name: 'Iron Ploughshare', description: 'Villagers work farms another 15% faster.',
     at: 'granary', cost: { food: 125, wood: 75 }, time: 45, age: 1, requires: ['oxPlough'],
-    effects: [add('farm', 'farmFood', 125), mul('villager', 'gather.farm', 1.15)],
+    effects: [mul('villager', 'gather.farm', 1.15)],
   },
   cropRotation: {
-    name: 'Crop Rotation', description: 'Farms hold 175 more food and are worked 20% faster.',
+    name: 'Crop Rotation', description: 'Villagers work farms another 20% faster.',
     at: 'granary', cost: { food: 150, wood: 100 }, time: 50, age: 2, requires: ['ironPloughshare'],
-    effects: [add('farm', 'farmFood', 175), mul('villager', 'gather.farm', 1.2)],
+    effects: [mul('villager', 'gather.farm', 1.2)],
   },
   threshingFloor: {
     name: 'Threshing Floor', description: '+20% food from berries, hunting and fishing.',

@@ -294,6 +294,7 @@ export class Game {
     this.rig = parts.rig;
     this.terrain = parts.terrain;
     this.views = parts.views;
+    this.rig.follow.obstacleDistance = (from, to) => this.views.cameraObstacleDistance(from, to);
     this.props = parts.props;
     this.grass = parts.grass;
     this.fog = parts.fog;
@@ -359,10 +360,7 @@ export class Game {
     this.elapsed += dt;
 
     this.controls.update(this.matchOver || this.paused ? 0 : dt);
-    // Camera keys stay out of the pause menu. The current view still renders below.
-    if (!this.matchOver && !this.paused) this.rig.update(dt);
     this.maybePauseKey();
-    this.matchAudio.setEar(this.earPose());
 
     if (this.online && !this.matchOver) {
       this.online.advance();
@@ -381,6 +379,9 @@ export class Game {
       // One economy sample about every 10 sim seconds. gameOver records the last one itself.
       if (!this.matchOver && this.endgameLog.shouldSample(this.world.time)) this.endgame.sample();
     }
+    // Use the same post-tick interpolation as EntityViews, without camera input in pause menus.
+    if (!this.matchOver && !this.paused) this.rig.update(dt, this.accumulator / STEP);
+    this.matchAudio.setEar(this.earPose());
     this.matchAudio.pulse(this.earSamples(), !this.matchOver && !this.paused, dt);
     this.matchMusic.advance(this.world.time);
 
@@ -403,8 +404,8 @@ export class Game {
 
   /** Camera position and the ground-right axis, so voices pan with the view. */
   private earPose(): { at: Vec2; right: Vec2 } {
-    if (this.rig.mode === 'fps') {
-      return { at: { x: this.rig.fps.pos.x, z: this.rig.fps.pos.z }, right: yawBasis(this.rig.fps.yaw).right };
+    if (this.rig.mode !== 'rts') {
+      return { at: { x: this.rig.camera.position.x, z: this.rig.camera.position.z }, right: yawBasis(this.rig.follow.yaw).right };
     }
     return {
       at: {
@@ -417,8 +418,8 @@ export class Game {
 
   /** Points the ambience beds sample: the focus and the ground under the view. */
   private earSamples(): Vec2[] {
-    if (this.rig.mode === 'fps') {
-      const pos = this.rig.fps.pos;
+    if (this.rig.mode !== 'rts') {
+      const pos = this.rig.follow.pos;
       return [
         pos,
         { x: pos.x + 8, z: pos.z },
@@ -432,7 +433,7 @@ export class Game {
 
   /** Ground point the player is looking at: shadows, grass and sky follow it. */
   private focus(): Vec2 {
-    const p = this.rig.mode === 'fps' ? this.rig.fps.pos : this.rig.rts.target;
+    const p = this.rig.mode !== 'rts' ? this.rig.follow.pos : this.rig.rts.target;
     return { x: p.x, z: p.z };
   }
 

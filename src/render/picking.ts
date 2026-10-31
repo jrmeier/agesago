@@ -12,12 +12,13 @@ export const PICK_RANK = {
   townCenter: 1,
 } as const;
 
-/** Orders reach foundations through tree canopies and work targets through friendly units. */
+/** Orders reach work targets through tree canopies and friendly units. */
 export const ORDER_PICK_RANK = {
-  attack: 5,
-  foundation: 4,
+  attack: 6,
+  foundation: 5,
+  workBuilding: 4,
   node: 3,
-  workBuilding: 2,
+  tree: 2,
   unit: 1,
   building: 0,
 } as const;

@@ -2,10 +2,10 @@ import { BUILD_HOTKEYS } from '../ui/build';
 
 /**
  * Every RTS-mode hotkey (KeyboardEvent.code) in one table, so a test can prove none clash.
- * First-person mode reuses W/A/S/D and the arrows for movement; it ignores everything here
+ * Villager-follow views use arrows for looking and ignore RTS actions here
  * except F.
  *
- * Attack-move is Q: A is already select-all (and strafe in first person), and Q sits right
+ * Attack-move is Q: A is already select-all, and Q sits right
  * next to it under the left hand, free of every build key. Ctrl+right-click attack-moves
  * directly. Stop is X (the ✕ on its button). Train slots are Z / C / V, left to right in the
  * training panel, so they never collide with the build keys a villager selection uses.

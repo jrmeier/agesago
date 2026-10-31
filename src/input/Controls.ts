@@ -1,6 +1,7 @@
+import { villagerPose } from '../camera/FollowCamera';
 import type { EntityViews, ScreenRect } from '../render/EntityViews';
 import type { PickIntent } from '../render/picking';
-import type { CameraRig } from '../camera/CameraRig';
+import { CAMERA_LABELS, type CameraRig } from '../camera/CameraRig';
 import { isShip } from '../core/units';
 import { BUILDINGS } from '../core/buildings';
 import { GAIA, type Building, type BuildingKind, type Command, type EntityId, type PropPlacement, type Stance, type UnitKind, type Vec2 } from '../core/types';
@@ -100,7 +101,7 @@ export function resolveLongPress(args: {
  * building is not a target until it is in sight again. With villagers selected,
  * H / S / G / M / P / B / Y / K (or the #build-grid buttons) enter placement mode: the ghost
  * follows the cursor, R or Shift+wheel rotates, LMB places (Shift keeps placing), RMB / Esc
- * cancels. Disabled in first-person mode (where A strafes).
+ * cancels. Disabled in villager-follow views.
  * Touch: tap selects a unit, attacks a visible enemy with units selected, orders the selection
  * (gather / construct / farm / move), sets a selected building's rally point, or with no units
  * selected selects the tapped visible building / enemy. A tap while a Build / Train / Orders sheet is
@@ -174,8 +175,18 @@ export class Controls {
       if (this.placement.active && !this.villagerIds().length) this.placement.cancel();
       if (this.targeting && !this.ownUnitIds().length) this.setTargeting(false);
     });
+    rig.resolveTarget = (id, alpha) => {
+      const available = (u: import('../core/types').Unit | undefined) => !!u && u.kind === 'villager' && u.owner === world.localPlayer && u.hp > 0 && u.state !== 'garrisoned';
+      const unit = id !== null ? world.units.get(id) :
+        [...selection.ids].map(id => world.units.get(id)).find(available) ?? [...world.units.values()].find(available);
+      return unit && available(unit) ? villagerPose(unit, rig.rts.hf, alpha) : null;
+    };
+    rig.feedback = message => {
+      const status = document.getElementById('camera-status');
+      if (status) status.textContent = message;
+    };
     rig.onModeChange((mode) => {
-      if (mode === 'fps') {
+      if (mode !== 'rts') {
         this.touchBox = null;
         this.showBox(null);
         this.placement.cancel();
@@ -189,7 +200,8 @@ export class Controls {
     bindButton('select-same-btn', () => this.selectSameKind());
     bindButton('touch-select-all', () => this.selectAllOwn());
     bindButton('touch-deselect', () => selection.clear());
-    bindButton('touch-fps', () => rig.setMode(rig.mode === 'rts' ? 'fps' : 'rts'));
+    bindButton('touch-fps', () => rig.cycleMode());
+    bindButton('camera-cycle', () => rig.cycleMode());
     bindButton('explore-btn', () => this.explore());
     bindButton('cancel-build-btn', () => this.cancelSelectedFoundation());
     bindButton('town-bell-btn', () => this.deps.world.dispatch({ type: 'townBell' }));
@@ -259,7 +271,7 @@ export class Controls {
       this.syncBoxArm();
       return;
     }
-    if (rig.mode !== 'rts') {
+    if (rig.mode !== 'rts' || input.keyPressed('KeyF')) {
       this.syncBoxArm();
       return;
     }
@@ -905,9 +917,20 @@ export class Controls {
   }
 
   private syncMode(): void {
-    const fps = this.deps.rig.mode === 'fps';
-    document.body.classList.toggle('fps-mode', fps);
-    document.getElementById('touch-fps')?.setAttribute('aria-pressed', String(fps));
+    const { rig, views } = this.deps;
+    const following = rig.mode !== 'rts';
+    document.body.classList.toggle('fps-mode', following);
+    document.body.dataset.cameraMode = rig.mode;
+    views.setCameraHiddenUnit(rig.mode === 'pov' ? rig.followedId : null);
+    for (const id of ['touch-fps', 'camera-cycle']) {
+      const button = document.getElementById(id);
+      button?.setAttribute('aria-label', `Camera: ${CAMERA_LABELS[rig.mode]}. Cycle Overhead, Villager POV, Third-person (F)`);
+      button?.setAttribute('aria-pressed', String(following));
+      const label = button?.querySelector('span');
+      if (label) label.textContent = CAMERA_LABELS[rig.mode];
+    }
+    const status = document.getElementById('camera-status');
+    if (status) status.textContent = following ? `${CAMERA_LABELS[rig.mode]} · Drag to look · Villager keeps working` : '';
   }
 }
 

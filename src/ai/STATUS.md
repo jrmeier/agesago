@@ -11,7 +11,7 @@ resource trickle).
 - Splits gatherers across food, wood, gold and stone by target ratios that change over the game.
 - Builds houses before the pop cap stalls villager production.
 - Builds drop sites (storehouse, granary, mining camp) next to gatherers working far from one.
-- Builds farms after the berries near the base are gone, and reseeds fallow farms.
+- Builds permanent farms after the berries near the base are gone and keeps them staffed.
 - Sends the scout to unexplored ground, then patrols.
 - Herdables are not population and not soldiers. A sheep in sight does not stall training or call the army home.
 - Military (barracks, waves, defence, retreat) is in `military.ts`. It is not part of this ticket's acceptance.
@@ -98,6 +98,12 @@ nearly wiped out. The researcher won **8/10** (seeds 6–10, tried during tuning
 overall). This test is heavy: about 5 minutes of wall time for the 10 games.
 
 Caveats:
+- The permanent-farm and villager-job changes currently reduce the research-versus-control
+  result to **11/20 (55%)**, below the unchanged 75% acceptance target. The original
+  `1d41af7` simulation scores **15/20** on the same seeds. Economy, research progression,
+  and pacing checks pass; allocation accounting and old-cargo delivery were also checked
+  independently. The cause of the competitive result remains unresolved; the test has not
+  been relaxed and balance constants have not been retuned to hide it.
 - Player 1 has a big edge on these maps: two control AIs split 4–1 for player 1. As player 2 the
   researcher wins about half its games, against roughly 1 in 5 for the control.
 - With the new City cost, no researcher reaches the City Age while fighting. Its edge comes from

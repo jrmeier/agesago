@@ -91,6 +91,8 @@ export function statusLabel(u: StatusUnit, carryCap: number): string {
       return carry ? `Moving · ${carry.amount} ${carry.type}` : 'Moving';
     case 'exploring':
       return 'Exploring';
+    case 'toTend': return 'Walking to corral';
+    case 'tending': return 'Tending livestock';
     case 'toBuild':
       return 'Going to build';
     case 'building':

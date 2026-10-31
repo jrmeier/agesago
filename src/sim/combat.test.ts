@@ -4,6 +4,8 @@ import { GRASS_ONLY, type Heightfield, type MapLayout, type PlayerId, type SimEv
 import { UNITS, damage } from '../core/units';
 import { BALANCE } from './balance';
 import { completeBuilding, layFoundation } from './systems/build';
+import { applyDamage } from './systems/combat';
+import { deserializeWorld, serializeWorld } from './serialize';
 import { damageTo, unitSpeed } from './systems/stats';
 import { defaultPlayers, World } from './World';
 
@@ -306,6 +308,69 @@ describe('stances', () => {
 });
 
 describe('villagers under attack', () => {
+  it('restores a full-load farm job through fleeing, save/load and depositing', () => {
+    const world = arena();
+    const farm = layFoundation(world, 'farm', { x: 15, z: 15 }, 0, 1);
+    completeBuilding(world, farm);
+    const v = spawn(world, 'villager', 1, { x: 15, z: 17 });
+    world.dispatch({ type: 'gather', unitIds: [v.id], nodeId: farm.id });
+    run(world, 30, () => v.state === 'toDrop');
+    expect(v.carry?.amount).toBe(BALANCE.carryCap);
+    applyDamage(world, v, 1, null, 2, { x: v.pos.x + 2, z: v.pos.z });
+    expect(world.fleeState.get(v.id)?.anchor).toEqual(farm.pos);
+    world.seed = 17;
+    const loaded = deserializeWorld(serializeWorld(world), flat());
+    run(loaded, 80);
+    expect(loaded.stock.food).toBeGreaterThan(BALANCE.carryCap);
+    expect(loaded.units.get(v.id)?.gatherNode).toBe(farm.id);
+    expect(loaded.farmers.get(farm.id)).toBe(v.id);
+    expect(loaded.gatherState.get(v.id)?.anchor).toEqual(farm.pos);
+  });
+
+  it('does not search around the flee destination when the work source disappears', () => {
+    const world = arena({ nodes: [
+      { kind: 'tree', pos: { x: 50, z: 50 }, amount: 1 },
+      { kind: 'tree', pos: { x: 63, z: 50 }, amount: 100 },
+      { kind: 'tree', pos: { x: 80, z: 50 }, amount: 100 },
+    ] });
+    const [first, second, far] = [...world.nodes.values()];
+    const v = spawn(world, 'villager', 1, { x: 50, z: 51 });
+    world.dispatch({ type: 'gather', unitIds: [v.id], nodeId: first.id });
+    run(world, 150, () => v.gatherNode === second.id && v.state === 'gathering');
+    expect(v.gatherNode).toBe(second.id);
+    expect(world.gatherState.get(v.id)?.anchor).toEqual(first.pos);
+    applyDamage(world, v, 1, null, 2, { x: v.pos.x - 2, z: v.pos.z });
+    world.nodes.delete(second.id);
+    run(world, 150);
+    expect(v.state).toBe('idle');
+    expect(far.amount).toBe(100);
+  });
+
+  it.each(['move', 'stop', 'gather', 'construct'] as const)('%s cancels interrupted work permanently', (order) => {
+    const world = arena({ nodes: [
+      { kind: 'tree', pos: { x: 50, z: 50 }, amount: 100 },
+      { kind: 'berry', pos: { x: 55, z: 55 }, amount: 100 },
+    ] });
+    const [tree, food] = [...world.nodes.values()];
+    const v = spawn(world, 'villager', 1, { x: 50, z: 51 });
+    world.dispatch({ type: 'gather', unitIds: [v.id], nodeId: tree.id });
+    run(world, 2);
+    applyDamage(world, v, 1, null, 2, { x: 50, z: 53 });
+    expect(world.fleeState.has(v.id)).toBe(true);
+    const woodLeft = tree.amount;
+    if (order === 'move') world.dispatch({ type: order, unitIds: [v.id], target: { x: 45, z: 45 } });
+    else if (order === 'stop') world.dispatch({ type: order, unitIds: [v.id] });
+    else if (order === 'gather') world.dispatch({ type: order, unitIds: [v.id], nodeId: food.id });
+    else {
+      const house = layFoundation(world, 'house', { x: 45, z: 45 }, 0, 1);
+      world.dispatch({ type: order, unitIds: [v.id], buildingId: house.id });
+    }
+    expect(world.fleeState.has(v.id)).toBe(false);
+    run(world, 90);
+    expect(tree.amount).toBe(woodLeft);
+    expect(v.gatherNode).not.toBe(tree.id);
+  });
+
   it('flee from the attacker, then go back to work', () => {
     const world = arena({ nodes: [{ kind: 'tree', pos: { x: 50, z: 50 }, amount: 200 }] });
     const tree = [...world.nodes.keys()][0];

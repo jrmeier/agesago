@@ -53,6 +53,7 @@ describe('build hotkeys', () => {
       'storehouse',
       'miningCamp',
       'granary',
+      'corral',
       'farm',
       'barracks',
       'archeryRange',
@@ -138,8 +139,9 @@ describe('building panel labels', () => {
     expect(buildingRole('townCenter', undefined, undefined, 0)).toBe('+5 population · Shelter 0/10 · Fires when garrisoned');
     expect(buildingRole('palisade')).toBe('Blocks movement');
     expect(buildingRole('gate')).toBe('Opens for your units');
-    expect(buildingRole('farm', 180.6, 250)).toBe('Food 180/250');
-    expect(buildingRole('farm', 0, 250)).toMatch(/reseed/);
+    expect(buildingRole('farm', 180.6, 250)).toBe('Renewable food · 1 villager');
+    expect(buildingRole('farm', 0, 250)).toBe('Renewable food · 1 villager');
+    expect(buildingRole('farm', undefined, undefined, 0, 1)).toBe('Renewable food · 1/1 villager assigned');
     expect(popLabel(7, 10)).toBe('7/10');
   });
 });

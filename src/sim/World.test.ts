@@ -127,7 +127,7 @@ describe('gathering', () => {
     expect(u.gatherNode).toBeNull();
   });
 
-  it('resets carry when switching resource type', () => {
+  it('deposits carried resources before switching resource type', () => {
     const world = new World(
       flatField(),
       layout([{ x: 32, z: 28.5 }], [
@@ -139,13 +139,14 @@ describe('gathering', () => {
     const [tree, gold] = [...world.nodes.keys()];
     world.dispatch({ type: 'gather', unitIds: [u.id], nodeId: tree });
     while (!(u.carry && u.carry.amount >= 3)) world.tick(DT);
+    const carriedWood = u.carry!.amount;
     world.dispatch({ type: 'gather', unitIds: [u.id], nodeId: gold });
     while (u.state !== 'gathering') world.tick(DT);
     world.tick(DT);
     expect(u.carry === null || u.carry.type === 'gold').toBe(true);
     run(world, 2);
     expect(u.carry!.type).toBe('gold');
-    expect(world.stock.wood).toBe(0);
+    expect(world.stock.wood).toBe(carriedWood);
   });
 
   it('rejects a gather order on a missing node', () => {
