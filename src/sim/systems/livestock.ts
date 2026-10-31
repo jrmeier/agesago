@@ -1,3 +1,4 @@
+import { canWork } from '../../core/units';
 import type { Building, EntityId, PlayerId, Unit } from '../../core/types';
 import type { World } from '../World';
 import { buildingRect } from './sites';
@@ -23,7 +24,7 @@ export function corralSheep(world: World, b: Building): Unit[] {
 }
 export function corralWorker(world: World, b: Building): Unit | undefined {
   return [...world.units.values()].find(u => u.tendingCorral === b.id && u.owner === b.owner && u.hp > 0
-    && u.kind === 'villager' && (u.state === 'toTend' || u.state === 'tending'));
+    && canWork(u.kind) && (u.state === 'toTend' || u.state === 'tending'));
 }
 export function releaseTending(world: World, ids: EntityId[]): void {
   for (const id of ids) {
@@ -44,7 +45,7 @@ export function orderTend(world: World, ids: EntityId[], buildingId: EntityId, b
   let occupied = false, unreachable = false;
   for (const id of new Set(ids)) {
     const u = world.units.get(id);
-    if (!u || u.owner !== by || u.kind !== 'villager' || u.state === 'garrisoned') continue;
+    if (!u || u.owner !== by || !canWork(u.kind) || u.state === 'garrisoned') continue;
     const candidates = [b, ...nearby].filter(c => !corralWorker(world, c) || corralWorker(world, c)?.id === id);
     let assigned = false;
     for (const c of candidates) {

@@ -1,3 +1,4 @@
+import { clearEconomyJob } from './gather';
 import type { EntityId, PlayerId, PropPlacement, Vec2 } from '../../core/types';
 import { isAnimal, isShip } from '../../core/units';
 import { TECHS, type TechId } from '../../core/techs';
@@ -52,6 +53,7 @@ export function orderPriest(world: World, ids: EntityId[], type: PriestOrder['ty
   if (!valid || !priests.length) { world.events.emit({ type: 'rejected', reason: 'invalid-target' }); return; }
   releaseCombat(world, priests.map(u => u.id));
   for (const u of priests) {
+    clearEconomyJob(world, u);
     world.priestOrders.set(u.id, { type, target: targetId, progress: 0 });
     u.path = []; world.setState(u, 'idle');
   }

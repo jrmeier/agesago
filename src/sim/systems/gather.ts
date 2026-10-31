@@ -1,4 +1,4 @@
-import { isShip } from '../../core/units';
+import { canWork } from '../../core/units';
 import type { Stat } from '../../core/techs';
 import type { Building, EntityId, ResourceNode, ResourceType, Unit, UnitState, Vec2 } from '../../core/types';
 import { BALANCE } from '../balance';
@@ -56,7 +56,7 @@ export function farmFree(world: World, farm: Building, u: Unit): boolean {
   return true;
 }
 
-/** 'gather' command: send every villager to work the node; scouts can't gather and just walk up to it. */
+/** 'gather' command: send capable land units to work the node. */
 export function orderGather(world: World, unitIds: EntityId[], nodeId: EntityId): void {
   const node = world.nodes.get(nodeId);
   if (!node) {
@@ -74,7 +74,7 @@ export function orderGather(world: World, unitIds: EntityId[], nodeId: EntityId)
 }
 
 /**
- * 'gather' on a farm: one villager works a farm at a time. The first villager takes this farm;
+ * 'gather' on a farm: one worker works a farm at a time. The first worker takes this farm;
  * the rest take nearby free farms, or stop if none are available.
  */
 export function orderFarm(world: World, unitIds: EntityId[], farm: Building): void {
@@ -84,7 +84,7 @@ export function orderFarm(world: World, unitIds: EntityId[], farm: Building): vo
   }
   const units = [...new Set(unitIds)]
     .map((id) => world.units.get(id))
-    .filter((u): u is Unit => !!u && u.kind === 'villager' && u.owner === farm.owner);
+    .filter((u): u is Unit => !!u && canWork(u.kind) && u.state !== 'garrisoned' && u.owner === farm.owner);
   const cancelled = cancelExplore(world, units);
   let unassigned = 0;
   for (const u of units) {
@@ -101,22 +101,10 @@ export function orderFarm(world: World, unitIds: EntityId[], farm: Building): vo
   if (unassigned || (unitIds.length && !units.length)) world.events.emit({ type: 'rejected', reason: 'occupied' });
 }
 
-/** Plain move to the edge of `node` (for units that can't gather). False if unreachable. */
-function walkToNode(world: World, u: Unit, node: ResourceNode): boolean {
-  const path = nodePath(world, u, node);
-  if (!path) return false;
-  u.path = path;
-  u.gatherNode = null;
-  u.gatherType = null;
-  world.gatherState.delete(u.id);
-  world.setState(u, 'moving');
-  return true;
-}
-
-/** Assign `node` to `u` and path to its edge (scouts just walk there). False (unit untouched) if unreachable. */
+/** Assign `node` to `u` and path to its edge. False (unit untouched) if unreachable. */
 export function sendToNode(world: World, u: Unit, node: ResourceNode): boolean {
   if (node.amount <= 0) return false;
-  if (u.kind !== 'villager') return walkToNode(world, u, node);
+  if (!canWork(u.kind) || u.state === 'garrisoned') return false;
   const path = nodePath(world, u, node);
   if (!path) return false;
   assign(world, u, node.id, node.type, node.pos, path);
@@ -125,7 +113,7 @@ export function sendToNode(world: World, u: Unit, node: ResourceNode): boolean {
 
 /** Claim `farm` for `u` and walk onto its near edge. False (unit untouched) if taken, incomplete or unreachable. */
 export function sendToFarm(world: World, u: Unit, farm: Building): boolean {
-  if (u.kind !== 'villager' || !isWorkableFarm(farm) || !farmFree(world, farm, u)) return false;
+  if (!canWork(u.kind) || u.state === 'garrisoned' || !isWorkableFarm(farm) || !farmFree(world, farm, u)) return false;
   const path = route(world, u.owner, u.pos, farmSpot(u.pos, farm));
   if (!path || !inReach({ ...u, pos: path.at(-1) ?? u.pos }, farm)) return false;
   assign(world, u, farm.id, 'food', farm.pos, path);
@@ -164,12 +152,12 @@ function farmSpot(from: Vec2, farm: Building): Vec2 {
 /** Arrivals for toNode / toDrop, then gathering progress. */
 export function gatherSystem(world: World, dt: number, arrived: Unit[]): void {
   for (const u of arrived) {
-    if (isShip(u.kind)) continue;
+    if (!canWork(u.kind)) continue;
     if (u.state === 'toNode') arriveAtNode(world, u);
     else if (u.state === 'toDrop') deposit(world, u);
   }
   for (const u of world.units.values()) {
-    if (!isShip(u.kind) && u.state === 'gathering') gatherTick(world, u, dt);
+    if (canWork(u.kind) && u.state === 'gathering') gatherTick(world, u, dt);
   }
 }
 

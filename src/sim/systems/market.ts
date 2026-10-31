@@ -1,3 +1,4 @@
+import { clearEconomyJob } from './gather';
 import { MARKET } from '../../core/buildings';
 import type {
   Building,
@@ -214,7 +215,7 @@ export function orderTrade(world: World, unitIds: EntityId[], marketId: EntityId
     u.tradeWith = target.id;
     // Already at the far end: start by heading home.
     const leg = gap(u, target) <= ARRIVE_SLACK ? home : target;
-    if (sendTo(world, u, leg)) sent++;
+    if (sendTo(world, u, leg)) { clearEconomyJob(world, u); sent++; }
     else delete u.tradeWith;
   }
   if (!sent) reject(world, by, homeless === carts.length ? 'requires' : 'unreachable');

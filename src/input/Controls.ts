@@ -2,7 +2,7 @@ import { villagerPose } from '../camera/FollowCamera';
 import type { EntityViews, ScreenRect } from '../render/EntityViews';
 import type { PickIntent } from '../render/picking';
 import { CAMERA_LABELS, type CameraRig } from '../camera/CameraRig';
-import { isShip } from '../core/units';
+import { canWork, isShip } from '../core/units';
 import { BUILDINGS } from '../core/buildings';
 import { GAIA, type Building, type BuildingKind, type Command, type EntityId, type PropPlacement, type Stance, type UnitKind, type Vec2 } from '../core/types';
 import type { Selection } from '../game/Selection';
@@ -98,7 +98,7 @@ export function resolveLongPress(args: {
  * (double-tap) a unit selects all of that kind on screen. T = train villager, E = explore,
  * "." / Home = next scout. Shift+/ (or the ? button) opens the hotkey list; Esc closes it.
  * Clicking a visible building selects it. A last-seen enemy
- * building is not a target until it is in sight again. With villagers selected,
+ * building is not a target until it is in sight again. With land units selected,
  * H / S / G / M / P / B / Y / K (or the #build-grid buttons) enter placement mode: the ghost
  * follows the cursor, R or Shift+wheel rotates, LMB places (Shift keeps placing), RMB / Esc
  * cancels. Disabled in villager-follow views.
@@ -172,7 +172,7 @@ export class Controls {
     });
     onScoutFocus(world, (id) => selection.set([id]));
     selection.onChange(() => {
-      if (this.placement.active && !this.villagerIds().length) this.placement.cancel();
+      if (this.placement.active && !this.workerIds().length) this.placement.cancel();
       if (this.targeting && !this.ownUnitIds().length) this.setTargeting(false);
     });
     rig.resolveTarget = (id, alpha) => {
@@ -354,10 +354,10 @@ export class Controls {
     }
   }
 
-  /** Enter placement for `kind` if villagers are selected. Mouse: the ghost starts under the cursor. */
+  /** Enter placement for `kind` if workers are selected. Mouse: the ghost starts under the cursor. */
   private beginPlacement(kind: BuildingKind): void {
     const { input, rig } = this.deps;
-    const builders = this.villagerIds();
+    const builders = this.workerIds();
     if (!builders.length) return;
     // Age-locked kinds stay greyed in the build menu ("Requires Town Age").
     const age = this.deps.world.players.get(this.deps.world.localPlayer)?.age ?? 0;
@@ -577,10 +577,13 @@ export class Controls {
     return [...this.deps.selection.ids].filter((id) => this.isOwnUnit(id));
   }
 
-  /** Selected own villagers (the ones that can build). */
-  private villagerIds(): EntityId[] {
+  /** Selected own land units available to build and gather. */
+  private workerIds(): EntityId[] {
     const { world } = this.deps;
-    return this.ownUnitIds().filter((id) => world.units.get(id)?.kind === 'villager');
+    return this.ownUnitIds().filter((id) => {
+      const u = world.units.get(id);
+      return !!u && canWork(u.kind) && u.hp > 0 && u.state !== 'garrisoned';
+    });
   }
 
   /** The selected own building that trains units (and so has a rally point), if that is the selection. */
@@ -767,7 +770,11 @@ export class Controls {
     if (!unitIds.length) return;
     const building = id !== null ? world.buildings.get(id) : undefined;
     const ownBuilding = building && building.owner === world.localPlayer ? building : undefined;
-    const buildCmd = ownBuilding ? resolveBuildingOrder(this.villagerIds(), ownBuilding) : null;
+    const workers = this.workerIds();
+    // Shelters retain their villager-only capacity; every land worker can construct or farm.
+    const buildingWorkers = ownBuilding?.complete && BUILDINGS[ownBuilding.kind].garrison
+      ? workers.filter(uid => world.units.get(uid)?.kind === 'villager') : workers;
+    const buildCmd = ownBuilding ? resolveBuildingOrder(buildingWorkers, ownBuilding) : null;
     let movers = unitIds;
     // Trade carts onto an own or allied market trade with it (M8-12); everyone else carries on.
     const carts = unitIds.filter((u) => world.units.get(u)?.kind === 'tradeCart');
@@ -779,8 +786,8 @@ export class Controls {
     }
     if (buildCmd) {
       world.dispatch(buildCmd);
-      // Scouts and soldiers (which can't build or farm) just walk over.
-      movers = movers.filter((u) => world.units.get(u)?.kind !== 'villager');
+      // Units without this work capability still receive the ordinary move order.
+      movers = movers.filter((u) => !buildingWorkers.includes(u));
       if (!movers.length) return;
     }
     const node = id !== null ? world.nodes.get(id) : undefined;

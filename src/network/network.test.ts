@@ -72,7 +72,7 @@ describe('online command relay', () => {
       { type: 'join', code: 'ABCDEF', name: 'Guest' },
     ]) {
       expect(validClientMessage({ ...request, version: NETWORK_VERSION })).toBe(true);
-      expect(validClientMessage({ ...request, version: 1 })).toBe(false);
+      expect(validClientMessage({ ...request, version: NETWORK_VERSION - 1 })).toBe(false);
     }
     const input = (commands: unknown[]) => ({ type: 'input', turn: 0, commands });
     expect(validClientMessage(input([{ type: 'build', unitIds: [1], kind: '__proto__', pos: { x: 1, z: 1 }, rot: 0 }]))).toBe(false);

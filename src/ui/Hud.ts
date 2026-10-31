@@ -1,7 +1,7 @@
 import { BUILDINGS, FARM_FOOD } from '../core/buildings';
 import { AGE_NAMES, TECHS, buildingTier, techsAt, unitLine, type Age, type TechId } from '../core/techs';
 import type { Building, BuildingKind, ResourceType, Stockpile, Unit, UnitKind } from '../core/types';
-import { UNITS, trainable } from '../core/units';
+import { canWork, UNITS, trainable } from '../core/units';
 import type { Selection } from '../game/Selection';
 import { shownSelection, sightFromState, stepLastSeen, type LastSeenBuilding } from '../render/lastSeen';
 import { BALANCE } from '../sim/balance';
@@ -71,7 +71,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * enemy panel), #unit-name, #unit-status, #unit-hp (health bar), #unit-stats (attack /
  * armour / range chips for soldiers), .unit-portrait (its <use> swaps between unit and building
  * icons), #explore-btn (shown when the selection can explore; Controls handles the click),
- * #build-grid (one [data-build] button per buildable kind, shown when villagers are selected;
+ * #build-grid (one [data-build] button per buildable kind, shown when land workers are selected;
  * Controls handles clicks), #build-progress / #cancel-build-btn (building panel for a selected
  * foundation; Controls handles the click), #train-grid (one [data-train] button per unit a
  * selected complete building trains — click trains one, Shift-click five; dispatched here),
@@ -475,9 +475,9 @@ export class Hud {
     this.el.panel?.classList.toggle('building-mode', target === 'building');
     this.el.panel?.classList.toggle('enemy', foreign);
     this.updateExplore(own);
-    const villagers = own.some((u) => u.kind === 'villager');
-    setHidden(this.el.grid, !villagers);
-    if (villagers) this.updateAffordable();
+    const workers = own.some((u) => canWork(u.kind) && u.hp > 0 && u.state !== 'garrisoned');
+    setHidden(this.el.grid, !workers);
+    if (workers) this.updateAffordable();
     this.updateCommands(own);
     this.updateBuilding(target === 'building' ? building : undefined, ownBuilding);
     if (target === 'units') {
@@ -487,7 +487,7 @@ export class Hud {
       const line = same ? lineOf(kinds[0]) : null;
       setText(this.el.name, line && line.tier > 0 ? (units.length > 1 ? `${units.length} × ${line.title}` : line.title) : selectionName(kinds));
       const capacity = carryCap(this.world, units[0], units[0].carry?.type ?? units[0].gatherType ?? 'wood');
-      setText(this.el.status, foreign ? this.ownerName(owner) : kinds.every(k => k === 'priest')
+      setText(this.el.status, foreign ? this.ownerName(owner) : kinds.every(k => k === 'priest') && !units.some(u => u.carry || u.gatherType || ['toBuild', 'building', 'toTend', 'tending'].includes(u.state))
         ? (units.some(u => u.relic) ? 'Carrying a relic · Move beside your temple to enshrine' : 'Move to standing stones for relics · Order on ally to heal, enemy to convert')
         : kinds.every(k => k === 'transport') ? `Passengers ${units.reduce((n, u) => n + (u.passengers?.length ?? 0), 0)}/${units.length * 10} · Order land units onto a ship near shore; Unload then choose a coast`
         : kinds.every(k => k === 'fishingBoat') ? 'Order onto water fish · Delivers food to your dock'
@@ -511,7 +511,7 @@ export class Hud {
       this.setHp(-1, 0);
       this.setStats(null);
     }
-    const showBuild = villagers;
+    const showBuild = workers;
     const showTrain = !!this.el.trainGrid && !this.el.trainGrid.hidden;
     const showOrders = !!this.el.commands && !this.el.commands.hidden;
     this.syncTouchMenus(showBuild, showTrain, showOrders, own.length > 0 && own.every((u) => u.kind === own[0].kind));
@@ -604,7 +604,7 @@ export class Hud {
     } else if (b.kind === 'corral' && own) {
       const worker = corralWorker(this.world, b);
       const count = corralSheep(this.world, b).length;
-      setText(this.el.status, `${count}/${HERD_CAP} sheep · ${!worker ? 'Assign a villager' : worker.state === 'toTend' ? 'Worker arriving' : count < 2 ? 'Needs two owned sheep' : 'Breeding & harvesting surplus'}`);
+      setText(this.el.status, `${count}/${HERD_CAP} sheep · ${!worker ? 'Assign a worker' : worker.state === 'toTend' ? 'Worker arriving' : count < 2 ? 'Needs two owned sheep' : 'Breeding & harvesting surplus'}`);
     } else if (b.kind === 'gate') {
       setText(this.el.status, b.livestockOpen ? 'Your livestock may pass' : 'Livestock blocked · your people may pass');
     } else if (panel && panel.research?.length && productionOrder(panel)[0] === 'research') {
@@ -635,9 +635,9 @@ export class Hud {
     }
     if (tend && isCorral) {
       const worker = corralWorker(this.world, b);
-      const idle = [...this.world.units.values()].filter(u => u.owner === b.owner && u.kind === 'villager' && u.state === 'idle')
+      const idle = [...this.world.units.values()].filter(u => u.owner === b.owner && canWork(u.kind) && u.state === 'idle')
         .sort((a, c) => Math.hypot(a.pos.x - b.pos.x, a.pos.z - b.pos.z) - Math.hypot(c.pos.x - b.pos.x, c.pos.z - b.pos.z) || a.id - c.id)[0];
-      tend.textContent = worker ? 'Release tending villager' : 'Assign nearest idle villager';
+      tend.textContent = worker ? 'Release tending worker' : 'Assign nearest idle worker';
       tend.disabled = !worker && !idle;
       tend.onclick = () => {
         if (worker) this.world.dispatch({ type: 'stop', unitIds: [worker.id] });

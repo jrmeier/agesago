@@ -144,64 +144,74 @@ for (const target of ['tree', 'farm', 'foundation', 'foundation-canopy', 'farm-c
   });
 }
 
-test('the Build menu reassigns a wood gatherer until the new house is complete', async ({ page }, testInfo) => {
-  await page.goto('/?e2e');
-  await page.waitForFunction(() => (window as any).game?.renderer?.webgl?.info?.render?.frame > 2);
-  const fixture = await page.evaluate(() => {
-    const g = (window as any).game;
-    const w = g.world;
-    const worker = [...w.units.values()].find((u: any) => u.kind === 'villager' && u.owner === w.localPlayer) as any;
-    const tree = [...w.nodes.values()].find((n: any) => n.kind === 'tree') as any;
-    worker.pos = { x: tree.pos.x + 1, z: tree.pos.z };
-    worker.prevPos = { ...worker.pos };
-    w.dispatch({ type: 'gather', unitIds: [worker.id], nodeId: tree.id });
-    (window as any).dev.fastForward(4);
-    const carriedWood = worker.carry?.amount ?? 0;
-    (window as any).__resumeVillagerTick = w.tick.bind(w);
-    w.tick = () => {};
-    (window as any).dev.give({ wood: 1000 });
-    g.rig.rts.edgeScroll = false;
-    const tc = w.townCenter.pos;
-    let spot: { x: number; z: number } | null = null;
-    for (let radius = 8; radius < 25 && !spot; radius++) {
-      for (let i = 0; i < 16 && !spot; i++) {
-        const angle = i * Math.PI / 8;
-        const pos = { x: Math.round((tc.x + Math.cos(angle) * radius) * 2) / 2, z: Math.round((tc.z + Math.sin(angle) * radius) * 2) / 2 };
-        if (w.canPlace('house', pos, 0).ok) spot = pos;
+for (const kind of ['villager', 'hoplite'] as const) {
+  test(`the Build menu reassigns a ${kind} wood gatherer until the new house is complete`, async ({ page }, testInfo) => {
+    await page.goto('/?e2e');
+    await page.waitForFunction(() => (window as any).game?.renderer?.webgl?.info?.render?.frame > 2);
+    const fixture = await page.evaluate(kind => {
+      const g = (window as any).game;
+      const w = g.world;
+      if (kind === 'hoplite') {
+        (window as any).dev.give({ food: 1000, wood: 1000, gold: 1000 });
+        const barracks = (window as any).dev.placeComplete('barracks');
+        if (barracks == null) throw new Error('No barracks placement');
+        w.dispatch({ type: 'train', buildingId: barracks, unit: kind });
+        (window as any).dev.fastForward(30);
       }
+      const worker = [...w.units.values()].find((u: any) => u.kind === kind && u.owner === w.localPlayer) as any;
+      if (!worker) throw new Error('Unit was not trained');
+      const tree = [...w.nodes.values()].find((n: any) => n.kind === 'tree') as any;
+      worker.pos = { x: tree.pos.x + 1, z: tree.pos.z };
+      worker.prevPos = { ...worker.pos };
+      w.dispatch({ type: 'gather', unitIds: [worker.id], nodeId: tree.id });
+      (window as any).dev.fastForward(4);
+      const carriedWood = worker.carry?.amount ?? 0;
+      (window as any).__resumeVillagerTick = w.tick.bind(w);
+      w.tick = () => {};
+      (window as any).dev.give({ wood: 1000 });
+      g.rig.rts.edgeScroll = false;
+      const tc = w.townCenter.pos;
+      let spot: { x: number; z: number } | null = null;
+      for (let radius = 8; radius < 25 && !spot; radius++) {
+        for (let i = 0; i < 16 && !spot; i++) {
+          const angle = i * Math.PI / 8;
+          const pos = { x: Math.round((tc.x + Math.cos(angle) * radius) * 2) / 2, z: Math.round((tc.z + Math.sin(angle) * radius) * 2) / 2 };
+          if (w.canPlace('house', pos, 0).ok) spot = pos;
+        }
+      }
+      if (!spot) throw new Error('No clear house placement location');
+      g.selection.set([worker.id]);
+      g.rig.focusOn(spot);
+      return { workerId: worker.id, treeId: tree.id, amount: tree.amount, carriedWood, spot };
+    }, kind);
+    expect(fixture.carriedWood).toBeGreaterThan(0);
+    if (testInfo.project.name === 'phone') await page.locator('#menu-tabs [data-menu="build"]').tap();
+    await page.locator('[data-build="house"]').click();
+    await expect(page.locator('body')).toHaveClass(/placing/);
+    const aim = await page.evaluate((spot) => {
+      const g = (window as any).game;
+      const canvas = document.querySelector('#game-container canvas') as HTMLCanvasElement;
+      const rect = canvas.getBoundingClientRect();
+      const p = g.rig.camera.position.clone().set(spot.x, Math.max(0, g.world.hf.heightAt(spot.x, spot.z)), spot.z).project(g.rig.camera);
+      return { x: rect.left + (p.x + 1) * rect.width / 2, y: rect.top + (1 - p.y) * rect.height / 2 };
+    }, fixture.spot);
+    if (testInfo.project.name === 'phone') {
+      await page.touchscreen.tap(aim.x, aim.y);
+      await expect(page.locator('#place-bar')).not.toHaveClass(/invalid/);
+      await page.locator('#place-confirm').click();
+    } else {
+      await page.mouse.click(aim.x, aim.y);
     }
-    if (!spot) throw new Error('No clear house placement location');
-    g.selection.set([worker.id]);
-    g.rig.focusOn(spot);
-    return { workerId: worker.id, treeId: tree.id, amount: tree.amount, carriedWood, spot };
+    await expect(page.locator('body')).not.toHaveClass(/placing/);
+    const result = await page.evaluate((fixture) => {
+      const w = (window as any).game.world;
+      const worker = w.units.get(fixture.workerId);
+      const houseId = w.buildState.get(worker.id);
+      const assigned = worker.state === 'toBuild' && worker.gatherNode === null && houseId !== undefined;
+      w.tick = (window as any).__resumeVillagerTick;
+      (window as any).dev.fastForward(180);
+      return { assigned, complete: w.buildings.get(houseId)?.complete ?? false, treeUnchanged: w.nodes.get(fixture.treeId).amount === fixture.amount };
+    }, fixture);
+    expect(result).toEqual({ assigned: true, complete: true, treeUnchanged: true });
   });
-  expect(fixture.carriedWood).toBeGreaterThan(0);
-  if (testInfo.project.name === 'phone') await page.locator('#menu-tabs [data-menu="build"]').tap();
-  await page.locator('[data-build="house"]').click();
-  await expect(page.locator('body')).toHaveClass(/placing/);
-  const aim = await page.evaluate((spot) => {
-    const g = (window as any).game;
-    const canvas = document.querySelector('#game-container canvas') as HTMLCanvasElement;
-    const rect = canvas.getBoundingClientRect();
-    const p = g.rig.camera.position.clone().set(spot.x, Math.max(0, g.world.hf.heightAt(spot.x, spot.z)), spot.z).project(g.rig.camera);
-    return { x: rect.left + (p.x + 1) * rect.width / 2, y: rect.top + (1 - p.y) * rect.height / 2 };
-  }, fixture.spot);
-  if (testInfo.project.name === 'phone') {
-    await page.touchscreen.tap(aim.x, aim.y);
-    await expect(page.locator('#place-bar')).not.toHaveClass(/invalid/);
-    await page.locator('#place-confirm').click();
-  } else {
-    await page.mouse.click(aim.x, aim.y);
-  }
-  await expect(page.locator('body')).not.toHaveClass(/placing/);
-  const result = await page.evaluate((fixture) => {
-    const w = (window as any).game.world;
-    const worker = w.units.get(fixture.workerId);
-    const houseId = w.buildState.get(worker.id);
-    const assigned = worker.state === 'toBuild' && worker.gatherNode === null && houseId !== undefined;
-    w.tick = (window as any).__resumeVillagerTick;
-    (window as any).dev.fastForward(180);
-    return { assigned, complete: w.buildings.get(houseId)?.complete ?? false, treeUnchanged: w.nodes.get(fixture.treeId).amount === fixture.amount };
-  }, fixture);
-  expect(result).toEqual({ assigned: true, complete: true, treeUnchanged: true });
-});
+}

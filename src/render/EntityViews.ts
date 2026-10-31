@@ -393,7 +393,7 @@ export class EntityViews {
       let rank: number = PICK_RANK.townCenter;
       if (intent === 'order') {
         const own = building.owner === this.world.localPlayer;
-        const work = own && (!building.complete || building.kind === 'farm' || !!BUILDINGS[building.kind].garrison);
+        const work = own && (!building.complete || building.kind === 'farm' || building.kind === 'corral' || !!BUILDINGS[building.kind].garrison);
         const market = building.kind === 'market' && building.complete && !this.world.areEnemies(this.world.localPlayer, building.owner);
         rank = this.world.areEnemies(this.world.localPlayer, building.owner) ? ORDER_PICK_RANK.attack
           : own && !building.complete ? ORDER_PICK_RANK.foundation

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { canWork } from '../core/units';
 import { BUILDINGS } from '../core/buildings';
 import type { BuildingKind, EntityId, ResourceType, Stockpile, Vec2 } from '../core/types';
 import type { CameraRig } from '../camera/CameraRig';
@@ -258,7 +259,11 @@ export class Placement implements TouchGrab {
   }
 
   private livingBuilders(): EntityId[] {
-    return this.builders.filter((id) => this.deps.world.units.get(id)?.kind === 'villager');
+    const { world } = this.deps;
+    return this.builders.filter((id) => {
+      const u = world.units.get(id);
+      return !!u && canWork(u.kind) && u.owner === world.localPlayer && u.hp > 0 && u.state !== 'garrisoned';
+    });
   }
 
   /** Wall preview. Cost is subtracted per accepted segment, so later ones can show as unaffordable. */

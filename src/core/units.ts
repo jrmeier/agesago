@@ -243,3 +243,8 @@ export function damage(attacker: UnitKind, defenderClass: UnitClass, armor: { me
   const base = Math.max(0, a.attack.melee - armor.melee) + Math.max(0, a.attack.pierce - armor.pierce);
   return Math.max(1, base) + (a.bonus[defenderClass] ?? 0);
 }
+
+/** Trained land units can take explicit economy orders; idle units never seek work. */
+export function canWork(kind: UnitKind): boolean {
+  return UNITS[kind].trainedAt !== null && !isAnimal(kind) && !isShip(kind);
+}

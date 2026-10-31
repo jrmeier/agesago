@@ -18,10 +18,10 @@ test('corral assignment and gate livestock controls work on desktop and touch', 
   await expect(tend).toBeVisible(); await expect(tend).toBeEnabled();
   if (info.project.name === 'phone') { expect((await tend.boundingBox())!.height).toBeGreaterThanOrEqual(44); await tend.tap(); }
   else await tend.click();
-  await expect(tend).toHaveText('Release tending villager');
+  await expect(tend).toHaveText('Release tending worker');
   await page.evaluate(() => (window as any).dev.fastForward(130));
   await expect(page.locator('#unit-status')).toContainText('Breeding');
-  await tend.click(); await expect(tend).toHaveText('Assign nearest idle villager');
+  await tend.click(); await expect(tend).toHaveText('Assign nearest idle worker');
   await page.evaluate(id => (window as any).game.selection.set([id]), ids.gate);
   const gate = page.locator('#gate-livestock-btn');
   await expect(gate).toHaveText('Allow own livestock passage');

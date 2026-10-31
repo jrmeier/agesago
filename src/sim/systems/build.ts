@@ -1,4 +1,4 @@
-import { isShip } from '../../core/units';
+import { canWork, isShip } from '../../core/units';
 import { BUILDINGS, FARM_FOOD, footprintRadius } from '../../core/buildings';
 import type {
   Building,
@@ -105,8 +105,11 @@ export function canPlace(world: World, kind: BuildingKind, pos: Vec2, rot: numbe
   return { ok: true };
 }
 
-/** 'build' command: validate, pay, lay the foundation and send the villagers to build it. */
+/** 'build' command: validate, pay, lay the foundation and send the selected workers to build it. */
 export function orderBuild(world: World, unitIds: EntityId[], kind: BuildingKind, pos: Vec2, rot: number, by: PlayerId): void {
+  const workers = unitIds.filter(id => { const u = world.units.get(id); return u && canWork(u.kind) && u.owner === by && u.state !== 'garrisoned'; });
+  if (unitIds.length && !workers.length) { reject(world, 'invalid-target'); return; }
+  unitIds = workers;
   if (!BUILDINGS[kind].buildable) {
     reject(world, 'invalid-target');
     return;
@@ -231,9 +234,9 @@ export function builderSpot(b: Building, from: Vec2, slot: number): Vec2 {
   return { x: X0, z: Z1 - (t - 2 * W - D) };
 }
 
-/** Send villagers to work on foundation `b` ('toBuild' → 'building' on arrival). Scouts ignore it. */
+/** Send capable land units to work on an owned foundation ('toBuild' → 'building' on arrival). */
 export function sendBuilders(world: World, unitIds: EntityId[], b: Building): void {
-  const units = unitIds.map((id) => world.units.get(id)).filter((u): u is Unit => !!u && u.kind === 'villager');
+  const units = unitIds.map((id) => world.units.get(id)).filter((u): u is Unit => !!u && canWork(u.kind) && u.state !== 'garrisoned' && u.owner === b.owner);
   const cancelled = cancelExplore(world, units);
   // Slots are laid out around the edge point nearest the group's centre, so they never collide.
   const c = { x: 0, z: 0 };
@@ -258,7 +261,7 @@ export function sendBuilders(world: World, unitIds: EntityId[], b: Building): vo
 /** Help build a foundation, or staff a completed permanent farm. */
 export function orderConstruct(world: World, unitIds: EntityId[], buildingId: EntityId): void {
   const b = world.buildings.get(buildingId);
-  // Only the owner's villagers build or farm it.
+  // Only the owner's workers build or farm it.
   unitIds = unitIds.filter((id) => world.units.get(id)?.owner === b?.owner);
   if (!b || !unitIds.length) {
     reject(world, 'invalid-target');
@@ -280,6 +283,9 @@ export function orderConstruct(world: World, unitIds: EntityId[], buildingId: En
  * Occupied or out-of-bounds segments are skipped; running out of resources stops the line.
  */
 export function orderBuildWall(world: World, unitIds: EntityId[], kind: BuildingKind, from: Vec2, to: Vec2, by: PlayerId): void {
+  const workers = unitIds.filter(id => { const u = world.units.get(id); return u && canWork(u.kind) && u.owner === by && u.state !== 'garrisoned'; });
+  if (unitIds.length && !workers.length) { reject(world, 'invalid-target'); return; }
+  unitIds = workers;
   const spec = BUILDINGS[kind];
   if (!spec.buildable || !spec.line) {
     reject(world, 'invalid-target');
@@ -306,8 +312,7 @@ export function orderBuildWall(world: World, unitIds: EntityId[], kind: Building
     return;
   }
   world.emitStock();
-  const villagers = unitIds.map((id) => world.units.get(id)).filter((u): u is Unit => !!u && u.kind === 'villager');
-  villagers.forEach((u, i) => sendBuilders(world, [u.id], placed[i % placed.length]));
+  unitIds.forEach((id, i) => sendBuilders(world, [id], placed[i % placed.length]));
 }
 
 /** 'cancelBuild': refund the full cost of an unfinished foundation and remove it. */

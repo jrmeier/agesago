@@ -67,19 +67,19 @@ export function resolveAttackMove(
   return { type: 'attackMove', unitIds: [...unitIds], target: { ...ground } };
 }
 
-/** The parts of a building that decide what villagers do when ordered onto it. */
+/** The parts of a building that decide what workers do when ordered onto it. */
 export type OrderBuilding = Pick<Building, 'id' | 'kind' | 'complete' | 'food'>;
 
 /**
- * Villager order onto a building: a foundation → help construct it; a complete farm
+ * Worker order onto a building: a foundation → help construct it; a complete farm
  * → work it (a 'gather' whose nodeId is the farm); a finished shelter
- * (Town Center, watch tower) → garrison. Anything else
+ * (Town Center, watch tower) → garrison for eligible villagers supplied by the caller. Anything else
  * (e.g. a finished house) is not a building order → null, and the caller falls back to
  * selecting it or a plain move.
  */
-export function resolveBuildingOrder(villagerIds: readonly EntityId[], b: OrderBuilding): Command | null {
-  if (!villagerIds.length) return null;
-  const unitIds = [...villagerIds];
+export function resolveBuildingOrder(workerIds: readonly EntityId[], b: OrderBuilding): Command | null {
+  if (!workerIds.length) return null;
+  const unitIds = [...workerIds];
   if (!b.complete) return { type: 'construct', unitIds, buildingId: b.id };
   if (b.kind === 'farm') return { type: 'gather', unitIds, nodeId: b.id };
   if (b.kind === 'corral') return { type: 'tend', unitIds, buildingId: b.id };

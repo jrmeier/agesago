@@ -130,9 +130,9 @@ export function constructionLabel(progress: number): string {
 /** What a complete building does, for the building panel. `occupants` is how many villagers are inside. */
 export function buildingRole(kind: BuildingKind, _food?: number, _farmFood?: number, occupants?: number, workers?: number): string {
   const spec = BUILDINGS[kind];
-  if (kind === 'corral') return 'A villager breeds two owned sheep and harvests surplus; enclose with palisades and gates';
+  if (kind === 'corral') return 'A worker breeds two owned sheep and harvests surplus; enclose with palisades and gates';
   if (kind === 'farm') {
-    return workers === undefined ? 'Renewable food · 1 villager' : `Renewable food · ${workers}/1 villager assigned`;
+    return workers === undefined ? 'Renewable food · 1 worker' : `Renewable food · ${workers}/1 worker assigned`;
   }
   const parts: string[] = [];
   if (kind === 'dock') parts.push('Shoreline shipyard · Fishing, sea trade and transports');

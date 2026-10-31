@@ -20,7 +20,7 @@ test('a completed farm keeps producing without reseeding and shows its assigned 
     g.selection.set([id]);
     return { id, workerId: worker.id, food: w.stock.food, wood: w.stock.wood };
   });
-  await expect(page.locator('#unit-status')).toHaveText('Renewable food · 1/1 villager assigned');
+  await expect(page.locator('#unit-status')).toHaveText('Renewable food · 1/1 worker assigned');
   const worked = await page.evaluate(fixture => {
     const w = (window as any).game.world;
     // More food than a legacy field held, across many delivery trips.
@@ -34,7 +34,7 @@ test('a completed farm keeps producing without reseeding and shows its assigned 
     const w = (window as any).game.world;
     w.dispatch({ type: 'stop', unitIds: [fixture.workerId] });
   }, fixture);
-  await expect(page.locator('#unit-status')).toHaveText('Renewable food · 0/1 villager assigned');
+  await expect(page.locator('#unit-status')).toHaveText('Renewable food · 0/1 worker assigned');
   const stopped = await page.evaluate(() => {
     const w = (window as any).game.world;
     const food = w.stock.food;

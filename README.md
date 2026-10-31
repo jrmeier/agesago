@@ -66,19 +66,21 @@ npm run build   # static site to dist/
 ```
 
 Pushes to `main` are tested, built and deployed to https://agesago.jedm.dev by `.github/workflows/ci.yml`.
-The livestock and permanent-farm simulation uses multiplayer protocol 2; deploy the web client and relay together.
+The trained-unit work, livestock, and permanent-farm simulation uses multiplayer protocol 3; deploy the web client and relay together.
 
-## Villager work
+## Building and resource work
 
-New orders replace a villager's previous job. When a resource runs out, villagers look for the same resource near their assigned work area, then wait if none is reachable. They deliver carried resources before switching resource types.
+Villagers and all trained land units—including hoplites, archers, cavalry, priests, and trade carts—can build, gather, farm, and tend livestock. Select them to use the build menu or order them onto a resource or foundation. Their combat, healing, conversion, and trade orders remain available. Ships keep their naval roles.
 
-Build a farm once for 60 wood and assign one villager to it. The villager keeps harvesting and delivering food without exhausting the field or paying to reseed. Unstaffed farms produce no food; farming research increases work speed.
+New orders replace a worker's previous job. When a resource runs out, workers look for the same resource near their assigned work area, then wait if none is reachable. They deliver carried resources before switching resource types.
+
+Build a farm once for 60 wood and assign one worker to it. The worker keeps harvesting and delivering food without exhausting the field or paying to reseed. Unstaffed farms produce no food; farming research increases work speed.
 
 ### Livestock corrals
 
-Build a **Corral** once for 100 wood (villager build menu, **Shift+P**). Scout to claim sheep, select the owned sheep, and move at least two into the marked pasture; moved sheep keep their new home. The pasture markers are not fences: build **Palisades** and a **Gate** around it to contain animals. Gates are available in Village Age. Select a gate and choose **Allow own livestock passage** to admit sheep, then **Block livestock passage** to contain them; your people can still pass, while enemy livestock cannot.
+Build a **Corral** once for 100 wood (build menu, **Shift+P**). Scout to claim sheep, select the owned sheep, and move at least two into the marked pasture; moved sheep keep their new home. The pasture markers are not fences: build **Palisades** and a **Gate** around it to contain animals. Gates are available in Village Age. Select a gate and choose **Allow own livestock passage** to admit sheep, then **Block livestock passage** to contain them; your people can still pass, while enemy livestock cannot.
 
-Select a villager and right-click the completed corral (tap it on touch), or select the corral and use **Assign nearest idle villager**. One villager must be present and tending: with two owned sheep in the pasture, a sheep is born every 45 seconds up to a herd of six, and the worker harvests surplus livestock every 60 seconds for 60 food while retaining two breeders. Production stops without a worker or breeding pair. **Release tending villager**, Stop, or another unit order ends the job. The corral panel shows sheep count, worker status, and a collapsible guide; assignments, progress, and gate settings survive saves and multiplayer commands.
+Select a land worker and right-click the completed corral (tap it on touch), or select the corral and use **Assign nearest idle worker**. One worker must be present and tending: with two owned sheep in the pasture, a sheep is born every 45 seconds up to a herd of six, and the worker harvests surplus livestock every 60 seconds for 60 food while retaining two breeders. Production stops without a worker or breeding pair. **Release tending worker**, Stop, or another unit order ends the job. The corral panel shows sheep count, worker status, and a collapsible guide; assignments, progress, and gate settings survive saves and multiplayer commands.
 
 ## Villager camera views
 

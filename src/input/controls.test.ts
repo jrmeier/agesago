@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type Building, type BuildingKind, type Command } from '../core/types';
+import { type Building, type BuildingKind, type Command, type UnitKind } from '../core/types';
 import { qualityTier } from '../core/quality';
 import { Selection } from '../game/Selection';
 import { EntityViews } from '../render/EntityViews';
@@ -108,7 +108,7 @@ function installOrderDom(): HTMLElement {
   return element() as unknown as HTMLElement;
 }
 
-function orderScene(target: 'tree' | BuildingKind) {
+function orderScene(target: 'tree' | BuildingKind, kind: UnitKind = 'villager') {
   const hud = installOrderDom();
   const hf = testField(true);
   const world = new World(hf, {
@@ -116,6 +116,7 @@ function orderScene(target: 'tree' | BuildingKind) {
     scouts: [], nodes: target === 'tree' ? [{ kind: 'tree', pos: { x: 30, z: 24 }, amount: 100 }] : [], props: [],
   }, defaultPlayers(2));
   const [selected, overlapping] = [...world.units.values()];
+  selected.kind = kind;
   let targetId: number;
   if (target === 'tree') targetId = [...world.nodes.keys()][0];
   else {
@@ -296,4 +297,32 @@ describe('orders through overlapping friendly villagers', () => {
     s.click('desktop');
     expect(s.commands).toEqual([{ type: 'gather', unitIds: [s.selected.id], nodeId: s.targetId }]);
   });
+});
+
+
+describe('trained land unit work controls', () => {
+  beforeEach(() => vi.restoreAllMocks());
+  afterEach(() => vi.unstubAllGlobals());
+
+  for (const mode of ['desktop', 'touch'] as const) {
+    for (const kind of ['hoplite', 'archer', 'horseman', 'priest', 'tradeCart'] as const) {
+      for (const target of ['house', 'farm', 'corral'] as const) {
+        it(`${mode} assigns ${kind} to ${target} without a following move canceling the job`, () => {
+          const s = orderScene(target, kind);
+          s.click(mode);
+          expect(s.commands).toEqual([target === 'house'
+            ? { type: 'construct', unitIds: [s.selected.id], buildingId: s.targetId }
+            : target === 'corral'
+              ? { type: 'tend', unitIds: [s.selected.id], buildingId: s.targetId }
+              : { type: 'gather', unitIds: [s.selected.id], nodeId: s.targetId }]);
+        });
+      }
+    }
+    it(`${mode} keeps shelters villager-only and moves a hoplite to the shelter`, () => {
+      const s = orderScene('townCenter', 'hoplite');
+      s.click(mode);
+      expect(s.commands).toHaveLength(1);
+      expect(s.commands[0].type).toBe('move');
+    });
+  }
 });

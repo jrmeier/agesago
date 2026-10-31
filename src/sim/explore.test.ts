@@ -83,7 +83,7 @@ describe('scouts', () => {
     expect(vis.isVisible(v.pos.x + 6, v.pos.z)).toBe(true);
   });
 
-  it('a gather order sends scouts next to the node without gathering; villagers still gather', () => {
+  it('an explicit gather order lets scouts work alongside villagers', () => {
     const world = new World(
       field(64, 48),
       layout({ x: 32, z: 24 }, [{ x: 32, z: 28.5 }], [{ x: 28, z: 28.5 }], [{ kind: 'berry', pos: { x: 38, z: 30 }, amount: 100 }])
@@ -92,13 +92,11 @@ describe('scouts', () => {
     const [s] = unitsOf(world, 'scout');
     const node = world.nodes.keys().next().value as number;
     world.dispatch({ type: 'gather', unitIds: [s.id, v.id], nodeId: node });
-    expect(s.state).toBe('moving');
+    expect(s.state).toBe('toNode');
     expect(v.state).toBe('toNode');
     run(world, 10);
-    expect(s.state).toBe('idle');
-    expect(s.gatherNode).toBeNull();
-    expect(s.carry).toBeNull();
-    expect(Math.hypot(s.pos.x - 38, s.pos.z - 30)).toBeLessThan(1.5);
+    expect(['gathering', 'toDrop', 'toNode']).toContain(s.state);
+    expect(s.gatherNode).toBe(node);
     expect(['gathering', 'toDrop', 'toNode']).toContain(v.state);
     expect(world.nodes.get(node)!.amount).toBeLessThan(100);
   });

@@ -35,7 +35,11 @@ match by resignation; relay tests cover identity attribution and hash disagreeme
 
 Host: `jedmeier@157.245.7.84` (jedm). Static files remain under `/var/www/agesago.jedm.dev`.
 The separate relay service binds only `127.0.0.1:8973` and runs as `jedmeier`.
-Build `relay-dist`, copy it plus `server/start.mjs` and package/lock files into an immutable
+Build both `dist` and `relay-dist` from the same commit. When `NETWORK_VERSION` changes,
+release both together: older clients are rejected until refreshed. Keep a backup of the
+current static files and relay symlink for a paired rollback. Copy `dist` to the static
+root with directories readable/traversable (755) and files readable (644) by nginx.
+Copy `relay-dist` plus `server/start.mjs` and package/lock files into an immutable
 `/home/jedmeier/agesago-relay/releases/<commit>` directory, run `npm ci --omit=dev`, and point
 `/home/jedmeier/agesago-relay/current` at that release. Install the service unit from
 `server/agesago-relay.service` and start it with systemd.
@@ -56,7 +60,8 @@ location /multiplayer {
 
 Validate with `nginx -t` before reloading. Check both `/multiplayer/health` and an actual
 WebSocket create/join/turn exchange at `wss://agesago.jedm.dev/multiplayer` afterwards.
-Rollback: restore the previous release symlink and restart `agesago-relay`; for a first
+Rollback: restore both the matching static-file backup and previous relay release symlink,
+then restart `agesago-relay` and verify the health protocol and referenced web assets. For a first
 installation, stop/disable the service and restore the saved nginx site file, validate,
 then reload nginx. No database or existing game data is migrated.
 

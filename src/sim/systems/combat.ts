@@ -1,14 +1,14 @@
 import { orderTend } from './livestock';
 import { BUILDINGS } from '../../core/buildings';
 import type { Building, EntityId, PlayerId, ResourceType, Stance, Unit, UnitKind, UnitState, Vec2 } from '../../core/types';
-import { isAnimal, isShip, UNITS } from '../../core/units';
+import { canWork, isAnimal, isShip, UNITS } from '../../core/units';
 import { GAIA } from '../../core/types';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
 import { removeBuilding, sendBuilders } from './build';
 import { navFor, route, routeForUnit } from './passage';
 import { cancelExplore, settleCancelled } from './explore';
-import { resumeGatherJob, sendToDrop, sendToFarm, sendToNode } from './gather';
+import { clearEconomyJob, resumeGatherJob, sendToDrop, sendToFarm, sendToNode } from './gather';
 import { formationOffset } from './movement';
 import { siteApproach } from './sites';
 import { playerHasFlag } from './research';
@@ -209,10 +209,7 @@ export function findEnemy(world: World, u: Unit, radius: number): Target | null 
 function clearWork(world: World, units: Unit[]): Unit[] {
   const cancelled = cancelExplore(world, units);
   for (const u of units) {
-    u.gatherNode = null;
-    u.gatherType = null;
-    world.gatherState.delete(u.id);
-    world.buildState.delete(u.id);
+    clearEconomyJob(world, u);
     world.fleeState.delete(u.id);
     u.target = null;
     const cs = world.combatState.get(u.id);
@@ -328,7 +325,7 @@ function edgeDistanceTo(p: Vec2, b: Building): number {
 }
 
 /**
- * Send a freshly trained unit to its building's rally point: villagers gather a rallied
+ * Send a freshly trained unit to its building's rally point: capable land units work a rallied
  * resource or farm (or build a rallied foundation), anyone attacks a rallied enemy, otherwise
  * the unit walks to the point.
  */
@@ -338,17 +335,21 @@ export function applyRally(world: World, b: Building, u: Unit): void {
   if (r.targetId !== undefined) {
     const node = world.nodes.get(r.targetId);
     if (node && u.kind === 'fishingBoat') { world.dispatch({ type: 'gather', unitIds: [u.id], nodeId: node.id }, u.owner); return; }
-    if (node && u.kind === 'villager' && sendToNode(world, u, node)) return;
+    if (node && canWork(u.kind) && sendToNode(world, u, node)) return;
     const t = targetOf(world, r.targetId);
     if (t && world.areEnemies(u.owner, t.owner)) {
       orderAttack(world, [u.id], t.id, u.owner);
       return;
     }
-    if (t && !isUnit(t) && t.owner === u.owner && u.kind === 'villager') {
+    if (t && !isUnit(t) && t.owner === u.owner && canWork(u.kind)) {
       if (!t.complete) {
         sendBuilders(world, [u.id], t);
         if (u.state === 'toBuild') return;
       } else if (t.kind === 'farm' && sendToFarm(world, u, t)) return;
+      else if (t.kind === 'corral') {
+        orderTend(world, [u.id], t.id, u.owner);
+        if (u.tendingCorral !== undefined) return;
+      }
     }
   }
   const path = routeForUnit(world, u, r.pos);

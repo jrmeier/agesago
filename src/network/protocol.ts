@@ -5,8 +5,8 @@ import { TECHS } from '../core/techs';
 import type { Command } from '../core/types';
 import { UNITS } from '../core/units';
 
-/** Permanent farms and livestock change deterministic simulation and command support. */
-export const NETWORK_VERSION = 2;
+/** Trained land units can work, changing deterministic simulation from protocol 2. */
+export const NETWORK_VERSION = 3;
 export const TICKS_PER_TURN = 4;
 export const HASH_EVERY = 25;
 export const MAX_COMMANDS = 64;
