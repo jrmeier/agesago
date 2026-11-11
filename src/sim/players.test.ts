@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GRASS_ONLY, type Heightfield, type MapLayout } from '../core/types';
+import { BALANCE } from './balance';
 import { World } from './World';
 
 function flat(): Heightfield {
@@ -36,7 +37,7 @@ describe('players and ownership', () => {
     expect(w.popOf(1)).toBe(1);
     expect(w.popOf(2)).toBe(1);
     w.stockOf(2).food = 500;
-    expect(w.stock.food).toBe(0);
+    expect(w.stock.food).toBe(BALANCE.startingStock.food);
     expect(w.visibilityOf(1).isVisible(15, 15)).toBe(true);
     expect(w.visibilityOf(1).isExplored(65, 65)).toBe(false);
     expect(w.visibilityOf(2).isVisible(65, 65)).toBe(true);

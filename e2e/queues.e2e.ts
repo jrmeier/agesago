@@ -121,7 +121,7 @@ test('queue cancel, the rally flag, and the idle badge work', async ({ page }, t
   const rally = await page.evaluate(() => (window as any).game.world.townCenter.rally?.pos ?? null);
   expect(rally).toBeTruthy();
 
-  // A match starts with an empty stockpile. Put food in so the queue control can be used.
+  // Set food explicitly so the queue control can be used whatever the starting stockpile is.
   await page.evaluate(() => {
     (window as any).game.world.stock.food = 200;
   });

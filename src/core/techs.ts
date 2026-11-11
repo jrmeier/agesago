@@ -109,16 +109,16 @@ const table = {
   woodlandCraft:{name:'Woodland Craft',description:'Villagers carry 3 more wood; infantry walk 5% faster.',at:'forge',cost:{food:175,gold:100},time:45,age:1,civ:'celts',effects:[add('villager','carry.wood',3),mul('class:infantry','speed',1.05)]},
   // ---- Ages (Town Center) ----
   townAge: {
-    name: 'Town Age', description: 'Advance to the Town Age: archers, horsemen, swordsmen, civilization units, priests, trade carts, merchant ships, triremes, forge, market, watch towers, temple and stone walls.',
-    at: 'townCenter', cost: { food: 400 }, time: 60, age: 0, effects: [], ageUp: 1,
+    name: 'Town Age', description: 'Advance to the Town Age: archers, horsemen, swordsmen, civilization units, priests, trade carts, merchant ships, triremes, forge, market, watch towers, temple, stone walls and the first unit-line upgrades.',
+    at: 'townCenter', cost: { food: 300 }, time: 45, age: 0, effects: [], ageUp: 1,
   },
   cityAge: {
-    name: 'City Age', description: 'Advance to the City Age: academy, unit upgrades and stronger defences.',
-    at: 'townCenter', cost: { food: 3800, gold: 800 }, time: 150, age: 1, effects: [], ageUp: 2,
+    name: 'City Age', description: 'Advance to the City Age: the academy with its masonry, ballistics and tower techs, second-tier unit lines, elite civilization units and stronger economy and forge techs.',
+    at: 'townCenter', cost: { food: 1200, gold: 500 }, time: 90, age: 1, effects: [], ageUp: 2,
   },
   empireAge: {
-    name: 'Empire Age', description: 'Advance to the Empire Age: elite units and the finest techs.',
-    at: 'townCenter', cost: { food: 12000, gold: 1500, stone: 1000 }, time: 240, age: 2, effects: [], ageUp: 3,
+    name: 'Empire Age', description: 'Advance to the Empire Age: third-tier unit lines and the finest economy, forge and defence techs.',
+    at: 'townCenter', cost: { food: 6500, gold: 1000, stone: 600 }, time: 150, age: 2, effects: [], ageUp: 3,
   },
 
   // ---- Town Center ----

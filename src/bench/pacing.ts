@@ -22,11 +22,11 @@ const RESOURCES: ResourceType[] = ['food', 'wood', 'gold', 'stone'];
 const dist = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.z - b.z);
 const total = (c: Partial<Stockpile>) => (c.food ?? 0) + (c.wood ?? 0) + (c.gold ?? 0) + (c.stone ?? 0);
 
-/** Pacing targets, seconds of sim time (ticket M8-17). */
+/** Pacing targets, seconds of sim time (ticket M13-3: Town 5:00, City 12:00, Empire 20:00). */
 export const AGE_TARGETS: Record<1 | 2 | 3, { target: number; lo: number; hi: number }> = {
-  1: { target: 600, lo: 480, hi: 720 },
-  2: { target: 1200, lo: 1080, hi: 1320 },
-  3: { target: 1950, lo: 1680, hi: 2220 },
+  1: { target: 300, lo: 240, hi: 360 },
+  2: { target: 720, lo: 630, hi: 810 },
+  3: { target: 1200, lo: 1080, hi: 1320 },
 };
 /** Every economy tech must pay for itself (research time included) within this many seconds. */
 export const PAYBACK_LIMIT = 300;
@@ -76,8 +76,8 @@ function findSpot(
 
 /** Share of gatherers per resource, by the age being worked toward. */
 const SPLITS: Record<Age, Record<ResourceType, number>> = {
-  0: { food: 0.55, wood: 0.45, gold: 0, stone: 0 },
-  1: { food: 0.45, wood: 0.32, gold: 0.18, stone: 0.05 },
+  0: { food: 0.65, wood: 0.35, gold: 0, stone: 0 },
+  1: { food: 0.48, wood: 0.36, gold: 0.12, stone: 0.04 },
   2: { food: 0.4, wood: 0.26, gold: 0.27, stone: 0.07 },
   3: { food: 0.4, wood: 0.26, gold: 0.27, stone: 0.07 },
 };
@@ -91,13 +91,14 @@ const ARMY_CAP = 125;
 
 /**
  * Economy techs the build order researches, in priority order, with a "worth it now" test.
- * `first` techs come before the next age-up; the rest wait until the age-up is paid for.
+ * `first` techs come before the next age-up; earlier-age techs are bought alongside it without holding it
+ * up; the rest wait until the age-up is paid for.
  */
 const ECO_ORDER: { tech: TechId; first?: boolean; when: (c: Counts) => boolean }[] = [
   { tech: 'bronzeAxe', first: true, when: (c) => c.wood >= 5 },
-  { tech: 'oxPlough', first: true, when: (c) => c.farms >= 3 },
-  { tech: 'donkeyPacks', first: true, when: (c) => c.villagers >= 18 },
-  { tech: 'bronzePicks', first: true, when: (c) => c.gold >= 3 },
+  { tech: 'oxPlough', when: (c) => c.farms >= 3 },
+  { tech: 'donkeyPacks', when: (c) => c.villagers >= 18 },
+  { tech: 'bronzePicks', when: (c) => c.gold >= 3 },
   { tech: 'ironAxe', first: true, when: (c) => c.wood >= 8 },
   { tech: 'ironPloughshare', first: true, when: (c) => c.farms >= 6 },
   { tech: 'deepShafts', when: (c) => c.gold >= 5 },
@@ -230,6 +231,8 @@ class BuildOrder {
     if (this.tc.research?.length || this.tc.queue >= 2) return;
     const n = this.villagers().length + this.tc.queue;
     if (n >= VILLAGER_CAP || this.stock.food < 50) return;
+    // Like a player going up to the Town Age: once only food holds it back, bank food instead of villagers.
+    if (this.me.age === 0 && researchBlock(this.world, ME, 'townAge', true) === null && this.stock.food < TECHS.townAge.cost.food!) return;
     if (this.world.popOf(ME) + this.queued() >= this.world.popCapOf(ME)) return;
     this.world.dispatch({ type: 'train', buildingId: this.tc.id, unit: 'villager' }, ME);
   }
@@ -297,11 +300,11 @@ class BuildOrder {
     let waiting = false;
     for (const { tech, first, when } of ECO_ORDER) {
       if (this.skip.has(tech) || TECHS[tech].age > this.me.age || this.isQueued(tech) || !when(this.counts())) continue;
-      // Earlier-age techs are always worth buying before the next age-up.
+      // Earlier-age techs are worth buying before the next age-up, but only `first` ones hold it up.
       const now = first || TECHS[tech].age < this.me.age;
       if (saving && !now) continue;
       this.tryResearch(tech);
-      if (now && !this.isQueued(tech)) waiting = true;
+      if (first && !this.isQueued(tech)) waiting = true;
     }
     if (saving && !waiting) {
       this.tryResearch(ageUp);
@@ -334,9 +337,15 @@ class BuildOrder {
   // ---- buildings ----
   private ageBuildings(): void {
     for (const kind of AGE_BUILDINGS[this.me.age]) {
-      if (kind === 'storehouse' || kind === 'granary') continue; // laid as drop sites
+      if (kind === 'storehouse') continue; // laid as a drop site
       if (this.mine(kind).length) continue;
       if (!this.affords(BUILDINGS[kind].cost)) return;
+      if (kind === 'granary') {
+        // Berries next to the Town Center don't need a granary as a drop site, but the Town Age does.
+        const berry = this.frontier('food', (n) => n.kind === 'berry');
+        this.build(kind, berry ? this.toward(berry.pos, 3.5) : this.tc.pos, 0, 12, 2, 1.2);
+        return;
+      }
       this.build(kind, this.tc.pos, 10, 26, 3);
       return;
     }

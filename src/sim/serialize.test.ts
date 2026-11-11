@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { Heightfield, MapLayout, ResourceNode } from '../core/types';
 import { generateMap } from './mapgen';
 import { deserializeWorld, SAVE_VERSION, serializeWorld } from './serialize';
+import { BALANCE } from './balance';
 import { World } from './World';
 import { completeBuilding, layFoundation } from './systems/build';
 import { applyDamage } from './systems/combat';
@@ -119,8 +120,8 @@ describe('world save/load', () => {
     b.stock.food = 500;
     b.visibility.state.fill(2);
     expect(a.units.get(first.id)!.pos).toEqual(first.pos);
-    expect(save.players[0].stock.food).toBe(0);
-    expect(a.stock.food).toBe(0);
+    expect(save.players[0].stock.food).toBe(BALANCE.startingStock.food);
+    expect(a.stock.food).toBe(BALANCE.startingStock.food);
     a.units.get(first.id)!.path.push({ x: 1, z: 2 });
     expect(first.path).toEqual([]);
   });

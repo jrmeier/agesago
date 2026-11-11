@@ -21,6 +21,8 @@ function setup(nodes: MapLayout['nodes'], hf = field()) {
   const world = new World(hf, {
     townCenter: { x: 10, z: 10 }, villagers: [{ x: 10, z: 20 }], scouts: [], props: [], nodes,
   });
+  // An empty stockpile, so the stock is exactly what was gathered.
+  Object.assign(world.stock, { food: 0, wood: 0, gold: 0, stone: 0 });
   const worker = [...world.units.values()][0];
   const rejected: SimEvent[] = [];
   world.events.on('rejected', (e) => rejected.push(e));

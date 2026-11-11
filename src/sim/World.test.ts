@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_SEED, GRASS_ONLY, type Heightfield, type MapLayout, type SimEvent, type Vec2 } from '../core/types';
 import { BALANCE } from './balance';
 import { generateMap } from './mapgen';
-import { World } from './World';
+import { BUILDINGS } from '../core/buildings';
+import { World, defaultPlayers } from './World';
 
 const DT = 1 / BALANCE.tickRate;
 
@@ -32,6 +33,11 @@ function record(world: World): SimEvent[] {
   return log;
 }
 
+/** Start from an empty stockpile, so the stock is exactly what was gathered. */
+function emptyStock(world: World): void {
+  Object.assign(world.stock, { food: 0, wood: 0, gold: 0, stone: 0 });
+}
+
 function run(world: World, seconds: number, each?: () => void): void {
   for (let i = 0, n = Math.round(seconds / DT); i < n; i++) {
     world.tick(DT);
@@ -50,11 +56,28 @@ describe('World (contract smoke test)', () => {
     expect(world.nodes.size).toBe(layout.nodes.length);
     expect(world.townCenter!.kind).toBe('townCenter');
   });
+
+  it('gives every player the starting stockpile: villagers and a first building at 0:00', () => {
+    const { hf, layout } = generateMap(DEFAULT_SEED, 2);
+    const world = new World(hf, layout, defaultPlayers(2));
+    for (const id of [1, 2]) {
+      expect(world.stockOf(id)).toEqual(BALANCE.startingStock);
+      expect(world.stockOf(id)).not.toBe(world.stockOf(id === 1 ? 2 : 1));
+    }
+    const { food, wood } = BALANCE.startingStock;
+    expect(food).toBeGreaterThanOrEqual(2 * BALANCE.trainCost.food);
+    expect(wood).toBeGreaterThanOrEqual(BUILDINGS.storehouse.cost.wood!);
+    const tc = world.townCenterOf(1)!;
+    world.dispatch({ type: 'train', buildingId: tc.id, unit: 'villager' }, 1);
+    expect(tc.queue).toBe(1);
+    expect(world.stockOf(1).food).toBe(food - BALANCE.trainCost.food);
+  });
 });
 
 describe('gathering', () => {
   it('fills to carry cap, walks to the TC, and stock rises only on deposit by carryCap', () => {
     const world = new World(flatField(), layout([{ x: 32, z: 28.5 }], [{ kind: 'tree', pos: { x: 38, z: 28 }, amount: 100 }]));
+    emptyStock(world);
     const log = record(world);
     const u = world.units.get(firstId(world.units))!;
     const tree = firstId(world.nodes);
@@ -119,6 +142,7 @@ describe('gathering', () => {
         ]
       )
     );
+    emptyStock(world);
     const u = world.units.get(firstId(world.units))!;
     world.dispatch({ type: 'gather', unitIds: [u.id], nodeId: firstId(world.nodes) });
     run(world, 30);
@@ -135,6 +159,7 @@ describe('gathering', () => {
         { kind: 'gold', pos: { x: 30, z: 32 }, amount: 100 },
       ])
     );
+    emptyStock(world);
     const u = world.units.get(firstId(world.units))!;
     const [tree, gold] = [...world.nodes.keys()];
     world.dispatch({ type: 'gather', unitIds: [u.id], nodeId: tree });

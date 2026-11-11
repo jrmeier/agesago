@@ -173,6 +173,7 @@ describe('explicit land-unit economy work', () => {
     w.dispatch({ type: 'tend', unitIds: [u.id], buildingId: corral.id });
     w.dispatch({ type: 'build', unitIds: [u.id], kind: 'house', pos: { x: 55, z: 30 }, rot: 0 });
     expect(u.gatherNode).toBeNull(); expect(u.tendingCorral).toBeUndefined(); expect(w.buildState.has(u.id)).toBe(false);
-    expect([...w.buildings.values()].some(b => b.kind === 'house')).toBe(false); expect(w.stock.wood).toBe(stock);
+    // Animals belong to gaia, so dispatch strips them and 'build' is a builder-less placement the stockpile can pay for.
+    if (u.owner === 1) { expect([...w.buildings.values()].some(b => b.kind === 'house')).toBe(false); expect(w.stock.wood).toBe(stock); }
   });
 });

@@ -38,7 +38,7 @@ export const BALANCE = {
   placementSample: 0.5,
   /** A farmer stands this far inside the field edge. */
   farmInset: 0.6,
-  startingStock: { wood: 0, food: 0, gold: 0, stone: 0 },
+  startingStock: { food: 200, wood: 200, gold: 100, stone: 100 },
   villagerRadius: 0.3,
   townCenterRadius: 1.6,
   /** Gap kept between a villager's edge and the node / building it walks up to. */

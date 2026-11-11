@@ -1,4 +1,4 @@
-# Progression balance (M8-17)
+# Progression balance (M8-17, retuned in M13-3)
 
 How fast a game moves through the ages, why each economy tech costs what it does, and how to
 check both again after a change.
@@ -7,9 +7,15 @@ check both again after a change.
 
 | Age | Target | Band the bench accepts |
 |---|---|---|
-| Town Age | about 10:00 | 8:00–12:00 |
-| City Age | about 20:00 | 18:00–22:00 |
-| Empire Age | about 30:00–35:00 | 28:00–37:00 |
+| Town Age | about 5:00 | 4:00–6:00 |
+| City Age | about 12:00 | 10:30–13:30 |
+| Empire Age | about 20:00 | 18:00–22:00 |
+
+Like 0 A.D. phases, an age-up is a modest cost plus a building count: two distinct completed
+buildings from the current age (`AGE_BUILDINGS_NEEDED`; only the Academy for the Empire Age).
+
+**Starting stockpile.** Every player starts with 200 food, 200 wood, 100 gold and 100 stone
+(`BALANCE.startingStock`), so at 0:00 they can queue villagers and lay a first drop site.
 
 Every economy tech has to **pay for itself within 5 sim-minutes** of clicking it, research time
 included, with a typical crew of 6–10 villagers on that resource. Bronze Axe should take about
@@ -46,10 +52,12 @@ unit-vs-unit damage is the same as before. Targets with no research, checked in 
 `src/bench/pacing.ts` plays player 1 on a real generated map (`generateMap(seed, 2)`, the real
 `World`, no AI). It plays like a steady human player, not an optimised rush:
 
-- It trains villagers without stopping, up to 70. The Town Center stops only while it researches.
+- It trains villagers without stopping, up to 70. The Town Center stops only while it researches,
+  and once the Town Age is only waiting on food, it banks food instead of training (as a player
+  going up would).
 - It builds houses ahead of population (up to 200), drop sites next to the nearest berries, trees,
   gold and stone (and moves on as they run out), then permanent farms once the berries are gone.
-- It splits villagers by the age it is working toward. The Village Age is 55% food and 45% wood.
+- It splits villagers by the age it is working toward. The Village Age is 65% food and 35% wood.
   Later ages bring in gold and stone. When a resource runs out within reach, its share goes to the
   other resources.
 - **It keeps a standing army.** From the Town Age it has one barracks per age past Village, each
@@ -57,10 +65,11 @@ unit-vs-unit damage is the same as before. Targets with no research, checked in 
   military spending, so age-ups compete with it for food and wood. Without it, a 70-villager
   economy piles up resources and the costs can't produce a real game's arc.
 - It researches economy techs when they're worth it: Bronze Axe at 5 woodcutters, Ox Plough at
-  3 farms, and so on. Bronze Axe, Ox Plough, Donkey Packs, Bronze Picks, Iron Axe and Iron
-  Ploughshare come before the next age-up. The rest wait until that age-up is paid for.
+  3 farms, and so on. Bronze Axe, Iron Axe and Iron Ploughshare come before the next age-up.
+  Techs from an earlier age are bought alongside the age-up but don't hold it up. The rest wait
+  until that age-up is paid for.
 - It ages up as soon as it has the buildings and can pay. For the Town Age it builds a storehouse
-  and a granary, for the City Age a forge and a market, and for the Empire Age an academy. If gold is
+  and a granary (the granary even when the berries are close enough to use the Town Center), for the City Age a forge and a market, and for the Empire Age an academy. If gold is
   the only thing missing, it sells spare wood or food at the market.
 - It knows the map (its fog is explored at the start), so building placement never waits on scouting.
 
@@ -98,16 +107,17 @@ pay the next unit stops repairing. A damaged ship near an own finished dock heal
 `dockHealRate` (1.5 hp/s).
 
 **Age cost scale.** Villagers here gather about 0.7–0.8 resources/s and train in 8 s, so incomes
-are roughly 4× an AoE2 game's. That puts the scripted economy at about 900/min at 10 min,
-2,300/min at 15 min and 3,000/min at 25 min. Each age costs a few minutes of that income on top
-of the army upkeep:
+are roughly 4× an AoE2 game's. That puts the scripted economy at about 700/min at 3 min,
+2,300/min at 10 min, 2,700/min at 15 min and 3,700/min at 20 min. Each age costs modest
+minutes of that income on top of villagers and the army; the building count sets the rest of the pace:
 
-- Town Age: 400 food (about half a minute of Village income)
-- City Age: 3,800 food and 800 gold (about 2 min of Town income)
-- Empire Age: 12,000 food, 1,500 gold and 1,000 stone, with a 4-minute research (about 5 min of City income)
+- Town Age: 300 food, 45 s (about a minute of Village food once the two buildings are up)
+- City Age: 1,200 food and 500 gold, 90 s (about a minute of Town income, minus the army)
+- Empire Age: 6,500 food, 1,000 gold and 600 stone, 150 s (about 3–4 min of City income after the
+  army, techs and second-tier upgrades)
 
 **Gold is the scarce resource.** Each start kit has 800 gold, and about 3,200 lies within 90 tiles
-of a Town Center. The scripted player has mined all of that by about minute 22. Age gold costs stay
+of a Town Center. The scripted player has mined all of that by about minute 18–21. Age gold costs stay
 inside that budget, and the Empire Age leans on food. Anything past it has to come from the market
 or trade carts.
 
@@ -119,62 +129,75 @@ heal 1 hp/s (`garrisonHeal`), 3 hp/s in a temple (`garrisonHealBy`). Below 20% o
 
 ## Results
 
-Historical results from `npm run bench:pacing` on lane/balance8 (M8 sim, 70 villagers,
-standing army), before permanent farms. Rerun the benchmark for current rates and age times.
+From `npm run bench:pacing` after M13-3 (permanent farms, three-tier unit lines, starting
+stockpile, 70 villagers, standing army).
 
 ### Age times, seeds 1–5
 
 | Seed | Town | City | Empire |
 |---|---|---|---|
-| 1 | 10:39 | 19:03 | 31:10 |
-| 2 | 10:35 | 19:09 | 31:34 |
-| 3 | 10:39 | 19:19 | 32:09 |
-| 4 | 10:45 | 19:20 | 32:14 |
-| 5 | 10:45 | 19:13 | 32:00 |
+| 1 | 4:33 | 12:00 | 20:01 |
+| 2 | 4:57 | 12:18 | 19:45 |
+| 3 | 4:57 | 11:59 | 19:48 |
+| 4 | 4:57 | 12:15 | 20:37 |
+| 5 | 4:57 | 12:08 | 19:54 |
 
-With the old numbers (`townAge` 500f/60 s, `cityAge` 800f 200g/90 s, `empireAge` 1000f 800g
-200s/120 s), the same build order reached Town at about 10:40, City at about 15:40 and Empire at
-about 18:20. The pre-M8-17 code couldn't reach the Empire Age at all; see "Sim fix" below.
+With the M8-17 costs (`townAge` 400f/60 s, `cityAge` 3800f 800g/150 s, `empireAge` 12000f 1500g
+1000s/240 s) and the starting stockpile, the same build order reached Town at about 8:20, City at
+about 16:40 and Empire at about 28:30 on seed 1.
 
 ### Gather rate over time (seed 1, resources deposited per minute)
 
 | Minute | Age | Villagers + soldiers | Workers f/w/g/s | Food | Wood | Gold | Stone |
 |---|---|---|---|---|---|---|---|
-| 5 | Village | 12 + 0 | 7/5/0/0 | 155 | 190 | 0 | 0 |
-| 10 | Village | 32 + 0 | 14/12/5/1 | 656 | 218 | 13 | 0 |
-| 15 | Town | 65 + 18 | 27/20/11/2 | 1263 | 687 | 283 | 104 |
-| 20 | City | 70 + 44 | 27/19/18/5 | 1241 | 511 | 247 | 220 |
-| 25 | City | 70 + 87 | 38/25/0/7 | 1667 | 1076 | 0 | 273 |
-| 30 | City | 70 + 99 | 36/25/0/5 | 1753 | 548 | 0 | 78 |
-| 35 | Empire | 70 + 99 | 41/27/0/0 | 2351 | 780 | 0 | 0 |
+| 3 | Village | 16 + 0 | 8/6/0/0 | 395 | 320 | 0 | 0 |
+| 5 | Town | 20 + 0 | 7/5/2/0 | 409 | 220 | 60 | 0 |
+| 8 | Town | 35 + 5 | 12/13/5/2 | 572 | 439 | 137 | 73 |
+| 10 | Town | 50 + 12 | 23/18/5/2 | 1196 | 844 | 169 | 67 |
+| 12 | City | 54 + 22 | 21/14/13/3 | 1320 | 646 | 273 | 91 |
+| 15 | City | 66 + 37 | 25/17/16/5 | 1404 | 684 | 400 | 245 |
+| 20 | City | 70 + 73 | 39/24/0/6 | 2301 | 1223 | 0 | 208 |
+| 25 | Empire | 70 + 74 | 38/25/0/5 | 2430 | 1462 | 0 | 108 |
 
-Gold stops at about minute 22 because nothing is left within reach. Wood per villager is low late
-in the game because the woodline has moved far out. `--verbose` prints every minute for every seed.
+Gold stops at about minute 18–21 because nothing is left within reach. `--verbose` prints every
+minute for every seed.
 
-### Economy tech payback (seed 1; seeds 2–5 match within a few seconds)
+### Economy tech payback (seed 1)
 
-| Tech | Cost | Time | Crew | Gain | Payback (before → after) |
+Unchanged by M13-3: the age-up costs don't enter the payback measurement, and every economy tech
+still pays back within 5 minutes, so no tech cost changed.
+
+| Tech | Cost | Time | Crew | Gain | Payback |
 |---|---|---|---|---|---|
-| Bronze Axe | 90f 50w | 25 s | 8 wood | +12.2% | 3:12 → **3:01** |
-| Iron Axe | 125f 50g | 45 s | 10 wood | +11.1% | 5:23 → **3:24** |
-| Two-Man Saw | 150f 75g | 60 s | 10 wood | +11.5% | 15:57 → **3:58** |
-| Bronze Picks | 75f 75w | 30 s | 8 gold | +12.1% | 4:09 → **3:38** |
-| Stone Chisels | 75f 75w | 30 s | 6 stone | +19.2% | 3:25 → **3:00** |
-| Deep Shafts | 150f 100w | 45 s | 8 gold + 4 stone | +10.8% | 5:13 → **3:53** |
-| Ore Sledges | 150f 100w | 50 s | 10 gold + 4 stone | +9.7% | 8:22 → **3:31** |
-| Ox Plough | 75f 75w | 25 s | 8 farm | +18.6% | 4:49 → **3:43** |
-| Iron Ploughshare | 125f 75w | 45 s | 10 farm | +18.4% | 9:09 → **3:55** |
-| Crop Rotation | 150f 100w | 50 s | 10 farm | +18.6% | 15:01 → **4:09** |
-| Threshing Floor | 100f 50w | 40 s | 6 berry | +14.0% | 5:53 → **3:48** |
-| Donkey Packs | 175f 50w | 50 s | 8 wood + 8 farm + 4 gold | +7.6% | 4:32 → **4:07** |
-| Ox Carts | 300f 200w | 75 s | 10 wood + 10 farm + 8 gold | +21.0% | 3:02 → 3:02 |
+| Bronze Axe | 90f 50w | 25 s | 8 wood | +12.2% | 3:01 |
+| Iron Axe | 125f 50g | 45 s | 10 wood | +11.1% | 3:24 |
+| Two-Man Saw | 150f 75g | 60 s | 10 wood | +11.5% | 3:58 |
+| Bronze Picks | 75f 75w | 30 s | 8 gold | +12.1% | 3:38 |
+| Stone Chisels | 75f 75w | 30 s | 6 stone | +19.2% | 3:00 |
+| Deep Shafts | 150f 100w | 45 s | 8 gold + 4 stone | +10.8% | 3:53 |
+| Ore Sledges | 150f 100w | 50 s | 10 gold + 4 stone | +9.7% | 3:31 |
+| Ox Plough | 75f 75w | 25 s | 8 farm | +10.6% | 4:50 |
+| Iron Ploughshare | 125f 75w | 45 s | 10 farm | +11.4% | 4:55 |
+| Crop Rotation | 150f 100w | 50 s | 10 farm | +13.7% | 4:44 |
+| Threshing Floor | 100f 50w | 40 s | 6 berry | +14.0% | 3:48 |
+| Donkey Packs | 175f 50w | 50 s | 8 wood + 8 farm + 4 gold | +7.6% | 3:51 |
+| Ox Carts | 300f 200w | 75 s | 10 wood + 10 farm + 8 gold | +23.1% | 2:46 |
 
 Village Age techs are judged with 8 workers. Town and City Age techs are judged with 10, because
 camps are bigger by then. Census (villagers train 10% faster) isn't in the table because it doesn't
 change gather rates. Its value is villagers arriving sooner, and that only matters while the Town
-Center is still training.
+Center is still training. The farm techs are closest to the limit; raise their cost only with care.
 
-### What changed in `src/core/techs.ts`
+### Age costs in M13-3
+
+| Tech | M8-17 | M13-3 |
+|---|---|---|
+| Town Age | 400f, 60 s | 300f, 45 s |
+| City Age | 3800f 800g, 150 s | 1200f 500g, 90 s |
+| Empire Age | 12000f 1500g 1000s, 240 s | 6500f 1000g 600s, 150 s |
+| Starting stock | none | 200f 200w 100g 100s |
+
+### What changed in `src/core/techs.ts` (M8-17)
 
 | Tech | Before | After |
 |---|---|---|

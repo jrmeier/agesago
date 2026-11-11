@@ -142,7 +142,7 @@ describe('labels', () => {
     expect(timeLabel(90)).toBe('1m 30s');
     expect(timeLabel(120)).toBe('2m');
     expect(researchLabel('bronzeAxe', 10, 1)).toBe('Researching Bronze Axe 40%');
-    expect(researchLabel('townAge', 30, 2)).toBe('Advancing to the Town Age 50% (+1)');
+    expect(researchLabel('townAge', TECHS.townAge.time / 2, 2)).toBe('Advancing to the Town Age 50% (+1)');
     expect(researchedText('ironAxe')).toBe('Iron Axe researched');
     expect(agedUpText(1)).toBe('Entered the Town Age');
     expect(techTip('bronzeAxe', '100 food · 50 wood')).toBe(`Bronze Axe: ${TECHS.bronzeAxe.description} 100 food · 50 wood · ${TECHS.bronzeAxe.time}s.`);

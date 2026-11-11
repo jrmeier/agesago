@@ -574,10 +574,11 @@ describe('farms', () => {
     w.dispatch({ type: 'move', unitIds: [u.id], target: { x: 10, z: 10 } });
     const thief = w.spawnUnit('villager', { x: 22, z: 30 }, 2);
     const food = farm.food;
+    const thiefFood = w.stockOf(2).food;
     w.dispatch({ type: 'gather', unitIds: [thief.id], nodeId: farm.id }, 2);
     run(w, 20);
     expect(thief.gatherNode).not.toBe(farm.id);
-    expect(w.stockOf(2).food).toBe(0);
+    expect(w.stockOf(2).food).toBe(thiefFood);
     expect(farm.food).toBeLessThanOrEqual(food!);
   });
 

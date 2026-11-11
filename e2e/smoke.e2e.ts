@@ -27,6 +27,11 @@ test('boots, renders and shows the HUD without errors', async ({ page }) => {
   for (const id of ['#res-food', '#res-wood', '#res-gold', '#res-pop', '#train-btn']) {
     await expect(page.locator(id)).toBeVisible();
   }
+  // A new match starts with a stockpile: enough for villagers and a first building at 0:00.
+  const stock = await page.evaluate(() => ({ ...(window as any).game.world.stock }));
+  expect(stock).toMatchObject({ food: 200, wood: 200, gold: 100, stone: 100 });
+  await expect(page.locator('#res-food')).toContainText('200');
+  await expect(page.locator('#train-btn')).toBeEnabled();
   const calls = await page.evaluate(() => (window as any).game.renderer.webgl.info.render.calls);
   expect(calls).toBeGreaterThan(5);
   expect(errors).toEqual([]);
@@ -34,9 +39,10 @@ test('boots, renders and shows the HUD without errors', async ({ page }) => {
 
 test('villagers gather and deposit food', async ({ page }) => {
   await boot(page);
-  const food = await page.evaluate(() => {
+  const { before, food } = await page.evaluate(() => {
     const g = (window as any).game;
     const w = g.world;
+    const before = w.stock.food as number;
     const tc = w.townCenter.pos;
     const berries = [...w.nodes.values()]
       .filter((n: any) => n.kind === 'berry')
@@ -44,10 +50,10 @@ test('villagers gather and deposit food', async ({ page }) => {
     const villagers = [...w.units.values()].filter((u: any) => u.kind === 'villager').map((u: any) => u.id);
     w.dispatch({ type: 'gather', unitIds: villagers, nodeId: berries[0].id });
     for (let i = 0; i < 20 * 60; i++) w.tick(0.05);
-    return w.stock.food;
+    return { before, food: w.stock.food as number };
   });
-  expect(food).toBeGreaterThan(0);
-  await expect(page.locator('#res-food')).not.toHaveText('0');
+  expect(food).toBeGreaterThan(before);
+  await expect(page.locator('#res-food')).not.toHaveText(String(before));
 });
 
 test('the scout explores and the fog lifts', async ({ page }) => {
