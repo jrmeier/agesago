@@ -327,6 +327,11 @@ body.touch .train-tile {
   max-width: none;
 }
 
+body.touch .upgrade-tile {
+  grid-column: span 2;
+  max-width: none;
+}
+
 body.touch .research-head {
   grid-column: 1 / -1;
   margin-top: 6px;

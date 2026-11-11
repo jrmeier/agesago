@@ -25,6 +25,11 @@ export const HOTKEYS = {
   townBell: 'KeyU',
   /** W: free of every build and train key; the tech-tree button and Menu sheet open it too. */
   techTree: 'KeyW',
+  /**
+   * Shift+U upgrades the selected building(s) (M14-3). Every letter is taken, so it is a Shift
+   * chord like the second-row build keys; plain U stays the town bell.
+   */
+  upgradeBuilding: 'Shift+KeyU',
 } as const;
 
 /** Training-panel slot keys, left to right. */

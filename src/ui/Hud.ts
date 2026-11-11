@@ -1,4 +1,4 @@
-import { BUILDINGS, FARM_FOOD } from '../core/buildings';
+import { BUILDINGS, BUILDING_UPGRADES, FARM_FOOD, buildingTitle, nextUpgrade } from '../core/buildings';
 import { AGE_NAMES, TECHS, buildingTier, techsAt, unitLine, type Age, type TechId } from '../core/techs';
 import type { Building, BuildingKind, ResourceType, Stockpile, Unit, UnitKind } from '../core/types';
 import { canWork, UNITS, trainable } from '../core/units';
@@ -10,6 +10,18 @@ import { corralSheep, corralWorker, HERD_CAP } from '../sim/systems/livestock';
 import { carryCap } from '../sim/systems/gather';
 import { trainTime } from '../sim/systems/train';
 import { ageBuildings, ageBuildingsNeeded, researchBlock, statOf } from '../sim/systems/research';
+import { upgradeBlock } from '../sim/systems/buildingUpgrade';
+import { HOTKEYS } from '../input/hotkeys';
+import {
+  UPGRADING_TEXT,
+  statRowsText,
+  upgradeEntry,
+  upgradeFraction,
+  upgradeLabel,
+  upgradeSelected,
+  upgradeTip,
+  type UpgradeEntry,
+} from './buildingUpgrade';
 import type { World } from '../sim/World';
 import {
   BUILD_HOTKEYS,
@@ -107,6 +119,7 @@ export class Hud {
     grid: byId('build-grid'),
     progress: byId('build-progress'),
     cancel: byId('cancel-build-btn'),
+    cancelUpgrade: byId('cancel-upgrade-btn'),
     bell: byId('town-bell-btn'),
     ungarrison: byId('ungarrison-btn'),
     garrisonList: byId('garrison-list'),
@@ -126,6 +139,10 @@ export class Hud {
   private readonly techButtons = new Map<TechId, HTMLButtonElement>();
   private researchHead: HTMLElement | null = null;
   private researchKey = '';
+  /** "Upgrade" header in the training grid (kinds with an upgrade chain) and its one tile. */
+  private upgradeHead: HTMLElement | null = null;
+  private upgradeTile: HTMLButtonElement | null = null;
+  private upgradeKey = '';
   /** Techs that opened up at the last age-up and haven't been looked at yet. */
   private readonly fresh = new Set<TechId>();
   private ageKey = '';
@@ -221,6 +238,12 @@ export class Hud {
       this.onTrain();
     });
     this.el.trainGrid?.addEventListener('click', (e) => {
+      const up = (e.target as Element).closest<HTMLElement>('[data-upgrade]');
+      if (up) {
+        up.blur();
+        this.upgradeAt(up);
+        return;
+      }
       const tech = (e.target as Element).closest<HTMLElement>('[data-research]');
       if (tech) {
         tech.blur();
@@ -264,6 +287,16 @@ export class Hud {
       return;
     }
     this.world.dispatch({ type: 'research', buildingId: id, tech });
+  }
+
+  /** Upgrade every selected building of the panel's kind that can start; a locked tile shakes and says why. */
+  private upgradeAt(btn: HTMLElement): void {
+    if (btn.dataset.locked === 'true') {
+      this.flashTrainGrid();
+      if (document.body.classList.contains('touch')) this.showTip(btn);
+      return;
+    }
+    upgradeSelected(this.world, this.selection.ids);
   }
 
   /** Touch: holding a tile shows its tooltip (title) in #tech-tip instead of clicking it. */
@@ -393,6 +426,9 @@ export class Hud {
     this.techButtons.clear();
     this.researchKey = '';
     this.researchHead = null;
+    this.upgradeHead = null;
+    this.upgradeTile = null;
+    this.upgradeKey = '';
     if (!kind) return;
     for (const e of trainEntries(kind, this.world.stock, this.world.players.get(this.world.localPlayer)?.researched, this.world.players.get(this.world.localPlayer)?.player.civ)) {
       const btn = tile(`#i-${e.kind}`, e.name, e.cost, e.key, 'Shift-click: queue 5');
@@ -400,6 +436,14 @@ export class Hud {
       btn.dataset.train = e.kind;
       grid.append(btn);
       this.trainButtons.set(e.kind, btn);
+    }
+    if (BUILDING_UPGRADES[kind]?.length) {
+      const head = document.createElement('h4');
+      head.className = 'research-head upgrade-head';
+      head.textContent = 'Upgrade';
+      head.hidden = true;
+      grid.append(head);
+      this.upgradeHead = head;
     }
     if (techsAt(kind).length) {
       const head = document.createElement('h4');
@@ -433,7 +477,9 @@ export class Hud {
     const grid = this.el.trainGrid;
     if (!grid || !this.researchHead) return;
     const view = this.techView();
-    const entries = techEntries(b.kind, view, (t) => researchBlock(this.world, this.world.localPlayer, t));
+    const entries = techEntries(b.kind, view, (t) => researchBlock(this.world, this.world.localPlayer, t)).map((e) =>
+      b.upgrading ? { ...e, locked: true, unaffordable: false, reason: UPGRADING_TEXT } : e
+    );
     const key = entries.map((e) => `${e.tech}:${e.locked ? 'L' : ''}${e.unaffordable ? 'U' : ''}${e.reason}${this.fresh.has(e.tech) ? '*' : ''}`).join(',');
     setHidden(this.researchHead, !entries.length);
     this.menuTabs.train?.classList.toggle('has-new', entries.some((e) => this.fresh.has(e.tech)));
@@ -566,15 +612,18 @@ export class Hud {
   private updateBuilding(b: Building | undefined, own: Building | undefined): void {
     this.updateLivestock(own);
     const foundation = !!own && !own.complete;
+    const upgrading = !!own?.upgrading;
     const shelter = !!own && own.complete && (BUILDINGS[own.kind].garrison ?? 0) > 0;
-    setHidden(this.el.progress, !foundation);
+    setHidden(this.el.progress, !foundation && !upgrading);
     setHidden(this.el.cancel, !foundation);
+    setHidden(this.el.cancelUpgrade, !upgrading);
     setHidden(this.el.bell, !shelter);
     setHidden(this.el.ungarrison, !shelter || !(own?.occupants?.length));
     this.updateGarrisonList(shelter ? own : undefined);
     const trainer = own && canTrainAt(own) ? own : undefined;
     const researcher = own && own.complete && techsAt(own.kind).length ? own : undefined;
-    const panel = trainer ?? researcher;
+    const upgradable = own && own.complete && (own.upgrading || nextUpgrade(own.kind, own.tier)) ? own : undefined;
+    const panel = trainer ?? researcher ?? upgradable;
     const kind = panel?.kind ?? '';
     // Unit-line upgrades rename tiles (Hoplite → Veteran Hoplite), so they also rebuild the grid.
     const lineSet = this.world.players.get(this.world.localPlayer)?.researched;
@@ -590,20 +639,28 @@ export class Hud {
     setHidden(this.el.queue, !panel || (panel.queue <= 0 && !panel.research?.length));
     if (!panel) this.menuTabs.train?.classList.remove('has-new');
     if (panel) {
-      setText(this.menuTabs.train, panel.kind === 'market' ? 'Trade' : trainable(panel.kind).length ? 'Train' : 'Research');
-      this.updateTrainAffordable();
+      setText(
+        this.menuTabs.train,
+        panel.kind === 'market' ? 'Trade' : trainable(panel.kind).length ? 'Train' : techsAt(panel.kind).length ? 'Research' : 'Upgrade'
+      );
+      this.updateTrainAffordable(panel);
+      this.updateUpgrade(panel);
       this.updateResearch(panel);
       this.updateQueue(panel);
     }
     if (!b) return;
     const researched = this.world.players.get(b.owner)?.researched ?? new Set<TechId>();
-    setText(this.el.name, buildingTier(researched, b.kind).title ?? BUILDINGS[b.kind].name);
+    setText(this.el.name, b.tier ? buildingTitle(b.kind, b.tier) : (buildingTier(researched, b.kind).title ?? BUILDINGS[b.kind].name));
     this.setPortrait(`#i-b-${b.kind}`, '');
     if (!own) {
       setText(this.el.status, this.ownerName(b.owner));
     } else if (foundation) {
       setText(this.el.status, constructionLabel(b.buildProgress));
       const w = `${(Math.min(1, Math.max(0, b.buildProgress)) * 100).toFixed(1)}%`;
+      if (this.progressFill && this.progressFill.style.width !== w) this.progressFill.style.width = w;
+    } else if (upgrading) {
+      setText(this.el.status, upgradeLabel(b));
+      const w = `${(upgradeFraction(b) * 100).toFixed(1)}%`;
       if (this.progressFill && this.progressFill.style.width !== w) this.progressFill.style.width = w;
     } else if (b.kind === 'corral' && own) {
       const worker = corralWorker(this.world, b);
@@ -776,11 +833,34 @@ export class Hud {
     );
   }
 
-  private updateTrainAffordable(): void {
+  private updateTrainAffordable(b: Building): void {
     const age = this.playerAge();
+    const upgrading = !!b.upgrading;
     this.trainAffordKey = markAffordable(this.trainButtons, (k) => UNITS[k].cost, this.world.stock, this.trainAffordKey, (k) =>
-      ageLockText(unitAge(k), age)
+      upgrading ? UPGRADING_TEXT : ageLockText(unitAge(k), age)
     );
+  }
+
+  /** The "Upgrade" tile for the panel's building: next tier, cost, before → after, lock reason. Hidden while it runs. */
+  private updateUpgrade(b: Building): void {
+    const head = this.upgradeHead;
+    if (!head) return;
+    const local = this.world.localPlayer;
+    const p = this.world.players.get(local);
+    const entry = b.upgrading
+      ? null
+      : upgradeEntry(b, upgradeBlock(this.world, b, local), {
+          age: p?.age ?? 0,
+          researched: p?.researched ?? new Set(),
+          stock: this.world.stock,
+        });
+    const key = entry ? `${b.kind}:${entry.spec.id}:${entry.locked ? 'L' : ''}${entry.unaffordable ? 'U' : ''}${entry.reason}` : '';
+    setHidden(head, !entry);
+    if (key === this.upgradeKey) return;
+    this.upgradeKey = key;
+    this.upgradeTile?.remove();
+    this.upgradeTile = entry ? upgradeTileEl(b.kind, entry) : null;
+    if (this.upgradeTile) head.after(this.upgradeTile);
   }
 
   private updateExplore(units: readonly Unit[]): void {
@@ -908,6 +988,35 @@ function techTile(e: TechEntry, fresh: boolean): HTMLButtonElement {
   time.className = 'tech-time';
   time.textContent = timeLabel(e.time);
   btn.querySelector('.build-cost')?.append(time);
+  const lock = btn.querySelector<HTMLElement>('.build-lock');
+  if (lock) lock.textContent = e.reason;
+  for (const part of btn.querySelectorAll<HTMLElement>('.build-cost-part')) {
+    part.classList.toggle('short', e.unaffordable && e.reason.includes(part.dataset.res ?? '-'));
+  }
+  return btn;
+}
+
+/** The building upgrade tile: the building's glyph, next tier's name, cost, time, before → after and lock reason. */
+function upgradeTileEl(kind: BuildingKind, e: UpgradeEntry): HTMLButtonElement {
+  const btn = tile(`#i-b-${kind}`, e.spec.title, e.spec.cost, HOTKEYS.upgradeBuilding);
+  btn.classList.add('train-tile', 'tech-tile', 'upgrade-tile');
+  btn.dataset.upgrade = e.spec.id;
+  btn.dataset.locked = String(e.locked);
+  btn.classList.toggle('locked', e.locked);
+  btn.classList.toggle('unaffordable', e.unaffordable);
+  btn.setAttribute('aria-disabled', String(e.locked || e.unaffordable));
+  const tip = upgradeTip(e, formatCost(e.spec.cost), timeLabel(e.spec.time), keyLabel(HOTKEYS.upgradeBuilding));
+  btn.title = tip;
+  btn.dataset.tip = tip;
+  btn.setAttribute('aria-label', tip);
+  const time = document.createElement('span');
+  time.className = 'tech-time';
+  time.textContent = timeLabel(e.spec.time);
+  btn.querySelector('.build-cost')?.append(time);
+  const stats = document.createElement('span');
+  stats.className = 'upgrade-stats';
+  stats.textContent = statRowsText(e.rows);
+  btn.querySelector('.build-cost')?.after(stats);
   const lock = btn.querySelector<HTMLElement>('.build-lock');
   if (lock) lock.textContent = e.reason;
   for (const part of btn.querySelectorAll<HTMLElement>('.build-cost-part')) {

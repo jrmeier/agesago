@@ -19,6 +19,11 @@ describe('hotkeys', () => {
     expect(HOTKEYS.stop).toBe('KeyX');
   });
 
+  it('upgrades buildings on Shift+U, leaving plain U to the town bell', () => {
+    expect(HOTKEYS.upgradeBuilding).toBe('Shift+KeyU');
+    expect(HOTKEYS.townBell).toBe('KeyU');
+  });
+
   it('has a slot key for every unit any building trains', () => {
     const most = Math.max(...(Object.keys(BUILDINGS) as BuildingKind[]).map((k) => trainable(k).length));
     expect(TRAIN_SLOT_KEYS.length).toBeGreaterThanOrEqual(most);

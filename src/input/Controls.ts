@@ -8,7 +8,8 @@ import { GAIA, type Building, type BuildingKind, type Command, type EntityId, ty
 import type { Selection } from '../game/Selection';
 import type { World } from '../sim/World';
 import { Alerts } from '../ui/Alerts';
-import { buildHotkeyCodes, kindForKey } from '../ui/build';
+import { buildHotkeyCodes, kindForKey, parseHotkey } from '../ui/build';
+import { cancelSelectedUpgrades, upgradeSelected } from '../ui/buildingUpgrade';
 import { ageLockText, unitAge } from '../ui/research';
 import { Discoveries } from '../ui/Discoveries';
 import { explorerIds } from '../ui/format';
@@ -212,6 +213,7 @@ export class Controls {
     bindButton('camera-cycle', () => rig.cycleMode());
     bindButton('explore-btn', () => this.explore());
     bindButton('cancel-build-btn', () => this.cancelSelectedFoundation());
+    bindButton('cancel-upgrade-btn', () => cancelSelectedUpgrades(this.deps.world, this.deps.selection.ids));
     bindButton('town-bell-btn', () => this.deps.world.dispatch({ type: 'townBell' }));
     bindButton('ungarrison-btn', () => this.ungarrison());
     bindButton('place-rotate', () => this.placement.rotate(1));
@@ -348,7 +350,10 @@ export class Controls {
     if (input.keyPressed(HOTKEYS.scout) || input.keyPressed('NumpadDecimal') || input.keyPressed(HOTKEYS.scoutAlt)) {
       focusNextScout(world, rig);
     }
-    if (plain(HOTKEYS.townBell)) world.dispatch({ type: 'townBell' });
+    const upgradeKey = parseHotkey(HOTKEYS.upgradeBuilding);
+    if (plain(upgradeKey.code) && !!input.keyMods(upgradeKey.code)?.shift === upgradeKey.shift) {
+      upgradeSelected(world, this.deps.selection.ids);
+    } else if (plain(HOTKEYS.townBell)) world.dispatch({ type: 'townBell' });
     if (plain(HOTKEYS.techTree)) this.techTree.show();
     for (const code of buildHotkeyCodes()) {
       const kind = plain(code) ? kindForKey(code, !!input.keyMods(code)?.shift) : null;
@@ -358,7 +363,7 @@ export class Controls {
     if (trainer) {
       for (const code of TRAIN_SLOT_KEYS) {
         const unit = plain(code) ? kindForSlotKey(trainer.kind, code, world.players.get(trainer.owner)?.player.civ) : null;
-        if (!unit || ageLockText(unitAge(unit), world.players.get(world.localPlayer)?.age ?? 0)) continue;
+        if (!unit || trainer.upgrading || ageLockText(unitAge(unit), world.players.get(world.localPlayer)?.age ?? 0)) continue;
         const n = trainBatch(!!input.keyMods(code)?.shift);
         for (let i = 0; i < n; i++) world.dispatch({ type: 'train', buildingId: trainer.id, unit });
       }
