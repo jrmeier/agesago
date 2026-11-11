@@ -206,6 +206,18 @@ sim sends them back to idle at full hp.
 | 4 | 21.0 | Town Hall 13.0, Large House 19.2 | 0.012 |
 | 5 | 20.8 | Town Hall 13.1 | 0.013 |
 
+After M13-3/M13-6 (integration I5) the City Age comes at 12–15 min and the Town Age economy keeps
+little wood (about 50 when the Town Hall's 200 is due), so the first upgrade now lands shortly
+*after* the City Age. `upkeep.test.ts` checks for an upgrade by 20 min instead of by the City Age:
+
+| seed | City Age | first upgrade done | upgrades started (min) |
+|---|---|---|---|
+| 1 | 15.2 min | 15.2 | Town Hall 12.9, City Hall 15.2 |
+| 2 | 12.3 | 13.5 | Town Hall 12.7 |
+| 3 | 15.0 | 16.5 | Town Hall 15.7 |
+| 4 | 14.5 | 15.0 | Guard Tower 14.4, Town Hall 14.9 |
+| 5 | 14.0 | 14.0 | Town Hall 10.9 |
+
 ## Open
 
 - No Empire Age step (6,500 food + 1,000 gold + 600 stone), so no tier-3 lines; tier 3 also needs

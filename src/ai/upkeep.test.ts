@@ -8,7 +8,7 @@ import { snapshot } from './context';
 import { makeGame, run } from './harness';
 import { MAX_REPAIRERS, REPAIR_CALM } from './upkeep';
 
-const CITY_BY = 25 * 60;
+const UPGRADED_BY = 20 * 60;
 
 function upgraded(world: World, player: number): string[] {
   const out: string[] = [];
@@ -17,21 +17,27 @@ function upgraded(world: World, player: number): string[] {
 }
 
 describe('upkeep AI: building upgrades (moderate, headless, idle human)', () => {
-  it.each([1, 2, 3, 4, 5])('seed %i: has an upgraded building by the City Age', (seed) => {
+  // M13-3/M13-6 moved the City Age from about 20 to 12–15 min, and the Town Age economy now spends
+  // its wood on buildings and techs, so the first upgrade lands around the City Age rather than
+  // before it. The check is upgraded by UPGRADED_BY (the City Age time this was written against),
+  // with the City Age reached by then.
+  it.each([1, 2, 3, 4, 5])('seed %i: has an upgraded building by 20 min, past the City Age', (seed) => {
     const world = makeGame(seed, ['ai', 'human']);
     const ai = new AIPlayer(world, 1, { difficulty: 'moderate', seed });
     const player = world.players.get(1)!;
     let aiMs = 0;
     let ticks = 0;
-    while (player.age < 2 && world.time < CITY_BY) {
+    let cityAt = 0;
+    while (world.time < UPGRADED_BY && (upgraded(world, 1).length === 0 || player.age < 2)) {
       const st = run(world, [ai], 10);
       aiMs += st.aiMs.get(1)!;
       ticks += st.updates;
+      if (!cityAt && player.age >= 2) cityAt = world.time;
     }
     const tiers = upgraded(world, 1);
     const msPerTick = aiMs / ticks;
     console.log(
-      `seed ${seed}: City ${(world.time / 60).toFixed(1)} min, upgraded [${tiers.join(' ')}], ` +
+      `seed ${seed}: City ${(cityAt / 60).toFixed(1)} min, first upgrade done by ${(world.time / 60).toFixed(1)} min, upgraded [${tiers.join(' ')}], ` +
         `started ${ai.upkeep.upgrades.map((u) => `${u.kind}:${u.tier}@${(u.at / 60).toFixed(1)}`).join(' ')}, AI ${msPerTick.toFixed(4)} ms/tick`
     );
     expect(player.age).toBeGreaterThanOrEqual(2);
