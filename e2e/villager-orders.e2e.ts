@@ -11,6 +11,9 @@ for (const target of ['tree', 'farm', 'foundation', 'foundation-canopy', 'farm-c
       const g = (window as any).game;
       const w = g.world;
       (window as any).dev.give({ wood: 1000 });
+      // Isolate the recorded orders from AI dispatches: with the starting stockpile (M13-3) the AI
+      // can queue a villager at once, which now and then landed in __villagerOrders.
+      g.ais.length = 0;
       // Freeze autonomous movement while keeping real Controls, rendering, and dispatch active.
       (window as any).__resumeVillagerTick = w.tick.bind(w);
       w.tick = () => {};
