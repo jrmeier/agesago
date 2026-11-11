@@ -20,7 +20,9 @@ async function cycle(page: Page, phone: boolean) {
   else await page.keyboard.press('f');
 }
 async function mode(page: Page, value: string) {
-  await expect(page.locator('body')).toHaveAttribute('data-camera-mode', value);
+  // The rig notices a lost follow target on its next frame; under parallel workers frames can be
+  // seconds apart, so allow more than the default 5 s.
+  await expect(page.locator('body')).toHaveAttribute('data-camera-mode', value, { timeout: 15_000 });
 }
 
 test('follows a working villager, looks without orders, cycles and restores the overhead pose', async ({ page }, info) => {
