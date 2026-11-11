@@ -174,7 +174,7 @@ test('a save survives reload, a newer file does not replace it, and new match st
       time: game.world.time as number,
     };
   }, before.id);
-  expect(again.food).toBe(0);
+  expect(again.food).toBe(200); // a new match starts on BALANCE.startingStock (M13-3), not the saved 123
   expect(again.time).toBeLessThan(15);
   expect(again.x === undefined || Math.abs(again.x - before.x) > 5).toBe(true);
 
@@ -264,7 +264,7 @@ test('a finished resume reopens the summary with its chart, group, and selection
     over: (window as any).game.world.gameOver as unknown,
     time: (window as any).game.world.time as number,
   }));
-  expect(fresh.food).toBe(0);
+  expect(fresh.food).toBe(200); // the starting stockpile again, not the finished match's
   expect(fresh.over).toBeNull();
   expect(fresh.time).toBeLessThan(15);
   expect(errors).toEqual([]);
