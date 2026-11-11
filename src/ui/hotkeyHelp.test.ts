@@ -28,5 +28,9 @@ describe('hotkey reference', () => {
     expect(rows.some((row) => row.keys === 'Shift+Q' && row.label.startsWith('Patrol'))).toBe(true);
     expect(rows.some((row) => row.keys === 'Shift+G' && row.label.startsWith('Guard'))).toBe(true);
     expect(rows.some((row) => row.keys === 'Alt+RMB' && row.label.startsWith('Guard'))).toBe(true);
+    for (const [keys, name] of [['Shift+L', 'Line'], ['Shift+C', 'Column'], ['Shift+X', 'Box'], ['Shift+S', 'No formation']]) {
+      expect(rows.some((row) => row.keys === keys && row.label.startsWith(name))).toBe(true);
+    }
+    expect(rows.some((row) => row.keys === 'RMB drag' && row.label.includes('front line'))).toBe(true);
   });
 });

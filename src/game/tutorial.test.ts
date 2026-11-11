@@ -47,4 +47,9 @@ describe('tutorial steps', () => {
     expect(hintText('train', false, dismissed)).toContain('Click');
     expect(loadDismissed('nope')).toEqual(new Set());
   });
+
+  it('mentions formations once soldiers are in play', () => {
+    expect(hintText('raid', false, new Set())).toMatch(/formation.*Line, Column or Box.*right-drag/);
+    expect(hintText('raid', true, new Set())).toMatch(/formation.*Line, Column or Box under Orders/);
+  });
 });

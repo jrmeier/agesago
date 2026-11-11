@@ -58,6 +58,8 @@ import { auraRingRadius } from './auraRings';
 import { choosePick, ndcToCanvas, ORDER_PICK_RANK, PICK_RANK, rectContains, type PickCandidate, type PickIntent } from './picking';
 import { ProjectilePool } from './projectiles';
 import { createShadowTexture } from './shadow';
+import { OrderOverlay } from './OrderOverlay';
+import { orderRoutes, type OrderRoute } from './orderRoutes';
 
 /** Gaia's share on a capture bar (M18-4): weathered stone grey. */
 const NEUTRAL_CAPTURE = 0x9a9488;
@@ -182,7 +184,8 @@ function upgradeFraction(building: Building): number | null {
  * animated units, buildings and construction, selection rings and the move marker.
  * Also pooled HP bars, projectiles and death ghosts. Listens for `projectile` and `died`.
  * Public surface: constructor(world, quality?), object, sync, pick, idsInRect, setSelected,
- * flashMarker, setFog, setShadows, showGhost, showLine, hideGhost.
+ * flashMarker, setFog, setShadows, showGhost, showLine, hideGhost, setPendingRoute, showFormationPreview.
+ * Selected own units also get ground lines for their orders (path, patrol loop, guard link).
  *
  * The world constructor does not emit `spawned`, so existing entities are mounted here
  * and later spawns/removals follow the event bus. `sync` also frustum-ready LOD-swaps
@@ -249,6 +252,14 @@ export class EntityViews {
   private readonly auraRingMat: THREE.MeshBasicMaterial;
   private readonly shadowGeo: THREE.BufferGeometry;
   private readonly shadowMat: THREE.MeshBasicMaterial;
+  /** Route lines and right-drag formation ghosts (M17-4). */
+  readonly orders = new OrderOverlay();
+  /** Patrol points being chosen, drawn as a line (null: none). */
+  private pendingRoute: Vec2[] | null = null;
+  /** Right-drag formation preview: ghost slots plus the drag line / facing arrow. */
+  private formationPreview: { slots: Vec2[]; lines: Vec2[][] } | null = null;
+  /** Sync time the route lines were last rebuilt; -Infinity forces a rebuild. */
+  private routesAt = -Infinity;
   private readonly markerMesh: THREE.Mesh;
   private readonly markerMat: THREE.MeshBasicMaterial;
   private readonly dummy = new THREE.Object3D();
@@ -340,6 +351,7 @@ export class EntityViews {
     this.markerMesh.renderOrder = 4;
     this.object.add(this.markerMesh);
 
+    this.object.add(this.orders.object);
     this.explorationView = new ExplorationView(this.world);
     this.object.add(this.explorationView.object);
     this.bars = new HealthBars(this.object);
@@ -433,6 +445,7 @@ export class EntityViews {
     this.syncRings(t);
     this.syncAuraRings(t);
     this.syncMarker(time);
+    this.syncOrders(time);
     this.projectiles.update(time);
     this.deaths.update(time, (owner, x, z, rubble) => this.ghostShown(owner, x, z, rubble));
   }
@@ -594,6 +607,29 @@ export class EntityViews {
 
   setSelected(ids: ReadonlySet<EntityId>): void {
     this.selected = ids;
+  }
+
+  /** Patrol points chosen so far, as a line from the patrollers (null clears it). */
+  setPendingRoute(points: readonly Vec2[] | null): void {
+    this.pendingRoute = points && points.length > 1 ? points.map((p) => ({ x: p.x, z: p.z })) : null;
+    this.routesAt = -Infinity;
+  }
+
+  /** Right-drag formation preview: ghost `slots` and guide `lines` (drag line, facing arrow); null hides it. */
+  showFormationPreview(preview: { slots: readonly Vec2[]; lines: readonly (readonly Vec2[])[] } | null): void {
+    this.formationPreview = preview ? { slots: [...preview.slots], lines: preview.lines.map((l) => [...l]) } : null;
+    this.orders.setSlots(this.formationPreview?.slots ?? null, (x, z) => this.groundY(x, z));
+    this.routesAt = -Infinity;
+  }
+
+  /** Rebuild the order lines ten times a second (or at once when the preview or pending route changed). */
+  private syncOrders(time: number): void {
+    if (time - this.routesAt < 0.1 && time >= this.routesAt) return;
+    this.routesAt = time;
+    const routes: OrderRoute[] = orderRoutes(this.world, this.selected);
+    if (this.pendingRoute) routes.push({ kind: 'pending', points: this.pendingRoute });
+    for (const line of this.formationPreview?.lines ?? []) routes.push({ kind: 'pending', points: line });
+    this.orders.setRoutes(routes, (x, z) => this.groundY(x, z));
   }
 
   /** Show the move-order marker at a ground position. */

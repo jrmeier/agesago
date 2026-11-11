@@ -7,7 +7,7 @@ import { EntityViews } from '../render/EntityViews';
 import { FogOfWar } from '../render/fog';
 import { defaultPlayers, World } from '../sim/World';
 import { type CameraRig } from '../camera/CameraRig';
-import { classifyRelease, Controls, rectBetween, resolveLongPress } from './Controls';
+import { classifyRelease, Controls, formationDragPlan, rectBetween, resolveLongPress } from './Controls';
 import { DRAG_THRESHOLD_PX, exceedsDragThreshold, LMB, RMB, type Input } from './Input';
 import { type GestureEvent } from './gestures';
 import { pickGround, pickGround3, screenRay } from './pickGround';
@@ -146,12 +146,14 @@ function orderScene(target: 'tree' | BuildingKind, kind: UnitKind = 'villager') 
   selection.set([selected.id]);
   const gestures: GestureEvent[] = [];
   let button: number | null = null;
+  let drag: Record<string, unknown> | null = null;
   const input = {
     width: 800, height: 800, ctrl: false, shift: false,
     keyMods: () => undefined, keyPressed: () => false,
-    drag: (b: number) => b === button ? { ...point, held: false, dragging: false, withSpace: false } : undefined,
-    released: (b: number) => b === button,
-    touch: { gestures, setGrabber() {}, disarmBox() {}, boxArmed: false },
+    drag: (b: number) => b === button ? drag ??= { ...point, startX: point.x, startY: point.y, held: false, dragging: false, withSpace: false } : undefined,
+    pressed: (b: number) => b === button,
+    released: (b: number) => b === button && !drag?.held,
+    touch: { gestures, setGrabber() {}, disarmBox() {}, armBox() {}, boxArmed: false },
   } as unknown as Input;
   const rig = { mode: 'rts', camera, rts: { hf }, onModeChange() {} } as unknown as CameraRig;
   const controls = new Controls({ world, views, rig, input, selection, hud, canvas: hud });
@@ -162,8 +164,22 @@ function orderScene(target: 'tree' | BuildingKind, kind: UnitKind = 'villager') 
     click(mode: 'desktop' | 'touch' | 'select') {
       if (mode === 'touch') gestures.push({ type: 'tap', ...point });
       else button = mode === 'desktop' ? RMB : LMB;
+      drag = null;
       controls.update(0);
     },
+    /** One frame of an RMB drag from the scene point to `to` (screen px); `held` keeps the button down. */
+    rightDrag(to: { x: number; y: number }, held: boolean) {
+      button = RMB;
+      drag = { startX: point.x, startY: point.y, ...to, held, dragging: true, withSpace: false };
+      controls.update(0);
+    },
+    /** A touch "Draw line" drag from the scene point to `to`. */
+    touchDraw(to: { x: number; y: number }) {
+      gestures.push({ type: 'box', x0: point.x, y0: point.y, ...to }, { type: 'boxEnd', x0: point.x, y0: point.y, ...to });
+      controls.update(0);
+      gestures.length = 0;
+    },
+    controls,
   };
 }
 
@@ -336,4 +352,73 @@ describe('trained land unit work controls', () => {
       expect(s.commands).toEqual([{ type: 'repair', unitIds: [s.selected.id], targetId: s.targetId }]);
     });
   }
+});
+
+describe('formation drag (M17-4)', () => {
+  beforeEach(() => vi.restoreAllMocks());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('lays the front along the drag, as wide as it, facing away from the group', () => {
+    // Group south of a drag along x: they face north (+z), and the reverse drag faces the same way.
+    const from = { x: 10, z: 0 };
+    const plan = formationDragPlan({ x: 4, z: 10 }, { x: 16, z: 10 }, from);
+    expect(plan.target).toEqual({ x: 10, z: 10 });
+    expect(plan.width).toBeCloseTo(12);
+    expect(plan.facing).toBeCloseTo(0);
+    expect(formationDragPlan({ x: 16, z: 10 }, { x: 4, z: 10 }, from).facing).toBeCloseTo(0);
+    // From the north they face south.
+    expect(Math.abs(formationDragPlan({ x: 4, z: 10 }, { x: 16, z: 10 }, { x: 10, z: 30 }).facing!)).toBeCloseTo(Math.PI);
+    // A tiny drag is a plain move to its start.
+    expect(formationDragPlan({ x: 4, z: 10 }, { x: 4.5, z: 10.5 }, from)).toEqual({ target: { x: 4, z: 10 } });
+  });
+
+  it('RMB drag previews ghost slots while held and orders a faced, sized move on release', () => {
+    const s = orderScene('tree', 'swordsman');
+    s.overlapping.kind = 'swordsman';
+    s.world.nodes.clear();
+    s.selection.set([s.selected.id, s.overlapping.id]);
+    const preview = vi.spyOn(s.views, 'showFormationPreview');
+    const to = { x: s.point.x + 160, y: s.point.y };
+    s.rightDrag(to, true);
+    expect(s.commands).toEqual([]);
+    const shown = preview.mock.calls.at(-1)![0];
+    expect(shown?.slots.length).toBe(2);
+    s.rightDrag(to, false);
+    expect(s.commands).toHaveLength(1);
+    const cmd = s.commands[0] as Extract<Command, { type: 'move' }>;
+    expect(cmd).toMatchObject({ type: 'move', formation: 'line' });
+    expect(cmd.unitIds.sort()).toEqual([s.selected.id, s.overlapping.id].sort());
+    expect(cmd.width).toBeGreaterThan(2);
+    expect(Number.isFinite(cmd.facing)).toBe(true);
+    expect(preview.mock.calls.at(-1)![0]).toBeNull();
+  });
+
+  it('the picked formation rides on plain right-click moves, and villagers alone ignore the pick', () => {
+    const s = orderScene('tree', 'swordsman');
+    s.overlapping.kind = 'archer';
+    s.world.nodes.clear();
+    s.selection.set([s.selected.id, s.overlapping.id]);
+    (s.controls as unknown as { setFormation(k: string): void }).setFormation('box');
+    s.click('desktop');
+    expect(s.commands.at(-1)).toMatchObject({ type: 'move', formation: 'box' });
+    s.overlapping.kind = 'villager';
+    s.selected.kind = 'villager';
+    s.click('desktop');
+    expect(s.commands.at(-1)).toMatchObject({ type: 'move', formation: 'none' });
+  });
+
+  it('touch "Draw line" turns the next drag into a formation move instead of a box', () => {
+    const s = orderScene('tree', 'swordsman');
+    s.overlapping.kind = 'swordsman';
+    s.world.nodes.clear();
+    s.selection.set([s.selected.id, s.overlapping.id]);
+    (s.controls as unknown as { setFormationDraw(on: boolean): void }).setFormationDraw(true);
+    s.touchDraw({ x: s.point.x + 160, y: s.point.y });
+    expect(s.commands).toHaveLength(1);
+    expect(s.commands[0]).toMatchObject({ type: 'move', formation: 'line' });
+    expect((s.commands[0] as { width?: number }).width).toBeGreaterThan(2);
+    // Used up: the next drag box-selects again.
+    s.touchDraw({ x: s.point.x + 160, y: s.point.y });
+    expect(s.commands).toHaveLength(1);
+  });
 });

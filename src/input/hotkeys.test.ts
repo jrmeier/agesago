@@ -21,6 +21,11 @@ describe('hotkeys', () => {
     expect(HOTKEYS.guard).toBe('Shift+KeyG');
   });
 
+  it('gives each formation its own Shift chord (Line, Column, boX, Spread)', () => {
+    expect([HOTKEYS.formationLine, HOTKEYS.formationColumn, HOTKEYS.formationBox, HOTKEYS.formationNone])
+      .toEqual(['Shift+KeyL', 'Shift+KeyC', 'Shift+KeyX', 'Shift+KeyS']);
+  });
+
   it('upgrades buildings on Shift+U, leaving plain U to the town bell', () => {
     expect(HOTKEYS.upgradeBuilding).toBe('Shift+KeyU');
     expect(HOTKEYS.townBell).toBe('KeyU');

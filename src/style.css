@@ -1049,6 +1049,44 @@ body.touch .queue-count {
   color: var(--crimson);
 }
 
+/* Formation picker (M17-4): shown for soldiers; "Draw line" is the touch stand-in for a right-drag. */
+.formation-group {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+
+.command-card:has(.formation-group[hidden]) .formation-sep,
+#command-card .formation-draw-btn {
+  display: none;
+}
+
+body.touch #command-card .formation-group {
+  display: contents;
+}
+
+body.touch #command-card .formation-draw-btn {
+  display: flex;
+}
+
+/* Training panel ×5 toggle (touch has no Shift-click). */
+#train-grid .train-batch {
+  display: none;
+}
+
+body.touch #train-grid .train-batch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+body.touch #train-grid .train-batch[aria-pressed="true"] {
+  color: var(--bronze-300);
+  background: var(--umber-800);
+}
+
 /* Inspecting an enemy: the same sheet with a crimson wash and rule, read-only. */
 .selection-panel.enemy {
   background:

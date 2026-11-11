@@ -36,6 +36,8 @@ export interface DragState {
   readonly withSpace: boolean;
   /** Alt was held when the button went down (Alt+RMB = guard). Read from the event, so a quick chord still counts. */
   readonly withAlt?: boolean;
+  /** Controls took this drag for itself (an RMB formation drag), so the camera must not pan with it. */
+  claimed?: boolean;
 }
 
 export class Input {

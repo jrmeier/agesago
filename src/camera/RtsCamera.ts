@@ -237,10 +237,10 @@ export class RtsCamera {
     this.apply();
   }
 
-  /** A held drag that should pan: RMB past the threshold, or LMB started with Space held. */
+  /** A held drag that should pan: RMB past the threshold (unless Controls claimed it for a formation), or LMB started with Space held. */
   private panDrag(input: Input): DragState | null {
     const r = input.drag(RMB);
-    if (r?.held && r.dragging) return r;
+    if (r?.held && r.dragging && !r.claimed) return r;
     const l = input.drag(LMB);
     if (l?.held && l.withSpace) return l;
     return null;

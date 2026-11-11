@@ -64,8 +64,8 @@ const HINTS: Record<Exclude<TutorialStep, 'done'>, { id: string; desktop: string
   },
   raid: {
     id: 'raid',
-    desktop: 'A hoplite stands with you. Click them and right-click a raider.',
-    touch: 'A hoplite stands with you. Tap them, then tap a raider.',
+    desktop: 'A hoplite stands with you. Click them and right-click a raider. Groups of soldiers march in formation: pick Line, Column or Box under Orders, or right-drag to lay the front.',
+    touch: 'A hoplite stands with you. Tap them, then tap a raider. Groups of soldiers march in formation: pick Line, Column or Box under Orders.',
   },
 };
 

@@ -4,8 +4,10 @@ import type { PickIntent } from '../render/picking';
 import { CAMERA_LABELS, type CameraRig } from '../camera/CameraRig';
 import { canGuard, canPatrol, canWork, defaultFormation, isShip } from '../core/units';
 import { canGarrison } from '../sim/systems/defence';
+import { formationSlots } from '../sim/systems/movement';
+import { navFor } from '../sim/systems/passage';
 import { BUILDINGS, maxCapturePoints } from '../core/buildings';
-import { GAIA, type Building, type BuildingKind, type Command, type EntityId, type FormationKind, type PropPlacement, type Stance, type UnitKind, type Vec2 } from '../core/types';
+import { GAIA, type Building, type BuildingKind, type Command, type EntityId, type FormationKind, type PropPlacement, type Stance, type Unit, type UnitKind, type Vec2 } from '../core/types';
 import type { Selection } from '../game/Selection';
 import type { World } from '../sim/World';
 import { Alerts } from '../ui/Alerts';
@@ -28,6 +30,7 @@ import type { GestureEvent } from './gestures';
 import { GROUP_KEYS, HOTKEYS, TRAIN_SLOT_KEYS, groupForKey } from './hotkeys';
 import { IdleCycler, idleVillagers } from './idle';
 import { LMB, RMB, type DragState, type Input } from './Input';
+import { MAX_PATROL_POINTS } from '../network/protocol';
 import { resolveAttackMove, resolveBuildingAttack, resolveBuildingOrder, resolveGuard, resolvePatrol, resolveOrder, resolveRepairOrder, resolveTargetOrder, resolveTradeOrder, type HitEntity } from './orders';
 import { pickGround, projectToCanvas, screenRay, toNdc } from './pickGround';
 import { Placement } from './Placement';
@@ -37,6 +40,15 @@ import { focusNextScout, onScoutFocus } from './scouts';
 const DOUBLE_CLICK_S = 0.35;
 /** Seconds between idle-villager recounts. */
 const IDLE_INTERVAL = 0.25;
+/** A formation drag shorter than this (metres) is a plain move to its start, with no facing or width. */
+const MIN_FORMATION_DRAG_M = 1.5;
+/** Formation hotkeys, in command-card order. */
+const FORMATION_KEYS: readonly [code: string, kind: FormationKind][] = [
+  [HOTKEYS.formationLine, 'line'],
+  [HOTKEYS.formationColumn, 'column'],
+  [HOTKEYS.formationBox, 'box'],
+  [HOTKEYS.formationNone, 'none'],
+];
 /** Digit and numpad keys that select / assign control groups. */
 const GROUP_CODES: readonly string[] = [...GROUP_KEYS, ...GROUP_KEYS.map((k) => k.replace('Digit', 'Numpad'))];
 
@@ -68,6 +80,32 @@ export function rectBetween(ax: number, ay: number, bx: number, by: number): Scr
   return { x0: Math.min(ax, bx), y0: Math.min(ay, by), x1: Math.max(ax, bx), y1: Math.max(ay, by) };
 }
 
+/** Where a formation drag puts the group: its centre, the way it faces (radians) and its front width. */
+export interface FormationDragPlan {
+  target: Vec2;
+  facing?: number;
+  width?: number;
+}
+
+/**
+ * A drag on the ground from `a` to `b` lays the formation's front: the group stands centred on the
+ * drag, as wide as it, facing away from `from` (where the group is now). A short drag is a plain move to `a`.
+ */
+export function formationDragPlan(a: Vec2, b: Vec2, from: Vec2): FormationDragPlan {
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const len = Math.hypot(dx, dz);
+  if (len < MIN_FORMATION_DRAG_M) return { target: { x: a.x, z: a.z } };
+  const target = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+  let fx = -dz / len;
+  let fz = dx / len;
+  if (fx * (target.x - from.x) + fz * (target.z - from.z) < 0) {
+    fx = -fx;
+    fz = -fz;
+  }
+  return { target, facing: Math.atan2(fx, fz), width: len };
+}
+
 /** A selected own unit considered by a touch long-press. */
 export interface LongPressUnit {
   id: EntityId;
@@ -83,10 +121,12 @@ export function resolveLongPress(args: {
   selected: readonly LongPressUnit[];
   ownUnitId: EntityId | null;
   ground: Vec2 | null;
+  /** The player's formation pick (default: the soldiers' default formation). */
+  formation?: FormationKind;
 }): { type: 'toggle'; id: EntityId } | Extract<Command, { type: 'attackMove' }> | null {
   if (args.ownUnitId !== null) return { type: 'toggle', id: args.ownUnitId };
-  const soldiers = args.selected.filter((u) => isMilitary(u.kind)).map((u) => u.id);
-  return resolveAttackMove(soldiers, args.ground, defaultFormation(args.selected.filter((u) => isMilitary(u.kind)).map((u) => u.kind)));
+  const soldiers = args.selected.filter((u) => isMilitary(u.kind));
+  return resolveAttackMove(soldiers.map((u) => u.id), args.ground, args.formation ?? defaultFormation(soldiers.map((u) => u.kind)));
 }
 
 /**
@@ -99,7 +139,12 @@ export function resolveLongPress(args: {
  * building selected, RMB sets its rally point (on a node / unit / building: rally to it) and
  * a flag marks it. Q (or the command-card button) arms attack-move: the next click / tap on
  * the ground attack-moves there (on an enemy: attacks it); Esc / RMB disarms. X = stop;
- * stance buttons set the stance of the selected soldiers. Z / C / V train the selected
+ * stance buttons set the stance of the selected soldiers. Formations (M17-4): the command card's
+ * Line / Column / Box / Loose buttons or Shift+L / C / X / S pick the formation the next moves use
+ * (session UI state, remembered per control group); RMB-drag with soldiers selected lays the front
+ * line (ghost slots preview it, release orders the move with that facing and width; Ctrl: attack-move),
+ * and on touch the Orders sheet's "Draw line" arms the next one-finger drag to do the same.
+ * Selected units' orders are drawn on the ground (EntityViews). Z / C / V train the selected
  * building's units (Shift: five). Ctrl / Cmd / Alt + 1–9 assign a control group (Shift adds),
  * 1–9 select it, a quick second press centres on it; the side rail's group buttons do the
  * same by tap (long-press assigns). "," and the idle button cycle idle villagers. Double-click
@@ -114,7 +159,8 @@ export function resolveLongPress(args: {
  * (gather / construct / farm / move), sets a selected building's rally point, or with no units
  * selected selects the tapped visible building / enemy. A tap while a Build / Train / Orders sheet is
  * open closes it and does not order. A long-press on an own unit toggles it; released on the ground,
- * it attack-moves the selected soldiers. Long-press + drag, or the Box button then a drag,
+ * it attack-moves the selected soldiers. Patrol on touch: each tap adds a point, #route-bar's ✓ sends
+ * the patrol (✕ cancels). Long-press + drag, or the Box button then a drag,
  * box-selects (a tap cancels Box). The Orders sheet button only arms the next tap.
  * #select-same-btn selects every
  * visible own unit of the selected kind. While placing, a tap moves the ghost, a finger on the
@@ -157,6 +203,20 @@ export class Controls {
   private guardArmed = false;
   /** Raze armed (M18-4): the next click / tap on an enemy or neutral building attacks it to destroy. */
   private razing = false;
+  /** Formation picked for the next orders (null: the selection's default). UI state, never sim state. */
+  private formationPick: FormationKind | null = null;
+  /** Formation pick remembered per control group, restored when the group is recalled. */
+  private readonly groupFormation = new Map<number, FormationKind | null>();
+  /** Touch "Draw line" armed: the next one-finger drag lays the formation's front. */
+  private formationDrawArmed = false;
+  /** A "Draw line" drag is under way (the recogniser has already used up its arm). */
+  private formationDrawing = false;
+  /** Cache key of the formation preview on screen ('' when none), so a still drag does not re-plan. */
+  private previewKey = '';
+  /** Last painted formation-button state. */
+  private formationButtonsKey = '';
+  /** Last painted route-bar state. */
+  private routeBarKey = '';
   /** Pause menu is up: orders and placement wait. Camera input is skipped by Game. */
   private suspended = false;
   /** Help, placement, or targeting already used Escape this frame, so it must not also pause. */
@@ -204,6 +264,7 @@ export class Controls {
       if (this.targeting && !this.ownUnitIds().length) this.setTargeting(false);
       if (this.patrolPoints && !this.patrolIds().length) this.setTargeting(false);
       if (this.guardArmed && !this.guardUnits().length) this.setTargeting(false);
+      if (this.formationDrawArmed && !this.formationApplies()) this.setFormationDraw(false);
     });
     rig.resolveTarget = (id, alpha) => {
       const available = (u: import('../core/types').Unit | undefined) => !!u && u.kind === 'villager' && u.owner === world.localPlayer && u.hp > 0 && u.state !== 'garrisoned';
@@ -221,6 +282,7 @@ export class Controls {
         this.showBox(null);
         this.placement.cancel();
         this.setTargeting(false);
+        this.setFormationDraw(false);
         input.touch.disarmBox();
       }
       this.syncMode();
@@ -246,8 +308,10 @@ export class Controls {
       btn.blur();
       this.beginPlacement(btn.dataset.build as BuildingKind);
     });
+    bindButton('route-confirm', () => this.finishPatrol());
+    bindButton('route-cancel', () => this.setTargeting(false));
     document.getElementById('command-card')?.addEventListener('click', (e) => {
-      const btn = (e.target as Element).closest<HTMLElement>('[data-cmd], [data-stance]');
+      const btn = (e.target as Element).closest<HTMLElement>('[data-cmd], [data-stance], [data-formation]');
       if (!btn) return;
       btn.blur();
       if (btn.dataset.cmd === 'unloadTransport') { this.setTargeting(true); this.unloading = true; }
@@ -255,6 +319,8 @@ export class Controls {
       else if (btn.dataset.cmd === 'patrol') this.setPatrolling(!this.patrolPoints);
       else if (btn.dataset.cmd === 'guard') this.setGuarding(!this.guardArmed);
       else if (btn.dataset.cmd === 'raze') this.setRazing(!this.razing);
+      else if (btn.dataset.cmd === 'formationDraw') this.setFormationDraw(!this.formationDrawArmed);
+      else if (btn.dataset.formation) this.setFormation(btn.dataset.formation as FormationKind);
       else if (btn.dataset.cmd === 'stop') this.stop();
       else if (btn.dataset.stance) this.setStance(btn.dataset.stance as Stance);
     });
@@ -278,6 +344,7 @@ export class Controls {
     if (!on) return;
     if (this.placement.active) this.placement.cancel();
     if (this.targeting) this.setTargeting(false);
+    this.setFormationDraw(false);
     this.deps.input.touch.disarmBox();
     this.touchBox = null;
     this.showBox(null);
@@ -333,6 +400,11 @@ export class Controls {
 
     for (const g of input.touch.gestures) this.gesture(g);
 
+    this.syncFormationButtons();
+    this.syncRouteBar();
+    // "Draw line" was disarmed by the recogniser (a second finger) without a drag.
+    if (this.formationDrawArmed && !input.touch.boxArmed && !this.formationDrawing) this.setFormationDraw(false);
+
     const left = input.drag(LMB);
     const selecting = left && !left.withSpace ? left : undefined;
     const mouseBox = selecting?.held && selecting.dragging && !this.targeting ? dragRect(selecting) : null;
@@ -348,9 +420,15 @@ export class Controls {
     this.hotkeys();
 
     const right = input.drag(RMB);
-    if (input.released(RMB) && right && classifyRelease(right) === 'click') {
-      if (this.targeting) this.setTargeting(false);
-      else if (!((right.withAlt || input.alt) && this.guardAt(right.x, right.y))) this.order(right.x, right.y, input.ctrl);
+    // With soldiers selected an RMB drag lays a formation instead of panning (Space+drag still pans).
+    if (right && input.pressed(RMB) && !this.targeting && !right.withAlt && this.formationApplies()) right.claimed = true;
+    if (right?.claimed && right.held && right.dragging) this.previewFormationDrag(right.startX, right.startY, right.x, right.y);
+    if (input.released(RMB) && right) {
+      if (right.claimed && right.dragging) this.finishFormationDrag(right.startX, right.startY, right.x, right.y, input.ctrl);
+      else if (classifyRelease(right) === 'click') {
+        if (this.targeting) this.setTargeting(false);
+        else if (!((right.withAlt || input.alt) && this.guardAt(right.x, right.y))) this.order(right.x, right.y, input.ctrl);
+      }
     }
     this.syncBoxArm();
   }
@@ -381,7 +459,18 @@ export class Controls {
     const g = input.keyMods(guardKey.code);
     const guarding = !!g && g.shift && !g.ctrl && !g.alt && this.guardUnits().length > 0;
     if (guarding) this.setGuarding(!this.guardArmed);
-    if (input.keyPressed(HOTKEYS.stop)) this.stop();
+    // Formation chords win over the build keys' Shift fallback (and Shift+X over Stop) while soldiers are selected.
+    let formationCode: string | null = null;
+    if (this.formationApplies()) {
+      for (const [key, kind] of FORMATION_KEYS) {
+        const { code } = parseHotkey(key);
+        const m = input.keyMods(code);
+        if (!m || !m.shift || m.ctrl || m.alt) continue;
+        this.setFormation(kind);
+        formationCode = code;
+      }
+    }
+    if (input.keyPressed(HOTKEYS.stop) && formationCode !== parseHotkey(HOTKEYS.stop).code) this.stop();
     if (input.keyPressed(HOTKEYS.idleVillager)) this.nextIdle();
     if (input.keyPressed(HOTKEYS.scout) || input.keyPressed('NumpadDecimal') || input.keyPressed(HOTKEYS.scoutAlt)) {
       focusNextScout(world, rig);
@@ -392,13 +481,14 @@ export class Controls {
     } else if (plain(HOTKEYS.townBell)) world.dispatch({ type: 'townBell' });
     if (plain(HOTKEYS.techTree)) this.techTree.show();
     for (const code of buildHotkeyCodes()) {
-      if (guarding && code === guardKey.code) continue;
+      if ((guarding && code === guardKey.code) || code === formationCode) continue;
       const kind = plain(code) ? kindForKey(code, !!input.keyMods(code)?.shift) : null;
       if (kind) this.beginPlacement(kind);
     }
     const trainer = this.rallyBuilding();
     if (trainer) {
       for (const code of TRAIN_SLOT_KEYS) {
+        if (code === formationCode) continue;
         const unit = plain(code) ? kindForSlotKey(trainer.kind, code, world.players.get(trainer.owner)?.player.civ) : null;
         if (!unit || trainer.upgrading || ageLockText(unitAge(unit), world.players.get(world.localPlayer)?.age ?? 0)) continue;
         world.dispatch(trainCommand(trainer.id, unit, trainBatch(!!input.keyMods(code)?.shift)));
@@ -520,7 +610,8 @@ export class Controls {
           break;
         }
         if (this.targeting) {
-          this.targetClick(g.x, g.y, false);
+          // Touch has no Shift: patrol taps gather points until #route-bar's ✓.
+          this.targetClick(g.x, g.y, !!this.patrolPoints);
           break;
         }
         const ownUnits = this.ownUnitIds().length > 0;
@@ -557,6 +648,7 @@ export class Controls {
           }),
           ownUnitId: id !== null && this.isOwnUnit(id) ? id : null,
           ground: this.groundAt(g.x, g.y),
+          formation: this.formationPick ?? undefined,
         });
         if (!action) break;
         if (action.type === 'toggle') this.toggle(action.id);
@@ -568,14 +660,26 @@ export class Controls {
         break;
       }
       case 'box':
+        if (this.formationDrawArmed) {
+          this.formationDrawing = true;
+          this.previewFormationDrag(g.x0, g.y0, g.x, g.y);
+          break;
+        }
         if (!this.touchBox) closeTouchMenus();
         this.touchBox = rectBetween(g.x0, g.y0, g.x, g.y);
         break;
       case 'boxEnd':
+        if (this.formationDrawArmed) {
+          this.finishFormationDrag(g.x0, g.y0, g.x, g.y, false);
+          this.setFormationDraw(false);
+          break;
+        }
         this.touchBox = null;
         this.boxSelect(rectBetween(g.x0, g.y0, g.x, g.y), false);
         break;
       case 'boxCancel':
+      case 'armCancel':
+        if (this.formationDrawArmed) this.setFormationDraw(false);
         this.touchBox = null;
         break;
     }
@@ -638,12 +742,152 @@ export class Controls {
     return this.deps.world.units.get(id)?.owner === this.deps.world.localPlayer;
   }
 
-  /** Selected units the local player owns (enemy selections are inspect-only). */
-  /** Group formation sent with move orders (M17-4 adds a picker; until then the per-selection default). */
+  /**
+   * Group formation sent with move orders: the player's pick when the group has soldiers in it,
+   * otherwise the selection's default (villagers and ships walk loose).
+   */
   private formationFor(ids: readonly EntityId[]): FormationKind {
-    return defaultFormation(ids.flatMap((id) => this.deps.world.units.get(id)?.kind ?? []));
+    const kinds = ids.flatMap((id) => this.deps.world.units.get(id)?.kind ?? []);
+    return this.formationPick !== null && kinds.some(isMilitary) ? this.formationPick : defaultFormation(kinds);
   }
 
+  /** The selection has own soldiers, so the formation picker, its keys and the RMB formation drag apply. */
+  private formationApplies(): boolean {
+    const { world } = this.deps;
+    return this.ownUnitIds().some((id) => {
+      const u = world.units.get(id);
+      return !!u && isMilitary(u.kind) && u.state !== 'garrisoned';
+    });
+  }
+
+  /** Pick the formation for the next orders; groups holding exactly this selection remember it. */
+  private setFormation(kind: FormationKind): void {
+    this.formationPick = kind;
+    const ids = this.deps.selection.ids;
+    for (let n = 1; n <= GROUP_KEYS.length; n++) {
+      const members = this.groups.get(n);
+      if (members.length && members.length === ids.size && members.every((id) => ids.has(id))) this.groupFormation.set(n, kind);
+    }
+    this.syncFormationButtons();
+  }
+
+  /** Mark the formation in force for the selection, and the touch "Draw line" button. */
+  private syncFormationButtons(): void {
+    const ids = this.formationApplies() ? this.ownUnitIds() : [];
+    const current = ids.length ? this.formationFor(ids) : '';
+    const key = `${current}|${this.formationDrawArmed}`;
+    if (key === this.formationButtonsKey) return;
+    this.formationButtonsKey = key;
+    const card = document.getElementById('command-card');
+    for (const btn of card?.querySelectorAll<HTMLElement>('[data-formation]') ?? []) {
+      btn.setAttribute('aria-pressed', String(btn.dataset.formation === current));
+    }
+    card?.querySelector('[data-cmd="formationDraw"]')?.setAttribute('aria-pressed', String(this.formationDrawArmed));
+  }
+
+  /** Touch "Draw line": arm (or drop) the next one-finger drag as the formation's front. */
+  private setFormationDraw(on: boolean): void {
+    const { input, rig } = this.deps;
+    if (on && (rig.mode !== 'rts' || !this.formationApplies())) on = false;
+    const was = this.formationDrawArmed;
+    this.formationDrawArmed = on;
+    if (on) {
+      this.setTargeting(false);
+      this.touchBox = null;
+      input.touch.armBox();
+      closeTouchMenus();
+    } else {
+      if (was && !this.formationDrawing) input.touch.disarmBox();
+      this.formationDrawing = false;
+      this.clearFormationPreview();
+    }
+    const hint = document.getElementById('select-hint');
+    if (hint) hint.textContent = on ? 'Drag the front line · tap to cancel' : 'Drag around your units · tap to cancel';
+    this.boxArmOn = null;
+    this.syncBoxArm();
+    this.syncFormationButtons();
+  }
+
+  /** Own selected units a formation drag moves (garrisoned ones stay put). */
+  private formationUnits(): Unit[] {
+    const { world } = this.deps;
+    return this.ownUnitIds().flatMap((id) => {
+      const u = world.units.get(id);
+      return u && u.state !== 'garrisoned' && u.hp > 0 ? [u] : [];
+    });
+  }
+
+  /** The order a formation drag between two screen points gives, or null off the map / with nobody to send. */
+  private formationDragOrder(x0: number, y0: number, x1: number, y1: number): { units: Unit[]; plan: FormationDragPlan; formation: FormationKind; a: Vec2; b: Vec2 } | null {
+    const a = this.groundAt(x0, y0);
+    const b = this.groundAt(x1, y1) ?? a;
+    const units = this.formationUnits();
+    if (!a || !b || !units.length) return null;
+    const centre = { x: 0, z: 0 };
+    for (const u of units) {
+      centre.x += u.pos.x / units.length;
+      centre.z += u.pos.z / units.length;
+    }
+    const plan = formationDragPlan(a, b, centre);
+    return { units, plan, formation: this.formationFor(units.map((u) => u.id)), a, b };
+  }
+
+  /** Ghost slots where each unit would stand, the drag line and a facing arrow. Re-planned only when the drag moves. */
+  private previewFormationDrag(x0: number, y0: number, x1: number, y1: number): void {
+    const o = this.formationDragOrder(x0, y0, x1, y1);
+    if (!o) {
+      this.clearFormationPreview();
+      return;
+    }
+    const q = (v: number) => Math.round(v * 4);
+    const key = `${q(o.a.x)},${q(o.a.z)},${q(o.b.x)},${q(o.b.z)},${o.formation},${o.units.length}`;
+    if (key === this.previewKey) return;
+    this.previewKey = key;
+    const { world, views } = this.deps;
+    const slots: Vec2[] = [];
+    // Land units and ships plan apart, as the sim does.
+    for (const group of [o.units.filter((u) => !isShip(u.kind)), o.units.filter((u) => isShip(u.kind))]) {
+      if (!group.length) continue;
+      const planned = formationSlots(navFor(world, group[0]), group, o.plan.target, o.formation, o.plan.facing, o.plan.width);
+      for (const p of planned) if (p) slots.push(p);
+    }
+    const lines: Vec2[][] = [[o.a, o.b]];
+    if (o.plan.facing !== undefined) {
+      const f = { x: Math.sin(o.plan.facing), z: Math.cos(o.plan.facing) };
+      const t = o.plan.target;
+      const tip = { x: t.x + f.x * 3, z: t.z + f.z * 3 };
+      const side = { x: f.z * 0.8, z: -f.x * 0.8 };
+      const back = { x: tip.x - f.x * 1.1, z: tip.z - f.z * 1.1 };
+      lines.push([t, tip], [{ x: back.x + side.x, z: back.z + side.z }, tip, { x: back.x - side.x, z: back.z - side.z }]);
+    }
+    views.showFormationPreview({ slots, lines });
+  }
+
+  private clearFormationPreview(): void {
+    if (!this.previewKey) return;
+    this.previewKey = '';
+    this.deps.views.showFormationPreview(null);
+  }
+
+  /** Release of a formation drag: move (or attack-move) there with the drag's facing and width. */
+  private finishFormationDrag(x0: number, y0: number, x1: number, y1: number, attackMove: boolean): void {
+    const o = this.formationDragOrder(x0, y0, x1, y1);
+    this.clearFormationPreview();
+    if (!o) return;
+    const { world, views } = this.deps;
+    const shape = {
+      formation: o.formation,
+      ...(o.plan.facing !== undefined ? { facing: o.plan.facing } : {}),
+      ...(o.plan.width !== undefined ? { width: o.plan.width } : {}),
+    };
+    const unitIds = o.units.map((u) => u.id);
+    world.dispatch(attackMove
+      ? { type: 'attackMove', unitIds, target: o.plan.target, ...shape }
+      : { type: 'move', unitIds, target: o.plan.target, ...shape });
+    views.flashMarker(o.plan.target);
+  }
+
+  /** Selected units the local player owns (enemy selections are inspect-only). */
   private ownUnitIds(): EntityId[] {
     return [...this.deps.selection.ids].filter((id) => this.isOwnUnit(id));
   }
@@ -676,7 +920,8 @@ export class Controls {
   private toggleBoxArm(): void {
     const { input, rig } = this.deps;
     if (rig.mode !== 'rts') return;
-    if (input.touch.boxArmed) input.touch.disarmBox();
+    if (this.formationDrawArmed) this.setFormationDraw(false);
+    else if (input.touch.boxArmed) input.touch.disarmBox();
     else {
       input.touch.armBox();
       closeTouchMenus();
@@ -686,12 +931,14 @@ export class Controls {
 
   /** Paint the Box button and the "drag around your units" hint from the recogniser. */
   private syncBoxArm(): void {
-    const on = this.deps.rig.mode === 'rts' && (this.deps.input.touch.boxArmed || this.touchBox !== null);
-    if (on === this.boxArmOn) return;
+    const rts = this.deps.rig.mode === 'rts';
+    const on = rts && !this.formationDrawArmed && (this.deps.input.touch.boxArmed || this.touchBox !== null);
+    const hintOn = on || (rts && this.formationDrawArmed);
+    if (on === this.boxArmOn && hintOn === !document.getElementById('select-hint')?.hidden) return;
     this.boxArmOn = on;
     document.getElementById('touch-box')?.setAttribute('aria-pressed', String(on));
     const hint = document.getElementById('select-hint');
-    if (hint) hint.hidden = !on;
+    if (hint) hint.hidden = !hintOn;
   }
 
   private selectAllOwn(): void {
@@ -891,14 +1138,13 @@ export class Controls {
     }
     if (this.patrolPoints) {
       const ground = this.groundAt(x, y);
-      if (ground) {
+      if (ground && this.patrolPoints.length < MAX_PATROL_POINTS) {
         this.patrolPoints.push(ground);
         views.flashMarker(ground);
+        this.showPendingRoute();
       }
       if (keepArmed) return;
-      const cmd = resolvePatrol(this.patrolIds(), this.patrolPoints);
-      if (cmd) world.dispatch(cmd);
-      this.setTargeting(false);
+      this.finishPatrol();
       return;
     }
     if (this.guardArmed) {
@@ -928,9 +1174,47 @@ export class Controls {
 
   private setTargeting(on: boolean): void {
     if (on && !this.ownUnitIds().length) on = false;
+    const hadRoute = !!this.patrolPoints?.length;
     this.targeting = on; this.unloading = false; this.patrolPoints = null; this.guardArmed = false; this.razing = false;
+    if (on && this.formationDrawArmed) this.setFormationDraw(false);
+    if (hadRoute) this.deps.views.setPendingRoute(null);
     document.body.classList.toggle('targeting', on);
     this.syncTargetButtons();
+  }
+
+  /** Send the patrol through the points chosen so far (touch ✓, or the final plain click). */
+  private finishPatrol(): void {
+    const cmd = resolvePatrol(this.patrolIds(), this.patrolPoints ?? []);
+    if (cmd) this.deps.world.dispatch(cmd);
+    this.setTargeting(false);
+  }
+
+  /** Draw the patrol being laid out: from the patrollers' centre through every point chosen. */
+  private showPendingRoute(): void {
+    const { world, views } = this.deps;
+    const units = this.patrolIds().flatMap((id) => world.units.get(id) ?? []);
+    if (!units.length || !this.patrolPoints?.length) return;
+    const from = { x: 0, z: 0 };
+    for (const u of units) {
+      from.x += u.pos.x / units.length;
+      from.z += u.pos.z / units.length;
+    }
+    views.setPendingRoute([from, ...this.patrolPoints]);
+  }
+
+  /** Touch patrol bar: how many points so far, with ✓ / ✕. Phones only; the mouse finishes with a plain click. */
+  private syncRouteBar(): void {
+    const bar = document.getElementById('route-bar');
+    if (!bar) return;
+    const show = !!this.patrolPoints && document.body.classList.contains('touch');
+    const n = this.patrolPoints?.length ?? 0;
+    const key = show ? String(n) : '';
+    if (key === this.routeBarKey) return;
+    this.routeBarKey = key;
+    bar.hidden = !show;
+    const count = document.getElementById('route-count');
+    if (count) count.textContent = n ? `${n} point${n === 1 ? '' : 's'} · tap more, then ✓` : 'Tap each point on the map, then ✓';
+    (document.getElementById('route-confirm') as HTMLButtonElement | null)?.toggleAttribute('disabled', !n);
   }
 
   /** Arm patrol: the next click / tap is the patrol point (Shift+click adds waypoints first). */
@@ -1032,7 +1316,10 @@ export class Controls {
     const { world, selection } = this.deps;
     const own = [...selection.ids].filter((id) => (world.units.get(id) ?? world.buildings.get(id))?.owner === world.localPlayer);
     if (add) this.groups.add(n, own);
-    else this.groups.assign(n, own);
+    else {
+      this.groups.assign(n, own);
+      this.groupFormation.set(n, this.formationPick);
+    }
   }
 
   /** Digit / group button: select group `n`; a quick second press centres the camera on it. */
@@ -1044,6 +1331,7 @@ export class Controls {
       return world.buildings.has(id);
     });
     if (!ids.length) return;
+    if (this.groupFormation.has(n)) this.formationPick = this.groupFormation.get(n)!;
     if (this.groups.press(n, this.time) === 'centre') {
       const c = groupCentre(ids, (id) => (world.units.get(id) ?? world.buildings.get(id))?.pos);
       if (c) rig.focusOn(c);

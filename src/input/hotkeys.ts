@@ -7,7 +7,7 @@ import { BUILD_HOTKEYS } from '../ui/build';
  *
  * Attack-move is Q: A is already select-all, and Q sits right
  * next to it under the left hand, free of every build key. Ctrl+right-click attack-moves
- * directly. Patrol is Shift+Q, its sibling (every plain letter is taken). Stop is X (the ✕ on its button). Train slots are Z / C / V, left to right in the
+ * directly. Patrol is Shift+Q, its sibling (every plain letter is taken); Guard is Shift+G. Stop is X (the ✕ on its button). Train slots are Z / C / V, left to right in the
  * training panel, so they never collide with the build keys a villager selection uses.
  */
 export const HOTKEYS = {
@@ -21,6 +21,14 @@ export const HOTKEYS = {
   /** Every plain letter is taken; G for Guard, ahead of the granary's Shift fallback when guards are selected. */
   guard: 'Shift+KeyG',
   stop: 'KeyX',
+  /**
+   * Formations (M17-4) are Shift chords too, and win over a build key's Shift fallback while soldiers
+   * are selected: Line (L), Column (C), boX (X) and Spread / loose (S).
+   */
+  formationLine: 'Shift+KeyL',
+  formationColumn: 'Shift+KeyC',
+  formationBox: 'Shift+KeyX',
+  formationNone: 'Shift+KeyS',
   idleVillager: 'Comma',
   scout: 'Period',
   scoutAlt: 'Home',

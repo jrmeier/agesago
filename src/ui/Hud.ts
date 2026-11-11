@@ -181,6 +181,8 @@ export class Hud {
   private popNoteTimer = 0;
   /** Building kind the training grid was built for ('' = none). */
   private trainKind: BuildingKind | '' = '';
+  /** Touch ×5 toggle in the training panel: each train tap queues five (phones have no Shift-click). */
+  private batchFive = false;
   /** Unit-line tiers the training grid was built for. */
   private trainLineKey = '';
   /** Building the training grid dispatches to. */
@@ -265,6 +267,13 @@ export class Hud {
       if (tech) {
         tech.blur();
         this.researchAt(tech.dataset.research as TechId, tech.dataset.locked === 'true');
+        return;
+      }
+      const batch = (e.target as Element).closest<HTMLElement>('[data-train-batch]');
+      if (batch) {
+        batch.blur();
+        this.batchFive = !this.batchFive;
+        batch.setAttribute('aria-pressed', String(this.batchFive));
         return;
       }
       const btn = (e.target as Element).closest<HTMLElement>('[data-train]');
@@ -406,7 +415,7 @@ export class Hud {
   private trainAt(kind: UnitKind, shift: boolean): void {
     const id = this.trainBuildingId;
     if (id === null) return;
-    this.world.dispatch(trainCommand(id, kind, trainBatch(shift)));
+    this.world.dispatch(trainCommand(id, kind, trainBatch(shift || this.batchFive)));
   }
 
   private setStock(stock: Stockpile, pop: number, popCap: number): void {
@@ -454,6 +463,19 @@ export class Hud {
     this.upgradeTile = null;
     this.upgradeKey = '';
     if (!kind) return;
+    const entries = trainEntries(kind, this.world.stock, this.world.players.get(this.world.localPlayer)?.researched, this.world.players.get(this.world.localPlayer)?.player.civ);
+    if (entries.length) {
+      // Touch only (CSS): the phone's stand-in for Shift-click. It stays on until tapped again.
+      const batch = document.createElement('button');
+      batch.type = 'button';
+      batch.className = 'build-btn train-batch';
+      batch.dataset.trainBatch = '';
+      batch.textContent = '×5';
+      batch.title = 'Queue five per tap';
+      batch.setAttribute('aria-label', 'Queue five per tap');
+      batch.setAttribute('aria-pressed', String(this.batchFive));
+      grid.append(batch);
+    }
     for (const e of trainEntries(kind, this.world.stock, this.world.players.get(this.world.localPlayer)?.researched, this.world.players.get(this.world.localPlayer)?.player.civ)) {
       const btn = tile(`#i-${e.kind}`, e.name, e.cost, e.key, 'Shift-click: queue 5');
       btn.classList.add('train-tile');
@@ -635,6 +657,8 @@ export class Hud {
     setHidden(card.querySelector<HTMLButtonElement>('[data-cmd="guard"]'), !own.some((u) => canGuard(u.kind)));
     // Raze (M18-4): soldiers capture buildings by default, this attacks one to destroy it.
     setHidden(card.querySelector<HTMLButtonElement>('[data-cmd="raze"]'), !own.some((u) => captureRate(u.kind) > 0));
+    // Formation picker (M17-4): soldiers only; Controls marks the formation in force.
+    setHidden(card.querySelector<HTMLElement>('.formation-group'), !own.some((u) => isMilitary(u.kind) && u.state !== 'garrisoned'));
     const fighters = own.filter((u) => isMilitary(u.kind) || u.kind === 'scout');
     card.classList.toggle('no-stances', !fighters.length);
     const stance = sharedStance(fighters);
