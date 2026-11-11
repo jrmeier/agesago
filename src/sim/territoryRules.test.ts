@@ -94,6 +94,26 @@ describe('territory placement rule (M18-3)', () => {
     expect(w.canPlace('townCenter', { x: NEUTRAL.x, z: NEUTRAL.z + 20 }, 0, 1)).toEqual({ ok: false, reason: 'town-spacing' });
   });
 
+  it('villagers found a new Town Center on neutral land from the Town Age (M18-5)', () => {
+    const w = arena();
+    const log = record(w);
+    const v = w.spawnUnit('villager', { x: NEUTRAL.x - 4, z: NEUTRAL.z }, 1);
+    w.players.get(1)!.age = 0;
+    w.dispatch({ type: 'build', unitIds: [v.id], kind: 'townCenter', pos: NEUTRAL, rot: 0 });
+    expect(log).toEqual([{ type: 'rejected', reason: 'age' }]);
+    w.players.get(1)!.age = 1;
+    const wood = w.stockOf(1).wood;
+    w.dispatch({ type: 'build', unitIds: [v.id], kind: 'townCenter', pos: NEUTRAL, rot: 0 });
+    const tc = [...w.buildings.values()].find((b) => b.kind === 'townCenter' && b.owner === 1 && b.pos.x === NEUTRAL.x)!;
+    expect(tc).toBeDefined();
+    expect(w.stockOf(1).wood).toBe(wood - BUILDINGS.townCenter.cost.wood!);
+    completeBuilding(w, tc);
+    run(w, 1);
+    // A root of its own: the land around it is player 1's and connected.
+    expect(w.territoryOwner({ x: NEUTRAL.x + 10, z: NEUTRAL.z })).toBe(1);
+    expect(w.isConnected({ x: NEUTRAL.x + 10, z: NEUTRAL.z })).toBe(true);
+  });
+
   it("'build' outside territory is rejected with reason 'territory' and costs nothing", () => {
     const w = arena();
     const log = record(w);

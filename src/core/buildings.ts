@@ -126,7 +126,10 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     popBonus: 5,
     drop: ['wood', 'food', 'gold', 'stone'],
     walkable: false,
-    buildable: false,
+    // Villagers found new Town Centers from the Town Age (M18-5), on neutral or own land, at
+    // least TERRITORY.townCenterSpacing from every other one.
+    buildable: true,
+    age: 1,
     sight: 11,
     hp: 2400,
     armor: { melee: 10, pierce: 15 },

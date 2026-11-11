@@ -316,7 +316,7 @@ Fletching and friends still multiply on top).
 | Guard → Fortress Tower | Empire | 50 wood, 175 stone | 45 s | hp ×1.5, +1 arrow, +2/+2 armour | 225 per arrow (1.7× a new tower), paid for by +630 hp and the armour that makes it shrug off archers. Stone-heavy, for the Empire economy. |
 | Palisade → Reinforced Palisade | Town | 4 wood, 2 stone | 5 s | hp ×1.5, +1/+1 armour | New segment: 0.021 res/hp. Upgrade: 0.043 res/hp (2×), but it thickens an existing line without a second row. |
 | Stone Wall → Fortified Stone Wall | City | 5 stone | 8 s | hp ×1.4, +1/+1 armour | New segment: 0.005 stone/hp. Upgrade: 0.010 stone/hp (2×), same reasoning. Stacks with the academy's Fortified Walls. |
-| Town Center → Town Hall | Town | 200 wood, 100 stone | 40 s | hp ×1.15, +1 arrow, +5 garrison | A Town Center can't be built new; compare to a watch tower (130 per arrow, 5 garrison) next to it: 300 buys an arrow, 5 garrison and 360 hp, but the TC trains no villagers for 40 s. |
+| Town Center → Town Hall | Town | 200 wood, 100 stone | 40 s | hp ×1.15, +1 arrow, +5 garrison | Compare to a watch tower (130 per arrow, 5 garrison) next to it: 300 buys an arrow, 5 garrison and 360 hp, but the TC trains no villagers for 40 s. |
 | Town Hall → City Hall | City | 300 wood, 200 stone, 100 gold | 60 s | hp ×1.15, +1 arrow, +5 garrison, +1/+1 armour | 600 per arrow + garrison + armour; about two Guard Towers' worth of defence in the one building the enemy must kill. |
 | City Hall → Imperial Palace | Empire | 400 stone, 250 gold | 80 s | hp ×1.2, +2 arrows, +1/+1 armour | 325 per arrow, the best arrow rate in the chain, because it costs 80 s of villager production in the late game. |
 | Barracks / Archery Range / Stable level 2 | City | 150 wood, 100 gold | 40 s | trains 20% faster, hp ×1.1 | A second building (175 wood) doubles throughput; level 2 adds only 20% for 250. Its real value is the gate: the Empire Age unit-line techs (Silver Shields, Champions, Master Archers, Lead-Shot Slingers, Tarantine Horsemen, Clibanarii) need a level-2 building of their kind. |
@@ -365,6 +365,11 @@ Placement and decay follow 0 A.D.'s BuildRestrictions and TerritoryDecay (`canPl
   outward. Nothing may go on another player's land, allied or not. A Town Center also needs
   30 units (`townCenterSpacing`) from every other Town Center or Town Center foundation. A rejected
   order reports `territory`, and the ghost says why.
+- **New Town Centers (M18-5).** Villagers build Town Centers from the Town Age (`age: 1`, Shift+S,
+  last tile of the build menu) at the existing 275 wood + 100 stone and 150 s build time. Each new
+  one is a territory root, trains villagers and adds 5 pop. The price is a first guess and much
+  cheaper than 0 A.D.'s Civic Center; the M13-7 / M16-9 balance passes should look at it (the
+  moderate AI now founds a second one on medium and larger maps, about minute 7–12).
 - **Decay.** A complete building loses `decayRate` = 0.2% of its max hp per second (1% per 5 s) while
   its centre is off its owner's connected territory. That covers enemy or neutral land, and own land
   cut off from every Town Center. Any garrisoned occupant stops decay, and repair works as usual.
@@ -406,7 +411,11 @@ Modelled on 0 A.D.'s Capturable (`src/sim/systems/capture.ts`; data in `CAPTURE`
 - **Orders.** Right-clicking an enemy or neutral building with soldiers captures it. Ctrl+right-click,
   attack-move targeting (Q), or the Raze order button (also in the phone Orders sheet) attack it to
   destroy instead. Units that cannot capture attack as before. Idle units that pick a building on
-  their own still attack it, and so does the AI, so its army razes towns rather than capturing them.
+  their own still attack it.
+- **The AI (M18-5).** Its attack waves capture military and economic buildings while no enemy
+  soldier stands next to them, and raze houses, walls and farms. A capture that gains no points for
+  20 s (a garrison wins them back as fast) turns into razing. At home it garrisons villagers (and,
+  when outnumbered, soldiers) in a Town Center, tower or temple that is being captured.
 
 ## Rerunning
 

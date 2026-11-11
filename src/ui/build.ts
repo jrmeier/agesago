@@ -33,6 +33,8 @@ export const BUILD_HOTKEYS: Partial<Record<BuildingKind, string>> = {
   dock: 'Shift+KeyK',
   wonder: 'Shift+KeyH',
   fortress: 'Shift+KeyN',
+  /** S for settlement: plain S stays the storehouse (M18-5). */
+  townCenter: 'Shift+KeyS',
 };
 
 const SHIFT = 'Shift+';
@@ -47,9 +49,10 @@ export function buildHotkeyCodes(): string[] {
   return [...new Set(Object.values(BUILD_HOTKEYS).map((k) => parseHotkey(k!).code))];
 }
 
-/** Kinds shown in the villager build menu, in BUILDINGS order. */
+/** Kinds shown in the villager build menu, in BUILDINGS order, except a new Town Center comes last. */
 export function buildableKinds(table: Record<BuildingKind, Pick<BuildingSpec, 'buildable'>> = BUILDINGS): BuildingKind[] {
-  return (Object.keys(table) as BuildingKind[]).filter((k) => table[k].buildable);
+  const kinds = (Object.keys(table) as BuildingKind[]).filter((k) => table[k].buildable && k !== 'townCenter');
+  return table.townCenter?.buildable ? [...kinds, 'townCenter'] : kinds;
 }
 
 /**

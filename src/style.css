@@ -805,11 +805,11 @@ body.placing .selection-panel * {
   letter-spacing: 0.05em;
 }
 
-/* Build grid: compact ivory tiles, at most 124px wide, seven across on a desktop. */
+/* Build grid: compact ivory tiles, at most 124px wide, eight across on a desktop. */
 .build-grid {
-  /* 7 × 3 holds all 21 buildings (with the wonder, siege workshop and fortress) without a fourth row
-     covering the map centre; a 22nd buildable kind needs another layout change. */
-  --cols: 7;
+  /* 8 × 3 holds all 22 buildings (with the wonder, siege workshop, fortress and Town Center, M18-5)
+     without a fourth row covering the map centre; a 25th buildable kind needs another layout change. */
+  --cols: 8;
   order: 2;
   flex: 1 0 100%;
   display: grid;

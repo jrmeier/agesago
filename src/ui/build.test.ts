@@ -72,6 +72,7 @@ describe('build hotkeys', () => {
       'academy',
       'wonder',
       'fortress',
+      'townCenter',
     ]);
     const keys = kinds.map((k) => BUILD_HOTKEYS[k]);
     expect(keys.every(Boolean)).toBe(true);
@@ -87,7 +88,7 @@ describe('build hotkeys', () => {
     expect(kindForKey('KeyM', true)).toBe('market');
     expect(kindForKey('KeyM')).toBe('miningCamp');
     // Shift with a key that has no chord still builds the plain kind.
-    expect(kindForKey('KeyS', true)).toBe('storehouse');
+    expect(kindForKey('KeyL', true)).toBe('palisade');
     // Shift+H is the wonder (Shift+G is the guard order, M17-3); plain H is still the house.
     expect(kindForKey('KeyH', true)).toBe('wonder');
     expect(kindForKey('KeyH')).toBe('house');
@@ -106,7 +107,13 @@ describe('build hotkeys', () => {
   });
 
   it('only lists kinds flagged buildable', () => {
-    expect(buildableKinds(BUILDINGS)).not.toContain('townCenter');
+    expect(buildableKinds({ ...BUILDINGS, townCenter: { ...BUILDINGS.townCenter, buildable: false } })).not.toContain('townCenter');
+  });
+
+  it('builds a new Town Center with Shift+S, last in the menu (M18-5)', () => {
+    expect(kindForKey('KeyS', true)).toBe('townCenter');
+    expect(kindForKey('KeyS')).toBe('storehouse');
+    expect(buildableKinds().at(-1)).toBe('townCenter');
   });
 });
 

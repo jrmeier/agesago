@@ -199,7 +199,8 @@ describe('build command', () => {
     w.dispatch({ type: 'build', unitIds: [id], kind: 'house', pos: { x: 15, z: 15 }, rot: 0 });
     expect(log).toEqual([
       { type: 'rejected', reason: 'blocked-site' },
-      { type: 'rejected', reason: 'invalid-target' },
+      // Town Centers need the Town Age (M18-5).
+      { type: 'rejected', reason: 'age' },
       { type: 'rejected', reason: 'insufficient-resources' },
     ]);
     expect(w.stock.wood).toBe(10);
