@@ -109,7 +109,7 @@ describe('watch tower → Guard Tower → Fortress Tower', () => {
     expect(tower.maxHp).toBe(Math.round(BUILDINGS.watchTower.hp * 1.4 * 1.5));
     expect(buildingAttack(w, tower)).toMatchObject({ arrows: base.arrows + 2, range: base.range + 1 });
     const a = BUILDINGS.watchTower.armor;
-    expect(armorOf(w, tower)).toEqual({ melee: a.melee + 2, pierce: a.pierce + 2 });
+    expect(armorOf(w, tower)).toEqual({ melee: a.melee + 2, pierce: a.pierce + 2, crush: 0 }); // tower tiers add no crush armour (M16-1)
     expect(upgradeBlock(w, tower, 1)).toBe('max-tier');
   });
 });
@@ -122,7 +122,7 @@ describe('walls', () => {
     w.players.get(1)!.age = 1;
     upgrade(w, wall);
     expect(wall.maxHp).toBe(Math.round(BUILDINGS.palisade.hp * 1.5));
-    expect(armorOf(w, wall)).toEqual({ melee: BUILDINGS.palisade.armor.melee + 1, pierce: BUILDINGS.palisade.armor.pierce + 1 });
+    expect(armorOf(w, wall)).toEqual({ melee: BUILDINGS.palisade.armor.melee + 1, pierce: BUILDINGS.palisade.armor.pierce + 1, crush: 0 });
   });
 
   it('a stone wall becomes a Fortified Stone Wall in the City Age', () => {
