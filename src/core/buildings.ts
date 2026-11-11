@@ -1,4 +1,4 @@
-import type { Age, BuildingKind, ResourceType, Stockpile } from './types';
+import type { Age, BuildingKind, ResourceType, Stockpile, TechId } from './types';
 
 /**
  * Building data table — the single source of truth for sizes, costs and roles.
@@ -274,6 +274,103 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     age: 2,
   },
 };
+
+/**
+ * What one in-place upgrade tier adds on top of the previous tier (M14-1, after 0 A.D.'s
+ * Upgrade component). Tiers stack: tier 2 has both tier 1's and tier 2's effects.
+ */
+export interface BuildingUpgradeEffects {
+  /** Multiplies base hit points (before research). */
+  hpMul?: number;
+  /** Extra population capacity. */
+  popBonus?: number;
+  armor?: { melee?: number; pierce?: number };
+  /** Extra pierce attack (buildings that shoot only). */
+  attack?: number;
+  /** Extra arrows fired with nobody inside (buildings that shoot only). */
+  arrows?: number;
+  /** Extra garrison slots (buildings with a garrison only). */
+  garrison?: number;
+}
+
+/** One step of a building's upgrade chain: tier N-1 → N. */
+export interface BuildingUpgradeSpec {
+  id: string;
+  /** The building's name once upgraded. */
+  title: string;
+  /** Tier reached (1 for the first step). */
+  tier: number;
+  cost: Partial<Stockpile>;
+  /** Seconds to complete. */
+  time: number;
+  /** Earliest age it can start. */
+  age: Age;
+  requires?: TechId[];
+  effects: BuildingUpgradeEffects;
+}
+
+/**
+ * Per-building upgrade chains, indexed by current tier: chain[0] takes tier 0 → 1, chain[1]
+ * takes 1 → 2. M14-2 adds the remaining chains (towers, Town Center, military buildings).
+ */
+export const BUILDING_UPGRADES: Partial<Record<BuildingKind, readonly BuildingUpgradeSpec[]>> = {
+  house: [
+    {
+      id: 'largeHouse', title: 'Large House', tier: 1, cost: { wood: 60, stone: 20 }, time: 20, age: 1,
+      effects: { hpMul: 1.5, popBonus: 5 },
+    },
+  ],
+};
+
+/** The upgrade that takes a `kind` building from `tier` to the next, if any. */
+export function nextUpgrade(kind: BuildingKind, tier = 0): BuildingUpgradeSpec | undefined {
+  return BUILDING_UPGRADES[kind]?.[tier];
+}
+
+/** Cumulative effects of upgrade tiers 1..tier, normalised (no missing fields). */
+export interface TierStats {
+  hpMul: number;
+  popBonus: number;
+  armorMelee: number;
+  armorPierce: number;
+  attack: number;
+  arrows: number;
+  garrison: number;
+}
+
+const BASE_TIER: TierStats = { hpMul: 1, popBonus: 0, armorMelee: 0, armorPierce: 0, attack: 0, arrows: 0, garrison: 0 };
+const tierCache = new Map<string, TierStats>();
+
+/** Sum of every upgrade effect a `kind` building at `tier` has. Tier 0 (or absent) is the base table. */
+export function tierStats(kind: BuildingKind, tier = 0): TierStats {
+  if (!tier) return BASE_TIER;
+  const key = `${kind}:${tier}`;
+  let t = tierCache.get(key);
+  if (t) return t;
+  t = { ...BASE_TIER };
+  for (const u of BUILDING_UPGRADES[kind]?.slice(0, tier) ?? []) {
+    const e = u.effects;
+    t.hpMul *= e.hpMul ?? 1;
+    t.popBonus += e.popBonus ?? 0;
+    t.armorMelee += e.armor?.melee ?? 0;
+    t.armorPierce += e.armor?.pierce ?? 0;
+    t.attack += e.attack ?? 0;
+    t.arrows += e.arrows ?? 0;
+    t.garrison += e.garrison ?? 0;
+  }
+  tierCache.set(key, t);
+  return t;
+}
+
+/** Display name of a building at `tier` (the latest upgrade's title, else the base name). */
+export function buildingTitle(kind: BuildingKind, tier = 0): string {
+  return (tier > 0 && BUILDING_UPGRADES[kind]?.[tier - 1]?.title) || BUILDINGS[kind].name;
+}
+
+/** Population capacity a complete `kind` building at `tier` provides. */
+export function popBonusOf(kind: BuildingKind, tier = 0): number {
+  return BUILDINGS[kind].popBonus + tierStats(kind, tier).popBonus;
+}
 
 /** Legacy farm capacity and full crop visual scale; farms no longer deplete. */
 export const FARM_FOOD = 250;

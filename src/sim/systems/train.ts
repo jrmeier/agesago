@@ -45,6 +45,10 @@ export function orderTrain(world: World, buildingId: EntityId, unit?: UnitKind):
     world.events.emit({ type: 'rejected', reason: 'invalid-target' });
     return;
   }
+  if (b.upgrading) {
+    if (b.owner === world.localPlayer) world.events.emit({ type: 'rejected', reason: 'busy' });
+    return;
+  }
   if ((UNITS[kind].age ?? 0) > ageOf(world, b.owner)) {
     if (b.owner === world.localPlayer) world.events.emit({ type: 'rejected', reason: 'age' });
     return;

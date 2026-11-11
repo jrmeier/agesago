@@ -1,6 +1,6 @@
 import type { CivId } from '../core/civilizations';
 import type { MapOptions } from '../core/maps';
-import { BUILDINGS, MARKET, MAX_POP, footprintRadius } from '../core/buildings';
+import { MARKET, MAX_POP, footprintRadius, popBonusOf } from '../core/buildings';
 import { EventBus } from '../core/events';
 import { isAnimal, isShip } from '../core/units';
 import {
@@ -53,6 +53,7 @@ import { movementSystem, orderMove } from './systems/movement';
 import { orderCancelTrain, orderTrain } from './systems/train';
 import { productionSystem } from './systems/production';
 import { orderCancelResearch, orderResearch } from './systems/research';
+import { buildingUpgradeSystem, orderCancelUpgrade, orderUpgradeBuilding } from './systems/buildingUpgrade';
 import { buildingMaxHp, buildingSight, unitMaxHp, unitSight } from './systems/stats';
 import { marketSystem, orderMarketTrade, orderTrade, orderTribute, releaseTrade } from './systems/market';
 import { resign, victorySystem, type GameResult } from './systems/victory';
@@ -238,7 +239,7 @@ export class World {
   /** Housing capacity from a player's completed buildings, capped at MAX_POP. */
   popCapOf(player: PlayerId): number {
     let cap = 0;
-    for (const b of this.buildings.values()) if (b.complete && b.owner === player) cap += BUILDINGS[b.kind].popBonus;
+    for (const b of this.buildings.values()) if (b.complete && b.owner === player) cap += popBonusOf(b.kind, b.tier);
     return Math.min(MAX_POP, cap);
   }
 
@@ -407,6 +408,12 @@ export class World {
       case 'cancelResearch':
         if (this.buildings.get(cmd.buildingId)?.owner === by) orderCancelResearch(this, cmd.buildingId, cmd.index);
         break;
+      case 'upgradeBuilding':
+        orderUpgradeBuilding(this, cmd.buildingId, by);
+        break;
+      case 'cancelUpgrade':
+        orderCancelUpgrade(this, cmd.buildingId, by);
+        break;
       case 'marketTrade':
         orderMarketTrade(this, by, cmd.resource, cmd.side);
         break;
@@ -449,6 +456,7 @@ export class World {
     combatSystem(this, dt, arrived);
     exploreSystem(this);
     productionSystem(this, dt);
+    buildingUpgradeSystem(this, dt);
     explorationRewardSystem(this, dt);
     this.time += dt;
     this.fogClock -= dt;

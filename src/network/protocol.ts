@@ -5,8 +5,8 @@ import { TECHS } from '../core/techs';
 import type { Command } from '../core/types';
 import { UNITS } from '../core/units';
 
-/** Trained land units can work, changing deterministic simulation from protocol 2. */
-export const NETWORK_VERSION = 3;
+/** 4: in-place building upgrades (upgradeBuilding/cancelUpgrade). 3: trained land units can work. */
+export const NETWORK_VERSION = 4;
 export const TICKS_PER_TURN = 4;
 export const HASH_EVERY = 25;
 export const MAX_COMMANDS = 64;
@@ -50,7 +50,7 @@ export function validCommand(v: unknown): v is Command {
     case 'cancelTrain': case 'cancelResearch': return id(v.buildingId) && index(v.index);
     case 'gateLivestock': return id(v.buildingId) && typeof v.open === 'boolean';
     case 'tend': case 'construct': case 'garrison': return ids(v.unitIds) && id(v.buildingId);
-    case 'cancelBuild': case 'ungarrison': return id(v.buildingId);
+    case 'cancelBuild': case 'ungarrison': case 'upgradeBuilding': case 'cancelUpgrade': return id(v.buildingId);
     case 'resign': case 'townBell': return true;
     case 'rally': return id(v.buildingId) && point(v.pos) && (v.targetId === undefined || id(v.targetId));
     case 'build': return ids(v.unitIds) && typeof v.kind === 'string' && Object.hasOwn(BUILDINGS, v.kind) && point(v.pos) && typeof v.rot === 'number' && Number.isFinite(v.rot);

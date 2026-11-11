@@ -61,9 +61,12 @@ export function unitTiers(researched: ReadonlySet<TechId> | undefined, kind: Uni
   };
 }
 
-/** Upgrade tier a building renders at (watch tower 0..2, town centre 0..1, else 0). */
-export function buildingRenderTier(researched: ReadonlySet<TechId> | undefined, kind: BuildingKind): number {
-  return researched ? buildingTier(researched, kind).tier : 0;
+/**
+ * Upgrade tier a building renders at: the higher of its owner's global upgrade techs and its own
+ * in-place tier (M14-1). Models clamp it (watch tower 0..2, town centre 0..1, else 0).
+ */
+export function buildingRenderTier(researched: ReadonlySet<TechId> | undefined, kind: BuildingKind, own = 0): number {
+  return Math.max(researched ? buildingTier(researched, kind).tier : 0, own);
 }
 
 export function sameTiers(a: UnitTiers, b: UnitTiers): boolean {

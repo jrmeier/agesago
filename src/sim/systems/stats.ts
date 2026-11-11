@@ -1,4 +1,4 @@
-import { BUILDINGS } from '../../core/buildings';
+import { BUILDINGS, tierStats } from '../../core/buildings';
 import type { Building, BuildingKind, PlayerId, Unit, UnitKind, Vec2 } from '../../core/types';
 import { UNITS } from '../../core/units';
 import { BALANCE } from '../balance';
@@ -43,15 +43,20 @@ export function unitMaxHp(world: World, owner: PlayerId, kind: UnitKind): number
   return Math.round(unitStat(world, owner, kind, 'hp', UNITS[kind].hp));
 }
 
-/** Max hit points of a building kind for `owner`. */
-export function buildingMaxHp(world: World, owner: PlayerId, kind: BuildingKind): number {
-  return Math.round(buildingStat(world, owner, kind, 'hp', BUILDINGS[kind].hp));
+/**
+ * Per-building upgrade tiers (M14-1) change the base value before research applies, so every
+ * building stat below takes the building's `tier` (absent: 0, the base table).
+ */
+
+/** Max hit points of a building kind at upgrade `tier` for `owner`. */
+export function buildingMaxHp(world: World, owner: PlayerId, kind: BuildingKind, tier = 0): number {
+  return Math.round(buildingStat(world, owner, kind, 'hp', BUILDINGS[kind].hp * tierStats(kind, tier).hpMul));
 }
 
-/** Garrison capacity of a building kind for `owner` (0: none). */
-export function garrisonCap(world: World, owner: PlayerId, kind: BuildingKind): number {
+/** Garrison capacity of a building kind at upgrade `tier` for `owner` (0: none). */
+export function garrisonCap(world: World, owner: PlayerId, kind: BuildingKind, tier = 0): number {
   const base = BUILDINGS[kind].garrison ?? 0;
-  return base > 0 ? Math.round(buildingStat(world, owner, kind, 'garrison', base)) : 0;
+  return base > 0 ? Math.round(buildingStat(world, owner, kind, 'garrison', base + tierStats(kind, tier).garrison)) : 0;
 }
 
 /** Attack of a unit kind for `owner` (base table values without `world`). */
@@ -75,10 +80,13 @@ export function armorOf(world: World | undefined, t: Unit | Building): { melee: 
     };
   }
   const a = BUILDINGS[t.kind].armor;
-  if (!world) return a;
+  const tier = tierStats(t.kind, t.tier);
+  const melee = a.melee + tier.armorMelee;
+  const pierce = a.pierce + tier.armorPierce;
+  if (!world) return t.tier ? { melee, pierce } : a;
   return {
-    melee: buildingStat(world, t.owner, t.kind, 'armor.melee', a.melee),
-    pierce: buildingStat(world, t.owner, t.kind, 'armor.pierce', a.pierce),
+    melee: buildingStat(world, t.owner, t.kind, 'armor.melee', melee),
+    pierce: buildingStat(world, t.owner, t.kind, 'armor.pierce', pierce),
   };
 }
 
@@ -89,11 +97,12 @@ export function buildingAttack(
 ): { pierce: number; range: number; reload: number; arrows: number } | undefined {
   const a = BUILDINGS[b.kind].attack;
   if (!a) return undefined;
+  const tier = tierStats(b.kind, b.tier);
   return {
-    pierce: buildingStat(world, b.owner, b.kind, 'attack.pierce', a.pierce),
+    pierce: buildingStat(world, b.owner, b.kind, 'attack.pierce', a.pierce + tier.attack),
     range: buildingStat(world, b.owner, b.kind, 'range', a.range),
     reload: a.reload,
-    arrows: Math.round(buildingStat(world, b.owner, b.kind, 'arrows', a.arrows)),
+    arrows: Math.round(buildingStat(world, b.owner, b.kind, 'arrows', a.arrows + tier.arrows)),
   };
 }
 

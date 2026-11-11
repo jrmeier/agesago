@@ -1,5 +1,5 @@
 import type { EntityId } from '../core/types';
-import { SAVE_VERSION, type SaveData } from '../sim/serialize';
+import { MIN_SAVE_VERSION, SAVE_VERSION, type SaveData } from '../sim/serialize';
 import type { EndgameSample } from '../ui/endgameLog';
 
 /** Wrapper around SaveData. The sim format stays at SAVE_VERSION. */
@@ -58,7 +58,8 @@ export function parseEnvelope(raw: unknown): ResumeEnvelope {
   if (!isRecord(raw)) throw new Error('Invalid resume');
   if (raw.version !== RESUME_VERSION) throw new Error(`Unsupported resume version ${String(raw.version)}; expected ${RESUME_VERSION}`);
   if (!isRecord(raw.sim)) throw new Error('Invalid resume: sim');
-  if (raw.sim.version !== SAVE_VERSION) {
+  const simVersion = raw.sim.version;
+  if (typeof simVersion !== 'number' || simVersion < MIN_SAVE_VERSION || simVersion > SAVE_VERSION) {
     throw new Error(`Unsupported save version ${String(raw.sim.version)}; expected ${SAVE_VERSION}`);
   }
   if (!isRecord(raw.view) || !finite(raw.view.x) || !finite(raw.view.z) || !finite(raw.view.distance)) {

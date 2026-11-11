@@ -303,6 +303,7 @@ export class EntityViews {
     });
     this.world.events.on('removed', (e) => this.unmount(e.id));
     this.world.events.on('researched', (e) => this.onResearched(e.owner));
+    this.world.events.on('buildingUpgraded', (e) => { if (this.buildingViews.has(e.id)) this.tierDirty.add(e.id); });
     this.world.events.on('constructed', (e) => {
       const building = this.world.buildings.get(e.id);
       const view = this.buildingViews.get(e.id);
@@ -580,7 +581,7 @@ export class EntityViews {
   private mountBuilding(building: Building): void {
     if (this.buildingViews.has(building.id)) return;
     const visual = createBuildingVisual(building.kind, this.ownerColor(building.owner),
-      buildingRenderTier(this.researchedBy(building.owner), building.kind), this.world.players.get(building.owner)?.player.civ);
+      buildingRenderTier(this.researchedBy(building.owner), building.kind, building.tier), this.world.players.get(building.owner)?.player.civ);
     visual.object.userData.entityId = building.id;
     this.poseBuilding(visual, building.kind, building.pos, building.rot);
     visual.setProgress(building.buildProgress, building.complete);
@@ -628,7 +629,7 @@ export class EntityViews {
 
   private refreshTier(building: Building, view: BuildingVisual): void {
     if (!this.tierDirty.delete(building.id)) return;
-    if (!view.setTier(buildingRenderTier(this.researchedBy(building.owner), building.kind))) return;
+    if (!view.setTier(buildingRenderTier(this.researchedBy(building.owner), building.kind, building.tier))) return;
     this.applyBuildingShadows(view.object);
     if (this.fog) this.fogBuilding(view.object);
   }

@@ -1,6 +1,6 @@
 import type { MapOptions } from '../core/maps';
 import { civFor } from '../core/civilizations';
-import { BUILDINGS, MARKET } from '../core/buildings';
+import { BUILDINGS, MARKET, nextUpgrade } from '../core/buildings';
 import { TECHS } from '../core/techs';
 import type { Age, Building, EntityId, Heightfield, MarketResource, Player, PlayerId, ResourceNode, Stockpile, TechId, Unit } from '../core/types';
 import { generateMap } from './mapgen';
@@ -14,8 +14,13 @@ import type { NavalJob, Landing } from './systems/naval';
 import type { ExplorationSite, PriestOrder } from './systems/explorationRewards';
 import type { GameResult } from './systems/victory';
 
-/** 2: M8 research (researched techs, ages, market prices, building research queues). */
-export const SAVE_VERSION = 2;
+/**
+ * 3: M14-1 in-place building upgrades (Building.tier, Building.upgrading).
+ * 2: M8 research (researched techs, ages, market prices, building research queues).
+ */
+export const SAVE_VERSION = 3;
+/** Oldest version that still loads; v2 buildings load at tier 0 with no upgrade running. */
+export const MIN_SAVE_VERSION = 2;
 
 /** Plain JSON, with ordered entries: iteration order affects scans, training and exploration. */
 export interface SaveData {
@@ -153,8 +158,8 @@ function restoreMap<K, V>(map: Map<K, V>, entries: [K, V][]): void {
 
 /** Regenerate static scenery from the seed; retain queues, jobs, exact fog and clocks. */
 export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
-  if (!data || data.version !== SAVE_VERSION) {
-    const old = typeof data?.version === 'number' && data.version < SAVE_VERSION;
+  if (!data || typeof data.version !== 'number' || data.version < MIN_SAVE_VERSION || data.version > SAVE_VERSION) {
+    const old = typeof data?.version === 'number' && data.version < MIN_SAVE_VERSION;
     throw new Error(
       `Unsupported save version ${data?.version}; expected ${SAVE_VERSION}` +
         (old ? ' (saves from before ages and research can no longer be loaded)' : '')
@@ -182,6 +187,12 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   for (const id of world.buildings.keys()) world.nav.removeRect(id);
   restoreMap(world.units, saved.units.map((u) => [u.id, u]));
   restoreMap(world.nodes, saved.nodes.map((n) => [n.id, n]));
+  if (saved.version < 3) {
+    for (const b of saved.buildings) {
+      delete b.tier;
+      delete b.upgrading;
+    }
+  }
   restoreMap(world.buildings, saved.buildings.map((b) => [b.id, b]));
   for (const b of world.buildings.values()) {
     const spec = BUILDINGS[b.kind];
@@ -206,6 +217,14 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
     }
   }
   for (const b of world.buildings.values()) {
+    // A tier must be a step its chain actually reaches (0 always is).
+    if (b.tier !== undefined && (!Number.isInteger(b.tier) || b.tier < 0 || (b.tier > 0 && !nextUpgrade(b.kind, b.tier - 1)))) {
+      throw new Error('Invalid save: building tier');
+    }
+    if (b.upgrading !== undefined && (typeof b.upgrading !== 'object' || b.upgrading.to !== (b.tier ?? 0) + 1
+      || !nextUpgrade(b.kind, b.tier) || typeof b.upgrading.progress !== 'number' || !Number.isFinite(b.upgrading.progress))) {
+      throw new Error('Invalid save: building upgrade');
+    }
     if (b.research?.some((t) => !Object.hasOwn(TECHS, t))) throw new Error('Invalid save: research queue');
     if (b.productionQueue !== undefined && (!Array.isArray(b.productionQueue)
       || b.productionQueue.some((k) => k !== 'train' && k !== 'research')

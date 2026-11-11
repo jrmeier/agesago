@@ -103,8 +103,8 @@ export function orderResearch(world: World, buildingId: EntityId, tech: TechId):
     world.events.emit({ type: 'rejected', reason: 'invalid-target' });
     return;
   }
-  // An age-up blocks its Town Center's research queue, and only one age-up may run at once.
-  if ((b.research?.length ?? 0) >= MAX_RESEARCH_QUEUE || b.research?.some((t) => TECHS[t].ageUp !== undefined)) {
+  // An in-place upgrade or an age-up blocks the queue, and only one age-up may run at once.
+  if (b.upgrading || (b.research?.length ?? 0) >= MAX_RESEARCH_QUEUE || b.research?.some((t) => TECHS[t].ageUp !== undefined)) {
     reject(world, b.owner, 'busy');
     return;
   }

@@ -21,7 +21,7 @@ export function applyResearch(world: World, owner: PlayerId, tech: TechId): void
   }
   for (const b of world.buildings.values()) {
     if (b.owner !== owner || !touchesHp(tech, b)) continue;
-    rescale(b, buildingMaxHp(world, owner, b.kind));
+    rescale(b, buildingMaxHp(world, owner, b.kind, b.tier));
   }
 }
 
@@ -33,7 +33,7 @@ function touchesHp(tech: TechId, e: Unit | Building): boolean {
 }
 
 /** New maxHp, same HP ratio (rounded to whole hit points; a living entity keeps at least 1). */
-function rescale(e: Unit | Building, maxHp: number): void {
+export function rescale(e: Unit | Building, maxHp: number): void {
   if (maxHp === e.maxHp || e.maxHp <= 0) return;
   const ratio = e.hp / e.maxHp;
   e.maxHp = maxHp;

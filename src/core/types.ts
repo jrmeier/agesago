@@ -304,6 +304,10 @@ export interface Building {
   research?: TechId[];
   /** Seconds of research completed on research[0]. */
   researchProgress?: number;
+  /** In-place upgrade tier (BUILDING_UPGRADES); absent means 0. */
+  tier?: number;
+  /** An in-place upgrade under way to tier `to`; blocks training and research. */
+  upgrading?: { to: number; progress: number };
 }
 
 export type Entity = Unit | ResourceNode | Building;
@@ -350,6 +354,10 @@ export type Command =
   | { type: 'research'; buildingId: EntityId; tech: TechId }
   /** Remove research queue entry `index` (0 = in progress) and refund it. */
   | { type: 'cancelResearch'; buildingId: EntityId; index: number }
+  /** Upgrade a complete, idle building in place to its next tier; pays up front. */
+  | { type: 'upgradeBuilding'; buildingId: EntityId }
+  /** Stop an in-progress building upgrade and refund it in full. */
+  | { type: 'cancelUpgrade'; buildingId: EntityId }
   /** Buy or sell 100 of a resource for gold at the issuer's market prices (needs a finished market). */
   | { type: 'marketTrade'; resource: MarketResource; side: 'buy' | 'sell' }
   /** Send resources to another player; a fee is lost (see MARKET.tributeFee). Needs a finished market. */
@@ -381,7 +389,9 @@ export type RejectReason =
   /** Already researched or already queued. */
   | 'researched'
   /** The building is busy (e.g. a Town Center aging up can't queue more). */
-  | 'busy';
+  | 'busy'
+  /** The building has no further upgrade. */
+  | 'max-tier';
 
 /** Result of checking whether a building fits at a spot (World.canPlace). */
 export interface PlacementCheck {
@@ -415,6 +425,10 @@ export type SimEvent =
   | { type: 'rejected'; reason: RejectReason }
   /** Research progress at a building (local player only, like trainProgress). */
   | { type: 'researchProgress'; buildingId: EntityId; tech: TechId; queue: number; progress: number; total: number }
+  /** In-place building upgrade progress (local player only, like trainProgress). */
+  | { type: 'upgradeProgress'; buildingId: EntityId; tier: number; progress: number; total: number }
+  /** A building finished upgrading in place to `tier` (all players; consumers filter). */
+  | { type: 'buildingUpgraded'; id: EntityId; owner: PlayerId; tier: number }
   /** `owner` finished researching `tech` (all players; consumers filter). */
   | { type: 'researched'; owner: PlayerId; tech: TechId }
   /** `owner` entered a new age. */

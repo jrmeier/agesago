@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SAVE_VERSION } from '../sim/serialize';
+import { MIN_SAVE_VERSION, SAVE_VERSION } from '../sim/serialize';
 import {
   RESUME_BROKEN_KEY,
   RESUME_KEY,
@@ -41,6 +41,14 @@ describe('resume envelope', () => {
     const raw = envelope();
     raw.sim = { version: SAVE_VERSION + 1 } as ResumeEnvelope['sim'];
     expect(() => parseEnvelope(raw)).toThrow(`Unsupported save version ${SAVE_VERSION + 1}; expected ${SAVE_VERSION}`);
+  });
+
+  it('still accepts older sim versions the loader migrates (v2 before building upgrades)', () => {
+    const raw = envelope();
+    raw.sim = { version: MIN_SAVE_VERSION } as ResumeEnvelope['sim'];
+    expect(parseEnvelope(raw).sim.version).toBe(MIN_SAVE_VERSION);
+    raw.sim = { version: MIN_SAVE_VERSION - 1 } as ResumeEnvelope['sim'];
+    expect(() => parseEnvelope(raw)).toThrow('Unsupported save version');
   });
 
   it('moves a corrupt slot aside and reports the failure', async () => {
