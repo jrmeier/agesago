@@ -127,17 +127,23 @@ export class Economy {
 
     // Shift a couple of workers per pass from the most over-staffed resource to the most short-staffed.
     this.foodGap = want('food');
+    // A short resource with nothing to gather (no free food before the fields go in) doesn't
+    // block the next one: food-short workers otherwise pile onto wood while gold goes unmined.
+    const blocked = new Set<ResourceType>();
     for (let moves = 0; moves < 2; moves++) {
       const over = TYPES.reduce((a, b) => (want(a) < want(b) ? a : b));
-      const under = TYPES.reduce((a, b) => (want(a) > want(b) ? a : b));
-      if (want(over) > -1.5 || want(under) < 1.5) break;
+      const unders = TYPES.filter((t) => !blocked.has(t) && t !== over && want(t) >= 1.5).sort((a, b) => want(b) - want(a));
+      if (want(over) > -1.5 || !unders.length) break;
       const pool = byType[over].filter((v) => !(v.gatherNode !== null && world.buildings.has(v.gatherNode)));
       const v = (pool.length ? pool : byType[over]).find((u) => !u.carry || u.carry.amount < 5) ?? (pool[0] ?? byType[over][0]);
       if (!v) break;
-      if (!this.assign(v, under, s)) {
-        if (under === 'food') this.foodShort++;
-        break;
-      }
+      const under = unders.find((t) => {
+        if (this.assign(v, t, s)) return true;
+        blocked.add(t);
+        if (t === 'food') this.foodShort++;
+        return false;
+      });
+      if (!under) break;
       byType[over].splice(byType[over].indexOf(v), 1);
       counts[over]--;
       counts[under]++;
@@ -306,7 +312,9 @@ export class Economy {
     const wood = this.c.world.stockOf(this.c.player).wood;
     if ((s.building.farm ?? 0) >= Math.min(6, Math.max(1, Math.ceil(this.foodGap)), 2 + Math.floor(wood / 150))) return null;
     const center = s.tc?.pos ?? this.c.home;
-    return this.place(s, { kind: 'farm', center, minR: 4, maxR: 16, clearOfNodes: 1, gap: 0.8 }, 1);
+    // The ring around the Town Center fills up: reach further out as the fields multiply.
+    const maxR = Math.min(28, 16 + 1.5 * (s.count.farm ?? 0));
+    return this.place(s, { kind: 'farm', center, minR: 4, maxR, clearOfNodes: 1, gap: 0.8 }, 1);
   }
 
   /** Military buildings in build order: the barracks, the profile's second choice, then the other. */

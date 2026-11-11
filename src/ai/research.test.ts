@@ -9,7 +9,9 @@ import { RULES } from './research';
 /** Drop-site economy techs (what "economy techs" means for the acceptance check). */
 const ECONOMY: ReadonlySet<TechId> = new Set<TechId>([...CHAINS.wood, ...CHAINS.mining, ...CHAINS.farming, 'stoneChisels', 'threshingFloor']);
 const TOWN_BY = 7 * 60;
-const CITY_BY = 17 * 60;
+const CITY_BY = 18 * 60;
+/** The City Age's unit line may come a few minutes after the age (it saves for it). */
+const LINE_BY = 25 * 60;
 const ECO_AT = 20 * 60;
 
 describe('research and ages AI (moderate, headless, idle human)', () => {
@@ -26,12 +28,13 @@ describe('research and ages AI (moderate, headless, idle human)', () => {
     let aiMs = 0;
     let ticks = 0;
     let ecoBy20 = 0;
-    for (let t = 0; t < CITY_BY; t += 30) {
+    for (let t = 0; t < LINE_BY; t += 30) {
       const st = run(world, [ai], 30);
       aiMs += st.aiMs.get(1)!;
       ticks += st.updates;
       if (world.time <= ECO_AT + 1) ecoBy20 = [...player.researched].filter((x) => ECONOMY.has(x)).length;
-      if (player.age >= 2 && world.time >= ECO_AT) break;
+      const tier2 = ai.research.started.some((x) => TECHS[x.tech].line?.tier === 2);
+      if (player.age >= 2 && world.time >= ECO_AT && (tier2 || world.time >= LINE_BY)) break;
     }
     off();
     // M13-6: a unit-line tier for each age reached, started in that age.

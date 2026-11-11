@@ -22,6 +22,8 @@ const AGE_UP: Partial<Record<Age, TechId>> = { 0: 'townAge', 1: 'cityAge' };
 const TC_REST = 45;
 /** Longest villager-training pause (sim seconds) to afford one economy tech. */
 const MAX_HOLD = 30;
+/** Longest (sim seconds, per age) cheaper techs wait while it saves for the age's unit line. */
+const LINE_HOLD = 150;
 /** Most market trades per pass. */
 const TRADES_PER_PASS = 3;
 
@@ -145,6 +147,8 @@ export class Research {
   private wanted: Partial<Stockpile> = {};
   /** The economy tech villager training is paused for, and since when. */
   private hold: { tech: TechId; since: number } | null = null;
+  /** When cheaper techs first waited for this age's unit line. */
+  private lineHold: { age: Age; since: number } | null = null;
 
   constructor(
     private readonly c: Ctx,
@@ -363,8 +367,12 @@ export class Research {
       }
       best = { tech: r.tech, at, score };
     }
-    // Saving for the age's unit line: cheaper techs don't spend what it needs.
-    if (best && want?.urgent && want.score > best.score) best = null;
+    // Saving for the age's unit line: cheaper techs don't spend what it needs, for a while (an
+    // economy short of that resource still gets its other techs).
+    if (best && want?.urgent && want.score > best.score) {
+      if (this.lineHold?.age !== f.age) this.lineHold = { age: f.age, since: world.time };
+      if (world.time - this.lineHold.since < LINE_HOLD) best = null;
+    }
     this.wanted = want && (!best || want.score > best.score) ? { ...TECHS[want.tech].cost } : {};
     // Hold the army back for it (not villagers), unless under attack.
     this.c.techReserve = !best && !this.c.armyFirst ? this.wanted : {};

@@ -15,6 +15,11 @@ resource trickle).
   berries within 40 of the Town Center are nearly picked (200 food or less), it waits for them instead of laying
   a field for a short gap.
 - Sends the scout to unexplored ground, then patrols.
+- Moves up to two workers per pass from the most over-staffed resource to the most short-staffed one
+  it can actually place them on: when there is no free food (fields not yet laid), the next short
+  resource gets them instead of the move stopping (M13-6; before, food-short workers piled onto wood
+  while gold went unmined). Fields reach further from the Town Center as they multiply (16 + 1.5 per
+  field, up to 28).
 - Herdables are not population and not soldiers. A sheep in sight does not stall training or call the army home.
 - Military (barracks, waves, defence, retreat) is in `military.ts`. It is not part of this ticket's acceptance.
 
@@ -135,8 +140,9 @@ With M13-1 the archery range and stable open in the Village Age, M13-2 added thr
   villager shelter, and as a raid for research.
 - **A unit-line tier per age.** As each age opens, the line rules get a bonus for the age's own tier
   of a unit it fields (2 or more of that kind; most fielded first), and an earlier tier it skipped as
-  the way there. The age's tier is `urgent`: while it can't be afforded, cheaper techs wait and the
-  army leaves its cost (`techReserve`), and the market tops it up. `Facts.lines` counts line techs
+  the way there. The age's tier is `urgent`: while it can't be afforded, cheaper techs wait (for at most
+  150 s per age, so a gold-starved economy still gets its other techs), the army leaves its cost
+  (`techReserve`), and the market tops it up. `Facts.lines` counts line techs
   researched or queued per tier. Other line tiers still need `lineUnits` of the kind.
 - **New pacing.** City Age villager counts are lower (moderate 28, hard 27, hardest 26); easy waits
   until 8 min for Town and 18 min for City (was 14 / 28). The Town Age reserve still pauses villagers
@@ -153,7 +159,7 @@ military buildings when the Town Age arrives and a unit line of tier N started i
 | 4 | 5.6 | 13.9 | 2 | compositeArcher, cretanArcher, … |
 | 5 | 5.4 | 14.7 | 2 | compositeArcher, cretanArcher, … |
 
-Bounds are now Town ≤ 7 min and City ≤ 17 min (were 14 and 25 for the old costs).
+Bounds are now Town ≤ 7 min, City ≤ 18 min, and the tier-2 line by 25 min (were 14 and 25 for the old costs).
 
 ## Open
 
