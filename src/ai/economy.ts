@@ -295,7 +295,13 @@ export class Economy {
       }
       const anchor = far.reduce((a, b) => (dist(a.pos, c) < dist(b.pos, c) ? a : b));
       if (this.skipped(-anchor.id)) continue;
-      const r = this.place(s, { kind, center: anchor.pos, minR: 2.5, maxR: 12, clearOfNodes: 1, gap: 1, maxChecks: 25 }, Math.min(2, this.c.profile.builders), anchor.pos);
+      const q: SpotQuery = { kind, center: anchor.pos, minR: 2.5, maxR: 12, clearOfNodes: 1, gap: 1, maxChecks: 25 };
+      let r = this.place(s, q, Math.min(2, this.c.profile.builders), anchor.pos);
+      // Territory (M18-3): drop sites go on own land only. When the resource lies past the border,
+      // take the nearest own-land spot further out toward it (still a shorter walk than home).
+      if (r === null && world.territoryOwner(anchor.pos) !== this.c.player) {
+        r = this.place(s, { ...q, maxR: 24, maxChecks: 40 }, Math.min(2, this.c.profile.builders), anchor.pos);
+      }
       if (r !== null) return r;
       // Nowhere to put it (dense forest, rocks): don't search here again for a while.
       this.skip.set(-anchor.id, world.time + 90);
