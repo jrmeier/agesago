@@ -36,7 +36,9 @@ const view = (v: Partial<TechView> = {}): TechView => ({
 describe('lock reasons', () => {
   it('names the age, the missing tech, the age-up buildings and the short resource', () => {
     expect(lockText('ironAxe', 'age', view())).toBe('Requires Town Age');
-    expect(lockText('veteranHoplite', 'age', view())).toBe('Requires City Age');
+    expect(lockText('veteranHoplite', 'age', view())).toBe('Requires Town Age');
+    expect(lockText('phalangite', 'age', view({ age: 1 }))).toBe('Requires City Age');
+    expect(lockText('silverShield', 'age', view({ age: 2 }))).toBe('Requires Empire Age');
     expect(lockText('ironAxe', 'requires', view({ age: 1 }))).toBe('Requires Bronze Axe');
     expect(lockText('townAge', 'requires', view({ ageBuildings: 1 }))).toBe('Requires 2 Village Age buildings (1/2)');
     expect(lockText('cityAge', 'requires', view({ age: 1 }))).toBe('Requires 2 Town Age buildings (0/2)');

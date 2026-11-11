@@ -22,10 +22,10 @@ export type TintRole = 'axe' | 'pick' | 'sickle' | 'armor' | 'jerkin' | 'trim' |
 export const TOOL_TINT = [null, 0xc0974a, 0x8f969c, 0xb9c2c9] as const;
 /** Body armour: tier 0 keeps the model's own colour, then linen, bronze, iron. */
 export const ARMOR_TINT = [null, 0xeae0c4, 0xc49a45, 0x8d949b] as const;
-/** Unit-line trim (belt, shield rim, crest): 0 as built, 1 polished bronze, 2 gold. */
-export const TRIM_TINT = [null, 0xd2ab55, 0xf0c64a] as const;
+/** Unit-line trim (belt, shield rim, crest): 0 as built, 1 polished bronze, 2 gold, 3 silver. */
+export const TRIM_TINT = [null, 0xd2ab55, 0xf0c64a, 0xdde3ea] as const;
 /** Horsehair crest colour by line tier; tier 0 has no crest. */
-export const CREST_TINT = [null, 0x8a2a1c, 0xf2ead2] as const;
+export const CREST_TINT = [null, 0x8a2a1c, 0xf2ead2, 0x5b2a86] as const;
 
 export interface UnitTiers {
   /** chainTier of CHAINS.wood / mining / farming (villagers only, else 0). */
@@ -34,7 +34,7 @@ export interface UnitTiers {
   farming: number;
   /** chainTier of the class's forge armour chain (0..3). */
   armor: number;
-  /** unitLine(...).tier (0..2). */
+  /** unitLine(...).tier (0..3). */
   line: number;
 }
 
@@ -180,7 +180,7 @@ export function applyUnitTiers(root: THREE.Object3D, tiers: UnitTiers): void {
   const armor = ARMOR_TINT[clampTier(tiers.armor, 3)];
   applyRole(root, 'armor', armor);
   applyRole(root, 'jerkin', armor, armor !== null);
-  const line = clampTier(tiers.line, 2);
+  const line = clampTier(tiers.line, 3);
   applyRole(root, 'trim', TRIM_TINT[line]);
   applyRole(root, 'rim', TRIM_TINT[line]);
   applyRole(root, 'crest', CREST_TINT[line], line > 0);

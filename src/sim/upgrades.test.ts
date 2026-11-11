@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../core/buildings';
-import type { TechId } from '../core/techs';
+import type { CivId } from '../core/civilizations';
+import { TECHS, unitLine, type Stat, type TechId } from '../core/techs';
 import {
   GRASS_ONLY,
   type Building,
@@ -19,7 +20,7 @@ import { UNITS } from '../core/units';
 import { BALANCE } from './balance';
 import { completeBuilding, layFoundation } from './systems/build';
 import { carryCap, gatherInterval } from './systems/gather';
-import { completeResearch, statOf } from './systems/research';
+import { completeResearch, researchBlock, statOf } from './systems/research';
 import { unitRange, unitSight, unitSpeed } from './systems/stats';
 import { AIPlayer } from '../ai/AIPlayer';
 import { makeGame, run as runAI } from '../ai/harness';
@@ -41,7 +42,7 @@ function flat(w = 120, d = 120): Heightfield {
 }
 
 /** Two players, Town Centers in far corners, no starting units, player 1's map explored and rich. */
-function arena(opts: { w?: number; d?: number; nodes?: MapLayout['nodes']; tc?: Vec2 } = {}): World {
+function arena(opts: { w?: number; d?: number; nodes?: MapLayout['nodes']; tc?: Vec2; civs?: CivId[] } = {}): World {
   const w = opts.w ?? 120;
   const d = opts.d ?? 120;
   const layout: MapLayout = {
@@ -52,7 +53,7 @@ function arena(opts: { w?: number; d?: number; nodes?: MapLayout['nodes']; tc?: 
     nodes: opts.nodes ?? [],
     props: [],
   };
-  const world = new World(flat(w, d), layout, defaultPlayers(2));
+  const world = new World(flat(w, d), layout, defaultPlayers(2, opts.civs));
   world.visibility.state.fill(EXPLORED);
   Object.assign(world.stock, { wood: 5000, food: 5000, gold: 5000, stone: 5000 });
   return world;
@@ -377,6 +378,67 @@ describe('forge', () => {
 });
 
 describe('unit lines', () => {
+  const LINES: { unit: UnitKind; techs: TechId[]; civ?: CivId }[] = [
+    { unit: 'hoplite', techs: ['veteranHoplite', 'phalangite', 'silverShield'] },
+    { unit: 'swordsman', techs: ['veteranSwordsman', 'heavySwordsman', 'championSwordsman'] },
+    { unit: 'archer', techs: ['compositeArcher', 'cretanArcher', 'masterArcher'] },
+    { unit: 'slinger', techs: ['balearicSlinger', 'rhodianSlinger', 'leadShotSlinger'] },
+    { unit: 'scout', techs: ['lightCavalry', 'prodromos', 'tarantineHorseman'] },
+    { unit: 'horseman', techs: ['companionCavalry', 'cataphract', 'clibanarius'] },
+    { unit: 'phalangiteGuard', techs: ['elitePhalangiteGuard'], civ: 'hellenes' },
+    { unit: 'legionary', techs: ['eliteLegionary'], civ: 'romans' },
+    { unit: 'immortal', techs: ['eliteImmortal'], civ: 'persians' },
+    { unit: 'raider', techs: ['eliteRaider'], civ: 'celts' },
+  ];
+
+  it('lists every unit-line tech in a line above', () => {
+    const covered = new Set(LINES.flatMap((l) => l.techs));
+    const lineTechs = (Object.keys(TECHS) as TechId[]).filter((t) => TECHS[t].line);
+    expect(new Set(lineTechs)).toEqual(covered);
+  });
+
+  it.each(LINES)('$unit line researches tier by tier, one age apart, changing stats and title', ({ unit, techs, civ }) => {
+    const world = arena({ civs: civ ? [civ] : undefined });
+    const player = world.players.get(1)!;
+    const at = building(world, TECHS[techs[0]].at, { x: 40, z: 40 });
+    const u = world.spawnUnit(unit, { x: 60, z: 60 }, 1);
+    let prevCost = 0;
+    techs.forEach((tech, i) => {
+      const spec = TECHS[tech];
+      expect(spec.at).toBe(UNITS[unit].trainedAt);
+      expect(spec.line).toEqual({ unit, tier: i + 1, title: expect.any(String) });
+      expect(spec.civ).toBe(civ);
+      // Soldier lines: Town, City, Empire; unique units: one City Age elite upgrade.
+      expect(spec.age).toBe(civ ? 2 : i + 1);
+      const cost = Object.values(spec.cost).reduce((a, b) => a + (b ?? 0), 0);
+      expect(cost).toBeGreaterThanOrEqual(prevCost * 1.6);
+      prevCost = cost;
+      if (i > 0) expect(spec.requires).toEqual([techs[i - 1]]);
+      player.age = (spec.age - 1) as 0 | 1 | 2;
+      expect(researchBlock(world, 1, tech)).toBe('age');
+      player.age = spec.age;
+      const before = new Map(spec.effects.map((e) => [e.stat, statOf(world, 1, { unit }, e.stat, 10)]));
+      const hp = u.maxHp;
+      expect(researchBlock(world, 1, tech)).toBeNull();
+      world.dispatch({ type: 'research', buildingId: at.id, tech });
+      run(world, spec.time + 0.2);
+      expect(player.researched.has(tech)).toBe(true);
+      for (const e of spec.effects) {
+        const stat: Stat = e.stat;
+        if (e.op === 'add' ? e.value > 0 : e.value > 1) expect(statOf(world, 1, { unit }, stat, 10)).toBeGreaterThan(before.get(stat)!);
+      }
+      expect(u.maxHp).toBeGreaterThan(hp);
+      expect(unitLine(player.researched, unit)).toEqual({ tier: i + 1, title: spec.line!.title });
+    });
+  });
+
+  it('a unique unit elite upgrade is only open to its civilization', () => {
+    const world = arena({ civs: ['romans'] });
+    world.players.get(1)!.age = 2;
+    expect(researchBlock(world, 1, 'eliteLegionary')).toBeNull();
+    expect(researchBlock(world, 1, 'eliteRaider')).toBe('requires');
+  });
+
   it('upgrading keeps every unit at the same HP ratio', () => {
     const world = arena();
     world.players.get(1)!.age = 3;

@@ -201,6 +201,8 @@ describe('unit upgrade visuals', () => {
     expect(unitTiers(set('linenCorslet'), 'slinger').armor).toBe(0);
     expect(unitTiers(set('horseBlankets', 'companionCavalry'), 'horseman')).toEqual({ wood: 0, mining: 0, farming: 0, armor: 1, line: 1 });
     expect(unitTiers(set('veteranHoplite', 'phalangite'), 'hoplite').line).toBe(2);
+    expect(unitTiers(set('veteranSwordsman', 'heavySwordsman', 'championSwordsman'), 'swordsman').line).toBe(3);
+    expect(unitTiers(set('eliteLegionary'), 'legionary').line).toBe(1);
     expect(unitTiers(set('bronzeAxe'), 'hoplite').wood).toBe(0);
   });
 
@@ -247,6 +249,12 @@ describe('unit upgrade visuals', () => {
     expect(iron.getHex()).not.toBe(torso.getHex());
     applyUnitTiers(hoplite.object, { ...BASE_TIERS, line: 1 });
     expect(bounds(hoplite.object).max.y).toBeGreaterThan(top + 0.005);
+    const crests = [1, 2, 3].map((line) => {
+      applyUnitTiers(hoplite.object, { ...BASE_TIERS, line });
+      expect(bounds(hoplite.object).max.y).toBeGreaterThan(top + 0.005);
+      return meshes(hoplite.object).map((m) => Array.from(m.geometry.getAttribute('color').array).join()).join('|');
+    });
+    expect(new Set(crests).size).toBe(3);
     applyUnitTiers(hoplite.object, BASE_TIERS);
     expect(bounds(hoplite.object).max.y).toBeCloseTo(top, 6);
     expect(meanColor(hoplite.object, 'tunic-head-armor').getHex()).toBe(torso.getHex());
