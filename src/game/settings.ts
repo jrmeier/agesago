@@ -11,6 +11,8 @@ export interface Settings {
   shadows: boolean;
   grass: boolean;
   water: boolean;
+  /** Territory borders on the ground and owner tint on the minimap. */
+  borders: boolean;
   uiScale: number;
   edgeScroll: boolean;
   edgeSpeed: number;
@@ -62,6 +64,7 @@ export function defaultSettings(detected: Quality, reducedMotion: boolean): Sett
     shadows: detected.shadows,
     grass: detected.grassDensity > 0,
     water: detected.fancyWater,
+    borders: true,
     uiScale: 1,
     edgeScroll: true,
     edgeSpeed: 1,
@@ -108,6 +111,7 @@ export function parseStored(raw: string | null, detected: Quality, reducedMotion
       shadows: typeof data.shadows === 'boolean' ? data.shadows : base.shadows,
       grass: typeof data.grass === 'boolean' ? data.grass : base.grass,
       water: typeof data.water === 'boolean' ? data.water : base.water,
+      borders: data.borders !== false,
       uiScale: nearest(Number(data.uiScale), UI_SCALES, 1),
       edgeScroll: typeof data.edgeScroll === 'boolean' ? data.edgeScroll : true,
       edgeSpeed: nearest(Number(data.edgeSpeed), EDGE_SPEEDS, 1),
@@ -202,6 +206,7 @@ export function sanitizeSettings(settings: Settings, detected: Quality, reducedM
     shadows: settings.shadows === true,
     grass: settings.grass === true,
     water: settings.water === true,
+    borders: settings.borders !== false,
     uiScale: nearest(settings.uiScale, UI_SCALES, 1),
     edgeScroll: settings.edgeScroll !== false,
     edgeSpeed: nearest(settings.edgeSpeed, EDGE_SPEEDS, 1),

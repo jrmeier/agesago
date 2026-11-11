@@ -1,3 +1,4 @@
+import { UNSEEN } from '../render/territoryBorders';
 import type { GroundWeights, Heightfield, Vec2 } from '../core/types';
 
 /** Linear 0..255 RGB triple. */
@@ -119,4 +120,33 @@ export function footprintKey(quad: readonly Vec2[], step = 0.05): string {
 function normalize3(x: number, y: number, z: number): [number, number, number] {
   const l = Math.hypot(x, y, z) || 1;
   return [x / l, y / l, z / l];
+}
+
+/** Owner tint alpha (0..255) inside remembered territory, and along its border. */
+export const TERRITORY_ALPHA = { fill: 64, edge: 210 } as const;
+
+/**
+ * Paint the owner tint layer: one RGBA pixel per territory cell. Owned cells (as remembered,
+ * see render/territoryBorders.ts) get a light wash of the owner's colour, border cells a strong
+ * one; neutral and unexplored cells stay clear.
+ */
+export function paintTerritory(
+  known: Uint8Array,
+  cols: number,
+  rows: number,
+  colorOf: (owner: number) => RGB,
+  out: Uint8ClampedArray,
+  isBorder: (i: number) => boolean,
+): void {
+  out.fill(0);
+  for (let i = 0; i < cols * rows; i++) {
+    const o = known[i];
+    if (!o || o === UNSEEN) continue;
+    const c = colorOf(o);
+    const p = i * 4;
+    out[p] = c[0];
+    out[p + 1] = c[1];
+    out[p + 2] = c[2];
+    out[p + 3] = isBorder(i) ? TERRITORY_ALPHA.edge : TERRITORY_ALPHA.fill;
+  }
 }

@@ -15,6 +15,8 @@ export interface FogPatchOptions {
   hideUnexplored?: boolean;
   /** Shadow-depth pass: discard only, leave the packed depth colour alone. */
   depth?: boolean;
+  /** Keep the material's own alpha (translucent overlays such as territory borders). */
+  keepAlpha?: boolean;
 }
 
 interface FogShader {
@@ -177,14 +179,15 @@ export function applyFog(material: THREE.Material, fog: FogOfWar, options: FogPa
   material.userData.agFog = 1;
   const hide = options.hideUnexplored === true;
   const depth = options.depth === true;
+  const keepAlpha = options.keepAlpha === true;
   const prevCompile = material.onBeforeCompile;
   const prevKey = material.customProgramCacheKey.bind(material);
   material.onBeforeCompile = (shader, renderer) => {
     prevCompile.call(material, shader, renderer);
-    patchFogShader(shader as FogShader, fog, hide, depth);
+    patchFogShader(shader as FogShader, fog, hide, depth, keepAlpha);
   };
   material.customProgramCacheKey = function () {
-    return `${prevKey()}|${prevCompile.toString()}|agfog|h${hide ? 1 : 0}|d${depth ? 1 : 0}|c${fog.cheap ? 1 : 0}`;
+    return `${prevKey()}|${prevCompile.toString()}|agfog|h${hide ? 1 : 0}|d${depth ? 1 : 0}|a${keepAlpha ? 1 : 0}|c${fog.cheap ? 1 : 0}`;
   };
   material.needsUpdate = true;
 }
@@ -196,7 +199,7 @@ export function createFogDepthMaterial(fog: FogOfWar): THREE.MeshDepthMaterial {
   return depth;
 }
 
-function patchFogShader(shader: FogShader, fog: FogOfWar, hide: boolean, depth: boolean): void {
+function patchFogShader(shader: FogShader, fog: FogOfWar, hide: boolean, depth: boolean, keepAlpha = false): void {
   shader.uniforms.uFogMap = fog.uniforms.uFogMap;
   shader.uniforms.uFogFrom = fog.uniforms.uFogFrom;
   shader.uniforms.uFogSize = fog.uniforms.uFogSize;
@@ -211,7 +214,7 @@ function patchFogShader(shader: FogShader, fog: FogOfWar, hide: boolean, depth: 
   if (!depth) {
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <tonemapping_fragment>',
-      `${colorBody(fog.cheap)}\n#include <tonemapping_fragment>`,
+      `${colorBody(fog.cheap, keepAlpha)}\n#include <tonemapping_fragment>`,
     );
     shader.fragmentShader = shader.fragmentShader.replace('#include <fog_fragment>', FOG_FRAGMENT);
   }
@@ -299,7 +302,7 @@ function concealBody(cheap: boolean): string {
 `;
 }
 
-function colorBody(cheap: boolean): string {
+function colorBody(cheap: boolean, keepAlpha = false): string {
   const parchment = cheap
     ? ''
     : /* glsl */ `
@@ -322,7 +325,7 @@ function colorBody(cheap: boolean): string {
     float agSight = smoothstep(0.42, 0.98, agFogBright);
     agRgb = mix(mix(agShroud, agExplored, agSeen), agRgb, agSight);
     gl_FragColor.rgb = agRgb;
-    gl_FragColor.a = mix(max(gl_FragColor.a, 0.9), gl_FragColor.a, agSeen);
+    ${keepAlpha ? '' : 'gl_FragColor.a = mix(max(gl_FragColor.a, 0.9), gl_FragColor.a, agSeen);'}
   }
 `;
 }

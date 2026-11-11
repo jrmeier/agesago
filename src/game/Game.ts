@@ -18,6 +18,7 @@ import { GrassField } from '../render/Grass';
 import { PropsView } from '../render/PropsView';
 import { Renderer } from '../render/Renderer';
 import { TerrainView } from '../render/TerrainView';
+import { TerritoryView } from '../render/TerritoryView';
 import { BALANCE } from '../sim/balance';
 import { generateMap } from '../sim/mapgen';
 import { deserializeWorld, serializeWorld } from '../sim/serialize';
@@ -134,6 +135,7 @@ export class Game {
   private readonly views: EntityViews;
   private readonly props: PropsView;
   private readonly grass: GrassField;
+  private readonly territory: TerritoryView;
   private readonly fog: FogOfWar;
   private readonly controls: Controls;
   private readonly hud: Hud;
@@ -314,9 +316,18 @@ export class Game {
     this.props.setFog(this.fog);
     this.grass.setFog(this.fog);
     this.views.setFog(this.fog);
+    this.territory = new TerritoryView(
+      this.world.hf,
+      this.world.territory,
+      this.world.visibility,
+      this.world.localPlayer,
+      this.quality,
+      (owner) => this.world.players.get(owner)?.player.color ?? 0x999999,
+    );
+    this.territory.setFog(this.fog);
     this.views.setShadows(this.quality.shadows);
     this.props.setShadows(this.quality.shadows);
-    this.renderer.scene.add(this.terrain.object, this.props.object, this.grass.object, this.views.object);
+    this.renderer.scene.add(this.terrain.object, this.territory.object, this.props.object, this.grass.object, this.views.object);
 
     this.selection.onChange((ids) => this.views.setSelected(ids));
     this.controls = new Controls({
@@ -400,6 +411,7 @@ export class Game {
     const decor = currentSettings().reducedMotion ? 0 : this.elapsed;
     this.renderer.update(focus, decor);
     this.terrain.update(decor);
+    this.territory.update(this.elapsed);
     if (this.grass.object.visible) this.grass.update(focus, decor);
     this.views.sync(this.accumulator / STEP, this.elapsed, this.rig.camera);
     this.hud.update();
@@ -701,6 +713,8 @@ export class Game {
       settings.colorblind,
     );
     this.minimap.setLocalFromPlayer(settings.colorblind);
+    this.territory.setShown(settings.borders);
+    this.minimap.setTerritoryShown(settings.borders);
     if (boot) return;
     const notes: string[] = [];
     if (settings.grass && !grassOk) notes.push('Grass fills in on the next match.');
@@ -733,6 +747,7 @@ export class Game {
     this.minimap.dispose();
     this.wonderTimer.dispose();
     this.props.dispose();
+    this.territory.dispose();
     this.renderer.domElement.remove();
   }
 }

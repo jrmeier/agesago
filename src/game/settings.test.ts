@@ -35,7 +35,24 @@ describe('settings', () => {
       sfx: 0.8,
       colorblind: false,
       reducedMotion: true,
+      borders: true,
     });
+  });
+
+  it('territory borders default on, survive a save, and are not owned by ?quality= (M18-2)', () => {
+    expect(defaultSettings(qualityTier('low'), false).borders).toBe(true);
+    const off = JSON.stringify({ ...defaultSettings(detected, false), borders: false });
+    expect(parseStored(off, detected, false)?.borders).toBe(false);
+    // Older saves without the field keep borders on.
+    const { borders: _unused, ...legacy } = defaultSettings(detected, false);
+    expect(parseStored(JSON.stringify(legacy), detected, false)?.borders).toBe(true);
+    const locked = resolveSettings({ stored: off, search: '?quality=high', detected, reducedMotion: false });
+    expect(locked.settings.borders).toBe(false);
+    expect(persistable({ ...locked.settings, borders: true }, parseStored(off, detected, false), detected, false, true).borders).toBe(true);
+    // Phones fall back to the plain line, desktops glow.
+    expect(qualityTier('low').territoryGlow).toBe(false);
+    expect(qualityTier('medium').territoryGlow).toBe(true);
+    expect(bootQuality(defaultSettings(detected, false), qualityTier('low'), '?quality=low').territoryGlow).toBe(false);
   });
 
   it('restores a save and snaps odd scales onto the steps', () => {

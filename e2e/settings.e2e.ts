@@ -45,6 +45,8 @@ test('settings persist, scale the UI, and apply in a match', async ({ page }, te
   await setRange(page, '#settings-master', '0.4');
   await activate(page, '#settings-colorblind', phone);
   await activate(page, '#settings-motion', phone);
+  await expect(page.locator('#settings-borders')).toBeChecked();
+  await activate(page, '#settings-borders', phone);
   await expect(page.locator('html')).toHaveClass(/reduce-motion/);
   const scaledOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(scaledOverflow).toBeLessThanOrEqual(1);
@@ -57,6 +59,7 @@ test('settings persist, scale the UI, and apply in a match', async ({ page }, te
   expect(saved.master).toBe(0.4);
   expect(saved.colorblind).toBe(true);
   expect(saved.reducedMotion).toBe(true);
+  expect(saved.borders).toBe(false);
 
   await page.reload();
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--ui-scale').trim())).toBe('1.15');
@@ -80,6 +83,16 @@ test('settings persist, scale the UI, and apply in a match', async ({ page }, te
   expect(applied.edge).toBe(false);
   expect(applied.invert).toBe(false);
   expect(applied.rival).toBe(0xe69f00);
+  // Territory borders were switched off: the ground ribbon and the minimap tint are hidden.
+  const borders = () =>
+    page.evaluate(() => {
+      const game = (window as unknown as { game: { renderer: { scene: { getObjectByName: (name: string) => { visible: boolean } | undefined } } } }).game;
+      return {
+        mesh: game.renderer.scene.getObjectByName('territory-borders')?.visible ?? null,
+        tint: (document.querySelector('.minimap-territory') as HTMLElement | null)?.hidden ?? null,
+      };
+    });
+  expect(await borders()).toEqual({ mesh: false, tint: true });
 
   await page.setViewportSize(phone ? { width: 412, height: 915 } : { width: 1280, height: 800 });
   await activate(page, '#pause-match', phone);
@@ -102,6 +115,8 @@ test('settings persist, scale the UI, and apply in a match', async ({ page }, te
     });
     expect(visible).toBe(false);
   }
+  await activate(page, '#settings-borders', phone);
+  await expect.poll(async () => (await borders()).tint).toBe(false);
   await activate(page, '#settings-shadows', phone);
   const shadows = await page.evaluate(() => {
     const game = (window as unknown as { game: { quality: { shadows: boolean }; renderer: { webgl: { shadowMap: { enabled: boolean } } } } }).game;

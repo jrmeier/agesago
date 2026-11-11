@@ -1,11 +1,12 @@
 import type { CameraRig, CameraMode } from '../camera/CameraRig';
 import type { NodeKind } from '../core/types';
 import { focusNextScout } from '../input/scouts';
+import { isBorderCell, TerritoryMemory } from '../render/territoryBorders';
 import { minimapBuildingBlips, sightFromState, stepLastSeen, unitMayShow, type LastSeenBuilding } from '../render/lastSeen';
 import type { World } from '../sim/World';
 import { nodeAlpha, paintFog } from './fog';
 import { exploredLabel } from './format';
-import { footprintKey, mapToWorld, renderTerrain, worldToMap, type MapBox } from './minimapMath';
+import { footprintKey, mapToWorld, paintTerritory, renderTerrain, worldToMap, type MapBox, type RGB } from './minimapMath';
 import { takePings } from './pings';
 import { closeTouchMenus, touchMenuOpen } from './touchMenus';
 
@@ -43,6 +44,12 @@ export class Minimap {
   private readonly frame: HTMLDivElement;
   private readonly fog: HTMLCanvasElement;
   private readonly fogPixels: ImageData | null;
+  /** Owner tint, one pixel per territory cell, from the local player's remembered territory. */
+  private readonly territory: HTMLCanvasElement;
+  private readonly territoryPixels: ImageData | null;
+  private readonly memory: TerritoryMemory;
+  private territoryVersion = -1;
+  private territoryShown = true;
   private readonly units: HTMLCanvasElement;
   private readonly view: HTMLCanvasElement;
   private readonly toggle: HTMLButtonElement;
@@ -93,9 +100,15 @@ export class Minimap {
     this.fog.width = vis.cols;
     this.fog.height = vis.rows;
     this.fogPixels = typeof ImageData === 'undefined' ? null : new ImageData(vis.cols, vis.rows);
+    const grid = world.territory;
+    this.memory = new TerritoryMemory(grid, vis, world.localPlayer);
+    this.territory = el('canvas', 'minimap-layer minimap-territory');
+    this.territory.width = grid.cols;
+    this.territory.height = grid.rows;
+    this.territoryPixels = typeof ImageData === 'undefined' ? null : new ImageData(grid.cols, grid.rows);
     this.units = el('canvas', 'minimap-layer');
     this.view = el('canvas', 'minimap-layer');
-    this.frame.append(terrain, this.fog, this.units, this.view);
+    this.frame.append(terrain, this.territory, this.fog, this.units, this.view);
 
     const bar = el('div', 'minimap-bar');
     this.explored = el('span', 'minimap-explored');
@@ -169,6 +182,7 @@ export class Minimap {
     const resized = this.fit();
     if (resized || time - this.lastDynamic >= DYNAMIC_INTERVAL) {
       this.lastDynamic = time;
+      this.drawTerritory();
       this.drawUnits();
     }
     const quad = this.rig.viewFootprint();
@@ -318,6 +332,34 @@ export class Minimap {
   setLocalFromPlayer(on: boolean): void {
     this.localFromPlayer = on;
     this.colorCache.clear();
+    this.territoryVersion = -1;
+  }
+
+  /** Settings toggle for the owner tint layer. */
+  setTerritoryShown(on: boolean): void {
+    this.territoryShown = on;
+    this.territory.hidden = !on;
+    this.territoryVersion = -1;
+  }
+
+  /** Repaint the owner tint when the remembered territory (or the palette) changed. */
+  private drawTerritory(): void {
+    if (!this.territoryShown) return;
+    this.memory.update();
+    if (this.memory.version === this.territoryVersion) return;
+    this.territoryVersion = this.memory.version;
+    const ctx = this.territory.getContext('2d');
+    if (!ctx || !this.territoryPixels) return;
+    const { cols, rows } = this.memory.grid;
+    const known = this.memory.known;
+    const rgb = new Map<number, RGB>();
+    const colorOf = (o: number): RGB => {
+      let c = rgb.get(o);
+      if (!c) rgb.set(o, (c = hexRgb(this.colors(o)[0])));
+      return c;
+    };
+    paintTerritory(known, cols, rows, colorOf, this.territoryPixels.data, (i) => isBorderCell(known, cols, rows, i));
+    ctx.putImageData(this.territoryPixels, 0, 0);
   }
 
   /** Fill and edge colours for a player's dots (the local player keeps the bright map blue). */
@@ -412,6 +454,11 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string): H
   const e = document.createElement(tag);
   e.className = className;
   return e;
+}
+
+function hexRgb(css: string): RGB {
+  const n = parseInt(css.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
 function cssHex(n: number): string {

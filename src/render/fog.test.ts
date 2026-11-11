@@ -213,6 +213,20 @@ describe('applyFog', () => {
     expect(shader.uniforms.uFogTime).toBeUndefined();
   });
 
+  it('leaves a translucent overlay its own alpha with keepAlpha (territory borders, M18-2)', () => {
+    const fog = new FogOfWar(new Visibility(4, 4), qualityTier('high'));
+    const plain = new THREE.MeshBasicMaterial();
+    const overlay = new THREE.MeshBasicMaterial();
+    applyFog(plain, fog);
+    applyFog(overlay, fog, { keepAlpha: true });
+    const a = compile(plain, lambert().vertexShader, lambert().fragmentShader);
+    const b = compile(overlay, lambert().vertexShader, lambert().fragmentShader);
+    expect(a.fragmentShader).toContain('gl_FragColor.a = mix(');
+    expect(b.fragmentShader).not.toContain('gl_FragColor.a = mix(');
+    expect(b.fragmentShader).toContain('agFogBright = agFogSample');
+    expect(plain.customProgramCacheKey()).not.toBe(overlay.customProgramCacheKey());
+  });
+
   it('patches the fancy water shader and the terrain splat together', () => {
     const fog = new FogOfWar(new Visibility(40, 30), qualityTier('high'));
     const water = new Water(wet(), qualityTier('high'));
@@ -263,6 +277,7 @@ describe('concealed scenery', () => {
       grassDensity: 3,
       grassRadius: 8,
       fancyWater: false,
+      territoryGlow: false,
     };
     const focus = { x: 8, z: 8 };
     const vis = new Visibility(32, 32);

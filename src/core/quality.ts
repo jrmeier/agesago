@@ -19,12 +19,14 @@ export interface Quality {
   grassRadius: number;
   /** Full water shader (depth tint, foam, ripples, reflections) vs a cheap animated plane. */
   fancyWater: boolean;
+  /** Territory borders as a soft glowing ribbon; false draws a thin plain line and rescans fog less often. */
+  territoryGlow: boolean;
 }
 
 const TIERS: Record<QualityTier, Quality> = {
-  low: { tier: 'low', pixelRatio: 1, shadows: false, shadowMapSize: 0, grassDensity: 0, grassRadius: 0, fancyWater: false },
-  medium: { tier: 'medium', pixelRatio: 1.5, shadows: true, shadowMapSize: 1024, grassDensity: 3, grassRadius: 28, fancyWater: true },
-  high: { tier: 'high', pixelRatio: 2, shadows: true, shadowMapSize: 2048, grassDensity: 7, grassRadius: 45, fancyWater: true },
+  low: { tier: 'low', pixelRatio: 1, shadows: false, shadowMapSize: 0, grassDensity: 0, grassRadius: 0, fancyWater: false, territoryGlow: false },
+  medium: { tier: 'medium', pixelRatio: 1.5, shadows: true, shadowMapSize: 1024, grassDensity: 3, grassRadius: 28, fancyWater: true, territoryGlow: true },
+  high: { tier: 'high', pixelRatio: 2, shadows: true, shadowMapSize: 2048, grassDensity: 7, grassRadius: 45, fancyWater: true, territoryGlow: true },
 };
 
 /** Device tier. Ignores `?quality=`, which is a per-visit override. */

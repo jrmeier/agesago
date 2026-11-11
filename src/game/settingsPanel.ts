@@ -38,6 +38,7 @@ export function mountSettings(): () => void {
   const shadows = must<HTMLInputElement>('settings-shadows');
   const grass = must<HTMLInputElement>('settings-grass');
   const water = must<HTMLInputElement>('settings-water');
+  const borders = must<HTMLInputElement>('settings-borders');
   const ui = must<HTMLInputElement>('settings-ui');
   const edge = must<HTMLInputElement>('settings-edge');
   const edgeSpeed = must<HTMLInputElement>('settings-edge-speed');
@@ -58,6 +59,7 @@ export function mountSettings(): () => void {
     shadows.checked = s.shadows;
     grass.checked = s.grass;
     water.checked = s.water;
+    borders.checked = s.borders;
     ui.value = String(s.uiScale);
     edge.checked = s.edgeScroll;
     edgeSpeed.value = String(s.edgeSpeed);
@@ -85,6 +87,7 @@ export function mountSettings(): () => void {
       shadows: shadows.checked,
       grass: grass.checked,
       water: water.checked,
+      borders: borders.checked,
       uiScale: Number(ui.value),
       edgeScroll: edge.checked,
       edgeSpeed: Number(edgeSpeed.value),

@@ -28,6 +28,7 @@ function cover(density: number, radius: number): Quality {
     grassDensity: density,
     grassRadius: radius,
     fancyWater: false,
+    territoryGlow: false,
   };
 }
 
