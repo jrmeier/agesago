@@ -10,12 +10,8 @@ import { RULES } from './research';
 const ECONOMY: ReadonlySet<TechId> = new Set<TechId>([...CHAINS.wood, ...CHAINS.mining, ...CHAINS.farming, 'stoneChisels', 'threshingFloor']);
 const TOWN_BY = 7 * 60;
 const CITY_BY = 18 * 60;
-/**
- * The City Age's unit line may come a few minutes after the age (it saves for it).
- * TEMPORARY 27 min (was 25): M18-3's territory rules keep drop sites inside the borders, which
- * slows seed 1's gold (tier-2 line at 25.5 min). Restore 25 when M18-5 (AI territory play) lands.
- */
-const LINE_BY = 27 * 60;
+/** The City Age's unit line may come a few minutes after the age (it saves for it). */
+const LINE_BY = 25 * 60;
 const ECO_AT = 20 * 60;
 
 describe('research and ages AI (moderate, headless, idle human)', () => {
@@ -48,7 +44,7 @@ describe('research and ages AI (moderate, headless, idle human)', () => {
     const msPerTick = aiMs / ticks;
     const fmt = (s: number | undefined) => (s === undefined ? 'never' : `${(s / 60).toFixed(1)} min`);
     console.log(
-      `seed ${seed}: Town ${fmt(town)}, City ${fmt(city)}, economy techs by 20 min ${ecoBy20}, ` +
+      `seed ${seed}: Town ${fmt(town)}, City ${fmt(city)}, tier-2 line ${fmt(lineTiers.find((l) => l.tier === 2)?.at)}, economy techs by 20 min ${ecoBy20}, ` +
         `techs ${ai.research.started.length} (${ai.research.started.map((s) => s.tech).join(' ')}), trades ${ai.research.trades}, ` +
         `military at Town ${militaryAtTown}, AI ${msPerTick.toFixed(4)} ms/tick`
     );
