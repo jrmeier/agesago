@@ -1,6 +1,7 @@
-import { BUILDINGS, MAX_POP } from '../core/buildings';
+import { BUILDINGS, MAX_POP, TERRITORY } from '../core/buildings';
+import { MAP_SIZES } from '../core/maps';
 import type { Building, BuildingKind, EntityId, ResourceNode, ResourceType, Unit, UnitState, Vec2 } from '../core/types';
-import { canAfford, dist, dropsFor, nearestSiteDist, type Ctx, type Snapshot } from './context';
+import { addStock, canAfford, dist, dropsFor, nearestSiteDist, type Ctx, type Snapshot } from './context';
 import { findSpot, type SpotQuery } from './placement';
 import { ageLocked } from '../sim/systems/build';
 
@@ -22,6 +23,10 @@ const BERRY_RANGE = 30;
 const HOME_BERRIES = 40;
 /** Home berry food left below which the AI waits for the bushes instead of laying a field. */
 const BERRIES_NEARLY_GONE = 200;
+/** Buildings that go up even while saving for a new Town Center. */
+const ESSENTIAL: ReadonlySet<BuildingKind> = new Set(['house', 'farm', 'storehouse', 'granary', 'miningCamp', 'townCenter']);
+/** Seconds a spot whose build order was rejected stays off the search. */
+const REJECTED_FOR = 120;
 export const PRODUCTION: BuildingKind[] = ['barracks', 'archeryRange', 'stable'];
 
 type Source = { id: EntityId; pos: Vec2 };
@@ -41,6 +46,13 @@ export class Economy {
   /** Node → sim time until which it is skipped (an order to it failed). */
   private readonly skip = new Map<EntityId, number>();
   private readonly scoutTargets = new Map<EntityId, Vec2>();
+  /** Spots a build order was rejected at, kept clear until `until` (sim time). */
+  private rejected: { pos: Vec2; until: number }[] = [];
+  /** Where the next Town Center goes, and when to look again. */
+  private site: Vec2 | null = null;
+  private nextSite = 0;
+  /** Clusters where no Town Center would fit, skipped until `until`. */
+  private failedSites: { pos: Vec2; until: number }[] = [];
   private readonly briefed = new Set<EntityId>();
   /** Per pass: gatherers per node / farm, and node shortlists by type. */
   private load = new Map<EntityId, number>();
@@ -77,11 +89,15 @@ export class Economy {
   econPass(s: Snapshot): void {
     const { world, player, profile } = this.c;
     const stock = world.stockOf(player);
-    const tc = s.tc;
-    if (tc?.complete && !tc.upgrading && this.c.upgradeHold !== tc.id) {
+    // Every finished Town Center trains villagers (a second one doubles the boom, M18-5), except
+    // while it upgrades or is held free for an upgrade (M14-6).
+    let queued = 0;
+    for (const tc of s.tcs) queued += tc.complete ? tc.queue : 0;
+    for (const tc of s.tcs) {
+      if (!tc.complete || tc.upgrading || this.c.upgradeHold === tc.id) continue;
       while (
         tc.queue < profile.tcQueue &&
-        s.villagers.length + tc.queue < profile.targetVillagers &&
+        s.villagers.length + queued < profile.targetVillagers &&
         s.popUsed < s.popCap &&
         stock.food - this.c.villagerHold - (this.c.pauseVillagers ? this.c.reserve.food ?? 0 : 0) >= 50
       ) {
@@ -89,6 +105,7 @@ export class Economy {
         this.c.issue({ type: 'train', buildingId: tc.id, unit: 'villager' });
         if (tc.queue === before) break;
         s.popUsed++;
+        queued++;
       }
     }
 
@@ -247,11 +264,12 @@ export class Economy {
 
   buildPass(s: Snapshot): void {
     this.maintainFoundations(s);
+    if (!this.wantsTown(s)) this.c.townReserve = {};
     // Farms jump the queue when food is badly short (berries gone, no fields yet).
     const urgent = this.foodShort > 0 && this.foodGap >= 3;
     const needs: (() => boolean | null)[] = urgent
-      ? [() => this.house(s), () => this.farm(s), () => this.dropSite(s), () => this.production(s)]
-      : [() => this.house(s), () => this.dropSite(s), () => this.farm(s), () => this.production(s)];
+      ? [() => this.house(s), () => this.farm(s), () => this.dropSite(s), () => this.expand(s), () => this.production(s)]
+      : [() => this.house(s), () => this.dropSite(s), () => this.farm(s), () => this.expand(s), () => this.production(s)];
     // true: built; false: wanted but not affordable yet (save up for it); null: not needed / no spot.
     for (const need of needs) if (need() !== null) return;
   }
@@ -295,13 +313,11 @@ export class Economy {
       }
       const anchor = far.reduce((a, b) => (dist(a.pos, c) < dist(b.pos, c) ? a : b));
       if (this.skipped(-anchor.id)) continue;
-      const q: SpotQuery = { kind, center: anchor.pos, minR: 2.5, maxR: 12, clearOfNodes: 1, gap: 1, maxChecks: 25 };
-      let r = this.place(s, q, Math.min(2, this.c.profile.builders), anchor.pos);
-      // Territory (M18-3): drop sites go on own land only. When the resource lies past the border,
-      // take the nearest own-land spot further out toward it (still a shorter walk than home).
-      if (r === null && world.territoryOwner(anchor.pos) !== this.c.player) {
-        r = this.place(s, { ...q, maxR: 24, maxChecks: 40 }, Math.min(2, this.c.profile.builders), anchor.pos);
-      }
+      // Work off our land: the camp goes at the edge of our territory on the way there.
+      // Too far out to help (the next Town Center will cover it): skip it for a while.
+      const edge = this.ownGround(anchor.pos);
+      const center = edge && dist(edge, anchor.pos) <= FAR_FROM_DROP ? edge : null;
+      const r = center && this.place(s, { kind, center, minR: center === anchor.pos ? 2.5 : 0, maxR: 12, clearOfNodes: 1, gap: 1, maxChecks: 25 }, Math.min(2, this.c.profile.builders), anchor.pos);
       if (r !== null) return r;
       // Nowhere to put it (dense forest, rocks): don't search here again for a while.
       this.skip.set(-anchor.id, world.time + 90);
@@ -324,6 +340,80 @@ export class Economy {
     // The ring around the Town Center fills up: reach further out as the fields multiply.
     const maxR = Math.min(28, 16 + 1.5 * (s.count.farm ?? 0));
     return this.place(s, { kind: 'farm', center, minR: 4, maxR, clearOfNodes: 1, gap: 0.8 }, 1);
+  }
+
+  // ---- Expansion (M18-5) ----
+
+  /**
+   * Found another Town Center toward the richest known resource cluster: on medium or larger
+   * maps, in the Town Age, once it has `expandAt` villagers and fewer than `towns` Town Centers.
+   */
+  private expand(s: Snapshot): boolean | null {
+    this.c.townReserve = {};
+    if (!this.wantsTown(s)) return null;
+    const { world } = this.c;
+    if (world.time >= this.nextSite) {
+      this.nextSite = world.time + 30;
+      this.site = this.expansionSite(s);
+    }
+    if (!this.site) return null;
+    const toward = norm({ x: this.c.home.x - this.site.x, z: this.c.home.z - this.site.z });
+    // Clusters sit in forests and rocks, where most spots fail the full check: look harder than
+    // for a house (this runs rarely, once the Town Center is affordable).
+    const q: SpotQuery = { kind: 'townCenter', center: this.site, minR: 3, maxR: 16, clearOfNodes: 1, gap: 2, maxChecks: 200, toward, bias: 6 };
+    const r = this.place(s, q, this.c.profile.builders + 1, this.site);
+    // Save for it (army, research and other buildings leave the cost alone).
+    if (r === false) this.c.townReserve = { ...BUILDINGS.townCenter.cost };
+    // No room there after all (or no builder free): try another cluster on the next pass.
+    if (r === null) {
+      this.failedSites.push({ pos: this.site, until: world.time + 300 });
+      [this.site, this.nextSite] = [null, 0];
+    }
+    return r;
+  }
+
+  /** Time for another Town Center (profile, map size, age, villagers, none going up). */
+  wantsTown(s: Snapshot): boolean {
+    const { world, player, profile } = this.c;
+    if (profile.expandAt === null || s.tcs.length >= profile.towns || s.villagers.length < profile.expandAt) return false;
+    return world.hf.width >= MAP_SIZES.medium && !ageLocked(world, 'townCenter', player);
+  }
+
+  /**
+   * The best known resource cluster for a new Town Center: reachable, on neutral or own land,
+   * clear of every known Town Center by the spacing rule, nearer home than the enemy. Scored by
+   * resources within reach (gold and stone count most) less the walk from home.
+   */
+  expansionSite(s: Snapshot): Vec2 | null {
+    const { world, player, intel } = this.c;
+    const home = this.c.home;
+    const tcs: Vec2[] = s.tcs.map((b) => b.pos);
+    for (const b of intel.buildings.values()) if (b.kind === 'townCenter') tcs.push(b.pos);
+    const enemy = intel.enemyStart;
+    const spacing = TERRITORY.townCenterSpacing + 4;
+    this.failedSites = this.failedSites.filter((f) => f.until > world.time);
+    const all: ResourceNode[] = [];
+    for (const t of TYPES) for (const n of intel.nodes[t]) if (n.amount > 0 && world.nodes.has(n.id)) all.push(n);
+    const WEIGHT: Record<ResourceType, number> = { gold: 1.5, stone: 1.2, wood: 0.4, food: 0.8 };
+    let best: Vec2 | null = null;
+    let bestScore = 0;
+    for (const seed of all) {
+      // Clusters are seeded by mines (and every 8th tree, so forests count too).
+      if (seed.type === 'food' || (seed.type === 'wood' && seed.id % 8)) continue;
+      const p = seed.pos;
+      const dHome = dist(p, home);
+      if (dHome < spacing || dHome > 90) continue;
+      if (enemy && dist(p, enemy) < dHome * 1.2) continue;
+      if (tcs.some((t) => dist(t, p) < spacing) || this.failedSites.some((f) => dist(f.pos, p) < 12)) continue;
+      const owner = world.territoryOwner(p);
+      if (owner !== 0 && owner !== player) continue;
+      if (world.nav.regionOfCell(p) !== this.c.region) continue;
+      let value = 0;
+      for (const n of all) if (Math.abs(n.pos.x - p.x) < 14 && Math.abs(n.pos.z - p.z) < 14) value += Math.min(n.amount, 800) * WEIGHT[n.type];
+      const score = value - dHome * 40;
+      if (score > bestScore) [best, bestScore] = [p, score];
+    }
+    return best && { ...best };
   }
 
   /** Military buildings in build order: the barracks, the profile's second choice, then the other. */
@@ -375,19 +465,51 @@ export class Economy {
   private place(s: Snapshot, q: SpotQuery, n: number, near?: Vec2): boolean | null {
     const { world, player, intel } = this.c;
     if (ageLocked(world, q.kind, player)) return null;
-    if (!canAfford(world.stockOf(player), BUILDINGS[q.kind].cost, this.c.reserve)) return false;
+    const reserve = ESSENTIAL.has(q.kind) ? this.c.reserve : addStock(this.c.reserve, this.c.townReserve);
+    if (!canAfford(world.stockOf(player), BUILDINGS[q.kind].cost, reserve)) return false;
     const builders = this.builders(s, near ?? q.center, n, q.kind === 'farm');
     if (!builders.length) return null;
-    const pos = findSpot(world, intel, player, { ...q, region: this.c.region });
-    if (!pos) return null;
-    const before = world.buildings.size;
-    this.c.issue({ type: 'build', unitIds: builders.map((u) => u.id), kind: q.kind, pos, rot: 0 });
-    return world.buildings.size > before ? true : null;
+    // A rejected spot (territory changed hands, the site got blocked) is remembered and the
+    // search moves on to the next one, so one bad spot never stalls construction (M18-5).
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const pos = findSpot(world, intel, player, { ...q, region: this.c.region, avoid: this.badSpots() });
+      if (!pos) return null;
+      const before = world.buildings.size;
+      this.c.issue({ type: 'build', unitIds: builders.map((u) => u.id), kind: q.kind, pos, rot: 0 });
+      if (world.buildings.size > before) return true;
+      const why = this.c.lastReject;
+      if (why !== 'territory' && why !== 'blocked-site') return null;
+      this.rejected.push({ pos, until: world.time + REJECTED_FOR });
+    }
+    return null;
+  }
+
+  /** Spots rejected recently (expired ones dropped). */
+  private badSpots(): Vec2[] {
+    const now = this.c.world.time;
+    this.rejected = this.rejected.filter((r) => r.until > now);
+    return this.rejected.map((r) => r.pos);
+  }
+
+  /**
+   * `p` if it is on our territory, else the nearest point on the way home that is (drop sites
+   * and most buildings need own land, M18-3). Null when nothing on the way is ours.
+   */
+  ownGround(p: Vec2): Vec2 | null {
+    const { world, player } = this.c;
+    const home = this.c.home;
+    if (world.territoryOwner(p) === player) return p;
+    const d = dist(p, home);
+    for (let t = 2; t <= d; t += 2) {
+      const q = { x: p.x + ((home.x - p.x) * t) / (d || 1), z: p.z + ((home.z - p.z) * t) / (d || 1) };
+      if (world.territoryOwner(q) === player) return q;
+    }
+    return null;
   }
 
   /** The `n` villagers best placed to build near `p` (idle ones, then non-farmers, nearest first). */
   private builders(s: Snapshot, p: Vec2, n: number, food: boolean): Unit[] {
-    const cands = s.villagers.filter((v) => !this.c.sheltered.has(v.id) && !BUILDING.has(v.state) && v.state !== 'moving');
+    const cands = s.villagers.filter((v) => !this.c.sheltered.has(v.id) && !BUILDING.has(v.state) && v.state !== 'moving' && v.state !== 'garrisoned');
     const { world } = this.c;
     const cost = (v: Unit) => {
       let c = dist(v.pos, p);

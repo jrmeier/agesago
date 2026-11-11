@@ -1,9 +1,12 @@
-import type { BuildingKind, EntityId, Stockpile, Unit, UnitKind, Vec2 } from '../core/types';
-import { isAnimal, UNITS, damage, trainable, type UnitClass } from '../core/units';
-import { canAfford, dist, type Ctx, type Snapshot } from './context';
+import { maxCapturePoints } from '../core/buildings';
+import type { Building, BuildingKind, EntityId, Stockpile, Unit, UnitKind, Vec2 } from '../core/types';
+import { captureRate, isAnimal, UNITS, damage, trainable, type UnitClass } from '../core/units';
+import { addStock, canAfford, dist, type Ctx, type Snapshot } from './context';
 import { PRODUCTION, norm, type Economy } from './economy';
 import type { SeenBuilding } from './intel';
 import { ageOf } from '../sim/systems/research';
+import { tooDamaged } from '../sim/systems/defence';
+import { garrisonCap } from '../sim/systems/stats';
 
 /** A typical member of each class, for judging matchups. */
 const TYPICAL: Record<UnitClass, UnitKind> = { villager: 'villager', infantry: 'swordsman', archer: 'archer', cavalry: 'horseman', wildlife: 'deer', ship: 'trireme', siege: 'ram' };
@@ -12,6 +15,12 @@ const CLASSES: UnitClass[] = ['infantry', 'archer', 'cavalry'];
 const BASE_RADIUS = 26;
 /** Max units re-ordered per pass (each order runs a path search). */
 const ORDERS_PER_PASS = 14;
+/** Enemy buildings razed rather than captured: cheap, or not worth holding (M18-5). */
+const RAZE: ReadonlySet<BuildingKind> = new Set(['house', 'palisade', 'stoneWall', 'gate', 'farm']);
+/** Seconds a capture may go without gaining points (a garrison holds it) before the army razes instead. */
+const CAPTURE_STALL = 20;
+/** Villagers run this far to a shelter; soldiers this far to hold a building under capture. */
+const SHELTER_REACH = 30;
 
 /**
  * How well `k` fares against class `c` per unit of resources: Lanchester-style damage dealt
@@ -56,6 +65,12 @@ export class Military {
   private shelterUntil = -Infinity;
   private lastHit: { pos: Vec2; at: number } | null = null;
   private readonly rallied = new Map<EntityId, Vec2>();
+  /** Own buildings we put units into (emptied once things are calm). */
+  private readonly shelters = new Set<EntityId>();
+  /** Capture in progress: our points on the target and when they last grew. */
+  private captureWatch: { id: EntityId; cp: number; at: number } | null = null;
+  /** Enemy buildings that held out against capture: raze them. */
+  private readonly raze = new Set<EntityId>();
 
   constructor(
     private readonly c: Ctx,
@@ -86,7 +101,7 @@ export class Military {
     const rally = this.rallyPoint();
     this.train(s, rally);
     for (const id of this.attackers) if (!this.c.world.units.has(id)) this.attackers.delete(id);
-    const home = s.army.filter((u) => !this.attackers.has(u.id));
+    const home = s.army.filter((u) => !this.attackers.has(u.id) && u.state !== 'garrisoned');
     if (this.defend(s, home)) return;
     if (this.mode === 'attack') this.pressAttack(home, rally);
     else this.muster(s, home, rally);
@@ -101,7 +116,7 @@ export class Military {
     // Saving for an age or a tech holds the army back, unless outgunned, raided or still
     // short of a first wave's worth of defenders.
     const free = this.c.armyFirst || (ageOf(world, player) > 0 && s.army.length < profile.firstWave);
-    const reserve: Partial<Stockpile> = free ? {} : { ...this.c.reserve };
+    const reserve: Partial<Stockpile> = free ? {} : addStock(this.c.reserve, this.c.townReserve);
     if (!free) for (const [r, n] of Object.entries(this.c.techReserve) as [keyof Stockpile, number][]) reserve[r] = (reserve[r] ?? 0) + n;
     if (s.villagers.length < profile.targetVillagers && s.tc) reserve.food = (reserve.food ?? 0) + 50;
     for (const b of s.buildings) {
@@ -171,11 +186,7 @@ export class Military {
     // Sheltering villagers go back to work after two quiet passes, or after a while anyway
     // (the Town Center doesn't shoot back, so hiding forever only starves the economy).
     this.calm = threats.length ? 0 : this.calm + 1;
-    if (this.c.sheltered.size && (this.calm >= 2 || world.time > this.shelterUntil)) {
-      const ids = [...this.c.sheltered].filter((id) => world.units.has(id));
-      this.c.sheltered.clear();
-      if (ids.length) this.c.issue({ type: 'stop', unitIds: ids });
-    }
+    if ((this.c.sheltered.size || this.shelters.size) && (this.calm >= 2 || world.time > this.shelterUntil)) this.release();
     if (!threats.length) {
       this.threatSince = null;
       return false;
@@ -203,16 +214,91 @@ export class Military {
     const idle = defenders.filter((u) => u.state !== 'attacking' && dist(u.pos, c) > 4).slice(0, ORDERS_PER_PASS);
     if (idle.length) this.c.issue({ type: 'attackMove', unitIds: idle.map((u) => u.id), target: c });
 
-    // Garrison-lite: villagers near raiding soldiers run to the Town Center.
-    if (profile.shelter && soldiers > 0 && s.tc) {
-      const run = s.villagers.filter((v) => !this.c.sheltered.has(v.id) && threats.some((t) => raider(t) && dist(t.pos, v.pos) < 12));
+    // Villagers near raiding soldiers garrison in the nearest Town Center or tower with room
+    // (which then shoots back), else run to the Town Center.
+    if (profile.shelter && soldiers > 0) {
+      const run = s.villagers.filter((v) => !this.c.sheltered.has(v.id) && v.state !== 'garrisoned' && threats.some((t) => raider(t) && dist(t.pos, v.pos) < 12));
       if (run.length && world.time > this.shelterUntil + 15) {
         this.shelterUntil = world.time + 20;
-        for (const v of run) this.c.sheltered.add(v.id);
-        this.c.issue({ type: 'move', unitIds: run.map((v) => v.id), target: s.tc.pos });
+        this.shelter(s, run);
       }
     }
+    this.holdCaptures(s, home, threats.filter(raider));
     return true;
+  }
+
+  /** Garrison `units` in the nearest own shelters with room; villagers left over run to the Town Center. */
+  private shelter(s: Snapshot, units: Unit[], only?: Building): Unit[] {
+    const { world } = this.c;
+    const room = new Map<Building, number>();
+    for (const b of only ? [only] : s.buildings) {
+      if (!b.complete || tooDamaged(b)) continue;
+      const free = garrisonCap(world, b.owner, b.kind, b.tier) - (b.occupants?.length ?? 0);
+      if (free > 0) room.set(b, free);
+    }
+    const into = new Map<Building, Unit[]>();
+    const left: Unit[] = [];
+    for (const u of units) {
+      let best: Building | null = null;
+      for (const [b, n] of room) if (n > 0 && dist(b.pos, u.pos) < SHELTER_REACH && (!best || dist(b.pos, u.pos) < dist(best.pos, u.pos))) best = b;
+      if (!best) {
+        left.push(u);
+        continue;
+      }
+      room.set(best, room.get(best)! - 1);
+      into.set(best, [...(into.get(best) ?? []), u]);
+    }
+    const sent: Unit[] = [];
+    for (const [b, us] of into) {
+      this.c.issue({ type: 'garrison', unitIds: us.map((u) => u.id), buildingId: b.id });
+      if (this.c.lastReject) continue;
+      this.shelters.add(b.id);
+      sent.push(...us);
+    }
+    for (const u of sent) if (u.kind === 'villager') this.c.sheltered.add(u.id);
+    const runners = left.filter((u) => u.kind === 'villager');
+    if (!only && runners.length && s.tc) {
+      for (const v of runners) this.c.sheltered.add(v.id);
+      this.c.issue({ type: 'move', unitIds: runners.map((v) => v.id), target: s.tc.pos });
+    }
+    return sent;
+  }
+
+  /**
+   * Own buildings losing capture points to enemy soldiers next to them: nearby villagers go
+   * inside (each occupant wins points back), and soldiers too when the enemy outnumbers the
+   * army at home (they can't win the fight outside).
+   */
+  private holdCaptures(s: Snapshot, home: Unit[], raiders: Unit[]): void {
+    const { world } = this.c;
+    for (const b of s.buildings) {
+      if (!b.complete || !b.capture || (b.capture[b.owner] ?? 0) >= maxCapturePoints(b.kind) * 0.95) continue;
+      const capturers = raiders.filter((t) => dist(t.pos, b.pos) < b.radius + 6).length;
+      if (!capturers) continue;
+      // Keep whoever is inside there while the capture goes on.
+      this.shelterUntil = Math.max(this.shelterUntil, world.time + 20);
+      if (garrisonCap(world, b.owner, b.kind, b.tier) <= (b.occupants?.length ?? 0)) continue;
+      const nearest = (us: Unit[]) =>
+        us.filter((u) => u.state !== 'garrisoned' && u.state !== 'toShelter' && dist(u.pos, b.pos) < SHELTER_REACH).sort((x, y) => dist(x.pos, b.pos) - dist(y.pos, b.pos));
+      const helpers = capturers > home.length ? [...nearest(home), ...nearest(s.villagers)] : nearest(s.villagers);
+      if (helpers.length) this.shelter(s, helpers, b);
+    }
+  }
+
+  /** Things are calm: everyone we put inside comes out, and runners go back to work. */
+  private release(): void {
+    const { world, player } = this.c;
+    for (const id of this.shelters) {
+      const b = world.buildings.get(id);
+      if (b && b.owner === player && b.occupants?.length) this.c.issue({ type: 'ungarrison', buildingId: id });
+    }
+    this.shelters.clear();
+    const ids = [...this.c.sheltered].filter((id) => {
+      const u = world.units.get(id);
+      return u && u.state !== 'garrisoned';
+    });
+    this.c.sheltered.clear();
+    if (ids.length) this.c.issue({ type: 'stop', unitIds: ids });
   }
 
   // ---- Attack waves ----
@@ -262,6 +348,7 @@ export class Military {
       }
     }
     if (!this.target || !intel.buildings.has(this.target.id)) this.target = intel.nearestBuilding(at);
+    this.watchCapture(group);
     // Fresh troops at the rally point join the push in groups.
     const fresh = home.filter((u) => u.state === 'idle' && dist(u.pos, rally) < 14);
     if (fresh.length >= 4) {
@@ -272,12 +359,54 @@ export class Military {
     this.advance(group, false);
   }
 
+  /**
+   * Capture rather than raze (M18-5): military and economic buildings, while no enemy soldier
+   * stands guard and the capture hasn't stalled. Houses and walls are razed.
+   */
+  private captures(id: EntityId): boolean {
+    const { world, player, intel, profile } = this.c;
+    const b = world.buildings.get(id);
+    if (!profile.capture || !b || RAZE.has(b.kind) || this.raze.has(id) || maxCapturePoints(b.kind) <= 0) return false;
+    for (const u of world.units.values()) {
+      if (u.kind === 'villager' || isAnimal(u.kind) || !world.areEnemies(player, u.owner) || u.state === 'garrisoned') continue;
+      if (dist(u.pos, b.pos) < b.radius + 10 && intel.sees(u.pos.x, u.pos.z)) return false;
+    }
+    return true;
+  }
+
+  /**
+   * A capture whose points stopped growing for CAPTURE_STALL seconds (a garrison wins them back
+   * as fast) turns into razing.
+   */
+  private watchCapture(group: Unit[]): void {
+    const { world, player } = this.c;
+    const t = this.target;
+    const b = t && world.buildings.get(t.id);
+    if (!t || !b || this.raze.has(t.id)) return;
+    const capturing = group.filter((u) => u.target === t.id && world.combatState.get(u.id)?.capture);
+    if (!capturing.length) {
+      this.captureWatch = null;
+      return;
+    }
+    const cp = b.capture?.[player] ?? 0;
+    const w = this.captureWatch;
+    if (!w || w.id !== t.id || cp > w.cp + 1) this.captureWatch = { id: t.id, cp: Math.max(cp, w?.id === t.id ? w.cp : 0), at: world.time };
+    else if (world.time - w.at > CAPTURE_STALL) {
+      this.raze.add(t.id);
+      this.captureWatch = null;
+      this.c.issue({ type: 'attack', unitIds: capturing.slice(0, ORDERS_PER_PASS).map((u) => u.id), targetId: t.id });
+    }
+  }
+
   /** Order `units` (all of them, or only idle ones) toward the current target, or to search for one. */
   private advance(units: Unit[], all: boolean): void {
     const { world } = this.c;
-    const movers = (all ? units : units.filter((u) => u.state === 'idle')).slice(0, ORDERS_PER_PASS);
-    if (!movers.length) return;
     const t = this.target;
+    // Soldiers that walked up and started hitting a building we mean to capture switch to capturing.
+    const capture = !!t && this.captures(t.id);
+    const redo = (u: Unit) => u.state === 'idle' || (capture && u.target === t!.id && captureRate(u.kind) > 0 && !world.combatState.get(u.id)?.capture);
+    const movers = (all ? units : units.filter(redo)).slice(0, ORDERS_PER_PASS);
+    if (!movers.length) return;
     if (!t) {
       // Nothing known: sweep unexplored ground (or look around) as a group.
       const p = this.econ.frontier(movers[0]) ?? this.c.intel.enemyStart;
@@ -287,7 +416,10 @@ export class Military {
     const at = centroid(movers);
     const near = movers.filter((u) => dist(u.pos, t.pos) < t.radius + 9);
     const far = movers.filter((u) => dist(u.pos, t.pos) >= t.radius + 9);
-    if (near.length && world.buildings.has(t.id)) this.c.issue({ type: 'attack', unitIds: near.map((u) => u.id), targetId: t.id });
+    const live = world.buildings.get(t.id);
+    // Just captured (intel catches up on its next scan): nothing to hit there.
+    const hostile = !!live && world.areEnemies(this.c.player, live.owner);
+    if (near.length && hostile) this.c.issue({ type: capture ? 'capture' : 'attack', unitIds: near.map((u) => u.id), targetId: t.id });
     if (far.length) {
       const d = norm({ x: at.x - t.pos.x, z: at.z - t.pos.z });
       const p = { x: t.pos.x + d.x * (t.radius + 2.5), z: t.pos.z + d.z * (t.radius + 2.5) };
@@ -296,6 +428,7 @@ export class Military {
   }
 }
 
+/** Mean position of `units` (non-empty). */
 function centroid(units: Unit[]): Vec2 {
   const c = { x: 0, z: 0 };
   for (const u of units) {

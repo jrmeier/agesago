@@ -1,3 +1,4 @@
+import { normalizeMapOptions, type MapOptions } from '../core/maps';
 import type { Stat } from '../core/techs';
 import type { Player, PlayerId } from '../core/types';
 import { isAnimal, UNITS } from '../core/units';
@@ -7,10 +8,13 @@ import { World, defaultPlayers } from '../sim/World';
 import { AIPlayer, type AIOptions } from './AIPlayer';
 
 /** Headless game setup for AI tests and tuning (no rendering). */
-export function makeGame(seed: number, control: Player['control'][] = ['human', 'ai']): World {
-  const { hf, layout } = generateMap(seed, control.length);
+export function makeGame(seed: number, control: Player['control'][] = ['human', 'ai'], map: MapOptions = {}): World {
+  const { hf, layout } = generateMap(seed, control.length, map);
   const players = defaultPlayers(control.length).map((p, i) => ({ ...p, control: control[i] }));
-  return new World(hf, layout, players);
+  const world = new World(hf, layout, players);
+  world.seed = seed;
+  world.mapOptions = normalizeMapOptions(map);
+  return world;
 }
 
 export interface RunStats {

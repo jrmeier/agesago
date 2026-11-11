@@ -4,7 +4,7 @@ import type { Age, Building, BuildingKind, MarketResource, ResourceType, Stockpi
 import { isAnimal, UNITS, type UnitClass } from '../core/units';
 import { buyCost, LOT, sellGain } from '../sim/systems/market';
 import { ageBuildingsNeeded, ageBuildings, ageOf, isQueued, researchBlock } from '../sim/systems/research';
-import { canAfford, dist, type Ctx, type Snapshot } from './context';
+import { addStock, canAfford, dist, type Ctx, type Snapshot } from './context';
 import { norm, PRODUCTION, type Economy } from './economy';
 import type { ResearchProfile, TechGroup } from './profile';
 
@@ -342,7 +342,7 @@ export class Research {
   choose(s: Snapshot, f: Facts, p: ResearchProfile): { tech: TechId; at: Building } | null {
     const { world, player, profile } = this.c;
     const stock = world.stockOf(player);
-    const reserve: Partial<Stockpile> = { ...this.c.reserve };
+    const reserve: Partial<Stockpile> = addStock(this.c.reserve, this.c.townReserve);
     const booming = f.villagers < profile.targetVillagers && !!s.tc;
     if (booming) reserve.food = (reserve.food ?? 0) + 50 + p.villagerReserve;
     const tcBusy = booming && (world.time < this.tcFreeAt || this.nearAge(f, p));

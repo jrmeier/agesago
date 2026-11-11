@@ -1,5 +1,5 @@
 import { BUILDINGS } from '../core/buildings';
-import type { Building, BuildingKind, Command, EntityId, PlayerId, ResourceType, Stockpile, Unit, Vec2 } from '../core/types';
+import type { Building, BuildingKind, Command, EntityId, PlayerId, RejectReason, ResourceType, Stockpile, Unit, Vec2 } from '../core/types';
 import { isAnimal, popCost } from '../core/units';
 import { buildingQueuedPop } from '../sim/systems/train';
 import type { World } from '../sim/World';
@@ -15,6 +15,8 @@ export interface Ctx {
   readonly rng: () => number;
   /** Issue a command as this player (the only way the AI changes the game). */
   issue(cmd: Command): void;
+  /** Why the last issued command was rejected, or null if it went through (set by issue). */
+  lastReject: RejectReason | null;
   /** Villagers held at the Town Center during a raid (the economy leaves them alone). */
   readonly sheltered: Set<EntityId>;
   /** Scouts that explore (the starting ones); scouts trained later are soldiers. */
@@ -28,6 +30,11 @@ export interface Ctx {
    * construction and research leave this much in the stockpile.
    */
   reserve: Partial<Stockpile>;
+  /**
+   * Saving for a new Town Center (M18-5): army training, research and other construction leave
+   * this much (houses, farms and drop sites don't).
+   */
+  townReserve: Partial<Stockpile>;
   /** Resources held for the next tech: army training leaves this much (villagers don't). */
   techReserve: Partial<Stockpile>;
   /** Food villager training leaves for an economy tech (a short, bounded pause). */
@@ -50,6 +57,8 @@ export interface Snapshot {
   army: Unit[];
   buildings: Building[];
   tc: Building | undefined;
+  /** Every Town Center, foundations included (the first is `tc`). */
+  tcs: Building[];
   /** Population plus units queued (what the pop cap is checked against). */
   popUsed: number;
   popCap: number;
@@ -59,7 +68,7 @@ export interface Snapshot {
 }
 
 export function snapshot(world: World, player: PlayerId, explorers?: ReadonlySet<EntityId>): Snapshot {
-  const s: Snapshot = { villagers: [], scouts: [], army: [], buildings: [], tc: undefined, popUsed: 0, popCap: world.popCapOf(player), count: {}, building: {} };
+  const s: Snapshot = { villagers: [], scouts: [], army: [], buildings: [], tc: undefined, tcs: [], popUsed: 0, popCap: world.popCapOf(player), count: {}, building: {} };
   for (const u of world.units.values()) {
     if (u.owner !== player || isAnimal(u.kind)) continue;
     s.popUsed += popCost(u.kind);
@@ -73,12 +82,23 @@ export function snapshot(world: World, player: PlayerId, explorers?: ReadonlySet
     s.popUsed += buildingQueuedPop(b);
     s.count[b.kind] = (s.count[b.kind] ?? 0) + 1;
     if (!b.complete) s.building[b.kind] = (s.building[b.kind] ?? 0) + 1;
-    if (b.kind === 'townCenter' && !s.tc) s.tc = b;
+    if (b.kind === 'townCenter') {
+      s.tcs.push(b);
+      // The first finished one (the founding Town Center while it stands).
+      if (b.complete && !s.tc) s.tc = b;
+    }
   }
   return s;
 }
 
 export const dist = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.z - b.z);
+
+/** `a` plus `b`, resource by resource. */
+export function addStock(a: Partial<Stockpile>, b: Partial<Stockpile>): Partial<Stockpile> {
+  const out: Partial<Stockpile> = { ...a };
+  for (const [r, n] of Object.entries(b) as [ResourceType, number][]) out[r] = (out[r] ?? 0) + n;
+  return out;
+}
 
 export function canAfford(stock: Stockpile, cost: Partial<Stockpile>, reserve: Partial<Stockpile> = {}): boolean {
   for (const [r, n] of Object.entries(cost) as [ResourceType, number][]) if (stock[r] - (reserve[r] ?? 0) < n) return false;

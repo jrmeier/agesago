@@ -88,6 +88,15 @@ export interface Profile {
   builders: number;
   /** Pull villagers into the Town Center when raided. */
   shelter: boolean;
+  /**
+   * Villagers before it founds another Town Center toward a resource cluster (M18-5; Town Age,
+   * medium or larger maps only). null = never expands.
+   */
+  expandAt: number | null;
+  /** Town Centers it aims to own (the founding one included). */
+  towns: number;
+  /** Soldiers capture undefended military and economic buildings instead of razing them (M18-5). */
+  capture: boolean;
   /** Light cheats for 'hardest': resources per sim second and full map knowledge. */
   cheat: { trickle: Partial<Stockpile>; fullMap: boolean } | null;
   /** Ages and upgrades; null = never researches or ages up. */
@@ -119,6 +128,9 @@ const BASE: Record<Difficulty, Profile> = {
     counters: false,
     builders: 1,
     shelter: false,
+    expandAt: null,
+    towns: 1,
+    capture: false,
     cheat: null,
     research: {
       townAgeAt: 18,
@@ -155,6 +167,9 @@ const BASE: Record<Difficulty, Profile> = {
     counters: true,
     builders: 2,
     shelter: true,
+    expandAt: 24,
+    towns: 2,
+    capture: true,
     cheat: null,
     research: {
       townAgeAt: 20,
@@ -191,6 +206,9 @@ const BASE: Record<Difficulty, Profile> = {
     counters: true,
     builders: 3,
     shelter: true,
+    expandAt: 22,
+    towns: 2,
+    capture: true,
     cheat: null,
     research: {
       townAgeAt: 19,
@@ -227,6 +245,9 @@ const BASE: Record<Difficulty, Profile> = {
     counters: true,
     builders: 3,
     shelter: true,
+    expandAt: 22,
+    towns: 3,
+    capture: true,
     cheat: { trickle: { food: 0.35, wood: 0.35, gold: 0.25, stone: 0.1 }, fullMap: true },
     research: {
       townAgeAt: 18,
@@ -286,5 +307,6 @@ export function makeProfile(difficulty: Difficulty, personality?: Personality, t
     p.research.cityAgeAt = Math.min(p.research.cityAgeAt, p.targetVillagers);
     p.research.townAgeAt = Math.min(p.research.townAgeAt, p.research.cityAgeAt - 4);
   }
+  if (p.expandAt !== null) p.expandAt = Math.min(p.expandAt, p.targetVillagers - 4);
   return p;
 }

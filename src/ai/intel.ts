@@ -61,8 +61,14 @@ export class Intel {
       }
     }
     for (const [id, s] of this.buildings) {
+      const b = w.buildings.get(id);
       // Gone, and we can see that it's gone.
-      if (!w.buildings.has(id) && this.seesFootprint(s.pos, s.radius)) this.buildings.delete(id);
+      if (!b && this.seesFootprint(s.pos, s.radius)) this.buildings.delete(id);
+      // Captured (M18-4): ours (or an ally's) now, which we know; or seen changing hands.
+      else if (b && b.owner !== s.owner && (b.owner === this.player || this.seesFootprint(s.pos, s.radius))) {
+        if (w.areEnemies(this.player, b.owner)) s.owner = b.owner;
+        else this.buildings.delete(id);
+      }
     }
     for (const u of w.units.values()) {
       if (isAnimal(u.kind) || !w.areEnemies(this.player, u.owner)) continue;

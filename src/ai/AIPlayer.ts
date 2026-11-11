@@ -36,7 +36,7 @@ export class AIPlayer {
   readonly research: Research;
   readonly upkeep: Upkeep;
   /** Counters for tests and debugging. */
-  readonly stats = { commands: 0, rejected: 0, tasks: 0 };
+  readonly stats = { commands: 0, rejected: 0, territoryRejected: 0, tasks: 0 };
   private readonly ctx: Ctx;
   private readonly tasks: Task[];
   private readonly offs: (() => void)[] = [];
@@ -62,12 +62,14 @@ export class AIPlayer {
       intel: this.intel,
       rng: rngFrom((opts.seed ?? 1) * 7919 + player),
       issue: (cmd: Command) => self.issue(cmd),
+      lastReject: null,
       sheltered: new Set<EntityId>(),
       explorers: new Set([...world.units.values()].filter((u) => u.owner === player && u.kind === 'scout').map((u) => u.id)),
       home,
       region: world.nav.regionAt(tc ? { x: tc.pos.x, z: tc.pos.z + tc.radius + 1 } : home),
       reserve: {},
       techReserve: {},
+      townReserve: {},
       villagerHold: 0,
       armyFirst: false,
       aging: false,
@@ -108,8 +110,11 @@ export class AIPlayer {
       world.events.on('defeated', (e) => {
         if (e.player === player) this.defeated = true;
       }),
-      world.events.on('rejected', () => {
-        if (this.issuing) this.stats.rejected++;
+      world.events.on('rejected', (e) => {
+        if (!this.issuing) return;
+        this.stats.rejected++;
+        this.ctx.lastReject ??= e.reason;
+        if (e.reason === 'territory') this.stats.territoryRejected++;
       })
     );
   }
@@ -149,6 +154,7 @@ export class AIPlayer {
 
   private issue(cmd: Command): void {
     this.stats.commands++;
+    this.ctx.lastReject = null;
     this.issuing = true;
     try {
       this.world.dispatch(cmd, this.player);

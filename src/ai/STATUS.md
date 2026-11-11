@@ -1,4 +1,4 @@
-# AI status (M7-2 economy, M8-16 research and ages, M13-6 new age gates, M14-6 upgrades and repairs)
+# AI status (M7-2 economy, M8-16 research and ages, M13-6 new age gates, M14-6 upgrades and repairs, M18-5 territory and capture)
 
 The computer player (`AIPlayer`) acts only through `world.dispatch(cmd, player)`. It reads its
 own units, buildings and stock, enemy units it can see right now, enemy buildings it has seen,
@@ -218,6 +218,65 @@ little wood (about 50 when the Town Hall's 200 is due), so the first upgrade now
 | 4 | 14.5 | 15.0 | Guard Tower 14.4, Town Hall 14.9 |
 | 5 | 14.0 | 14.0 | Town Hall 10.9 |
 
+## M18-5: territory, expansion and capture
+
+Territory (M18-1..3) limits where buildings go and capture (M18-4) lets soldiers take buildings.
+The AI now plays both.
+
+- **Placement.** `findSpot` already filtered on territory (own land; neutral too for `placeIn:
+  'ownOrNeutral'` kinds) and asks `World.canPlace` last, so a legal-looking spot is never issued
+  blind. On top of that, `AIPlayer.issue` records why a command was rejected (`ctx.lastReject`,
+  `stats.territoryRejected`). When a `build` bounces for `territory` or `blocked-site`, `Economy.place`
+  remembers the spot for 120 s (`SpotQuery.avoid`) and tries the next one at once, up to three
+  times, so a stale or contested spot never stalls construction. A drop site for gatherers working
+  off our land goes at the edge of our territory on the way there (`ownGround`), or is skipped if
+  that edge is too far from the work to help.
+- **Town Centers are buildable** (sim change, needed for expansion): Town Age, 275 wood + 100 stone,
+  Shift+S, last tile of the villager build menu (desktop grid now 8 × 3). The M18-3 neutral-land
+  and spacing rules apply.
+- **Expansion.** `Profile.expandAt` (villagers; moderate 24, hard and hardest 22, easy never) and
+  `Profile.towns` (Town Centers to own; 2, hardest 3). On medium or larger maps (width ≥ 144) in the
+  Town Age, `Economy.expand` picks the richest known resource cluster (`expansionSite`: mines and
+  every 8th tree as seeds, resources within 14 weighted gold 1.5, stone 1.2, food 0.8, wood 0.4,
+  less 40 per unit of distance from home). The cluster must be reachable, on neutral or own land,
+  34+ from every known Town Center and nearer home than the enemy. A cluster with no room is skipped
+  for 300 s. While it can't afford the Town Center, `ctx.townReserve` holds its cost against army
+  training, research and non-essential buildings (houses, farms and drop sites still go up). Every
+  finished Town Center trains villagers.
+- **Defence against capture.** Raided villagers garrison in the nearest Town Center, tower, temple
+  or fortress with room within 30 (they used to just run to the Town Center), which makes it shoot.
+  A building losing capture points to enemy soldiers next to it pulls in nearby villagers, and home
+  soldiers too when the capturers outnumber the army at home (each occupant wins back 3 cp/s).
+  Everyone comes out (`ungarrison`) once things are calm.
+- **Capture on offence.** Attack waves capture military and economic buildings (`capture` command)
+  while no visible enemy soldier stands within 10 of them, and raze houses, walls, gates and farms.
+  Soldiers that walked up and started hitting a capturable target switch to capturing. A capture
+  whose points haven't grown for 20 s (a garrison wins them back) turns into razing. Intel drops a
+  building once it is ours (or seen in an ally's hands) and follows it to a new enemy owner.
+- `harness.makeGame` takes map options (size, type) and sets the save identity.
+
+## Acceptance tests (M18-5)
+
+`src/ai/territory.test.ts`:
+- every map type × seeds 1–5 (small maps, 10 min, moderate vs idle human): every foundation the AI
+  lays is on legal land, no territory rejections, no pop-cap stall over 15 s, the AI keeps housing,
+  under 1 ms per tick;
+- forced territory rejections: the AI never re-asks a bounced spot and building carries on;
+- a second Town Center on medium (seeds 1–3), large (1–2) and giant (1) maps within 15 min, at
+  least the spacing from the first, next to mines or trees, never more than `towns`; none on small;
+- scripted capture: six swordsmen capture an undefended barracks (only `capture` orders, hp
+  kept, intel forgets it); a house is razed, never captured; a temple held by five garrisoned
+  hoplites is captured first, then razed when the capture stalls;
+- a Town Center under capture by six swordsmen gets its villagers and its lone hoplite inside, and holds.
+
+Measured with a headless probe (moderate vs idle human, 15 min, seeds 1–5 on every map type): the AI
+founded a second Town Center in 46 of 50 medium and large games, between 5.9 and 11.9 min (median
+about 8.5). The other four (medium riverValley 2, large highlands 5, large islands 1 and 4) captured
+the idle human's Town Center at about 11 min first, which already makes two. No game had a territory
+rejection, and planning stayed at or under 0.015 ms per tick. The Town Center search allows a
+resource right next to the footprint (`clearOfNodes: 1`) and up to 200 full checks: with the
+stricter house settings, dense forests had no spot at all.
+
 ## Open
 
 - No Empire Age step (6,500 food + 1,000 gold + 600 stone), so no tier-3 lines; tier 3 also needs
@@ -226,4 +285,8 @@ little wood (about 50 when the Town Hall's 200 is due), so the first upgrade now
 - No walls, fortified walls or machicolations (so no wall upgrades either).
 - No Empire Age, so the AI never reaches tower tier 2, the Imperial Palace, or tier-3 unit lines.
 - The AI does not move gatherers to stone to pay for a repair; it waits until it can afford one.
+- One expansion target at a time; no third Town Center below hardest, and no expansion on small
+  maps. It doesn't defend an expansion beyond the general base-radius defence.
+- The AI doesn't recapture its own lost buildings on purpose, and it doesn't reinforce a capture
+  that stalls; it razes.
 - Wonders and relics are out of scope.

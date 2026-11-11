@@ -19,6 +19,8 @@ export interface SpotQuery {
   region?: number;
   /** Stop after this many full canPlace checks. */
   maxChecks?: number;
+  /** Spots to keep clear of (recent rejections): no candidate within 2 of one. */
+  avoid?: readonly Vec2[];
 }
 
 interface Box {
@@ -71,6 +73,7 @@ export function findSpot(world: World, intel: Intel, player: PlayerId, q: SpotQu
     if (x0 < 0.5 || z0 < 0.5 || x1 > W - 0.5 || z1 > D - 0.5) continue;
     if (!intel.knows(p.x, p.z) || !intel.knows(x0, z0) || !intel.knows(x1, z1) || !intel.knows(x0, z1) || !intel.knows(x1, z0)) continue;
     if (!world.hf.isWalkable(p.x, p.z)) continue;
+    if (q.avoid?.some((a) => Math.abs(a.x - p.x) < 2 && Math.abs(a.z - p.z) < 2)) continue;
     // Territory (M18-3): own land, or neutral for outposts, docks and Town Centers.
     const owner = world.territoryOwner(p);
     if (owner !== player && (owner || !neutralOk)) continue;
