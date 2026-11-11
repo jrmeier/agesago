@@ -25,6 +25,9 @@ const UNIT_NAMES: Record<UnitKind, [string, string]> = {
   merchantShip: ['Merchant Ship', 'Merchant Ships'],
   trireme: ['Trireme', 'Triremes'],
   transport: ['Transport', 'Transports'],
+  ram: ['Battering Ram', 'Battering Rams'],
+  catapult: ['Catapult', 'Catapults'],
+  boltShooter: ['Bolt Shooter', 'Bolt Shooters'],
   deer: ['Deer', 'Deer'],
   boar: ['Boar', 'Boars'],
   sheep: ['Sheep', 'Sheep'],
@@ -107,6 +110,10 @@ export function statusLabel(u: StatusUnit, carryCap: number): string {
       return 'Garrisoned';
     case 'attacking':
       return 'Attacking';
+    case 'packing':
+      return 'Packing up';
+    case 'unpacking':
+      return 'Setting up';
     case 'idle':
       return carry ? `Idle · ${carry.amount} ${carry.type}` : 'Idle';
   }

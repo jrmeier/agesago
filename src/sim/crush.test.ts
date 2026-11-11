@@ -169,11 +169,11 @@ function skirmish(a: UnitKind, b: UnitKind): [number, number] {
 }
 
 describe('crush damage: buildings need siege to fall', () => {
-  it('soldiers carry a little crush; ranged units and ships none', () => {
+  it('soldiers and warships carry a little crush; ranged units none', () => {
     const c = (k: UnitKind) => UNITS[k].attack.crush ?? 0;
-    for (const k of ['hoplite', 'swordsman', 'legionary', 'raider', 'phalangiteGuard'] as UnitKind[]) expect(c(k)).toBe(2);
+    for (const k of ['hoplite', 'swordsman', 'legionary', 'raider', 'phalangiteGuard', 'trireme'] as UnitKind[]) expect(c(k)).toBe(2);
     for (const k of ['horseman', 'scout', 'villager'] as UnitKind[]) expect(c(k)).toBe(1);
-    for (const k of ['archer', 'slinger', 'immortal', 'trireme'] as UnitKind[]) expect(c(k)).toBe(0);
+    for (const k of ['archer', 'slinger', 'immortal'] as UnitKind[]) expect(c(k)).toBe(0);
     // Default unit crush armour soaks the soldiers' crush, so only siege crushes units.
     for (const k of FIGHTERS) expect(c(k)).toBeLessThanOrEqual(UNIT_CRUSH_ARMOR);
   });

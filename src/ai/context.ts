@@ -1,6 +1,6 @@
 import { BUILDINGS } from '../core/buildings';
 import type { Building, BuildingKind, Command, EntityId, PlayerId, ResourceType, Stockpile, Unit, Vec2 } from '../core/types';
-import { isAnimal } from '../core/units';
+import { isAnimal, popCost } from '../core/units';
 import type { World } from '../sim/World';
 import type { Intel } from './intel';
 import type { Profile } from './profile';
@@ -56,7 +56,7 @@ export function snapshot(world: World, player: PlayerId): Snapshot {
   const s: Snapshot = { villagers: [], scouts: [], army: [], buildings: [], tc: undefined, popUsed: 0, popCap: world.popCapOf(player), count: {}, building: {} };
   for (const u of world.units.values()) {
     if (u.owner !== player || isAnimal(u.kind)) continue;
-    s.popUsed++;
+    s.popUsed += popCost(u.kind);
     if (u.kind === 'villager') s.villagers.push(u);
     else if (u.kind === 'scout') s.scouts.push(u);
     else s.army.push(u);
@@ -64,7 +64,7 @@ export function snapshot(world: World, player: PlayerId): Snapshot {
   for (const b of world.buildings.values()) {
     if (b.owner !== player) continue;
     s.buildings.push(b);
-    s.popUsed += b.queue;
+    for (let i = 0; i < b.queue; i++) s.popUsed += popCost(b.queueKinds?.[i] ?? 'villager');
     s.count[b.kind] = (s.count[b.kind] ?? 0) + 1;
     if (!b.complete) s.building[b.kind] = (s.building[b.kind] ?? 0) + 1;
     if (b.kind === 'townCenter' && !s.tc) s.tc = b;

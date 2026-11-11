@@ -597,6 +597,14 @@ export function buildingModel(kind: BuildingKind, opts?: BuildingModelOptions): 
     parts.push(block([0.1, 1.35, 0.52], WOOD, [0.28, 0.72, -0.16]));
     parts.push(block([0.08, 0.16, 0.08], 0xb89b53, [-0.28, 0.85, 0.4]));
     parts.push(block([0.08, 0.16, 0.08], 0xb89b53, [0.28, 0.85, -0.4]));
+  } else if (kind === 'siegeWorkshop') {
+    // Placeholder (M16-3 brings the real model): a timber shed with a wide door and a crane beam.
+    parts.push(part(bevelBox(4.2, 1.9, 3.2), 0xb39468, [0, 0.98, -0.6]));
+    parts.push(...roofParts(4.5, 3.5, 1.95, 0.8, false, 3).map(piece => piece.translate(0, 0, -0.6)));
+    parts.push(block([1.8, 1.5, 0.06], TREE_TRUNK, [0, 0.78, 1.02]));
+    parts.push(block([0.14, 2.9, 0.14], TREE_TRUNK, [1.75, 1.45, 1.75]));
+    parts.push(part(new THREE.CylinderGeometry(0.06, 0.06, 2.4, 6), WOOD, [1.2, 2.6, 1.75], [1, 1, 1], [0, 0, Math.PI / 2.6]));
+    for (const x of [-1.2, -0.4]) parts.push(part(new THREE.CylinderGeometry(0.35, 0.35, 0.1, 10), WOOD, [x, 0.36, 1.65], [1, 1, 1], [Math.PI / 2, 0, 0]));
   } else {
     for (let i = 0; i < 6; i++) {
       parts.push(block([0.27, 0.045, 3.66], 0x8f6944, [-1.61 + i * 0.64, 0.075, 0]));

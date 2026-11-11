@@ -28,6 +28,7 @@ export const BUILD_HOTKEYS: Partial<Record<BuildingKind, string>> = {
   forge: 'KeyJ',
   market: 'Shift+KeyM',
   academy: 'Shift+KeyJ',
+  siegeWorkshop: 'Shift+KeyB',
   temple: 'Shift+KeyO',
   dock: 'Shift+KeyK',
   wonder: 'Shift+KeyG',

@@ -71,6 +71,10 @@ export type UnitKind =
   | 'merchantShip'
   | 'trireme'
   | 'transport'
+  /** M16-2 siege engines, trained at the siege workshop. */
+  | 'ram'
+  | 'catapult'
+  | 'boltShooter'
   | AnimalKind;
 /** Everything a player can build. Data (sizes, costs, build times) lives in core/buildings.ts. */
 export type BuildingKind =
@@ -97,7 +101,9 @@ export type BuildingKind =
   | 'temple'
   | 'dock'
   /** M16-7: Empire Age monument; standing through its countdown wins the match. */
-  | 'wonder';
+  | 'wonder'
+  /** M16-2: City Age siege engines and their techs. */
+  | 'siegeWorkshop';
 export type EntityKind = UnitKind | NodeKind | BuildingKind;
 
 export const NODE_RESOURCE: Record<NodeKind, ResourceType> = {
@@ -221,7 +227,11 @@ export type UnitState =
   /** Inside a building: off the map, untargetable, until ungarrisoned. */
   | 'garrisoned'
   /** Closing on or striking a target (see Unit.target). */
-  | 'attacking';
+  | 'attacking'
+  /** Siege engine folding up to move (Unit.packTimer counts down); it cannot move or shoot. */
+  | 'packing'
+  /** Siege engine setting up to shoot (Unit.packTimer counts down); it cannot move or shoot. */
+  | 'unpacking';
 
 export interface Unit {
   id: EntityId;
@@ -260,6 +270,10 @@ export interface Unit {
   xp?: number;
   /** Veterancy: 0 Basic, 1 Advanced, 2 Elite (absent = 0). See RANKS in core/units.ts. */
   rank?: Rank;
+  /** Packing siege engines (UnitSpec.packs): set up to shoot, so it cannot move (absent = packed). */
+  deployed?: boolean;
+  /** Seconds left of a pack or unpack under way (absent when none). */
+  packTimer?: number;
 }
 
 /** Veterancy rank: 0 Basic, 1 Advanced, 2 Elite. */
@@ -420,6 +434,9 @@ export interface PlacementCheck {
 /** How a match was decided. */
 export type VictoryReason = 'conquest' | 'resign' | 'wonder';
 
+/** What a ranged attack throws: renderers pick a model per kind. */
+export type ProjectileKind = 'arrow' | 'stone' | 'javelin' | 'boulder' | 'bolt';
+
 export type SimEvent =
   | { type: 'spawned'; id: EntityId; kind: EntityKind }
   | { type: 'removed'; id: EntityId }
@@ -431,7 +448,7 @@ export type SimEvent =
   /** A unit or building was destroyed (followed by 'removed'). */
   | { type: 'died'; id: EntityId; kind: EntityKind; owner: PlayerId; pos: Vec2 }
   /** A ranged attack was launched; renderers draw it flying for `flight` seconds. */
-  | { type: 'projectile'; kind: 'arrow' | 'stone' | 'javelin'; from: Vec2; to: Vec2; flight: number; targetId: EntityId }
+  | { type: 'projectile'; kind: ProjectileKind; from: Vec2; to: Vec2; flight: number; targetId: EntityId }
   /** A player lost everything (or resigned). */
   | { type: 'defeated'; player: PlayerId; reason: 'conquest' | 'resign' }
   /** The game is decided: every surviving player is on the winning team (or the wonder owner's team). */

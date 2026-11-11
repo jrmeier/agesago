@@ -54,6 +54,22 @@ describe('selection summaries', () => {
     expect(arch[2].text).toBe('7');
   });
 
+  it('shows siege crush, minimum range, pop cost and what the shot does', () => {
+    const cat = combatChips(UNITS.catapult);
+    expect(cat.map((c) => c.icon)).toEqual(['#i-st-crush', '#i-st-armor', '#i-st-range', '#i-pop']);
+    expect(cat[0].text).toBe('40');
+    expect(cat[0].title).toContain('splash');
+    expect(cat[2].text).toBe('5–16');
+    expect(cat[3].text).toBe('3');
+    const ram = combatChips(UNITS.ram);
+    expect(ram.map((c) => c.icon)).toEqual(['#i-st-crush', '#i-st-armor', '#i-pop']);
+    expect(ram[0].title).toContain('only buildings and siege');
+    const bolt = combatChips(UNITS.boltShooter);
+    expect(bolt[0].icon).toBe('#i-st-pierce');
+    expect(bolt[0].title).toContain('passes through up to 3');
+    expect(combatChips(UNITS.horseman)[0].title).toContain('+10 vs siege');
+  });
+
   it('knows soldiers from civilians and the shared stance', () => {
     expect(isMilitary('villager')).toBe(false);
     expect(isMilitary('scout')).toBe(false);

@@ -269,6 +269,11 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     // Healing only: no attack, so occupants add no arrows (BALANCE.garrisonHealBy).
     garrison: 10,
   },
+  siegeWorkshop: {
+    name: 'Siege Workshop', size: { w: 5, d: 5 }, cost: { wood: 300, stone: 150 }, buildTime: 60,
+    popBonus: 0, drop: [], walkable: false, buildable: true, sight: 6, hp: 1500,
+    armor: { melee: 7, pierce: 14 }, age: 2,
+  },
   academy: {
     name: 'Academy',
     size: { w: 4.4, d: 4.4 },

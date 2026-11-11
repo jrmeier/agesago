@@ -68,6 +68,7 @@ describe('build hotkeys', () => {
       'market',
       'dock',
       'temple',
+      'siegeWorkshop',
       'academy',
       'wonder',
     ]);

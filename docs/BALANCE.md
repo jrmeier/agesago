@@ -47,6 +47,30 @@ unit-vs-unit damage is the same as before. Targets with no research, checked in 
 | Stone Wall segment | 120 s |
 | Town Center | 240 s |
 
+Warships (triremes) carry 2 crush, the same as infantry: they can pull down a shoreline house
+slowly but are no substitute for siege.
+
+## Siege (M16-2)
+
+The Siege Workshop (City Age, 300 wood + 150 stone) trains three engines of class `siege`.
+Siege units take several population slots (`UnitSpec.pop`), do not rank up and cannot work.
+
+| Engine | HP | Attack | Armour m/p/c | Range | Reload | Pop | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Battering Ram | 350 | 50 crush | 1/12/4 | melee | 2 s | 3 | Attacks only buildings and siege |
+| Catapult | 180 | 40 crush | 1/6/4 | 5–16 | 5 s | 3 | Splash radius 2, falloff, hurts own units; unpacks |
+| Bolt Shooter | 150 | 25 pierce | 1/6/4 | 14 | 4 s | 2 | Bolt passes through up to 3 enemies in a line; unpacks |
+
+- Catapults and bolt shooters must unpack (3 s) before they shoot and pack (3 s) before they move.
+- Melee infantry get +8 against siege, horsemen +10, scouts +4; arrows do 1 to a ram.
+- Workshop techs: Torsion Springs (+20% siege attack), Reinforced Frames (+20% siege HP), Quick
+  Rigging (pack and unpack twice as fast).
+- The Siege Workshop counts as a City Age building for the Empire Age, but the Academy alone is
+  still enough.
+
+Checked in `src/sim/siege.test.ts`: 3 rams bring down a stone wall segment in about 14.5 s
+(10 swordsmen still need over 60 s); 10 swordsmen kill an unescorted ram in a few seconds.
+
 ## The scripted build order
 
 `src/bench/pacing.ts` plays player 1 on a real generated map (`generateMap(seed, 2)`, the real

@@ -1,6 +1,7 @@
 import type { MapOptions } from '../core/maps';
 import { civFor } from '../core/civilizations';
 import { BUILDINGS, MARKET, nextUpgrade } from '../core/buildings';
+import { packs, UNITS } from '../core/units';
 import { TECHS } from '../core/techs';
 import type { Age, Building, EntityId, Heightfield, MarketResource, Player, PlayerId, ResourceNode, Stockpile, TechId, Unit } from '../core/types';
 import { generateMap } from './mapgen';
@@ -18,6 +19,8 @@ import type { ExplorationSite, PriestOrder } from './systems/explorationRewards'
 import { normalizeWonderRules, type GameResult, type WonderCountdown, type WonderRules } from './systems/victory';
 
 /**
+ * 9: M16-2 siege engines (Unit.deployed, Unit.packTimer, 'packing'/'unpacking' states). Older
+ *    saves hold no siege, so they load with no pack state.
  * 8: M16-7 wonder victory (match wonderRules, systems.wonder countdown, Building.completedAt).
  *    Older saves load with the default rules (on, 300 s) and no countdown.
  * 7: M15-5 loot totals per player (PlayerState.looted; older saves load with zero).
@@ -28,7 +31,7 @@ import { normalizeWonderRules, type GameResult, type WonderCountdown, type Wonde
  * 3: M14-1 in-place building upgrades (Building.tier, Building.upgrading).
  * 2: M8 research (researched techs, ages, market prices, building research queues).
  */
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 /** Oldest version that still loads; v2 buildings load at tier 0 with no upgrade running. */
 export const MIN_SAVE_VERSION = 2;
 
@@ -242,6 +245,12 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   for (const u of data.units) {
     if (u.rank !== undefined && u.rank !== 0 && u.rank !== 1 && u.rank !== 2) throw new Error('Invalid save: unit rank');
     if (u.xp !== undefined && !(typeof u.xp === 'number' && Number.isFinite(u.xp) && u.xp >= 0)) throw new Error('Invalid save: unit xp');
+    if (!Object.hasOwn(UNITS, u.kind)) throw new Error('Invalid save: unit kind');
+    const transition = u.state === 'packing' || u.state === 'unpacking';
+    if ((u.deployed !== undefined || u.packTimer !== undefined || transition) && !packs(u.kind)) throw new Error('Invalid save: siege pack state');
+    if (u.deployed !== undefined && u.deployed !== true) throw new Error('Invalid save: siege pack state');
+    if (u.packTimer !== undefined && !(typeof u.packTimer === 'number' && Number.isFinite(u.packTimer) && u.packTimer >= 0)) throw new Error('Invalid save: siege pack state');
+    if (transition && u.packTimer === undefined) throw new Error('Invalid save: siege pack state');
   }
   const saved = copy(data);
   const generated = generateMap(saved.seed, saved.playerCount, saved.mapOptions);
@@ -280,6 +289,13 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   if (saved.version < 6) delete saved.systems.repairDebt;
   // Pre-loot saves: every player starts with nothing looted.
   if (saved.version < 7) for (const p of saved.players) delete p.looted;
+  // Pre-siege saves: no unit is deployed or mid-pack.
+  if (saved.version < 9) {
+    for (const u of saved.units) {
+      delete u.deployed;
+      delete u.packTimer;
+    }
+  }
   restoreMap(world.buildings, saved.buildings.map((b) => [b.id, b]));
   for (const b of world.buildings.values()) {
     const spec = BUILDINGS[b.kind];

@@ -17,6 +17,11 @@ export const MAX_RESEARCH_QUEUE = 5;
 
 /** Building kinds that don't count toward the "two buildings from your current age" rule. */
 const NOT_AGE_BUILDINGS = new Set<BuildingKind>(['townCenter', 'house', 'farm', 'corral', 'palisade', 'stoneWall', 'gate']);
+/**
+ * Kinds that count toward aging up but do not raise how many are needed: the City Age still asks
+ * for one building, the Academy or the Siege Workshop (M16-2).
+ */
+const EXTRA_AGE_BUILDINGS = new Set<BuildingKind>(['siegeWorkshop']);
 
 export function ageOf(world: World, owner: PlayerId): Age {
   return world.players.get(owner)?.age ?? 0;
@@ -37,11 +42,11 @@ export const AGE_BUILDINGS_NEEDED = 2;
 
 /**
  * Distinct current-age buildings needed to leave `age`: AGE_BUILDINGS_NEEDED, or every kind that
- * age has if it has fewer (the City Age has only the Academy, so Empire needs just that).
+ * age has if it has fewer (the City Age counts only the Academy, so Empire needs one building).
  */
 export function ageBuildingsNeeded(age: Age): number {
   const kinds = (Object.keys(BUILDINGS) as BuildingKind[]).filter(
-    (k) => BUILDINGS[k].buildable && !NOT_AGE_BUILDINGS.has(k) && (BUILDINGS[k].age ?? 0) === age
+    (k) => BUILDINGS[k].buildable && !NOT_AGE_BUILDINGS.has(k) && !EXTRA_AGE_BUILDINGS.has(k) && (BUILDINGS[k].age ?? 0) === age
   );
   return Math.min(AGE_BUILDINGS_NEEDED, kinds.length);
 }

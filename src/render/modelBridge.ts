@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { UnitKind } from '../core/types';
+import type { ProjectileKind, UnitKind } from '../core/types';
 import {
   createScout,
   createAnimal,
@@ -12,7 +12,7 @@ import {
 import { createSoldier, createTradeCart, projectileGeometry as modelProjectile } from './models';
 import { applyUnitTiers, BASE_TIERS, ownedLambert, sameTiers, Shimmer, type UnitTiers } from './tiers';
 import { createShip } from './navalModels';
-import { isShip } from '../core/units';
+import { isShip, UNITS } from '../core/units';
 import { createPriest } from './explorationModels';
 import { rubbleGeometry as propsRubble } from './props';
 
@@ -22,7 +22,7 @@ import { rubbleGeometry as propsRubble } from './props';
  * Until they exist (or a villager/scout pose is still idle/walk only), placeholders cover them.
  */
 
-export type ProjKind = 'arrow' | 'stone' | 'javelin';
+export type ProjKind = ProjectileKind;
 
 export interface UnitAvatar {
   object: THREE.Object3D;
@@ -70,7 +70,7 @@ interface SoldierModel {
 const DIE_SECONDS = 1.2;
 
 type SoldierFactory = (kind: UnitKind, opts: { color: number; seed?: number }) => SoldierModel;
-type ProjectileFactory = (kind: ProjKind) => THREE.BufferGeometry;
+type ProjectileFactory = (kind: 'arrow' | 'stone' | 'javelin') => THREE.BufferGeometry;
 type RubbleFactory = (size: number) => THREE.BufferGeometry;
 
 const PENNANT = new THREE.BoxGeometry(0.2, 0.13, 0.045);
@@ -106,6 +106,7 @@ const PENNANT_Y: Record<UnitKind, number> = {
   phalangiteGuard: 1.2, legionary: 1.2, immortal: 1.15, raider: 1.2,
   hoplite: 1.2,
   swordsman: 1.2,
+  ram: 1.3, catapult: 1.5, boltShooter: 1.3,
   slinger: 1.12,
   archer: 1.15,
   horseman: 1.7,
@@ -354,6 +355,8 @@ export function createUnitAvatar(kind: UnitKind, color: number, seed: number): U
 function createBaseAvatar(kind: UnitKind, color: number, seed: number): Omit<UnitAvatar, 'setTiers' | 'shimmer'> {
   if (isShip(kind)) return fromSoldier(kind, color, seed, createShip as unknown as SoldierFactory);
   if (kind === 'priest') return fromSoldier(kind, color, seed, createPriest as unknown as SoldierFactory);
+  // Placeholder siege bodies (real models are M16-3): a wheeled cart reads as an engine.
+  if (UNITS[kind].unitClass === 'siege') return fromSoldier(kind, color, seed, createTradeCart as unknown as SoldierFactory);
   if (kind === 'tradeCart') return fromSoldier(kind, color, seed, createTradeCart as unknown as SoldierFactory);
   if (kind === 'deer' || kind === 'boar' || kind === 'sheep') {
     const model = createAnimal(kind);
@@ -392,12 +395,15 @@ export function projectileGeometry(kind: ProjKind): THREE.BufferGeometry {
   if (cached) return cached;
   const factory = projectileFactory();
   let geo: THREE.BufferGeometry;
+  // Placeholder siege shots (M16-3 brings real ones): a boulder is a big stone, a bolt a javelin.
+  const base = kind === 'boulder' ? 'stone' : kind === 'bolt' ? 'javelin' : kind;
   if (factory) {
-    geo = factory(kind).clone();
-    if (kind !== 'stone') alignLongAxisToY(geo);
-  } else if (kind === 'arrow') geo = ARROW_GEO;
-  else if (kind === 'javelin') geo = JAVELIN_GEO;
-  else geo = STONE_GEO;
+    geo = factory(base).clone();
+    if (base !== 'stone') alignLongAxisToY(geo);
+  } else if (base === 'arrow') geo = ARROW_GEO;
+  else if (base === 'javelin') geo = JAVELIN_GEO;
+  else geo = STONE_GEO.clone();
+  if (kind === 'boulder') geo = geo.clone().scale(4, 4, 4);
   geo.userData.shared = 1;
   projectileCache.set(kind, geo);
   return geo;

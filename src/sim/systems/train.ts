@@ -1,6 +1,6 @@
 import { tierStats } from '../../core/buildings';
 import type { Building, EntityId, UnitKind, Vec2 } from '../../core/types';
-import { isShip, UNITS, trainable } from '../../core/units';
+import { isShip, popCost, UNITS, trainable } from '../../core/units';
 import { ensureProductionQueue, productionOrder, removeProduction } from '../productionQueue';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
@@ -25,10 +25,14 @@ export function trainTime(world: World, b: Building, kind: UnitKind): number {
   return unitStat(world, b.owner, kind, 'trainTime', UNITS[kind].trainTime) / tierStats(b.kind, b.tier).trainSpeed;
 }
 
-/** Units queued anywhere by `owner` (they count against the pop cap before they exist). */
-function queuedBy(world: World, owner: number): number {
+/** Population of the units queued anywhere by `owner` (they count against the pop cap before they exist). */
+export function queuedPop(world: World, owner: number): number {
   let n = 0;
-  for (const b of world.buildings.values()) if (b.owner === owner) n += b.queue;
+  for (const b of world.buildings.values()) {
+    if (b.owner !== owner) continue;
+    // Legacy queues may lack kinds: each such entry is one villager.
+    for (let i = 0; i < b.queue; i++) n += popCost(b.queueKinds?.[i] ?? 'villager');
+  }
   return n;
 }
 
@@ -54,7 +58,7 @@ export function orderTrain(world: World, buildingId: EntityId, unit?: UnitKind):
     if (b.owner === world.localPlayer) world.events.emit({ type: 'rejected', reason: 'age' });
     return;
   }
-  if (world.popOf(b.owner) + queuedBy(world, b.owner) >= world.popCapOf(b.owner)) {
+  if (world.popOf(b.owner) + queuedPop(world, b.owner) + popCost(kind) > world.popCapOf(b.owner)) {
     if (b.owner === world.localPlayer) world.events.emit({ type: 'rejected', reason: 'pop-cap' });
     return;
   }

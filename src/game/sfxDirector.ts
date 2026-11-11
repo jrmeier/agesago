@@ -1,5 +1,5 @@
 import { EventBus } from '../core/events';
-import type { Building, EntityId, EntityKind, PlayerId, SimEvent, Unit, Vec2 } from '../core/types';
+import type { Building, EntityId, EntityKind, PlayerId, ProjectileKind, SimEvent, Unit, Vec2 } from '../core/types';
 import { UNITS } from '../core/units';
 import { ProceduralSfx, type SfxSink, type SfxVoice } from './sfxPlayer';
 import {
@@ -100,10 +100,11 @@ export class MatchAudio {
     if (building) this.offer({ kind: 'clash', pos: building.pos, owner: building.owner, key: `hit:${id}`, gap: 0.12 });
   }
 
-  private onProjectile(kind: 'arrow' | 'stone' | 'javelin', from: Vec2): void {
+  private onProjectile(kind: ProjectileKind, from: Vec2): void {
     const vis = this.world.visibilityOf(this.world.localPlayer);
     if (!vis.isVisible(from.x, from.z)) return;
-    this.offer({ kind, pos: from, owner: this.world.localPlayer });
+    // Placeholder sounds for siege shots: a boulder thuds like a stone, a bolt hisses like a javelin.
+    this.offer({ kind: kind === 'boulder' ? 'stone' : kind === 'bolt' ? 'javelin' : kind, pos: from, owner: this.world.localPlayer });
   }
 
   private onConstructed(id: EntityId): void {

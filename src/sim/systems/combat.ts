@@ -1,7 +1,7 @@
 import { orderTend } from './livestock';
 import { BUILDINGS } from '../../core/buildings';
 import type { Building, EntityId, PlayerId, Rank, ResourceType, Stance, Stockpile, Unit, UnitKind, UnitState, Vec2 } from '../../core/types';
-import { canWork, crushOf, isAnimal, isShip, UNITS } from '../../core/units';
+import { canWork, crushOf, isAnimal, isShip, packs, UNITS } from '../../core/units';
 import { GAIA } from '../../core/types';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
@@ -14,6 +14,7 @@ import { formationOffset } from './movement';
 import { siteApproach } from './sites';
 import { playerHasFlag } from './research';
 import { awardKill, recordDamage } from './veterancy';
+import { readyToFire, startUnpack } from './siege';
 import { armorOf, buildingAttack, damageTo, edgeDistance, garrisonCap, isRanged, nearestPoint, unitRadius, unitRange, unitSight, unitSpeed } from './stats';
 import { garrisonArrows, orderGarrison } from './defence';
 
@@ -78,6 +79,16 @@ function canAttack(world: World, owner: PlayerId, t: Target, attacker?: Unit): b
   return world.areEnemies(owner, t.owner)
     || (owner !== GAIA && isUnit(t) && isAnimal(t.kind))
     || (attacker?.kind === 'boar' && isUnit(t) && t.owner !== GAIA);
+}
+
+/**
+ * What `u` itself may strike: rams only buildings and siege engines; engines with a minimum
+ * range nothing closer than it (`d`, edge to edge, when known).
+ */
+function canTarget(u: Unit, t: Target, d?: number): boolean {
+  const spec = UNITS[u.kind];
+  if (spec.siegeTargetsOnly && isUnit(t) && UNITS[t.kind].unitClass !== 'siege') return false;
+  return d === undefined || !spec.minRange || d >= spec.minRange;
 }
 
 /** Work states a passive villager drops to run away when hit. */
@@ -194,7 +205,7 @@ export function findEnemy(world: World, u: Unit, radius: number): Target | null 
         }
         if (!lastEnemy || v.hp <= 0 || v.state === 'garrisoned') continue;
         const d = edgeDistance(u, v);
-        if (d > radius || d >= bestD || !world.units.has(v.id) || !vis.isVisible(v.pos.x, v.pos.z)) continue;
+        if (d > radius || d >= bestD || !canTarget(u, v, d) || !world.units.has(v.id) || !vis.isVisible(v.pos.x, v.pos.z)) continue;
         best = v;
         bestD = d;
       }
@@ -204,7 +215,7 @@ export function findEnemy(world: World, u: Unit, radius: number): Target | null 
   for (const b of world.buildings.values()) {
     if (!world.areEnemies(u.owner, b.owner)) continue;
     const d = edgeDistance(u, b);
-    if (d > radius || d >= bestD) continue;
+    if (d > radius || d >= bestD || !canTarget(u, b, d)) continue;
     const p = nearestPoint(u.pos, b);
     if (!vis.isVisible(p.x, p.z)) continue;
     best = b;
@@ -265,7 +276,13 @@ export function orderAttack(world: World, unitIds: EntityId[], targetId: EntityI
     world.events.emit({ type: 'rejected', reason: 'invalid-target' });
     return;
   }
-  const list = units(world, unitIds);
+  // Units that can't strike this target (a ram at a soldier) ignore the order and keep their work.
+  const all = units(world, unitIds);
+  const list = all.filter((u) => canTarget(u, t));
+  if (all.length && !list.length) {
+    world.events.emit({ type: 'rejected', reason: 'invalid-target' });
+    return;
+  }
   const cancelled = clearWork(world, list);
   for (const u of list) {
     if ((isAnimal(u.kind) && u.kind !== 'boar') || (UNITS[u.kind].attack.melee + UNITS[u.kind].attack.pierce + crushOf(UNITS[u.kind].attack) <= 0)) continue;
@@ -435,6 +452,7 @@ function attackTick(world: World, u: Unit, cs: CombatState, threat: Unit | undef
     t.hp <= 0 ||
     (isUnit(t) && t.state === 'garrisoned') ||
     !canAttack(world, u.owner, t, u) ||
+    !canTarget(u, t) ||
     (u.stance === 'passive' && !explicit) ||
     world.time - cs.seen > BALANCE.lostSightGrace
   ) {
@@ -444,11 +462,21 @@ function attackTick(world: World, u: Unit, cs: CombatState, threat: Unit | undef
   const spec = UNITS[u.kind];
   const d = edgeDistance(u, t);
   if (d <= unitRange(world, u.owner, u.kind) + 1e-6) {
+    if (!canTarget(u, t, d)) {
+      // Inside the minimum range: back off to shooting distance (packing first), else give up.
+      if (!(explicit || u.stance !== 'standGround') || !backOff(world, u, cs, nearestPoint(u.pos, t))) disengage(world, u, cs);
+      return;
+    }
     cs.anchor = { ...u.pos };
     if (!(threat && kite(world, u, cs, threat))) u.path = [];
     if (!u.path.length) {
       const p = nearestPoint(u.pos, t);
       u.facing = Math.atan2(p.x - u.pos.x, p.z - u.pos.z);
+    }
+    if (!readyToFire(u)) {
+      // A packed siege engine sets up before its first shot (the cooldown keeps running).
+      startUnpack(world, u);
+      return;
     }
     if (cs.cooldown <= 0) {
       strike(world, u, t);
@@ -484,9 +512,14 @@ function attackTick(world: World, u: Unit, cs: CombatState, threat: Unit | undef
 
 /** Step a ranged unit back from a melee attacker (it keeps shooting on the move). False if there is nowhere to go. */
 function kite(world: World, u: Unit, cs: CombatState, threat: Unit): boolean {
+  return backOff(world, u, cs, threat.pos);
+}
+
+/** Walk BALANCE.kiteStep directly away from `from`. False if there is nowhere to go. */
+function backOff(world: World, u: Unit, cs: CombatState, from: Vec2): boolean {
   if (u.path.length) return true;
-  let dx = u.pos.x - threat.pos.x;
-  let dz = u.pos.z - threat.pos.z;
+  let dx = u.pos.x - from.x;
+  let dz = u.pos.z - from.z;
   const len = Math.hypot(dx, dz);
   if (len < 1e-6) {
     dx = Math.sin(u.facing + Math.PI);
@@ -535,12 +568,75 @@ function resolveProjectiles(world: World): void {
   }
   list.length = keep;
   for (const p of due) {
+    // Siege shots (never a building's own volley, which carries `pierce`).
+    const spec = p.pierce === undefined ? UNITS[p.kind] : undefined;
+    if (spec?.splash) {
+      splashHit(world, p, spec.splash);
+      continue;
+    }
     const t = targetOf(world, p.targetId);
+    if (spec?.pierceTargets && t && isUnit(t)) {
+      lineHit(world, p, t, spec.pierceTargets);
+      continue;
+    }
     if (!t || t.hp <= 0) continue;
     if (isUnit(t) && t.state === 'garrisoned') continue;
     if (isUnit(t) && dist(t.pos, p.aim) > BALANCE.hitRadius) continue; // dodged
     const amount = p.pierce !== undefined ? Math.max(1, p.pierce - armorOf(world, t).pierce) : damageTo(p.kind, t, world, p.owner, p.rank);
     applyDamage(world, t, amount, p.by, p.owner, p.from);
+  }
+}
+
+/**
+ * A boulder lands at its aim point: everyone within `radius` (edge distance; own units, allies
+ * and buildings too) takes the shooter's damage scaled by 1 − distance / radius.
+ */
+function splashHit(world: World, p: PendingHit, radius: number): void {
+  const hits: { t: Target; amount: number }[] = [];
+  const add = (t: Target, d: number) => {
+    if (d >= radius) return;
+    const amount = Math.round(damageTo(p.kind, t, world, p.owner, p.rank) * (1 - d / radius));
+    if (amount > 0) hits.push({ t, amount });
+  };
+  for (const u of world.units.values()) {
+    if (u.hp <= 0 || u.state === 'garrisoned') continue;
+    add(u, Math.max(0, dist(u.pos, p.aim) - unitRadius(u)));
+  }
+  for (const b of world.buildings.values()) add(b, dist(nearestPoint(p.aim, b), p.aim));
+  // Damage after the scan: deaths change the maps.
+  for (const { t, amount } of hits) if (t.hp > 0 && targetOf(world, t.id) === t) applyDamage(world, t, amount, p.by, p.owner, p.from);
+}
+
+/** Bolt overshoot past the aim point, and how far off the line a body may be and still be hit. */
+const BOLT_OVERSHOOT = 2;
+const BOLT_WIDTH = 0.25;
+
+/**
+ * A bolt flies on through a line of units: the aimed unit (if it did not dodge) and any enemy
+ * whose body crosses the line from the shooter to just past the aim point, nearest the shooter
+ * first, `cap` in all.
+ */
+function lineHit(world: World, p: PendingHit, aimed: Unit, cap: number): void {
+  const len = dist(p.from, p.aim);
+  if (len < 1e-6) return;
+  const dx = (p.aim.x - p.from.x) / len;
+  const dz = (p.aim.z - p.from.z) / len;
+  const hits: { u: Unit; along: number }[] = [];
+  for (const u of world.units.values()) {
+    if (u.hp <= 0 || u.state === 'garrisoned') continue;
+    const rx = u.pos.x - p.from.x;
+    const rz = u.pos.z - p.from.z;
+    const along = rx * dx + rz * dz;
+    const onAim = u === aimed && dist(u.pos, p.aim) <= BALANCE.hitRadius;
+    if (!onAim) {
+      if (u.id === p.by || !world.areEnemies(p.owner, u.owner)) continue;
+      if (along < 0 || along > len + BOLT_OVERSHOOT || Math.abs(rx * dz - rz * dx) > unitRadius(u) + BOLT_WIDTH) continue;
+    }
+    hits.push({ u, along });
+  }
+  hits.sort((a, b) => a.along - b.along || a.u.id - b.u.id);
+  for (const { u } of hits.slice(0, cap)) {
+    if (u.hp > 0 && world.units.get(u.id) === u) applyDamage(world, u, damageTo(p.kind, u, world, p.owner, p.rank), p.by, p.owner, p.from);
   }
 }
 
@@ -586,6 +682,7 @@ function react(world: World, v: Unit, by: EntityId | null, byOwner: PlayerId, fr
   const a = by !== null ? world.units.get(by) : undefined;
   if (!a) return;
   if (v.stance === 'standGround' && edgeDistance(v, a) > unitRange(world, v.owner, v.kind)) return;
+  if (!canTarget(v, a, edgeDistance(v, a))) return;
   engage(world, v, a, false);
 }
 
@@ -786,7 +883,7 @@ export function combatSystem(world: World, dt: number, arrived: Unit[]): void {
   for (const a of world.units.values()) {
     if (a.state !== 'attacking' || a.target === null || isRanged(a.kind)) continue;
     const t = world.units.get(a.target);
-    if (!t || t.state !== 'attacking' || !isRanged(t.kind) || (t.stance !== 'aggressive' && t.stance !== 'defensive')) continue;
+    if (!t || t.state !== 'attacking' || !isRanged(t.kind) || packs(t.kind) || (t.stance !== 'aggressive' && t.stance !== 'defensive')) continue;
     if (unitSpeed(t, world) <= unitSpeed(a, world)) continue; // can't outrun it: stand and shoot
 
     const d = edgeDistance(a, t);

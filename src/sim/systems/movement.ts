@@ -8,6 +8,7 @@ import { closedGates, navFor, routeForUnit } from './passage';
 import { clearEconomyJob } from './gather';
 import { unitSpeed } from './stats';
 import { cancelExplore, settleCancelled } from './explore';
+import { anchored } from './siege';
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 const HASH_CELL = 2;
@@ -150,6 +151,9 @@ export function orderMove(world: World, unitIds: EntityId[], target: Vec2): void
   if (!moved) world.events.emit({ type: 'rejected', reason: 'unreachable' });
 }
 
+/** Idle bodies step aside for movers; a deployed siege engine does not. */
+const yields = (u: Unit): boolean => u.state === 'idle' && !anchored(u);
+
 /** Rebuild a small local spatial hash from tick-start positions; resolve each neighbouring pair once. */
 function separation(world: World, st: Steering): void {
   const { bodies, hash, stride } = st;
@@ -158,7 +162,8 @@ function separation(world: World, st: Steering): void {
   for (const u of world.units.values()) {
     if (u.state === 'garrisoned') continue;
     const i = bodies.length;
-    bodies.push({ u, x: u.pos.x, z: u.pos.z, radius: radiusOf(u), moving: u.path.length > 0, pushX: 0, pushZ: 0 });
+    // Deployed or (un)packing siege engines hold their ground until packed.
+    bodies.push({ u, x: u.pos.x, z: u.pos.z, radius: radiusOf(u), moving: u.path.length > 0 && !anchored(u), pushX: 0, pushZ: 0 });
     const key = Math.floor(u.pos.z / HASH_CELL) * stride + Math.floor(u.pos.x / HASH_CELL);
     const bucket = hash.get(key);
     if (bucket) bucket.push(i);
@@ -192,8 +197,8 @@ function separation(world: World, st: Steering): void {
           } else { dx /= d; dz /= d; }
           const force = (reach - d) * 6;
           // Idle bodies take most of the displacement; working/attacking bodies hold their ground.
-          const shareA = a.moving ? (b.moving ? 0.5 : b.u.state === 'idle' ? 0.15 : 1)
-            : a.u.state === 'idle' ? 0.85 : 0;
+          const shareA = a.moving ? (b.moving ? 0.5 : yields(b.u) ? 0.15 : 1)
+            : yields(a.u) ? 0.85 : 0;
           const shareB = 1 - shareA;
           a.pushX += dx * force * shareA;
           a.pushZ += dz * force * shareA;
@@ -240,7 +245,7 @@ export function movementSystem(world: World, dt: number): Unit[] {
       let rest = st.resting.get(u);
       if (rest && (rest.path !== u.path || u.state !== 'idle')) { st.resting.delete(u); rest = undefined; }
       // Stationary workers retain their jobs; only idle units yield their positions.
-      if (u.state === 'idle' && (body.pushX || body.pushZ || rest)) {
+      if (u.state === 'idle' && !anchored(u) && (body.pushX || body.pushZ || rest)) {
         const dx = rest ? rest.slot.x - u.pos.x : 0;
         const dz = rest ? rest.slot.z - u.pos.z : 0;
         const d = Math.hypot(dx, dz);

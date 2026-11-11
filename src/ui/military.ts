@@ -106,31 +106,51 @@ export function armorChip(m: number, p: number, c: number): StatChip {
 }
 
 /** Crush attack chip (what pulls buildings down). */
-export function crushChip(c: number | string): StatChip {
-  return { icon: '#i-st-crush', text: String(c), title: `Crush attack ${c} (against buildings)` };
+export function crushChip(c: number | string, note = ''): StatChip {
+  return { icon: '#i-st-crush', text: String(c), title: `Crush attack ${c} (against buildings)${note}` };
+}
+
+type ChipSpec = Pick<UnitSpec, 'attack' | 'armor' | 'range' | 'projectile' | 'bonus'>
+  & Partial<Pick<UnitSpec, 'pop' | 'minRange' | 'splash' | 'pierceTargets' | 'siegeTargetsOnly' | 'packTime'>>;
+
+/** What a siege engine's shot does beyond plain damage, for chip titles ("" for others). */
+export function siegeNote(spec: ChipSpec): string {
+  const notes: string[] = [];
+  if (spec.siegeTargetsOnly) notes.push('only buildings and siege');
+  if (spec.splash) notes.push(`splash ${spec.splash}, hurts own units too`);
+  if (spec.pierceTargets) notes.push(`passes through up to ${spec.pierceTargets} units`);
+  if (spec.packTime) notes.push('unpacks to shoot');
+  return notes.length ? `; ${notes.join('; ')}` : '';
 }
 
 /**
  * Attack / crush / armour / range chips for a soldier kind: crush only when it has some, range
  * only for ranged units. Armour reads melee/pierce/crush.
  */
-export function combatChips(spec: Pick<UnitSpec, 'attack' | 'armor' | 'range' | 'projectile' | 'bonus'>): StatChip[] {
+export function combatChips(spec: ChipSpec): StatChip[] {
   const ranged = !!spec.projectile;
   const atk = ranged ? spec.attack.pierce : spec.attack.melee;
   const crush = crushOf(spec.attack);
   const bonus = Object.entries(spec.bonus)
     .map(([cls, n]) => `+${n} vs ${cls}`)
     .join(', ');
-  const chips: StatChip[] = [
-    {
+  const note = siegeNote(spec);
+  const chips: StatChip[] = [];
+  // Pure crush engines (ram, catapult) show only their crush attack.
+  if (atk > 0 || crush <= 0) {
+    chips.push({
       icon: ranged ? '#i-st-pierce' : '#i-st-melee',
       text: String(atk),
-      title: `${ranged ? 'Pierce' : 'Melee'} attack ${atk}${bonus ? ` (${bonus})` : ''}`,
-    },
-  ];
-  if (crush > 0) chips.push(crushChip(crush));
+      title: `${ranged ? 'Pierce' : 'Melee'} attack ${atk}${bonus ? ` (${bonus})` : ''}${crush > 0 ? '' : note}`,
+    });
+  }
+  if (crush > 0) chips.push(crushChip(crush, note));
   chips.push(armorChip(spec.armor.melee, spec.armor.pierce, crushOf(spec.armor, UNIT_CRUSH_ARMOR)));
-  if (ranged) chips.push({ icon: '#i-st-range', text: String(spec.range), title: `Range ${spec.range}` });
+  if (ranged) {
+    const range = spec.minRange ? `${spec.minRange}–${spec.range}` : String(spec.range);
+    chips.push({ icon: '#i-st-range', text: range, title: `Range ${range}` });
+  }
+  if ((spec.pop ?? 1) > 1) chips.push({ icon: '#i-pop', text: String(spec.pop), title: `Takes ${spec.pop} population` });
   return chips;
 }
 

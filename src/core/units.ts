@@ -1,12 +1,12 @@
 import type { CivId } from './civilizations';
 import type { AuraId } from './auras';
-import type { Age, BuildingKind, Stockpile, UnitKind } from './types';
+import type { Age, BuildingKind, ProjectileKind, Stockpile, UnitKind } from './types';
 
 /**
  * Unit data table — stats, costs and counters for every unit kind. Single source of truth
  * for sim, AI, render sizing and HUD. FROZEN contract (integrator-owned).
  */
-export type UnitClass = 'villager' | 'infantry' | 'archer' | 'cavalry' | 'wildlife' | 'ship';
+export type UnitClass = 'villager' | 'infantry' | 'archer' | 'cavalry' | 'wildlife' | 'ship' | 'siege';
 
 export interface UnitSpec {
   /** Unique to this civilization; hidden and rejected for other rosters. */
@@ -29,7 +29,19 @@ export interface UnitSpec {
   /** Extra damage against these classes (rock–paper–scissors counters). */
   bonus: Partial<Record<UnitClass, number>>;
   /** Ranged units fire this projectile. */
-  projectile?: 'arrow' | 'stone' | 'javelin';
+  projectile?: ProjectileKind;
+  /** Population slots it takes (default 1). */
+  pop?: number;
+  /** Siege that must unpack (this many seconds) before shooting and pack again before moving. */
+  packTime?: number;
+  /** Cannot shoot targets closer than this (edge to edge). */
+  minRange?: number;
+  /** Shots land as an area blow of this radius, hurting everyone in it (own units too), with falloff. */
+  splash?: number;
+  /** Shots fly on through a line of units, hitting up to this many in all. */
+  pierceTargets?: number;
+  /** Battering rams: may only attack buildings and siege engines. */
+  siegeTargetsOnly?: boolean;
   cost: Partial<Stockpile>;
   /** Seconds to train. */
   trainTime: number;
@@ -70,10 +82,10 @@ export function rawDamage(attack: DamageTypes, armor: DamageTypes): number {
 }
 
 export const UNITS: Record<UnitKind, UnitSpec> = {
-  phalangiteGuard: {name:'Phalangite Guard',civ:'hellenes',unitClass:'infantry',hp:65,speed:2.1,sight:6,attack:{melee:6,pierce:0,crush:2},armor:{melee:1,pierce:1},range:.9,reload:2,bonus:{cavalry:12},cost:{food:60,wood:35},trainTime:14,trainedAt:'barracks',radius:.32,age:1},
-  legionary: {name:'Legionary',civ:'romans',unitClass:'infantry',hp:65,speed:2.3,sight:6,attack:{melee:8,pierce:0,crush:2},armor:{melee:2,pierce:1},range:.5,reload:2,bonus:{},cost:{food:65,gold:25},trainTime:15,trainedAt:'barracks',radius:.32,age:1},
+  phalangiteGuard: {name:'Phalangite Guard',civ:'hellenes',unitClass:'infantry',hp:65,speed:2.1,sight:6,attack:{melee:6,pierce:0,crush:2},armor:{melee:1,pierce:1},range:.9,reload:2,bonus:{cavalry:12,siege:8},cost:{food:60,wood:35},trainTime:14,trainedAt:'barracks',radius:.32,age:1},
+  legionary: {name:'Legionary',civ:'romans',unitClass:'infantry',hp:65,speed:2.3,sight:6,attack:{melee:8,pierce:0,crush:2},armor:{melee:2,pierce:1},range:.5,reload:2,bonus:{siege:8},cost:{food:65,gold:25},trainTime:15,trainedAt:'barracks',radius:.32,age:1},
   immortal: {name:'Immortal',civ:'persians',unitClass:'archer',hp:40,speed:2.3,sight:8,attack:{melee:0,pierce:5},armor:{melee:0,pierce:1},range:7,reload:2,bonus:{archer:3},projectile:'arrow',cost:{wood:35,gold:55},trainTime:15,trainedAt:'archeryRange',radius:.3,age:1},
-  raider: {name:'Raider',civ:'celts',unitClass:'infantry',hp:55,speed:2.7,sight:7,attack:{melee:8,pierce:0,crush:2},armor:{melee:1,pierce:1},range:.5,reload:2,bonus:{},cost:{food:60,gold:20},trainTime:14,trainedAt:'barracks',radius:.32,age:1},
+  raider: {name:'Raider',civ:'celts',unitClass:'infantry',hp:55,speed:2.7,sight:7,attack:{melee:8,pierce:0,crush:2},armor:{melee:1,pierce:1},range:.5,reload:2,bonus:{siege:8},cost:{food:60,gold:20},trainTime:14,trainedAt:'barracks',radius:.32,age:1},
   deer: {
     name: 'Deer', unitClass: 'wildlife', hp: 12, speed: 4, sight: 0,
     attack: { melee: 0, pierce: 0 }, armor: { melee: 0, pierce: 0 },
@@ -115,7 +127,7 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     armor: { melee: 0, pierce: 2 },
     range: 0.6,
     reload: 2,
-    bonus: {},
+    bonus: { siege: 4 },
     cost: { food: 80 },
     trainTime: 14,
     trainedAt: 'stable',
@@ -131,7 +143,7 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     armor: { melee: 1, pierce: 1 },
     range: 0.7,
     reload: 2,
-    bonus: { cavalry: 12 },
+    bonus: { cavalry: 12, siege: 8 },
     cost: { food: 50, wood: 30 },
     trainTime: 12,
     trainedAt: 'barracks',
@@ -147,7 +159,7 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     armor: { melee: 1, pierce: 1 },
     range: 0.5,
     reload: 2,
-    bonus: {},
+    bonus: { siege: 8 },
     cost: { food: 60, gold: 20 },
     trainTime: 14,
     trainedAt: 'barracks',
@@ -199,7 +211,7 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     armor: { melee: 1, pierce: 2 },
     range: 0.7,
     reload: 1.9,
-    bonus: { archer: 6 },
+    bonus: { archer: 6, siege: 10 },
     cost: { food: 80, gold: 70 },
     trainTime: 18,
     trainedAt: 'stable',
@@ -218,7 +230,7 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
   },
   trireme: {
     name: 'Trireme', unitClass: 'ship', hp: 180, speed: 3.6, sight: 10,
-    attack: { melee: 0, pierce: 9 }, armor: { melee: 2, pierce: 3 }, range: 6, reload: 2,
+    attack: { melee: 0, pierce: 9, crush: 2 }, armor: { melee: 2, pierce: 3 }, range: 6, reload: 2,
     bonus: { ship: 5 }, projectile: 'arrow', cost: { wood: 150, gold: 80 }, trainTime: 30,
     trainedAt: 'dock', radius: 0.8, age: 1,
   },
@@ -232,6 +244,25 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     attack: { melee: 0, pierce: 0 }, armor: { melee: 0, pierce: 0 },
     range: 0, reload: 2, bonus: {}, cost: { gold: 100 }, trainTime: 30,
     trainedAt: 'temple', radius: 0.32, age: 1,
+  },
+  // ---- Siege (M16-2): City Age, siege workshop. Heavy crush; weak to melee infantry and cavalry. ----
+  ram: {
+    name: 'Battering Ram', unitClass: 'siege', hp: 350, speed: 1.6, sight: 6,
+    attack: { melee: 0, pierce: 0, crush: 50 }, armor: { melee: 1, pierce: 12, crush: 4 },
+    range: 0.6, reload: 2, bonus: {}, cost: { wood: 300, gold: 150 }, trainTime: 30,
+    trainedAt: 'siegeWorkshop', radius: 0.7, age: 2, pop: 3, siegeTargetsOnly: true,
+  },
+  catapult: {
+    name: 'Catapult', unitClass: 'siege', hp: 180, speed: 1.4, sight: 10,
+    attack: { melee: 0, pierce: 0, crush: 40 }, armor: { melee: 1, pierce: 6, crush: 4 },
+    range: 16, reload: 5, bonus: {}, projectile: 'boulder', cost: { wood: 300, stone: 200 }, trainTime: 40,
+    trainedAt: 'siegeWorkshop', radius: 0.75, age: 2, pop: 3, packTime: 3, minRange: 5, splash: 2,
+  },
+  boltShooter: {
+    name: 'Bolt Shooter', unitClass: 'siege', hp: 150, speed: 1.6, sight: 10,
+    attack: { melee: 0, pierce: 25 }, armor: { melee: 1, pierce: 6, crush: 4 },
+    range: 14, reload: 4, bonus: {}, projectile: 'bolt', cost: { wood: 250, gold: 150 }, trainTime: 30,
+    trainedAt: 'siegeWorkshop', radius: 0.6, age: 2, pop: 2, packTime: 3, pierceTargets: 3,
   },
   tradeCart: {
     name: 'Trade Cart',
@@ -254,6 +285,16 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
 
 export function isShip(kind: UnitKind): boolean {
   return kind === 'fishingBoat' || kind === 'merchantShip' || kind === 'trireme' || kind === 'transport';
+}
+
+/** Population slots a `kind` takes (UnitSpec.pop, default 1; wildlife takes none). */
+export function popCost(kind: UnitKind): number {
+  return isAnimal(kind) ? 0 : (UNITS[kind].pop ?? 1);
+}
+
+/** Siege engines that pack up to move and unpack to shoot. */
+export function packs(kind: UnitKind): boolean {
+  return (UNITS[kind].packTime ?? 0) > 0;
 }
 
 export function isAnimal(kind: UnitKind): kind is 'deer' | 'boar' | 'sheep' {
@@ -284,7 +325,7 @@ export function unitArmor(kind: UnitKind): Required<DamageTypes> {
 
 /** Trained land units can take explicit economy orders; idle units never seek work. */
 export function canWork(kind: UnitKind): boolean {
-  return UNITS[kind].trainedAt !== null && !isAnimal(kind) && !isShip(kind);
+  return UNITS[kind].trainedAt !== null && !isAnimal(kind) && !isShip(kind) && UNITS[kind].unitClass !== 'siege';
 }
 
 // ---- Veterancy (M15-1, after 0 A.D.'s Promotion + Loot) ----

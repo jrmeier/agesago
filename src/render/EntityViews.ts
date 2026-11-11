@@ -94,6 +94,7 @@ const UNIT_SCALE: Record<UnitKind, number> = {
   slinger: 1.25,
   archer: 1.25,
   horseman: 1.15,
+  ram: 1.6, catapult: 1.7, boltShooter: 1.4,
   tradeCart: 1.15,
   priest: 1.3,
   fishingBoat: 1.2, merchantShip: 1.2, trireme: 1.2, transport: 1.2,
@@ -111,6 +112,7 @@ const BAR_Y: Record<UnitKind, number> = {
   slinger: 1.75,
   archer: 1.8,
   horseman: 2.4,
+  ram: 2.4, catapult: 2.6, boltShooter: 2.2,
   tradeCart: 1.6,
   priest: 2.1,
   fishingBoat: 1.8, merchantShip: 3.0, trireme: 2.5, transport: 2.3,
@@ -136,6 +138,7 @@ const BUILDING_HEIGHT: Record<BuildingKind, number> = {
   forge: 2.9,
   market: 2.2,
   academy: 3.7,
+  siegeWorkshop: 3.4,
   temple: 3.6,
   dock: 2.2,
   wonder: 6.2,
@@ -1257,6 +1260,8 @@ function movingPose(kind: UnitKind): string {
 }
 
 function isTravelling(unit: Unit): boolean {
+  // A siege engine packing up keeps its path but stands still until packed.
+  if (unit.state === 'packing' || unit.state === 'unpacking') return false;
   if (unit.path.length > 0) return true;
   switch (unit.state) {
     case 'moving':

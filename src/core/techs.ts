@@ -34,6 +34,8 @@ export type Stat =
   | 'armor.crush'
   | 'range'
   | 'trainTime'
+  /** Seconds a siege engine takes to pack or unpack (UnitSpec.packTime). */
+  | 'packTime'
   | 'arrows'
   | 'garrison'
   | 'buildRate'
@@ -113,7 +115,7 @@ const table = {
     at: 'townCenter', cost: { food: 300 }, time: 45, age: 0, effects: [], ageUp: 1,
   },
   cityAge: {
-    name: 'City Age', description: 'Advance to the City Age: the academy with its masonry, ballistics and tower techs, second-tier unit lines, elite civilization units and stronger economy and forge techs.',
+    name: 'City Age', description: 'Advance to the City Age: the academy with its masonry, ballistics and tower techs, the siege workshop, second-tier unit lines, elite civilization units and stronger economy and forge techs.',
     at: 'townCenter', cost: { food: 1200, gold: 500 }, time: 90, age: 1, effects: [], ageUp: 2,
   },
   empireAge: {
@@ -458,6 +460,23 @@ const table = {
     name: 'Fortified Walls', description: 'Walls and gates +60% HP, +2 melee, +2 pierce and +2 crush armour.',
     at: 'academy', cost: { food: 200, stone: 100 }, time: 50, age: 2,
     effects: (['palisade', 'stoneWall', 'gate'] as const).flatMap((k) => [mul(k, 'hp', 1.6), ...armor(k, 2, 2, 2)]),
+  },
+
+  // ---- Siege workshop (M16-2) ----
+  torsionSprings: {
+    name: 'Torsion Springs', description: 'Siege engines +20% attack.',
+    at: 'siegeWorkshop', cost: { wood: 300, gold: 200 }, time: 50, age: 2,
+    effects: [mul('class:siege', 'attack.crush', 1.2), mul('class:siege', 'attack.pierce', 1.2)],
+  },
+  reinforcedFrames: {
+    name: 'Reinforced Frames', description: 'Siege engines +20% HP.',
+    at: 'siegeWorkshop', cost: { wood: 250, stone: 100 }, time: 45, age: 2,
+    effects: [mul('class:siege', 'hp', 1.2)],
+  },
+  quickRigging: {
+    name: 'Quick Rigging', description: 'Catapults and bolt shooters pack and unpack twice as fast.',
+    at: 'siegeWorkshop', cost: { food: 200, wood: 150 }, time: 40, age: 2,
+    effects: [mul('class:siege', 'packTime', 0.5)],
   },
 
   // ---- Market ----

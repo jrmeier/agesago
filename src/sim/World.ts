@@ -2,7 +2,7 @@ import type { CivId } from '../core/civilizations';
 import type { MapOptions } from '../core/maps';
 import { MARKET, MAX_POP, footprintRadius, popBonusOf } from '../core/buildings';
 import { EventBus } from '../core/events';
-import { isAnimal, isShip } from '../core/units';
+import { isAnimal, isShip, popCost } from '../core/units';
 import {
   NODE_RESOURCE,
   GAIA,
@@ -64,6 +64,7 @@ import { explorationSites, explorationRewardSystem, orderPriest, type Exploratio
 import { wildlifeSystem } from './systems/wildlife';
 import { auraSystem, type AuraSourceState } from './systems/auras';
 import type { AuraId } from '../core/auras';
+import { siegeSystem } from './systems/siege';
 
 /**
  * The simulation. Plain data; mutate only through dispatch(); advance with tick(dt).
@@ -264,10 +265,10 @@ export class World {
     return Math.min(MAX_POP, cap);
   }
 
-  /** Player units count toward the pop cap; herdables do not. */
+  /** Player units count toward the pop cap by their pop cost (siege takes 2–3); herdables do not. */
   popOf(player: PlayerId): number {
     let n = 0;
-    for (const u of this.units.values()) if (u.owner === player && !isAnimal(u.kind)) n++;
+    for (const u of this.units.values()) if (u.owner === player) n += popCost(u.kind);
     return n;
   }
 
@@ -468,6 +469,7 @@ export class World {
   /** Advance the simulation by dt seconds (called at a fixed BALANCE.tickRate). */
   tick(dt: number): void {
     for (const u of this.units.values()) u.prevPos = { ...u.pos };
+    siegeSystem(this, dt);
     const arrived = movementSystem(this, dt);
     garrisonSystem(this, arrived);
     marketSystem(this, dt, arrived);

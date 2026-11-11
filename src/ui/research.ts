@@ -6,7 +6,7 @@ import { crushOf, UNIT_CRUSH_ARMOR, UNITS, type UnitSpec } from '../core/units';
 import { productionOrder } from '../sim/productionQueue';
 import { AGE_BUILDINGS_NEEDED } from '../sim/systems/research';
 import { missingResources, shortfallText } from './build';
-import { armorChip, combatChips, crushChip, queueView, type StatChip } from './military';
+import { armorChip, combatChips, crushChip, queueView, siegeNote, type StatChip } from './military';
 
 /**
  * Pure helpers for the research UI (M8-14) and the age HUD (M8-6): which techs a building
@@ -223,11 +223,12 @@ export function upgradedUnitChips(spec: UnitSpec, stat: StatFn): StatChip[] {
     if (chip.icon === '#i-st-armor') {
       return upgradedArmorChip([spec.armor.melee, spec.armor.pierce, crushOf(spec.armor, UNIT_CRUSH_ARMOR)], stat);
     }
-    if (chip.icon === '#i-st-crush') return crushChip(withDelta(stat('attack.crush', crush), crush));
+    if (chip.icon === '#i-st-crush') return crushChip(withDelta(stat('attack.crush', crush), crush), siegeNote(spec));
     if (chip.icon === '#i-st-range') {
-      const text = withDelta(range, spec.range);
+      const text = spec.minRange ? `${spec.minRange}–${withDelta(range, spec.range)}` : withDelta(range, spec.range);
       return { ...chip, text, title: `Range ${text}` };
     }
+    if (chip.icon === '#i-pop') return chip;
     return { ...chip, text: atkText, title: chip.title.replace(/ \d+(\.\d+)?/, ` ${atkText}`) };
   });
 }
