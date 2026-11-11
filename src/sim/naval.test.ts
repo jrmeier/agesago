@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { footprintRadius } from '../core/buildings';
 import { GRASS_ONLY, type Building, type Heightfield, type MapLayout, type UnitKind, type Vec2 } from '../core/types';
-import { UNITS } from '../core/units';
+import { RANKS, UNITS } from '../core/units';
+import { gainXp } from './systems/veterancy';
 import { World } from './World';
 import { deserializeWorld, serializeWorld } from './serialize';
 import { buildingRect } from './systems/sites';
@@ -78,6 +79,14 @@ describe('transports and triremes', () => {
     expect(loaded.units.get(ship.id)!.passengers).toHaveLength(0);
     const landed=passengers.map(p=>loaded.units.get(p.id)!); expect(landed.every(p=>p.pos.x>70&&!hf.isWater(p.pos.x,p.pos.z)&&p.state==='idle')).toBe(true);
     expect(new Set(landed.map(p=>`${p.pos.x},${p.pos.z}`)).size).toBe(3);
+  });
+  it('veteran passengers keep their rank and experience through a crossing', () => {
+    const w=world(); const ship=w.spawnUnit('transport',{x:31,z:45}); const vet=w.spawnUnit('swordsman',{x:27,z:45});
+    gainXp(w,vet,RANKS[2].xp+5); const maxHp=vet.maxHp;
+    w.dispatch({type:'loadTransport',unitIds:[vet.id],transportId:ship.id}); run(w,4); expect(vet.state).toBe('garrisoned');
+    w.dispatch({type:'unloadTransport',transportId:ship.id,target:{x:72,z:45}}); run(w,25);
+    expect(vet.state).not.toBe('garrisoned'); expect(vet.pos.x).toBeGreaterThan(70);
+    expect(vet.rank).toBe(2); expect(vet.xp).toBeCloseTo(RANKS[2].xp+5); expect(vet.maxHp).toBe(maxHp);
   });
   it('enforces cargo capacity and issuer ownership, and a sunk transport loses its passengers', () => {
     const w=world(); const ship=w.spawnUnit('transport',{x:31,z:45}); const passengers=Array.from({length:12},()=>w.spawnUnit('villager',{x:29,z:45}));

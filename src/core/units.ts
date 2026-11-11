@@ -36,6 +36,8 @@ export interface UnitSpec {
   radius: number;
   /** Earliest age it can be trained in (default 0, Village). */
   age?: Age;
+  /** Experience its killer earns (default: total cost × XP_PER_COST; see xpValue). */
+  xp?: number;
 }
 
 export const UNITS: Record<UnitKind, UnitSpec> = {
@@ -247,4 +249,45 @@ export function damage(attacker: UnitKind, defenderClass: UnitClass, armor: { me
 /** Trained land units can take explicit economy orders; idle units never seek work. */
 export function canWork(kind: UnitKind): boolean {
   return UNITS[kind].trainedAt !== null && !isAnimal(kind) && !isShip(kind);
+}
+
+// ---- Veterancy (M15-1, after 0 A.D.'s Promotion + Loot) ----
+
+/** Default experience for killing a unit: this much per resource of its cost. */
+export const XP_PER_COST = 0.5;
+
+/** Experience a unit of `kind` is worth to whoever kills it (wildlife and free units: 0). */
+export function xpValue(kind: UnitKind): number {
+  const spec = UNITS[kind];
+  if (spec.xp !== undefined) return spec.xp;
+  let total = 0;
+  for (const v of Object.values(spec.cost)) total += v ?? 0;
+  return Math.round(total * XP_PER_COST);
+}
+
+export interface RankSpec {
+  name: string;
+  /** Total experience needed to reach this rank. */
+  xp: number;
+  /** Max HP multiplier (cumulative from Basic). */
+  hp: number;
+  /** Added to each attack type the unit actually has (base > 0). */
+  attack: number;
+  /** Added to melee and pierce armour. */
+  armor: number;
+  /** Gather and build rate multiplier: veterans are worse labourers. */
+  work: number;
+}
+
+/** 0 Basic · 1 Advanced · 2 Elite. Bonuses are cumulative totals, applied through statOf. */
+export const RANKS: readonly [RankSpec, RankSpec, RankSpec] = [
+  { name: 'Basic', xp: 0, hp: 1, attack: 0, armor: 0, work: 1 },
+  { name: 'Advanced', xp: 100, hp: 1.1, attack: 1, armor: 1, work: 0.85 },
+  { name: 'Elite', xp: 300, hp: 1.1 * 1.1, attack: 2, armor: 2, work: 0.7 },
+];
+
+/** Soldiers rank up: infantry, archers and cavalry (scouts included). Villagers, priests, trade carts, ships and wildlife do not. */
+export function canRank(kind: UnitKind): boolean {
+  const c = UNITS[kind].unitClass;
+  return c === 'infantry' || c === 'archer' || c === 'cavalry';
 }

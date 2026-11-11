@@ -1,4 +1,4 @@
-import { canWork, isShip } from '../../core/units';
+import { canWork, isShip, RANKS } from '../../core/units';
 import { BUILDINGS, FARM_FOOD, footprintRadius } from '../../core/buildings';
 import type {
   Building,
@@ -375,7 +375,8 @@ export function buildSystem(world: World, dt: number, arrived: Unit[]): void {
       world.buildState.delete(uid); // took another order
       continue;
     }
-    if (u.state === 'building') workers.set(bid, (workers.get(bid) ?? 0) + 1);
+    // Veterans build more slowly: each builder counts as its rank's work factor.
+    if (u.state === 'building') workers.set(bid, (workers.get(bid) ?? 0) + RANKS[u.rank ?? 0].work);
   }
   for (const [bid, n] of workers) {
     const b = world.buildings.get(bid);

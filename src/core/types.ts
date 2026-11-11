@@ -250,7 +250,14 @@ export interface Unit {
   relic?: string;
   /** Transport passengers are garrisoned and travel with this ship. */
   passengers?: EntityId[];
+  /** Experience earned from kills (soldiers only; absent = 0). */
+  xp?: number;
+  /** Veterancy: 0 Basic, 1 Advanced, 2 Elite (absent = 0). See RANKS in core/units.ts. */
+  rank?: Rank;
 }
+
+/** Veterancy rank: 0 Basic, 1 Advanced, 2 Elite. */
+export type Rank = 0 | 1 | 2;
 
 export interface ResourceNode {
   id: EntityId;
@@ -441,4 +448,6 @@ export type SimEvent =
   | { type: 'traded'; owner: PlayerId; id: EntityId; gold: number }
   | { type: 'treasure'; owner: PlayerId; site: string; pos: Vec2; reward: string }
   | { type: 'relic'; owner: PlayerId; site: string; templeId: EntityId }
-  | { type: 'converted'; owner: PlayerId; id: EntityId; previousOwner: PlayerId };
+  | { type: 'converted'; owner: PlayerId; id: EntityId; previousOwner: PlayerId }
+  /** A soldier ranked up (and healed to full). */
+  | { type: 'promoted'; id: EntityId; owner: PlayerId; rank: Rank };

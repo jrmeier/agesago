@@ -6,6 +6,7 @@ import type { Age, Building, EntityId, Heightfield, MarketResource, Player, Play
 import { generateMap } from './mapgen';
 import { World } from './World';
 import type { CombatState, FleeState, PendingHit } from './systems/combat';
+import type { DamageShare } from './systems/veterancy';
 import type { ExploreState } from './systems/explore';
 import type { GatherState } from './systems/gather';
 import { clearStatCache } from './systems/research';
@@ -15,10 +16,11 @@ import type { ExplorationSite, PriestOrder } from './systems/explorationRewards'
 import type { GameResult } from './systems/victory';
 
 /**
+ * 4: M15-1 veterancy (unit xp/rank, damage log). Older saves load with every unit at rank 0, xp 0.
  * 3: M14-1 in-place building upgrades (Building.tier, Building.upgrading).
  * 2: M8 research (researched techs, ages, market prices, building research queues).
  */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 /** Oldest version that still loads; v2 buildings load at tier 0 with no upgrade running. */
 export const MIN_SAVE_VERSION = 2;
 
@@ -60,6 +62,8 @@ export interface SaveData {
     flee: [EntityId, FleeState][];
     farmers: [EntityId, EntityId][];
     projectiles: PendingHit[];
+    /** Absent before version 4. */
+    damageLog?: [EntityId, DamageShare[]][];
     lastAlert: [PlayerId, number][];
     combatTicks: number;
     navVersion: number;
@@ -140,6 +144,7 @@ export function serializeWorld(world: World): SaveData {
       flee: [...world.fleeState],
       farmers: [...world.farmers],
       projectiles: world.projectiles,
+      damageLog: [...world.damageLog],
       lastAlert: [...world.lastAlert],
       combatTicks: world.combatTicks,
       navVersion: world.nav.version,
@@ -176,6 +181,10 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
     || savedIds.some((id) => !Number.isSafeInteger(id) || id < 1 || id >= data.clocks.nextId)
     || new Set(savedIds).size !== savedIds.length) throw new Error('Invalid save: entity ids or nextId');
   for (const p of data.players) if(p.player.civ !== undefined && !civFor(p.player.civ)) throw new Error('Invalid save: civilization');
+  for (const u of data.units) {
+    if (u.rank !== undefined && u.rank !== 0 && u.rank !== 1 && u.rank !== 2) throw new Error('Invalid save: unit rank');
+    if (u.xp !== undefined && !(typeof u.xp === 'number' && Number.isFinite(u.xp) && u.xp >= 0)) throw new Error('Invalid save: unit xp');
+  }
   const saved = copy(data);
   const generated = generateMap(saved.seed, saved.playerCount, saved.mapOptions);
   const terrain = hf ?? generated.hf;
@@ -185,6 +194,14 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   world.mapOptions = saved.mapOptions ?? {};
   // Initial entities emit no events; drop their footprints before replacing the maps.
   for (const id of world.buildings.keys()) world.nav.removeRect(id);
+  if (saved.version < 4) {
+    // Pre-veterancy saves: every unit starts at rank 0 with no xp and no damage history.
+    for (const u of saved.units) {
+      delete u.rank;
+      delete u.xp;
+    }
+    delete saved.systems.damageLog;
+  }
   restoreMap(world.units, saved.units.map((u) => [u.id, u]));
   restoreMap(world.nodes, saved.nodes.map((n) => [n.id, n]));
   if (saved.version < 3) {
@@ -252,6 +269,7 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   restoreMap(world.farmers, s.farmers);
   restoreMap(world.lastAlert, s.lastAlert);
   world.projectiles.push(...s.projectiles);
+  if (s.damageLog) restoreMap(world.damageLog, s.damageLog);
   world.combatTicks = s.combatTicks;
   world.nav.version = s.navVersion;
   world.nav.expanded = s.navExpanded;

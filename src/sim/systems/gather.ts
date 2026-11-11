@@ -32,8 +32,8 @@ export function carryCap(world: World, u: Unit, type: ResourceType): number {
 
 /** Seconds per resource unit for `u` on a node of `type` (farm: a farm field). */
 export function gatherInterval(world: World, u: Unit, type: ResourceType, farm: boolean): number {
-  if (farm) return BALANCE.farmInterval / unitStat(world, u.owner, u.kind, 'gather.farm', 1);
-  return BALANCE.gatherIntervals[type] / unitStat(world, u.owner, u.kind, GATHER_STAT[type], 1);
+  if (farm) return BALANCE.farmInterval / unitStat(world, u.owner, u.kind, 'gather.farm', 1, u.rank);
+  return BALANCE.gatherIntervals[type] / unitStat(world, u.owner, u.kind, GATHER_STAT[type], 1, u.rank);
 }
 
 /** States in which a farmer keeps its claim on a farm. */

@@ -80,4 +80,8 @@ export const BALANCE = {
   alertInterval: 3,
   /** Units keep after a target this long after losing sight of it (e.g. an archer shooting from the fog). */
   lostSightGrace: 2,
+
+  // ---- Veterancy (M15-1; rank table in core/units.ts RANKS) ----
+  /** Soldiers who hurt a unit within this many seconds of its death share its experience. */
+  xpWindow: 10,
 } as const;

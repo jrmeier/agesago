@@ -1,5 +1,5 @@
 import { BUILDINGS, tierStats } from '../../core/buildings';
-import type { Building, BuildingKind, PlayerId, Unit, UnitKind, Vec2 } from '../../core/types';
+import type { Building, BuildingKind, PlayerId, Rank, Unit, UnitKind, Vec2 } from '../../core/types';
 import { UNITS } from '../../core/units';
 import { BALANCE } from '../balance';
 import { rectDistance } from '../nav';
@@ -38,9 +38,9 @@ export function unitRange(world: World, owner: PlayerId, kind: UnitKind): number
   return unitStat(world, owner, kind, 'range', UNITS[kind].range);
 }
 
-/** Max hit points of a unit kind for `owner`. */
-export function unitMaxHp(world: World, owner: PlayerId, kind: UnitKind): number {
-  return Math.round(unitStat(world, owner, kind, 'hp', UNITS[kind].hp));
+/** Max hit points of a unit kind for `owner` at veterancy `rank`. */
+export function unitMaxHp(world: World, owner: PlayerId, kind: UnitKind, rank: Rank = 0): number {
+  return Math.round(unitStat(world, owner, kind, 'hp', UNITS[kind].hp, rank));
 }
 
 /**
@@ -59,13 +59,13 @@ export function garrisonCap(world: World, owner: PlayerId, kind: BuildingKind, t
   return base > 0 ? Math.round(buildingStat(world, owner, kind, 'garrison', base + tierStats(kind, tier).garrison)) : 0;
 }
 
-/** Attack of a unit kind for `owner` (base table values without `world`). */
-export function unitAttack(world: World | undefined, owner: PlayerId, kind: UnitKind): { melee: number; pierce: number } {
+/** Attack of a unit kind for `owner` at veterancy `rank` (base table values without `world`). */
+export function unitAttack(world: World | undefined, owner: PlayerId, kind: UnitKind, rank: Rank = 0): { melee: number; pierce: number } {
   const a = UNITS[kind].attack;
   if (!world) return a;
   return {
-    melee: unitStat(world, owner, kind, 'attack.melee', a.melee),
-    pierce: unitStat(world, owner, kind, 'attack.pierce', a.pierce),
+    melee: unitStat(world, owner, kind, 'attack.melee', a.melee, rank),
+    pierce: unitStat(world, owner, kind, 'attack.pierce', a.pierce, rank),
   };
 }
 
@@ -75,8 +75,8 @@ export function armorOf(world: World | undefined, t: Unit | Building): { melee: 
     const a = UNITS[t.kind].armor;
     if (!world) return a;
     return {
-      melee: unitStat(world, t.owner, t.kind, 'armor.melee', a.melee),
-      pierce: unitStat(world, t.owner, t.kind, 'armor.pierce', a.pierce),
+      melee: unitStat(world, t.owner, t.kind, 'armor.melee', a.melee, t.rank),
+      pierce: unitStat(world, t.owner, t.kind, 'armor.pierce', a.pierce, t.rank),
     };
   }
   const a = BUILDINGS[t.kind].armor;
@@ -119,10 +119,10 @@ export function isRanged(kind: UnitKind): boolean {
 /**
  * Damage of one `attacker` blow against `target`: (attack − armour) per type, at least 1, plus
  * the class bonus against units (buildings get none). With `world`, both sides' research
- * applies; `owner` is the attacker's owner.
+ * applies; `owner` is the attacker's owner and `rank` its veterancy.
  */
-export function damageTo(attacker: UnitKind, target: Unit | Building, world?: World, owner: PlayerId = 0): number {
-  const atk = unitAttack(world, owner, attacker);
+export function damageTo(attacker: UnitKind, target: Unit | Building, world?: World, owner: PlayerId = 0, rank: Rank = 0): number {
+  const atk = unitAttack(world, owner, attacker, rank);
   const arm = armorOf(world, target);
   const base = Math.max(0, atk.melee - arm.melee) + Math.max(0, atk.pierce - arm.pierce);
   const bonus = 'stance' in target ? (UNITS[attacker].bonus[UNITS[target.kind].unitClass] ?? 0) : 0;

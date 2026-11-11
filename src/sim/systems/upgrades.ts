@@ -17,7 +17,7 @@ export function applyResearch(world: World, owner: PlayerId, tech: TechId): void
   if (!TECHS[tech].effects.some((e) => e.stat === 'hp')) return;
   for (const u of world.units.values()) {
     if (u.owner !== owner || !touchesHp(tech, u)) continue;
-    rescale(u, unitMaxHp(world, owner, u.kind));
+    rescale(u, unitMaxHp(world, owner, u.kind, u.rank));
   }
   for (const b of world.buildings.values()) {
     if (b.owner !== owner || !touchesHp(tech, b)) continue;

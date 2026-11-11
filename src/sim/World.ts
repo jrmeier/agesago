@@ -45,6 +45,7 @@ import {
   type FleeState,
   type PendingHit,
 } from './systems/combat';
+import type { DamageShare } from './systems/veterancy';
 import { exploreSystem, orderExplore, type ExploreState } from './systems/explore';
 import { clearEconomyJob, gatherSystem, orderFarm, orderGather, type GatherState } from './systems/gather';
 import { buildingRect } from './systems/sites';
@@ -141,6 +142,8 @@ export class World {
   readonly fleeState = new Map<EntityId, FleeState>();
   /** Projectiles in flight (damage lands on impact). */
   readonly projectiles: PendingHit[] = [];
+  /** Victim unit → soldiers that recently hurt it, for splitting kill experience (veterancy). */
+  readonly damageLog = new Map<EntityId, DamageShare[]>();
   /** Sim time of each player's last 'attacked' alert (rate limit). */
   readonly lastAlert = new Map<PlayerId, number>();
   /** Ticks run by the combat system (staggers target scans). */

@@ -128,7 +128,7 @@ export function explorationRewardSystem(world: World, dt: number): void {
     world.gatherState.delete(target.id); world.buildState.delete(target.id); world.exploreState.delete(target.id); world.exploreQueue.delete(target.id);
     world.fleeState.delete(target.id); world.priestOrders.delete(target.id);
     const ratio = target.hp / target.maxHp;
-    target.owner = u.owner; target.maxHp = unitMaxHp(world, u.owner, target.kind); target.hp = Math.max(1, target.maxHp * ratio);
+    target.owner = u.owner; target.maxHp = unitMaxHp(world, u.owner, target.kind, target.rank); target.hp = Math.max(1, target.maxHp * ratio);
     target.target = null; target.path = []; target.gatherNode = null; target.gatherType = null; target.state = 'idle';
     world.priestOrders.delete(id);
     world.events.emit({ type: 'converted', owner: u.owner, id: target.id, previousOwner });

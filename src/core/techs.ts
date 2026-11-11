@@ -1,6 +1,6 @@
 import type { CivId } from './civilizations';
-import type { BuildingKind, ResourceType, Stockpile, UnitKind } from './types';
-import { UNITS, type UnitClass } from './units';
+import type { BuildingKind, Rank, ResourceType, Stockpile, UnitKind } from './types';
+import { RANKS, UNITS, type UnitClass } from './units';
 
 /**
  * Technology data table (M8) — ages, economy, military, building and market upgrades.
@@ -491,8 +491,8 @@ export function techsAt(kind: BuildingKind): TechId[] {
   return TECH_IDS.filter((t) => TECHS[t].at === kind);
 }
 
-/** What a modifier lookup is about. */
-export type Subject = { unit: UnitKind } | { building: BuildingKind } | 'player';
+/** What a modifier lookup is about. A unit's veterancy `rank` (default 0) stacks on top of research. */
+export type Subject = { unit: UnitKind; rank?: Rank } | { building: BuildingKind } | 'player';
 
 function matches(target: ModTarget, subject: Subject): boolean {
   if (subject === 'player') return target === 'player';
@@ -520,7 +520,21 @@ export function statMods(researched: Iterable<TechId>, subject: Subject, stat: S
 /** (base + Σadd) × Πmul. Pure; the sim's statOf() caches this per player. */
 export function applyStat(researched: Iterable<TechId>, subject: Subject, stat: Stat, base: number): number {
   const { add: a, mul: m } = statMods(researched, subject, stat);
-  return (base + a) * m;
+  return typeof subject === 'object' && 'unit' in subject && subject.rank ? rankedStat(stat, base, a, m, subject.rank) : (base + a) * m;
+}
+
+/**
+ * A ranked unit's stat: research's Σadd / Πmul plus the rank's bonus, (base + add + rankAdd) ×
+ * mul × rankMul. +attack only for attack types the unit has; gather rates take the rank's work
+ * penalty. Cheap: no lookups beyond RANKS.
+ */
+export function rankedStat(stat: Stat, base: number, add: number, mul: number, rank: Rank): number {
+  const r = RANKS[rank];
+  if (stat === 'hp') mul *= r.hp;
+  else if (stat === 'attack.melee' || stat === 'attack.pierce') { if (base > 0) add += r.attack; }
+  else if (stat === 'armor.melee' || stat === 'armor.pierce') add += r.armor;
+  else if (stat.startsWith('gather.')) mul *= r.work;
+  return (base + add) * mul;
 }
 
 export function hasFlag(researched: Iterable<TechId>, flag: TechFlag): boolean {

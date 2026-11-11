@@ -1,6 +1,6 @@
 import { orderTend } from './livestock';
 import { BUILDINGS } from '../../core/buildings';
-import type { Building, EntityId, PlayerId, ResourceType, Stance, Unit, UnitKind, UnitState, Vec2 } from '../../core/types';
+import type { Building, EntityId, PlayerId, Rank, ResourceType, Stance, Unit, UnitKind, UnitState, Vec2 } from '../../core/types';
 import { canWork, isAnimal, isShip, UNITS } from '../../core/units';
 import { GAIA } from '../../core/types';
 import { BALANCE } from '../balance';
@@ -12,6 +12,7 @@ import { clearEconomyJob, resumeGatherJob, sendToDrop, sendToFarm, sendToNode } 
 import { formationOffset } from './movement';
 import { siteApproach } from './sites';
 import { playerHasFlag } from './research';
+import { awardKill, recordDamage } from './veterancy';
 import { armorOf, buildingAttack, damageTo, edgeDistance, isRanged, nearestPoint, unitRadius, unitRange, unitSight, unitSpeed } from './stats';
 
 /** Per-unit combat bookkeeping kept off the frozen Unit shape (created on first engagement). */
@@ -56,6 +57,8 @@ export interface PendingHit {
   from: Vec2;
   /** Building shot: pierce damage, instead of `kind`'s attack. */
   pierce?: number;
+  /** Shooter's veterancy rank when it fired (absent = 0). */
+  rank?: Rank;
 }
 
 type Target = Unit | Building;
@@ -498,14 +501,16 @@ function kite(world: World, u: Unit, cs: CombatState, threat: Unit): boolean {
 function strike(world: World, u: Unit, t: Target): void {
   const spec = UNITS[u.kind];
   if (!spec.projectile) {
-    applyDamage(world, t, damageTo(u.kind, t, world, u.owner), u.id, u.owner, u.pos);
+    applyDamage(world, t, damageTo(u.kind, t, world, u.owner, u.rank), u.id, u.owner, u.pos);
     return;
   }
   const from = { x: u.pos.x, z: u.pos.z };
   const near = nearestPoint(from, t);
   const { aim, flight } = isUnit(t) ? aimAt(world, u.owner, from, t) : { aim: { x: near.x, z: near.z }, flight: dist(from, near) / BALANCE.projectileSpeed };
   world.events.emit({ type: 'projectile', kind: spec.projectile, from, to: aim, flight, targetId: t.id });
-  world.projectiles.push({ at: world.time + flight, targetId: t.id, aim, by: u.id, kind: u.kind, owner: u.owner, from });
+  const hit: PendingHit = { at: world.time + flight, targetId: t.id, aim, by: u.id, kind: u.kind, owner: u.owner, from };
+  if (u.rank) hit.rank = u.rank;
+  world.projectiles.push(hit);
 }
 
 /** Land projectiles whose flight is over: hit if the target is still near the aim point. */
@@ -524,7 +529,7 @@ function resolveProjectiles(world: World): void {
     if (!t || t.hp <= 0) continue;
     if (isUnit(t) && t.state === 'garrisoned') continue;
     if (isUnit(t) && dist(t.pos, p.aim) > BALANCE.hitRadius) continue; // dodged
-    const amount = p.pierce !== undefined ? Math.max(1, p.pierce - armorOf(world, t).pierce) : damageTo(p.kind, t, world, p.owner);
+    const amount = p.pierce !== undefined ? Math.max(1, p.pierce - armorOf(world, t).pierce) : damageTo(p.kind, t, world, p.owner, p.rank);
     applyDamage(world, t, amount, p.by, p.owner, p.from);
   }
 }
@@ -534,7 +539,9 @@ function resolveProjectiles(world: World): void {
  * or a reaction (villagers flee, idle soldiers fight back).
  */
 export function applyDamage(world: World, t: Target, amount: number, by: EntityId | null, byOwner: PlayerId, from: Vec2): void {
+  const dealt = Math.min(t.hp, amount);
   t.hp = Math.max(0, t.hp - amount);
+  if (isUnit(t)) recordDamage(world, t.id, by, dealt);
   world.events.emit({ type: 'damaged', id: t.id, hp: t.hp, maxHp: t.maxHp, by });
   const last = world.lastAlert.get(t.owner);
   if (last === undefined || world.time - last >= BALANCE.alertInterval - 1e-9) {
@@ -542,8 +549,10 @@ export function applyDamage(world: World, t: Target, amount: number, by: EntityI
     world.events.emit({ type: 'attacked', owner: t.owner, id: t.id, pos: { x: t.pos.x, z: t.pos.z } });
   }
   if (t.hp <= 0) {
-    if (isUnit(t)) killUnit(world, t);
-    else destroyBuilding(world, t);
+    if (isUnit(t)) {
+      awardKill(world, t);
+      killUnit(world, t);
+    } else destroyBuilding(world, t);
     return;
   }
   if (isUnit(t)) react(world, t, by, byOwner, from);
@@ -659,6 +668,7 @@ export function killUnit(world: World, u: Unit): void {
   world.buildState.delete(u.id);
   world.combatState.delete(u.id);
   world.fleeState.delete(u.id);
+  world.damageLog.delete(u.id);
   for (const [farm, id] of world.farmers) if (id === u.id) world.farmers.delete(farm);
   clearTargets(world, u.id);
   world.events.emit({ type: 'removed', id: u.id });

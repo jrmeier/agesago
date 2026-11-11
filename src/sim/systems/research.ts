@@ -1,7 +1,7 @@
 import { CIVS } from '../../core/civilizations';
 import { BUILDINGS } from '../../core/buildings';
-import { TECHS, hasFlag, statMods, type Stat, type Subject, type TechFlag, type TechId } from '../../core/techs';
-import type { Age, Building, BuildingKind, EntityId, PlayerId, RejectReason, UnitKind } from '../../core/types';
+import { TECHS, hasFlag, rankedStat, statMods, type Stat, type Subject, type TechFlag, type TechId } from '../../core/techs';
+import type { Age, Building, BuildingKind, EntityId, PlayerId, Rank, RejectReason, UnitKind } from '../../core/types';
 import type { PlayerState, World } from '../World';
 import { ensureProductionQueue, productionOrder, removeProduction } from '../productionQueue';
 import { affordable, pay } from './build';
@@ -223,16 +223,19 @@ function playerMods(p: PlayerState): PlayerMods {
   return c;
 }
 
-/** `base` with `owner`'s modifiers for unit kind `kind` applied. Cheap: a few map lookups, no allocation once warm. */
-export function unitStat(world: World, owner: PlayerId, kind: UnitKind, stat: Stat, base: number): number {
+/**
+ * `base` with `owner`'s modifiers for unit kind `kind` applied, plus veterancy `rank` (see
+ * rankedStat). Cheap: a few map lookups, no allocation once warm.
+ */
+export function unitStat(world: World, owner: PlayerId, kind: UnitKind, stat: Stat, base: number, rank: Rank = 0): number {
   const p = world.players.get(owner);
-  if (!p || (p.researched.size === 0 && !p.player.civ)) return base;
+  if (!p || (p.researched.size === 0 && !p.player.civ)) return rank ? rankedStat(stat, base, 0, 1, rank) : base;
   const c = playerMods(p);
   let byStat = c.units.get(kind);
   if (!byStat) c.units.set(kind, (byStat = new Map()));
   let m = byStat.get(stat);
   if (!m) byStat.set(stat, (m = statMods(p.researched, { unit: kind }, stat, p.player.civ ? CIVS[p.player.civ].bonuses : [])));
-  return (base + m.add) * m.mul;
+  return rank ? rankedStat(stat, base, m.add, m.mul, rank) : (base + m.add) * m.mul;
 }
 
 /** `base` with `owner`'s modifiers for building kind `kind` applied. */
@@ -261,7 +264,7 @@ export function statOf(world: World, owner: PlayerId, subject: Subject, stat: St
     return (base + m.add) * m.mul;
   }
   return 'unit' in subject
-    ? unitStat(world, owner, subject.unit, stat, base)
+    ? unitStat(world, owner, subject.unit, stat, base, subject.rank)
     : buildingStat(world, owner, subject.building, stat, base);
 }
 
