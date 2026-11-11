@@ -374,7 +374,39 @@ Placement and decay follow 0 A.D.'s BuildRestrictions and TerritoryDecay (`canPl
   else turns neutral (Gaia) with 25% of max hp (`neutralHp`). Its training and research queues are
   dropped without refund. It projects no territory, fires no arrows, never decays further and never
   counts as a wonder. Any player can tear it down with an explicit attack order; idle units ignore it.
-  Recapturing neutral buildings is not implemented yet.
+  Soldiers can capture neutral buildings (see Capture below).
+
+## Capture (M18-4)
+
+Modelled on 0 A.D.'s Capturable (`src/sim/systems/capture.ts`; data in `CAPTURE` and
+`BuildingSpec.capturePoints` in `src/core/buildings.ts`, `CAPTURE_RATE` in `src/core/units.ts`).
+
+- **Capture points.** A complete building splits `maxCapturePoints` between the players (Gaia
+  included); its owner holds them all until someone captures. The default is half the base hp
+  (`cpPerHp: 0.5`): house 275, barracks 600, Town Center 1200, fortress 2600, wonder 4000. Palisades,
+  stone walls, gates and farms (`capturePoints: 0`) and foundations can only be destroyed.
+- **Capture attack.** Infantry, archers, cavalry and scouts drain 2.5 cp/s each, champions 5 cp/s.
+  Units capture standing within 1 unit of the footprint (archers walk up too). Villagers, priests,
+  trade carts, ships and siege have no capture attack: villagers stay workers here (0 A.D.'s citizen
+  women don't capture either), and siege only destroys. What a unit takes is split evenly over its
+  player's rivals (Gaia counts as everyone's rival, allies never lose points) and added to its own.
+- **Winning points back.** Each garrisoned unit gives the owner 3 cp/s, and standing in the owner's
+  connected territory 1 cp/s. A building on a rival's territory (an outpost or a neutral ruin) drifts
+  to the territory owner at 1 cp/s. A cut-off building gets no home regeneration.
+- **Changing hands.** When the owner's points reach 0, the player holding the most takes the
+  building. The old owner gets its training, research and upgrade queues refunded. Occupants step
+  out, and rally, farmer and tending claims are dropped. Hit points, tier and the split of points stay.
+  Pop cap, territory, fog, auras and the conquest check follow the new owner. A captured counting
+  wonder cancels its countdown, which restarts for the new owner. Both players get a toast, and the
+  'captured' event fires.
+- **Pacing.** Three swordsmen (7.5 cp/s) take an undefended house on neutral land in about 37 s, or a
+  barracks in 80 s. Two garrisoned villagers (6 cp/s) hold a tower against two swordsmen. A Town
+  Center with its 10 villagers inside (31 cp/s at home) needs 13 soldiers or 7 champions just to
+  break even.
+- **Orders.** Right-clicking an enemy or neutral building with soldiers captures it. Ctrl+right-click,
+  attack-move targeting (Q), or the Raze order button (also in the phone Orders sheet) attack it to
+  destroy instead. Units that cannot capture attack as before. Idle units that pick a building on
+  their own still attack it, and so does the AI, so its army razes towns rather than capturing them.
 
 ## Rerunning
 
