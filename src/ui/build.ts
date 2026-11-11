@@ -1,5 +1,6 @@
 import { BUILDINGS, type BuildingSpec } from '../core/buildings';
-import type { BuildingKind, PlacementCheck, ResourceType, Stockpile } from '../core/types';
+import type { BuildingKind, PlacementCheck, ResourceType, Stockpile, UnitKind } from '../core/types';
+import { UNITS } from '../core/units';
 
 /** Resources in display order (top bar, cost lines). */
 export const RESOURCE_ORDER: readonly ResourceType[] = ['food', 'wood', 'gold', 'stone'];
@@ -133,7 +134,20 @@ export function repairLabel(hp: number, maxHp: number, touch: boolean): string {
   return `Damaged ${pct}% · ${touch ? 'Tap' : 'Right-click'} it with workers to repair`;
 }
 
-/** What a complete building does, for the building panel. `occupants` is how many villagers are inside. */
+/**
+ * Who is inside a shelter, by kind with counts, most first: "Inside: Villager ×3 · Archer ×2".
+ * `name` maps a kind to its display name (e.g. the researched tier title). Empty when nobody is inside.
+ */
+export function occupantSummary(kinds: readonly UnitKind[], name: (kind: UnitKind) => string = (k) => UNITS[k].name): string {
+  const counts = new Map<UnitKind, number>();
+  for (const k of kinds) counts.set(k, (counts.get(k) ?? 0) + 1);
+  if (!counts.size) return '';
+  const rows = [...counts].map(([k, n]) => ({ label: name(k), n }));
+  rows.sort((a, b) => b.n - a.n || a.label.localeCompare(b.label));
+  return `Inside: ${rows.map((r) => `${r.label} ×${r.n}`).join(' · ')}`;
+}
+
+/** What a complete building does, for the building panel. `occupants` is how many units are inside. */
 export function buildingRole(kind: BuildingKind, _food?: number, _farmFood?: number, occupants?: number, workers?: number): string {
   const spec = BUILDINGS[kind];
   if (kind === 'corral') return 'A worker breeds two owned sheep and harvests surplus; enclose with palisades and gates';

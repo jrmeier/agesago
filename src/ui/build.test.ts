@@ -11,6 +11,7 @@ import {
   repairLabel,
   costEntries,
   formatCost,
+  occupantSummary,
   keyLabel,
   kindForKey,
   missingResources,
@@ -146,5 +147,15 @@ describe('building panel labels', () => {
     expect(buildingRole('farm', 0, 250)).toBe('Renewable food · 1 worker');
     expect(buildingRole('farm', undefined, undefined, 0, 1)).toBe('Renewable food · 1/1 worker assigned');
     expect(popLabel(7, 10)).toBe('7/10');
+  });
+});
+
+describe('occupantSummary', () => {
+  it('lists who is inside by kind with counts, most first', () => {
+    expect(occupantSummary([])).toBe('');
+    expect(occupantSummary(['archer', 'villager', 'hoplite', 'villager', 'archer', 'villager'])).toBe(
+      'Inside: Villager ×3 · Archer ×2 · Hoplite ×1'
+    );
+    expect(occupantSummary(['hoplite'], () => 'Veteran Hoplite')).toBe('Inside: Veteran Hoplite ×1');
   });
 });

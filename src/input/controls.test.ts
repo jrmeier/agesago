@@ -318,11 +318,17 @@ describe('trained land unit work controls', () => {
         });
       }
     }
-    it(`${mode} keeps shelters villager-only and moves a hoplite to the shelter`, () => {
+    it(`${mode} garrisons a hoplite in an own shelter (M15-3)`, () => {
       const s = orderScene('townCenter', 'hoplite');
       s.click(mode);
-      expect(s.commands).toHaveLength(1);
-      expect(s.commands[0].type).toBe('move');
+      expect(s.commands).toEqual([{ type: 'garrison', unitIds: [s.selected.id], buildingId: s.targetId }]);
+    });
+    it(`${mode} repairs a damaged own shelter instead of garrisoning (M14-5 over M15-3)`, () => {
+      const s = orderScene('townCenter', 'hoplite');
+      const tc = s.world.buildings.get(s.targetId)!;
+      tc.hp = Math.round(tc.maxHp / 2);
+      s.click(mode);
+      expect(s.commands).toEqual([{ type: 'repair', unitIds: [s.selected.id], targetId: s.targetId }]);
     });
   }
 });

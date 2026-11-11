@@ -21,6 +21,7 @@ import {
   costEntries,
   formatCost,
   keyLabel,
+  occupantSummary,
   popLabel,
 } from './build';
 import { formatCount, groupStatus, portraitKind, selectionName, showExplore, trainLabel, trainProgress } from './format';
@@ -108,6 +109,7 @@ export class Hud {
     cancel: byId('cancel-build-btn'),
     bell: byId('town-bell-btn'),
     ungarrison: byId('ungarrison-btn'),
+    garrisonList: byId('garrison-list'),
     hp: byId('unit-hp'),
     stats: byId('unit-stats'),
     trainGrid: byId('train-grid'),
@@ -569,6 +571,7 @@ export class Hud {
     setHidden(this.el.cancel, !foundation);
     setHidden(this.el.bell, !shelter);
     setHidden(this.el.ungarrison, !shelter || !(own?.occupants?.length));
+    this.updateGarrisonList(shelter ? own : undefined);
     const trainer = own && canTrainAt(own) ? own : undefined;
     const researcher = own && own.complete && techsAt(own.kind).length ? own : undefined;
     const panel = trainer ?? researcher;
@@ -621,6 +624,15 @@ export class Hud {
       const staffed = farmer?.gatherNode === b.id && ['toNode', 'gathering', 'toDrop'].includes(farmer.state);
       setText(this.el.status, buildingRole(b.kind, b.food, FARM_FOOD, b.occupants?.length ?? 0, own ? (staffed ? 1 : 0) : undefined));
     }
+  }
+
+  /** Occupants of the selected own shelter, by kind with counts (named by researched tier). */
+  private updateGarrisonList(b: Building | undefined): void {
+    const researched = b ? this.world.players.get(b.owner)?.researched ?? new Set<TechId>() : null;
+    const kinds = (b?.occupants ?? []).map((id) => this.world.units.get(id)?.kind).filter((k): k is UnitKind => !!k);
+    const text = researched ? occupantSummary(kinds, (k) => unitLine(researched, k).title) : '';
+    setText(this.el.garrisonList, text);
+    setHidden(this.el.garrisonList, !text);
   }
 
   /** Plain buttons remain available in the summary on desktop and touch. */

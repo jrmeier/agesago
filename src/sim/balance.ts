@@ -1,3 +1,5 @@
+import type { BuildingKind, UnitKind } from '../core/types';
+
 /** Gameplay tuning numbers. Owned by the Sim lane (T3). */
 export const BALANCE = {
   /** Sim ticks per second (fixed step). */
@@ -58,6 +60,16 @@ export const BALANCE = {
   exploreForwardBias: 1,
   /** A foundation starts at this fraction of its max hp; construction adds the rest. */
   foundationHp: 0.1,
+
+  // ---- Garrison (M15-3) ----
+  /** Arrows a garrisoned unit adds to its building's volley, by kind: villagers and foot archers/slingers; melee soldiers add none. */
+  garrisonArrows: { villager: 1, slinger: 1, archer: 1, immortal: 1 } as Partial<Record<UnitKind, number>>,
+  /** Hit points per second a garrisoned unit regains (Town Center, towers, …). */
+  garrisonHeal: 1,
+  /** Per-building overrides of garrisonHeal: temples are infirmaries. */
+  garrisonHealBy: { temple: 3 } as Partial<Record<BuildingKind, number>>,
+  /** Below this fraction of max hp a building ejects everyone inside and takes nobody new. */
+  garrisonEjectHp: 0.2,
 
   // ---- Combat ----
   /** Chasers give up once this far from where they last had the target in range (or first acquired it). */

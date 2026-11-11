@@ -1,4 +1,6 @@
-import type { Building, EntityId, PlayerId, Unit } from '../../core/types';
+import type { Building, EntityId, PlayerId, Unit, UnitKind } from '../../core/types';
+import { isAnimal, isShip } from '../../core/units';
+import { BALANCE } from '../balance';
 import type { World } from '../World';
 import { builderSpot } from './build';
 import { garrisonCap } from './stats';
@@ -8,10 +10,40 @@ import { inReach, siteApproach } from './sites';
 
 const reject = (world: World, reason: 'invalid-target' | 'unreachable') => world.events.emit({ type: 'rejected', reason });
 
-/** Free beds left, counting villagers already walking in. */
+/** Any own land unit can shelter: villagers, soldiers, scouts, priests, carts (not ships or animals). */
+export function canGarrison(kind: UnitKind): boolean {
+  return !isShip(kind) && !isAnimal(kind);
+}
+
+/** Arrows one garrisoned unit of `kind` adds to its building's volley. */
+export function occupantArrows(kind: UnitKind): number {
+  return BALANCE.garrisonArrows[kind] ?? 0;
+}
+
+/** Extra arrows from everyone inside `b`. */
+export function garrisonArrows(world: World, b: Building): number {
+  let n = 0;
+  for (const id of b.occupants ?? []) {
+    const u = world.units.get(id);
+    if (u) n += occupantArrows(u.kind);
+  }
+  return n;
+}
+
+/** Hit points per second a unit regains inside a building of `kind`. */
+export function garrisonHealRate(kind: Building['kind']): number {
+  return BALANCE.garrisonHealBy[kind] ?? BALANCE.garrisonHeal;
+}
+
+/** Too damaged to hold anyone: below BALANCE.garrisonEjectHp of max hp. */
+export function tooDamaged(b: Building): boolean {
+  return b.hp < b.maxHp * BALANCE.garrisonEjectHp;
+}
+
+/** Free slots left (one per unit), counting units already walking in. */
 function room(world: World, b: Building): number {
   const cap = garrisonCap(world, b.owner, b.kind, b.tier);
-  if (!b.complete || cap <= 0) return 0;
+  if (!b.complete || cap <= 0 || tooDamaged(b)) return 0;
   let used = b.occupants?.length ?? 0;
   for (const u of world.units.values()) if (u.state === 'toShelter' && u.shelter === b.id) used++;
   return cap - used;
@@ -34,7 +66,7 @@ function dropWork(world: World, units: Unit[]): Unit[] {
 
 function enter(world: World, u: Unit, b: Building): boolean {
   const cap = garrisonCap(world, b.owner, b.kind, b.tier);
-  if (!b.complete || (b.occupants?.length ?? 0) >= cap || !inReach(u, b)) return false;
+  if (!b.complete || tooDamaged(b) || (b.occupants?.length ?? 0) >= cap || !inReach(u, b)) return false;
   u.path = [];
   u.pos = { x: b.pos.x, z: b.pos.z };
   u.prevPos = { x: b.pos.x, z: b.pos.z };
@@ -45,7 +77,7 @@ function enter(world: World, u: Unit, b: Building): boolean {
   return true;
 }
 
-/** A spot just outside `b` that a villager can stand on. */
+/** A spot just outside `b` that a unit can stand on. */
 function exitSpot(world: World, b: Building): { x: number; z: number } {
   const origin = siteApproach(b.pos, b);
   for (let s = 0; s < 8; s++) {
@@ -70,23 +102,23 @@ function eject(world: World, b: Building, u: Unit): void {
 }
 
 /**
- * 'garrison': villagers of the building's owner walk in, up to the free beds.
+ * 'garrison': land units of the building's owner walk in, up to the free slots.
  * Returns whether anyone was sent or taken inside. `quiet` skips the reject event
  * (the town bell reports once for the whole order).
  */
 export function orderGarrison(world: World, unitIds: EntityId[], buildingId: EntityId, quiet = false): boolean {
   const b = world.buildings.get(buildingId);
   const cap = b ? garrisonCap(world, b.owner, b.kind, b.tier) : 0;
-  const villagers = unitIds
+  const units = unitIds
     .map((id) => world.units.get(id))
-    .filter((u): u is Unit => !!u && u.kind === 'villager' && u.owner === b?.owner && u.state !== 'garrisoned');
-  if (!b || !b.complete || cap <= 0 || !villagers.length) {
+    .filter((u): u is Unit => !!u && canGarrison(u.kind) && u.owner === b?.owner && u.state !== 'garrisoned');
+  if (!b || !b.complete || cap <= 0 || tooDamaged(b) || !units.length) {
     if (!quiet) reject(world, 'invalid-target');
     return false;
   }
-  const cancelled = dropWork(world, villagers);
+  const cancelled = dropWork(world, units);
   let sent = 0;
-  for (const u of villagers) {
+  for (const u of units) {
     if (room(world, b) <= 0) continue;
     u.shelter = b.id;
     if (enter(world, u, b)) {
@@ -152,7 +184,35 @@ export function orderTownBell(world: World, by: PlayerId): void {
   if (!sent) reject(world, 'unreachable');
 }
 
-/** Villagers who have reached a shelter door step inside. */
+/** Everyone steps out of `b` (it is too damaged to hold them). */
+function ejectAll(world: World, b: Building): void {
+  for (const id of [...(b.occupants ?? [])]) {
+    const u = world.units.get(id);
+    if (u) eject(world, b, u);
+  }
+  b.occupants = [];
+}
+
+/**
+ * Per tick, for buildings with people inside: eject everyone once the building drops below
+ * BALANCE.garrisonEjectHp, otherwise heal the occupants at the building's rate.
+ */
+export function garrisonUpkeep(world: World, dt: number): void {
+  for (const b of world.buildings.values()) {
+    if (!b.occupants?.length) continue;
+    if (tooDamaged(b)) {
+      ejectAll(world, b);
+      continue;
+    }
+    const heal = garrisonHealRate(b.kind) * dt;
+    for (const id of b.occupants) {
+      const u = world.units.get(id);
+      if (u && u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + heal);
+    }
+  }
+}
+
+/** Units that have reached a shelter door step inside. */
 export function garrisonSystem(world: World, arrived: Unit[]): void {
   for (const u of arrived) {
     if (u.state !== 'toShelter' || u.shelter == null) continue;

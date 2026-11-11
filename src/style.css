@@ -611,6 +611,13 @@ body.placing .selection-panel * {
   color: var(--ink-700);
 }
 
+.garrison-list {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-700);
+}
+
 .unit-stats {
   display: flex;
   gap: var(--s-2);

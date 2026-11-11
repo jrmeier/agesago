@@ -33,7 +33,7 @@ import { NavGrid } from './nav';
 import { Visibility, type Viewer } from './visibility';
 import { buildSystem, canPlace, orderBuild, orderBuildWall, orderCancelBuild, orderConstruct } from './systems/build';
 import { orderRepair, repairSystem } from './systems/repair';
-import { garrisonSystem, orderGarrison, orderTownBell, orderUngarrison } from './systems/defence';
+import { garrisonSystem, garrisonUpkeep, orderGarrison, orderTownBell, orderUngarrison } from './systems/defence';
 import {
   combatSystem,
   orderAttack,
@@ -464,6 +464,7 @@ export class World {
     livestockSystem(this, dt);
     wildlifeSystem(this, dt);
     combatSystem(this, dt, arrived);
+    garrisonUpkeep(this, dt);
     exploreSystem(this);
     productionSystem(this, dt);
     buildingUpgradeSystem(this, dt);

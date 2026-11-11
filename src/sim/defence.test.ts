@@ -10,7 +10,8 @@ import {
 } from '../core/types';
 import { BALANCE } from './balance';
 import { rectDistance } from './nav';
-import { applyDamage } from './systems/combat';
+import { applyDamage, applyRally } from './systems/combat';
+import { deserializeWorld, serializeWorld } from './serialize';
 import { completeBuilding, layFoundation } from './systems/build';
 import { route } from './systems/passage';
 import { buildingRect } from './systems/sites';
@@ -83,6 +84,7 @@ function cuts(path: readonly Vec2[], r: { x0: number; z0: number; x1: number; z1
 
 function finish(world: World, kind: Building['kind'], pos: Vec2, owner = 1): Building {
   const b = layFoundation(world, kind, pos, 0, owner);
+  b.hp = b.maxHp;
   completeBuilding(world, b);
   return b;
 }
@@ -256,5 +258,135 @@ describe('tower fire', () => {
     const hp = foe.hp;
     run(manned, 1);
     expect(foe.hp).toBeLessThan(hp);
+  });
+});
+
+describe('soldier garrisons (M15-3)', () => {
+  /** Projectiles a tower at (32, 24) fires on its first volley at a hoplite in range, with `kinds` inside. */
+  function volley(kinds: Parameters<World['spawnUnit']>[0][]): number {
+    const w = field();
+    const tower = finish(w, 'watchTower', { x: 32, z: 24 });
+    for (const k of kinds) {
+      const u = w.spawnUnit(k, { x: 32, z: 24 }, 1);
+      w.dispatch({ type: 'garrison', unitIds: [u.id], buildingId: tower.id });
+      expect(u.state).toBe('garrisoned');
+    }
+    w.spawnUnit('hoplite', { x: 32, z: 28 }, 2);
+    w.updateFog();
+    const shots: SimEvent[] = [];
+    w.events.on('projectile', (e) => shots.push(e));
+    w.tick(DT);
+    return shots.length;
+  }
+
+  it('takes soldiers and villagers alike, one slot each, up to capacity', () => {
+    const w = field();
+    const tower = finish(w, 'watchTower', { x: 30, z: 24 });
+    const kinds = ['hoplite', 'archer', 'horseman', 'villager', 'slinger', 'swordsman'] as const;
+    const units = kinds.map((k) => w.spawnUnit(k, { x: 30, z: 24 }, 1));
+    w.dispatch({ type: 'garrison', unitIds: units.map((u) => u.id), buildingId: tower.id });
+    expect(tower.occupants).toHaveLength(5);
+    expect(units.slice(0, 5).every((u) => u.state === 'garrisoned' && u.shelter === tower.id)).toBe(true);
+    expect(units[5].state).not.toBe('garrisoned');
+
+    const rejected: SimEvent[] = [];
+    w.events.on('rejected', (e) => rejected.push(e));
+    w.dispatch({ type: 'garrison', unitIds: [units[5].id], buildingId: tower.id });
+    expect(rejected).toHaveLength(1);
+    expect(tower.occupants).toHaveLength(5);
+
+    w.dispatch({ type: 'ungarrison', buildingId: tower.id });
+    expect(tower.occupants ?? []).toHaveLength(0);
+    expect(units.slice(0, 5).every((u) => u.state === 'idle' && u.shelter === null)).toBe(true);
+  });
+
+  it('does not take enemy units or ships', () => {
+    const w = field();
+    const tower = finish(w, 'watchTower', { x: 30, z: 24 });
+    const foe = w.spawnUnit('hoplite', { x: 30, z: 24 }, 2);
+    w.dispatch({ type: 'garrison', unitIds: [foe.id], buildingId: tower.id });
+    expect(tower.occupants ?? []).toHaveLength(0);
+  });
+
+  it('adds an arrow per villager and foot archer or slinger, none per melee soldier', () => {
+    expect(volley([])).toBe(1);
+    expect(volley(['hoplite', 'swordsman', 'horseman'])).toBe(1);
+    expect(volley(['villager'])).toBe(2);
+    expect(volley(['archer', 'slinger'])).toBe(3);
+    expect(volley(['villager', 'archer', 'hoplite', 'hoplite'])).toBe(3);
+  });
+
+  it('heals occupants at the building rate: 1 hp/s in a tower, 3 hp/s in a temple', () => {
+    const w = field();
+    const tower = finish(w, 'watchTower', { x: 30, z: 24 });
+    const temple = finish(w, 'temple', { x: 40, z: 24 });
+    const a = w.spawnUnit('hoplite', { x: 30, z: 24 }, 1);
+    const b = w.spawnUnit('hoplite', { x: 40, z: 24 }, 1);
+    a.hp = 10;
+    b.hp = 10;
+    w.dispatch({ type: 'garrison', unitIds: [a.id], buildingId: tower.id });
+    w.dispatch({ type: 'garrison', unitIds: [b.id], buildingId: temple.id });
+    expect(b.state).toBe('garrisoned');
+    run(w, 5);
+    expect(a.hp).toBeCloseTo(10 + 5 * BALANCE.garrisonHeal, 5);
+    expect(b.hp).toBeCloseTo(10 + 5 * BALANCE.garrisonHealBy.temple!, 5);
+    expect(BALANCE.garrisonHealBy.temple).toBe(3);
+    run(w, 60);
+    expect(b.hp).toBe(b.maxHp);
+  });
+
+  it('ejects everyone when the building drops below the hp threshold, and refuses new occupants', () => {
+    const w = field();
+    const tower = finish(w, 'watchTower', { x: 30, z: 24 });
+    const units = [w.spawnUnit('archer', { x: 30, z: 24 }, 1), w.spawnUnit('villager', { x: 30, z: 24 }, 1)];
+    w.dispatch({ type: 'garrison', unitIds: units.map((u) => u.id), buildingId: tower.id });
+    expect(tower.occupants).toHaveLength(2);
+    tower.hp = tower.maxHp * BALANCE.garrisonEjectHp + 1;
+    w.tick(DT);
+    expect(tower.occupants).toHaveLength(2);
+    tower.hp = tower.maxHp * BALANCE.garrisonEjectHp - 1;
+    w.tick(DT);
+    expect(tower.occupants ?? []).toHaveLength(0);
+    for (const u of units) {
+      expect(u.state).not.toBe('garrisoned');
+      expect(u.shelter ?? null).toBeNull();
+      expect(rectDistance(u.pos, buildingRect(tower))).toBeGreaterThan(0);
+    }
+    w.dispatch({ type: 'garrison', unitIds: [units[0].id], buildingId: tower.id });
+    expect(units[0].state).not.toBe('garrisoned');
+  });
+
+  it('sends newly trained units into a rallied shelter', () => {
+    const w = field();
+    const barracks = finish(w, 'barracks', { x: 20, z: 20 });
+    const tower = finish(w, 'watchTower', { x: 30, z: 24 });
+    w.dispatch({ type: 'rally', buildingId: barracks.id, pos: { ...tower.pos }, targetId: tower.id });
+    expect(barracks.rally?.targetId).toBe(tower.id);
+    const recruit = w.spawnUnit('hoplite', { x: 23, z: 20 }, 1);
+    applyRally(w, barracks, recruit);
+    expect(['toShelter', 'garrisoned']).toContain(recruit.state);
+    run(w, 15, () => recruit.state === 'garrisoned');
+    expect(recruit.state).toBe('garrisoned');
+    expect(tower.occupants).toContain(recruit.id);
+  });
+
+  it('keeps soldiers garrisoned across save and load', () => {
+    const w = field();
+    const tower = finish(w, 'watchTower', { x: 32, z: 24 });
+    const archer = w.spawnUnit('archer', { x: 32, z: 24 }, 1);
+    const hoplite = w.spawnUnit('hoplite', { x: 32, z: 24 }, 1);
+    w.dispatch({ type: 'garrison', unitIds: [archer.id, hoplite.id], buildingId: tower.id });
+    w.seed = 1;
+    const loaded = deserializeWorld(JSON.parse(JSON.stringify(serializeWorld(w))), w.hf);
+    const t = loaded.buildings.get(tower.id)!;
+    expect(t.occupants).toEqual([archer.id, hoplite.id]);
+    expect(loaded.units.get(hoplite.id)?.state).toBe('garrisoned');
+    expect(loaded.units.get(archer.id)?.shelter).toBe(tower.id);
+    loaded.spawnUnit('hoplite', { x: 32, z: 28 }, 2);
+    loaded.updateFog();
+    const shots: SimEvent[] = [];
+    loaded.events.on('projectile', (e) => shots.push(e));
+    loaded.tick(DT);
+    expect(shots).toHaveLength(2);
   });
 });

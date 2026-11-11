@@ -14,7 +14,8 @@ import { formationOffset } from './movement';
 import { siteApproach } from './sites';
 import { playerHasFlag } from './research';
 import { awardKill, recordDamage } from './veterancy';
-import { armorOf, buildingAttack, damageTo, edgeDistance, isRanged, nearestPoint, unitRadius, unitRange, unitSight, unitSpeed } from './stats';
+import { armorOf, buildingAttack, damageTo, edgeDistance, garrisonCap, isRanged, nearestPoint, unitRadius, unitRange, unitSight, unitSpeed } from './stats';
+import { garrisonArrows, orderGarrison } from './defence';
 
 /** Per-unit combat bookkeeping kept off the frozen Unit shape (created on first engagement). */
 export interface CombatState {
@@ -347,6 +348,9 @@ export function applyRally(world: World, b: Building, u: Unit): void {
       orderAttack(world, [u.id], t.id, u.owner);
       return;
     }
+    // A rally onto an own shelter (Town Center, tower, temple) takes the new unit inside.
+    if (t && !isUnit(t) && t.owner === u.owner && t.complete && garrisonCap(world, t.owner, t.kind, t.tier) > 0
+      && orderGarrison(world, [u.id], t.id, true)) return;
     if (t && !isUnit(t) && t.owner === u.owner && canWork(u.kind)) {
       if (!t.complete) {
         sendBuilders(world, [u.id], t);
@@ -771,12 +775,12 @@ export function combatSystem(world: World, dt: number, arrived: Unit[]): void {
   defenceFire(world, dt);
 }
 
-/** Watch towers, and shelters with villagers inside, fire a volley at the nearest enemies in range. */
+/** Watch towers, and shelters with villagers or foot archers inside, fire a volley at the nearest enemies in range. */
 function defenceFire(world: World, dt: number): void {
   for (const b of world.buildings.values()) {
     if (!BUILDINGS[b.kind].attack || !b.complete || b.hp <= 0) continue;
     const attack = buildingAttack(world, b)!;
-    const arrows = attack.arrows + (b.occupants?.length ?? 0);
+    const arrows = attack.arrows + garrisonArrows(world, b);
     if (arrows <= 0) continue;
     b.cooldown = (b.cooldown ?? 0) - dt;
     if (b.cooldown > 0) continue;

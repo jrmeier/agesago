@@ -87,6 +87,12 @@ of a Town Center. The scripted player has mined all of that by about minute 22. 
 inside that budget, and the Empire Age leans on food. Anything past it has to come from the market
 or trade carts.
 
+**Garrisons (M15-3).** Any own land unit takes one slot in a Town Center (10), watch tower (5)
+or temple (10, healing only). Each garrisoned villager, archer, slinger or Immortal adds one arrow
+to the building's volley (`BALANCE.garrisonArrows`); melee soldiers and cavalry add none. Occupants
+heal 1 hp/s (`garrisonHeal`), 3 hp/s in a temple (`garrisonHealBy`). Below 20% of max hp
+(`garrisonEjectHp`) a building ejects everyone and takes nobody new.
+
 ## Results
 
 Historical results from `npm run bench:pacing` on lane/balance8 (M8 sim, 70 villagers,

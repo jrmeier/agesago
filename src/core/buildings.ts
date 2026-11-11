@@ -25,9 +25,9 @@ export interface BuildingSpec {
   hp: number;
   /** Damage reduction against attacks. */
   armor: { melee: number; pierce: number };
-  /** Pierce attack once complete. `arrows` fire with nobody inside; each garrisoned villager adds one. */
+  /** Pierce attack once complete. `arrows` fire with nobody inside; garrisoned villagers and foot archers add BALANCE.garrisonArrows. */
   attack?: { pierce: number; range: number; reload: number; arrows: number };
-  /** Villagers that can shelter here once complete. */
+  /** Own land units that can shelter here once complete (one slot each); they heal inside. */
   garrison?: number;
   /** Placed by dragging a line of segments rather than one click. */
   line?: boolean;
@@ -258,6 +258,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     name: 'Temple', size: { w: 4, d: 4 }, cost: { wood: 180, stone: 80 },
     buildTime: 50, popBonus: 0, drop: [], walkable: false, buildable: true,
     sight: 8, hp: 1400, armor: { melee: 1, pierce: 7 }, age: 1,
+    // Healing only: no attack, so occupants add no arrows (BALANCE.garrisonHealBy).
+    garrison: 10,
   },
   academy: {
     name: 'Academy',
