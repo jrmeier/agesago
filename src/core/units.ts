@@ -418,8 +418,11 @@ export const RANKS: readonly [RankSpec, RankSpec, RankSpec] = [
   { name: 'Elite', xp: 300, hp: 1.1 * 1.1, attack: 2, armor: 2, work: 0.7 },
 ];
 
-/** Soldiers rank up: infantry, archers and cavalry (scouts included). Villagers, priests, trade carts, ships and wildlife do not. */
+/**
+ * Soldiers rank up: infantry, archers and cavalry (scouts included). Villagers, priests, trade
+ * carts, ships and wildlife do not, and nor do champions (M16-5), who are already elite.
+ */
 export function canRank(kind: UnitKind): boolean {
   const c = UNITS[kind].unitClass;
-  return c === 'infantry' || c === 'archer' || c === 'cavalry';
+  return (c === 'infantry' || c === 'archer' || c === 'cavalry') && !isChampion(kind);
 }

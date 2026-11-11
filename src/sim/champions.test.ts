@@ -12,7 +12,7 @@ import {
   type UnitKind,
   type Vec2,
 } from '../core/types';
-import { canWork, isChampion, trainable, UNITS } from '../core/units';
+import { canRank, canWork, isChampion, trainable, UNITS } from '../core/units';
 import { limitLabel, limitLockText } from '../ui/build';
 import { BALANCE } from './balance';
 import { completeBuilding, layFoundation, ownedCount } from './systems/build';
@@ -47,6 +47,7 @@ function arena(opts: { w?: number; civs?: CivId[]; nodes?: MapLayout['nodes'] } 
 function building(world: World, kind: BuildingKind, pos: Vec2, owner: PlayerId = 1) {
   const b = layFoundation(world, kind, pos, 0, owner);
   completeBuilding(world, b);
+  b.hp = b.maxHp;
   return b;
 }
 
@@ -211,9 +212,21 @@ describe('champions', () => {
     expect(reasons).toContain('invalid-target');
   });
 
-  it('do not take line upgrades (no veterancy or rank-up path)', async () => {
+  it('do not rank up or take line upgrades', async () => {
     const { TECHS } = await import('../core/techs');
     for (const t of Object.values(TECHS)) if (t.line) expect(isChampion(t.line.unit)).toBe(false);
+    for (const k of CHAMPIONS) expect(canRank(k)).toBe(false);
+    // A champion that kills a group of enemies stays Basic and earns no experience.
+    const world = arena();
+    for (const p of [1, 2]) world.players.get(p)!.age = 2;
+    const champ = world.spawnUnit('praetorian', { x: 60, z: 60 }, 1);
+    const victims = Array.from({ length: 4 }, (_, i) => world.spawnUnit('villager', { x: 62, z: 58 + i * 1.2 }, 2));
+    world.updateFog();
+    world.dispatch({ type: 'attack', unitIds: [champ.id], targetId: victims[0].id });
+    run(world, 120, () => victims.every((v) => !world.units.has(v.id)));
+    expect(victims.every((v) => !world.units.has(v.id))).toBe(true);
+    expect(champ.rank ?? 0).toBe(0);
+    expect(champ.xp ?? 0).toBe(0);
   });
 });
 
