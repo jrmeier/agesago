@@ -3,6 +3,7 @@ import type { Age, BuildingKind, EntityId, Stockpile } from '../core/types';
 import { BALANCE } from '../sim/balance';
 import { completeBuilding, layFoundation } from '../sim/systems/build';
 import { clearStatCache, statOf } from '../sim/systems/research';
+import { gainXp } from '../sim/systems/veterancy';
 import type { World } from '../sim/World';
 
 /**
@@ -22,6 +23,8 @@ export interface DevHook {
   setAge(age: Age): void;
   /** Set a building's hit points (clamped to 1..maxHp) without killing it; returns the new hp. */
   setHp(id: EntityId, hp: number): number | null;
+  /** Give unit `id` experience (promotes it like a kill would). Returns its rank, or null. */
+  grantXp(id: EntityId, xp: number): number | null;
 }
 
 export function devHook(world: World): DevHook {
@@ -73,6 +76,12 @@ export function devHook(world: World): DevHook {
       b.hp = Math.min(b.maxHp, Math.max(1, hp));
       world.events.emit({ type: 'damaged', id, hp: b.hp, maxHp: b.maxHp, by: null });
       return b.hp;
+    },
+    grantXp(id, xp) {
+      const unit = world.units.get(id);
+      if (!unit) return null;
+      gainXp(world, unit, xp);
+      return unit.rank ?? 0;
     },
   };
 }

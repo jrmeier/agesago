@@ -11,6 +11,7 @@ import {
   type EntityKind,
   type NodeKind,
   type PlayerId,
+  type Rank,
   type ResourceNode,
   type Unit,
   type UnitKind,
@@ -34,6 +35,7 @@ import {
   type Sight,
 } from './lastSeen';
 import { HealthBars } from './hpBars';
+import { PromotionSparkles, RankChevrons } from './rankMarks';
 import { chunkCoord, SpatialInstances } from './instanceChunks';
 import { berryLodGeometry, goldLodGeometry, stoneLodGeometry, stoneNodeGeometry, treeLodGeometry } from './lod';
 import { createUnitAvatar, type UnitAvatar } from './modelBridge';
@@ -241,6 +243,10 @@ export class EntityViews {
   private depthMaterial: THREE.Material | null = null;
   private activeGhost: THREE.Group | null = null;
   private readonly bars: HealthBars;
+  private readonly chevrons: RankChevrons;
+  private readonly sparkles: PromotionSparkles;
+  /** Promotions since the last sync; their sparkles start at the next frame time. */
+  private readonly promotions: Array<{ id: EntityId; rank: Rank }> = [];
   private readonly projectiles: ProjectilePool;
   private readonly deaths: DeathGhosts;
 
@@ -314,6 +320,8 @@ export class EntityViews {
     this.explorationView = new ExplorationView(this.world);
     this.object.add(this.explorationView.object);
     this.bars = new HealthBars(this.object);
+    this.chevrons = new RankChevrons(this.object);
+    this.sparkles = new PromotionSparkles(this.object);
     this.projectiles = new ProjectilePool(this.object, quality);
     this.deaths = new DeathGhosts(this.object, quality);
 
@@ -329,6 +337,10 @@ export class EntityViews {
       this.projectiles.launch(e.kind, e.from, e.to, e.flight, (x, z) => this.groundY(x, z));
     });
     this.world.events.on('removed', (e) => this.unmount(e.id));
+    this.world.events.on('promoted', (e) => {
+      if (this.promotions.length >= 32) this.promotions.shift();
+      this.promotions.push({ id: e.id, rank: e.rank });
+    });
     this.world.events.on('researched', (e) => this.onResearched(e.owner));
     this.world.events.on('buildingUpgraded', (e) => { if (this.buildingViews.has(e.id)) this.tierDirty.add(e.id); });
     this.world.events.on('constructed', (e) => {
@@ -384,6 +396,7 @@ export class EntityViews {
     this.explorationView.sync();
     this.syncBuildings(camera);
     this.syncHealth(t, camera);
+    this.syncRanks(t, time, camera);
     this.syncRings(t);
     this.syncAuraRings(t);
     this.syncMarker(time);
@@ -815,6 +828,25 @@ export class EntityViews {
       this.pushBuildingBar(snap.kind, snap.pos, snap.hp, snap.maxHp, snap.id);
     }
     this.bars.end();
+  }
+
+  /** Chevrons over every shown veteran, and sparkles for promotions seen since the last frame. */
+  private syncRanks(alpha: number, time: number, camera: THREE.Camera): void {
+    this.chevrons.begin(camera);
+    for (const unit of this.world.units.values()) {
+      if (!unit.rank || !this.unitShown(unit)) continue;
+      const x = unit.prevPos.x + (unit.pos.x - unit.prevPos.x) * alpha;
+      const z = unit.prevPos.z + (unit.pos.z - unit.prevPos.z) * alpha;
+      this.chevrons.push(x, this.groundY(x, z) + BAR_Y[unit.kind] + 0.24, z, unit.rank);
+    }
+    this.chevrons.end();
+    for (const p of this.promotions) {
+      const unit = this.world.units.get(p.id);
+      if (!unit || !this.unitShown(unit)) continue;
+      this.sparkles.burst(unit.pos.x, this.groundY(unit.pos.x, unit.pos.z), unit.pos.z, p.rank, time);
+    }
+    this.promotions.length = 0;
+    this.sparkles.update(time, camera);
   }
 
   private syncRings(alpha: number): void {

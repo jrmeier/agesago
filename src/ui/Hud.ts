@@ -42,6 +42,7 @@ import {
   popLabel,
   shortfallText,
 } from './build';
+import { rankLine, rankSummary } from './rank';
 import { formatCount, groupStatus, portraitKind, selectionName, showExplore, trainLabel, trainProgress } from './format';
 import {
   STANCES,
@@ -136,6 +137,7 @@ export class Hud {
     hp: byId('unit-hp'),
     stats: byId('unit-stats'),
     auras: byId('unit-auras'),
+    rank: byId('unit-rank'),
     trainGrid: byId('train-grid'),
     queue: byId('train-queue'),
     commands: byId('command-card'),
@@ -191,6 +193,7 @@ export class Hud {
   private statsKey = '';
   private aurasKey = '';
   private hpKey = '';
+  private rankKey = '';
   private readonly menuTabs: Record<TouchMenu, HTMLElement | null>;
   /** Enemy buildings the panel may describe while they are out of sight. */
   private snaps = new Map<number, LastSeenBuilding>();
@@ -567,6 +570,7 @@ export class Hud {
       this.setPortrait(`#i-${portraitKind(kinds)}`, units.length > 1 ? String(units.length) : '');
       const hp = totalHp(units);
       this.setHp(hp.hp, hp.maxHp);
+      this.setRank(units);
       const single = kinds.every((k) => k === kinds[0]) ? kinds[0] : null;
       this.setStats(single && (isMilitary(single) || foreign) ? single : null, units[0].owner);
       this.setAuras(units.length === 1 ? activeAuras(this.world, units[0].id) : []);
@@ -574,6 +578,7 @@ export class Hud {
       this.setHp(building.complete ? building.hp : -1, building.maxHp);
       this.setBuildingStats(building.complete ? building : null);
       this.setAuras(activeAuras(this.world, building.id));
+      this.setRank([]);
     } else if (remembered) {
       this.setAuras([]);
       setText(this.el.name, BUILDINGS[remembered.kind].name);
@@ -581,8 +586,10 @@ export class Hud {
       this.setPortrait(`#i-b-${remembered.kind}`, '');
       this.setHp(remembered.complete ? remembered.hp : -1, remembered.maxHp);
       this.setStats(null);
+      this.setRank([]);
     } else {
       this.setHp(-1, 0);
+      this.setRank([]);
       this.setStats(null);
       this.setAuras([]);
     }
@@ -797,6 +804,26 @@ export class Hud {
       const fill = q.querySelector<HTMLElement>('.queue-fill');
       if (fill) fill.style.width = w;
     }
+  }
+
+  /** One soldier: rank name and a bar to the next rank. Several: how many of each rank. */
+  private setRank(units: readonly Unit[]): void {
+    const el = this.el.rank;
+    if (!el) return;
+    const line = units.length === 1 ? rankLine(units[0].kind, units[0].rank, units[0].xp) : null;
+    const summary = units.length > 1 ? rankSummary(units) : null;
+    const key = line ? `1:${line.name}:${line.label}` : summary ? `n:${summary}` : '';
+    if (key === this.rankKey) return;
+    this.rankKey = key;
+    setHidden(el, !key);
+    el.classList.toggle('summary', !line);
+    const name = el.querySelector<HTMLElement>('.unit-rank-name');
+    const text = el.querySelector<HTMLElement>('.unit-rank-text');
+    const fill = el.querySelector<HTMLElement>('.unit-rank-fill');
+    el.dataset.rank = line ? line.name : '';
+    setText(name, line ? line.name : '');
+    setText(text, line ? line.label : (summary ?? ''));
+    if (fill) fill.style.width = `${((line?.fraction ?? 0) * 100).toFixed(1)}%`;
   }
 
   private setHp(hp: number, maxHp: number): void {

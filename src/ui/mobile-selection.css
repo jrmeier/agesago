@@ -161,6 +161,19 @@ body.touch .unit-hp-text {
   line-height: 14px;
 }
 
+body.touch .unit-rank {
+  grid-column: 1 / -1;
+  gap: 5px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 14px;
+}
+
+body.touch .unit-rank-bar {
+  width: 44px;
+  height: 4px;
+}
+
 body.touch .unit-stats {
   grid-column: 2;
   margin: 0;

@@ -149,6 +149,17 @@ describe('positional sound', () => {
     hidden.ear.dispose();
   });
 
+  it('chimes when an own soldier is promoted and stays quiet for a fogged enemy', () => {
+    const own = world(new Map<EntityId, Unit>([[1, unit({ id: 1, owner: 1, pos: { x: 3, z: 1 } })]]));
+    own.world.events.emit({ type: 'promoted', id: 1, owner: 1, rank: 1 });
+    expect(own.sink.played.map((voice) => voice.kind)).toEqual(['research']);
+    const fogged = world(new Map<EntityId, Unit>([[2, unit({ id: 2, owner: 2, pos: { x: 90, z: 4 } })]]));
+    fogged.world.events.emit({ type: 'promoted', id: 2, owner: 2, rank: 2 });
+    expect(fogged.sink.played).toHaveLength(0);
+    own.ear.dispose();
+    fogged.ear.dispose();
+  });
+
   it('makes a far clash quieter than one beside the camera', () => {
     const nearUnits = new Map<EntityId, Unit>([[2, unit({ id: 2, owner: 2, pos: { x: 2, z: 0 } })]]);
     const farUnits = new Map<EntityId, Unit>([[2, unit({ id: 2, owner: 2, pos: { x: 40, z: 0 } })]]);

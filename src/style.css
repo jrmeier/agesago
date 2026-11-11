@@ -640,6 +640,64 @@ body.placing .selection-panel * {
   color: var(--ink-700);
 }
 
+.unit-rank {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--s-1);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink-700);
+  min-width: 0;
+}
+
+.unit-rank-name {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: rgb(42 29 18 / 0.12);
+  white-space: nowrap;
+}
+
+.unit-rank[data-rank='Advanced'] .unit-rank-name {
+  background: #c9d1da;
+  color: #1d140c;
+}
+
+.unit-rank[data-rank='Elite'] .unit-rank-name {
+  background: #f4c542;
+  color: #1d140c;
+}
+
+.unit-rank-bar {
+  width: 64px;
+  height: 5px;
+  flex: none;
+  border-radius: 3px;
+  background: rgb(42 29 18 / 0.16);
+  border: 1px solid rgb(42 29 18 / 0.2);
+  overflow: hidden;
+}
+
+.unit-rank-fill {
+  width: 0;
+  height: 100%;
+  background: #d9a62e;
+}
+
+.unit-rank.summary .unit-rank-name,
+.unit-rank.summary .unit-rank-bar {
+  display: none;
+}
+
+.unit-rank-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .unit-stats {
   display: flex;
   gap: var(--s-2);

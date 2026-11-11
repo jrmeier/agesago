@@ -67,6 +67,7 @@ export class MatchAudio {
     this.off.push(bus.on('spawned', (event) => this.onSpawned(event.id, event.kind)));
     this.off.push(bus.on('researched', (event) => this.onOwned(event.owner, 'research')));
     this.off.push(bus.on('agedUp', (event) => this.onOwned(event.owner, 'age')));
+    this.off.push(bus.on('promoted', (event) => this.onPromoted(event.id)));
     this.off.push(bus.on('unitState', (event) => this.onUnitState(event.id, event.state)));
     this.onPointer = (event) => this.onClick(event);
     if (typeof document !== 'undefined') document.addEventListener('pointerdown', this.onPointer, true);
@@ -118,6 +119,12 @@ export class MatchAudio {
     const unit = this.unit(id);
     if (!unit || UNITS[unit.kind].unitClass === 'wildlife') return;
     this.offer({ kind: 'ready', pos: unit.pos, owner: unit.owner });
+  }
+
+  /** Promotion reuses the research chime at the soldier. */
+  private onPromoted(id: EntityId): void {
+    const unit = this.unit(id);
+    if (unit) this.offer({ kind: 'research', pos: unit.pos, owner: unit.owner, key: `rank:${id}`, gap: 0.3 });
   }
 
   private onOwned(owner: PlayerId, kind: SfxKind): void {
