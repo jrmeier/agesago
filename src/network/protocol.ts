@@ -5,8 +5,8 @@ import { TECHS } from '../core/techs';
 import type { Command } from '../core/types';
 import { UNITS } from '../core/units';
 
-/** 5: upgrade chains replace the tower techs. 4: in-place building upgrades (upgradeBuilding/cancelUpgrade). 3: trained land units can work. */
-export const NETWORK_VERSION = 5;
+/** 6: 'repair' command and passive ship healing at docks. 5: upgrade chains replace the tower techs. 4: in-place building upgrades (upgradeBuilding/cancelUpgrade). 3: trained land units can work. */
+export const NETWORK_VERSION = 6;
 export const TICKS_PER_TURN = 4;
 export const HASH_EVERY = 25;
 export const MAX_COMMANDS = 64;
@@ -43,7 +43,7 @@ export function validCommand(v: unknown): v is Command {
     case 'move': case 'attackMove': return ids(v.unitIds) && point(v.target);
     case 'gather': return ids(v.unitIds) && id(v.nodeId);
     case 'heal': case 'convert':
-    case 'attack': return ids(v.unitIds) && id(v.targetId);
+    case 'attack': case 'repair': return ids(v.unitIds) && id(v.targetId);
     case 'stop': case 'explore': return ids(v.unitIds);
     case 'stance': return ids(v.unitIds) && ['aggressive', 'defensive', 'standGround', 'passive'].includes(String(v.stance));
     case 'train': return id(v.buildingId) && (v.unit === undefined || typeof v.unit === 'string' && Object.hasOwn(UNITS, v.unit));

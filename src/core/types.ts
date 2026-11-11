@@ -210,6 +210,10 @@ export type UnitState =
   | 'tending'
   | 'toBuild'
   | 'building'
+  /** Walking to a damaged completed building to repair it. */
+  | 'toRepair'
+  /** Restoring a completed building's hit points (paying as it goes). */
+  | 'repairing'
   /** Walking into a Town Center or tower. */
   | 'toShelter'
   /** Inside a building: off the map, untargetable, until ungarrisoned. */
@@ -343,8 +347,10 @@ export type Command =
   | { type: 'rally'; buildingId: EntityId; pos: Vec2; targetId?: EntityId }
   /** Place a foundation (cost is paid now) and send the units to build it. */
   | { type: 'build'; unitIds: EntityId[]; kind: BuildingKind; pos: Vec2; rot: number }
-  /** Send units to help construct an existing foundation (or repair later). */
+  /** Send units to help construct an existing foundation. */
   | { type: 'construct'; unitIds: EntityId[]; buildingId: EntityId }
+  /** Send workers to repair an own or allied completed building below max hp (paid as it goes). */
+  | { type: 'repair'; unitIds: EntityId[]; targetId: EntityId }
   /** Cancel an unfinished foundation; refunds the cost. */
   | { type: 'cancelBuild'; buildingId: EntityId }
   /** Auto-explore: units head for the nearest reachable unexplored ground until told otherwise. */

@@ -66,6 +66,13 @@ payback  = research_time + total_cost / gain   (s)
 - Carry and speed techs (Donkey Packs, Ox Carts) are measured on a mixed crew, because they help
   every villager.
 
+**Repair.** Workers restore an own or allied completed building at
+`maxHp × n^buildExponent / (buildTime × repairTimeFactor)` hp/s for `n` repairers
+(`repairTimeFactor` 1.5). A full 0 → max repair costs `repairCostFactor` (0.5) × the building's
+cost, paid by the repairer's owner one whole resource at a time as the hp go up; a player who can't
+pay the next unit stops repairing. A damaged ship near an own finished dock heals for free at
+`dockHealRate` (1.5 hp/s).
+
 **Age cost scale.** Villagers here gather about 0.7–0.8 resources/s and train in 8 s, so incomes
 are roughly 4× an AoE2 game's. That puts the scripted economy at about 900/min at 10 min,
 2,300/min at 15 min and 3,000/min at 25 min. Each age costs a few minutes of that income on top

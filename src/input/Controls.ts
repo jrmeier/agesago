@@ -23,7 +23,7 @@ import type { GestureEvent } from './gestures';
 import { GROUP_KEYS, HOTKEYS, TRAIN_SLOT_KEYS, groupForKey } from './hotkeys';
 import { IdleCycler, idleVillagers } from './idle';
 import { LMB, RMB, type DragState, type Input } from './Input';
-import { resolveAttackMove, resolveBuildingOrder, resolveOrder, resolveTargetOrder, resolveTradeOrder, type HitEntity } from './orders';
+import { resolveAttackMove, resolveBuildingOrder, resolveOrder, resolveRepairOrder, resolveTargetOrder, resolveTradeOrder, type HitEntity } from './orders';
 import { pickGround, projectToCanvas, screenRay, toNdc } from './pickGround';
 import { Placement } from './Placement';
 import { focusNextScout, onScoutFocus } from './scouts';
@@ -87,7 +87,8 @@ export function resolveLongPress(args: {
 /**
  * Player intent → sim commands: click / box / A select (RTS only; boxes and A take only the
  * local player's units, a click may inspect a visible enemy), RMB on a visible enemy unit or
- * building = attack, on an explored node = gather, on a foundation / farm = construct / farm,
+ * building = attack, on an explored node = gather, on a foundation / farm = construct / farm, on a
+ * damaged own or allied building = repair,
  * on ground (explored or not) = move; Ctrl+RMB = attack-move. With only an own training
  * building selected, RMB sets its rally point (on a node / unit / building: rally to it) and
  * a flag marks it. Q (or the command-card button) arms attack-move: the next click / tap on
@@ -787,7 +788,9 @@ export class Controls {
     // Shelters retain their villager-only capacity; every land worker can construct or farm.
     const buildingWorkers = ownBuilding?.complete && BUILDINGS[ownBuilding.kind].garrison
       ? workers.filter(uid => world.units.get(uid)?.kind === 'villager') : workers;
-    const buildCmd = ownBuilding ? resolveBuildingOrder(buildingWorkers, ownBuilding) : null;
+    // A damaged own or allied building is repaired by every land worker in the selection.
+    const repairCmd = resolveRepairOrder(workers, building, (o) => world.areEnemies(world.localPlayer, o));
+    const buildCmd = repairCmd ?? (ownBuilding ? resolveBuildingOrder(buildingWorkers, ownBuilding) : null);
     let movers = unitIds;
     // Trade carts onto an own or allied market trade with it (M8-12); everyone else carries on.
     const carts = unitIds.filter((u) => world.units.get(u)?.kind === 'tradeCart');
@@ -800,7 +803,8 @@ export class Controls {
     if (buildCmd) {
       world.dispatch(buildCmd);
       // Units without this work capability still receive the ordinary move order.
-      movers = movers.filter((u) => !buildingWorkers.includes(u));
+      const busy = repairCmd ? workers : buildingWorkers;
+      movers = movers.filter((u) => !busy.includes(u));
       if (!movers.length) return;
     }
     const node = id !== null ? world.nodes.get(id) : undefined;

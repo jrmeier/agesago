@@ -22,6 +22,14 @@ export const BALANCE = {
   popCap: 25,
   /** Construction exponent: progress/s = builders^buildExponent / buildTime (diminishing returns). */
   buildExponent: 0.75,
+  /** One repairer restores a building from 0 to full in buildTime × repairTimeFactor seconds (n^buildExponent for n). */
+  repairTimeFactor: 1.5,
+  /** Repairing from 0 to full hp costs this fraction of the building's cost, charged a unit at a time. */
+  repairCostFactor: 0.5,
+  /** A damaged ship within this distance of an own dock's footprint radius heals passively… */
+  dockHealRange: 4,
+  /** …at this many hp per second. */
+  dockHealRate: 1.5,
   /** Builders of a group order spread along the footprint edge this far apart. */
   builderSpacing: 0.8,
   /** Footprint sample spacing for placement terrain checks. */

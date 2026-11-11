@@ -20,6 +20,8 @@ export interface DevHook {
   statOf(subject: Subject, stat: Stat, base: number): number;
   /** Jump the local player to `age`. */
   setAge(age: Age): void;
+  /** Set a building's hit points (clamped to 1..maxHp) without killing it; returns the new hp. */
+  setHp(id: EntityId, hp: number): number | null;
 }
 
 export function devHook(world: World): DevHook {
@@ -64,6 +66,13 @@ export function devHook(world: World): DevHook {
       const p = world.players.get(local());
       if (p) p.age = age;
       clearStatCache(world);
+    },
+    setHp(id, hp) {
+      const b = world.buildings.get(id);
+      if (!b) return null;
+      b.hp = Math.min(b.maxHp, Math.max(1, hp));
+      world.events.emit({ type: 'damaged', id, hp: b.hp, maxHp: b.maxHp, by: null });
+      return b.hp;
     },
   };
 }

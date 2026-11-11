@@ -17,13 +17,14 @@ import type { ExplorationSite, PriestOrder } from './systems/explorationRewards'
 import type { GameResult } from './systems/victory';
 
 /**
+ * 6: M14-5 repair (toRepair/repairing unit states, per-player fractional repair debt).
  * 5: M14-2 upgrade chains. The academy's Guard/Fortress Tower techs became per-building tiers:
  *    older saves that researched them load with every watch tower at the matching tier.
  * 4: M15-1 veterancy (unit xp/rank, damage log). Older saves load with every unit at rank 0, xp 0.
  * 3: M14-1 in-place building upgrades (Building.tier, Building.upgrading).
  * 2: M8 research (researched techs, ages, market prices, building research queues).
  */
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 /** Oldest version that still loads; v2 buildings load at tier 0 with no upgrade running. */
 export const MIN_SAVE_VERSION = 2;
 
@@ -64,6 +65,8 @@ export interface SaveData {
     combat: [EntityId, CombatState][];
     flee: [EntityId, FleeState][];
     farmers: [EntityId, EntityId][];
+    /** Fractional repair cost owed per player (whole units are charged as they accrue); absent before v6. */
+    repairDebt?: [PlayerId, Partial<Stockpile>][];
     projectiles: PendingHit[];
     /** Absent before version 4. */
     damageLog?: [EntityId, DamageShare[]][];
@@ -146,6 +149,7 @@ export function serializeWorld(world: World): SaveData {
       combat: [...world.combatState],
       flee: [...world.fleeState],
       farmers: [...world.farmers],
+      repairDebt: [...world.repairDebt],
       projectiles: world.projectiles,
       damageLog: [...world.damageLog],
       lastAlert: [...world.lastAlert],
@@ -253,6 +257,8 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
     }
   }
   if (saved.version < 5) migrateTowerTechs(saved);
+  // Pre-repair saves carry no repair debt (and no toRepair/repairing units).
+  if (saved.version < 6) delete saved.systems.repairDebt;
   restoreMap(world.buildings, saved.buildings.map((b) => [b.id, b]));
   for (const b of world.buildings.values()) {
     const spec = BUILDINGS[b.kind];
@@ -310,6 +316,7 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   restoreMap(world.combatState, s.combat);
   restoreMap(world.fleeState, s.flee);
   restoreMap(world.farmers, s.farmers);
+  if (s.repairDebt) restoreMap(world.repairDebt, s.repairDebt);
   restoreMap(world.lastAlert, s.lastAlert);
   world.projectiles.push(...s.projectiles);
   if (s.damageLog) restoreMap(world.damageLog, s.damageLog);

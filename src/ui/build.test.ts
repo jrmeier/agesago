@@ -8,6 +8,7 @@ import {
   buildingRole,
   canAfford,
   constructionLabel,
+  repairLabel,
   costEntries,
   formatCost,
   keyLabel,
@@ -133,6 +134,8 @@ describe('building panel labels', () => {
   it('shows construction progress, roles and population', () => {
     expect(constructionLabel(0.426)).toBe('Under construction 42%');
     expect(constructionLabel(1.2)).toBe('Under construction 100%');
+    expect(repairLabel(310, 550, false)).toBe('Damaged 56% · Right-click it with workers to repair');
+    expect(repairLabel(310, 550, true)).toBe('Damaged 56% · Tap it with workers to repair');
     expect(buildingRole('house')).toBe('+5 population');
     expect(buildingRole('miningCamp')).toBe('Drop site: gold, stone');
     expect(buildingRole('watchTower', undefined, undefined, 2)).toBe('Shelter 2/5 · Ranged defence');

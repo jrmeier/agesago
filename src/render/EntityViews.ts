@@ -1210,6 +1210,7 @@ function isTravelling(unit: Unit): boolean {
     case 'toDrop':
     case 'exploring':
     case 'toBuild':
+    case 'toRepair':
     case 'toShelter':
       return true;
     default:
@@ -1235,11 +1236,13 @@ function poseOf(unit: Unit): VillagerPose {
     case 'toDrop':
     case 'exploring':
     case 'toBuild':
+    case 'toRepair':
     case 'toShelter':
       return 'walk';
     case 'gathering':
       return GATHER_POSE[unit.gatherType ?? 'food'];
     case 'building':
+    case 'repairing':
       return 'build';
     default:
       return 'idle';

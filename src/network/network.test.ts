@@ -77,6 +77,8 @@ describe('online command relay', () => {
     const input = (commands: unknown[]) => ({ type: 'input', turn: 0, commands });
     expect(validClientMessage(input([{ type: 'build', unitIds: [1], kind: '__proto__', pos: { x: 1, z: 1 }, rot: 0 }]))).toBe(false);
     expect(validClientMessage(input([{ type: 'move', unitIds: [1], target: { x: Infinity, z: 1 } }]))).toBe(false);
+    expect(validClientMessage(input([{ type: 'repair', unitIds: [1, 2], targetId: 7 }]))).toBe(true);
+    expect(validClientMessage(input([{ type: 'repair', unitIds: [1], targetId: -1 }]))).toBe(false);
     expect(validClientMessage(input(Array.from({ length: 65 }, () => ({ type: 'resign' }))))).toBe(false);
     expect(validClientMessage(input([{ type: 'research', buildingId: 1, tech: '__proto__' }]))).toBe(false);
   });

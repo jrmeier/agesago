@@ -54,7 +54,7 @@ export function hotkeyHelpRows(): HotkeyRow[] {
   const mouse: HotkeyRow[] = [
     { keys: 'LMB', label: 'Select. Drag a box to select several.' },
     { keys: 'Shift+LMB', label: 'Add to the selection, or keep placing buildings.' },
-    { keys: 'RMB', label: 'Move, gather, or attack.' },
+    { keys: 'RMB', label: 'Move, gather, or attack. On a damaged own or allied building: repair (costs half its price for a full repair).' },
     { keys: 'Corral', label: 'Move two owned sheep into the pasture; order a land unit onto it to breed and harvest surplus. Enclose with palisades and gates.' },
     { keys: 'Gate', label: 'Select a gate and use its livestock passage button. Your people always retain passage.' },
     { keys: 'Ctrl+RMB', label: 'Attack-move along the way.' },

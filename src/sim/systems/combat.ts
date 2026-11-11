@@ -5,7 +5,8 @@ import { canWork, isAnimal, isShip, UNITS } from '../../core/units';
 import { GAIA } from '../../core/types';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
-import { removeBuilding, sendBuilders } from './build';
+import { removeBuilding, sendBuilders, sendWorkers } from './build';
+import { canRepair } from './repair';
 import { navFor, route, routeForUnit } from './passage';
 import { cancelExplore, settleCancelled } from './explore';
 import { clearEconomyJob, resumeGatherJob, sendToDrop, sendToFarm, sendToNode } from './gather';
@@ -44,6 +45,8 @@ export interface FleeState {
   node: EntityId | null;
   type: ResourceType | null;
   build: EntityId | null;
+  /** Building being repaired, to go back to if it still needs it (absent before v3 saves). */
+  repair?: EntityId;
 }
 
 /** A projectile in flight; damage lands at `at` if the target is still near `aim`. */
@@ -74,7 +77,7 @@ function canAttack(world: World, owner: PlayerId, t: Target, attacker?: Unit): b
 }
 
 /** Work states a passive villager drops to run away when hit. */
-const FLEEING_FROM: ReadonlySet<UnitState> = new Set(['idle', 'toNode', 'gathering', 'toDrop', 'toBuild', 'building', 'toTend', 'tending']);
+const FLEEING_FROM: ReadonlySet<UnitState> = new Set(['idle', 'toNode', 'gathering', 'toDrop', 'toBuild', 'building', 'toRepair', 'repairing', 'toTend', 'tending']);
 
 function stateOf(world: World, u: Unit): CombatState {
   let cs = world.combatState.get(u.id);
@@ -595,13 +598,15 @@ function flee(world: World, v: Unit, from: Vec2): void {
   const path = spot && route(world, v.owner, v.pos, spot);
   if (!path) return;
   const working = v.state !== 'idle';
+  const repairing = v.state === 'toRepair' || v.state === 'repairing';
   const anchor = world.gatherState.get(v.id)?.anchor;
   world.fleeState.set(v.id, {
     anchor: anchor ? { ...anchor } : undefined,
     tend: v.tendingCorral,
     node: working ? v.gatherNode : null,
     type: working ? v.gatherType : null,
-    build: working ? (world.buildState.get(v.id) ?? null) : null,
+    build: working && !repairing ? (world.buildState.get(v.id) ?? null) : null,
+    repair: repairing ? world.buildState.get(v.id) : undefined,
   });
   cancelExplore(world, [v]);
   world.buildState.delete(v.id);
@@ -624,6 +629,11 @@ function resume(world: World, u: Unit): void {
   if (site && !site.complete) {
     sendBuilders(world, [u.id], site);
     if (u.state === 'toBuild') return;
+  }
+  const damaged = fs.repair !== undefined ? world.buildings.get(fs.repair) : undefined;
+  if (damaged && canRepair(world, damaged, u.owner)) {
+    sendWorkers(world, [u], damaged, 'toRepair');
+    if (u.state === 'toRepair') return;
   }
   if (fs.type) {
     const source = fs.node !== null ? world.get(fs.node) : undefined;

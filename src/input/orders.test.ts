@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Unit, Vec2 } from '../core/types';
-import { resolveAttackMove, resolveBuildingOrder, resolveOrder, resolveTargetOrder } from './orders';
+import { resolveAttackMove, resolveBuildingOrder, resolveOrder, resolveRepairOrder, resolveTargetOrder } from './orders';
 import { focusNextScout, nextScout, onScoutFocus } from './scouts';
 
 describe('order resolution under fog', () => {
@@ -156,5 +156,25 @@ describe('orders that depend on ownership', () => {
     expect(resolveAttackMove([4, 5], ground)).toEqual({ type: 'attackMove', unitIds: [4, 5], target: ground });
     expect(resolveAttackMove([], ground)).toBeNull();
     expect(resolveAttackMove([4], null)).toBeNull();
+  });
+});
+
+describe('repair orders', () => {
+  const enemy = (owner: number) => owner === 3;
+  const house = { id: 9, kind: 'house' as const, complete: true, owner: 1, hp: 200, maxHp: 550 };
+
+  it('repairs a damaged own or allied building', () => {
+    expect(resolveRepairOrder([1, 2], house, enemy)).toEqual({ type: 'repair', unitIds: [1, 2], targetId: 9 });
+    expect(resolveRepairOrder([1], { ...house, owner: 2 }, enemy)).toEqual({ type: 'repair', unitIds: [1], targetId: 9 });
+  });
+
+  it('leaves enemy, full, unfinished, farm and empty selections to the other orders', () => {
+    expect(resolveRepairOrder([1], { ...house, owner: 3 }, enemy)).toBeNull();
+    expect(resolveRepairOrder([1], { ...house, hp: 550 }, enemy)).toBeNull();
+    expect(resolveRepairOrder([1], { ...house, complete: false }, enemy)).toBeNull();
+    expect(resolveRepairOrder([1], { ...house, kind: 'farm' }, enemy)).toBeNull();
+    expect(resolveRepairOrder([1], { ...house, owner: 0 }, enemy)).toBeNull();
+    expect(resolveRepairOrder([], house, enemy)).toBeNull();
+    expect(resolveRepairOrder([1], undefined, enemy)).toBeNull();
   });
 });

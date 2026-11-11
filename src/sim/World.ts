@@ -32,6 +32,7 @@ import { BALANCE } from './balance';
 import { NavGrid } from './nav';
 import { Visibility, type Viewer } from './visibility';
 import { buildSystem, canPlace, orderBuild, orderBuildWall, orderCancelBuild, orderConstruct } from './systems/build';
+import { orderRepair, repairSystem } from './systems/repair';
 import { garrisonSystem, orderGarrison, orderTownBell, orderUngarrison } from './systems/defence';
 import {
   combatSystem,
@@ -134,6 +135,8 @@ export class World {
   readonly exploreQueue = new Set<EntityId>();
   /** Builder unit → the foundation it is walking to / working on (system bookkeeping). */
   readonly buildState = new Map<EntityId, EntityId>();
+  /** Fractional repair cost each player still owes (whole units are charged as they accrue). */
+  readonly repairDebt = new Map<PlayerId, Partial<Stockpile>>();
   /** Farm → the one villager working it (system bookkeeping; stale claims are dropped lazily). */
   readonly farmers = new Map<EntityId, EntityId>();
   /** Per-unit combat bookkeeping: order, cooldown, chase and leash (system bookkeeping). */
@@ -314,7 +317,7 @@ export class World {
     }
     // Any other unit order supersedes fighting and fleeing.
     if (
-      cmd.type === 'move' || cmd.type === 'gather' || cmd.type === 'build' || cmd.type === 'construct' ||
+      cmd.type === 'move' || cmd.type === 'gather' || cmd.type === 'build' || cmd.type === 'construct' || cmd.type === 'repair' ||
       cmd.type === 'explore' || cmd.type === 'garrison' || cmd.type === 'buildWall'
     ) {
       releaseCombat(this, cmd.unitIds);
@@ -357,6 +360,9 @@ export class World {
         break;
       case 'construct':
         orderConstruct(this, cmd.unitIds, cmd.buildingId);
+        break;
+      case 'repair':
+        orderRepair(this, cmd.unitIds, cmd.targetId, by);
         break;
       case 'cancelBuild':
         if (this.buildings.get(cmd.buildingId)?.owner === by) orderCancelBuild(this, cmd.buildingId);
@@ -453,6 +459,7 @@ export class World {
     navalSystem(this, dt);
     gatherSystem(this, dt, arrived);
     buildSystem(this, dt, arrived);
+    repairSystem(this, dt, arrived);
     // After gather/build so units it sends back to work aren't treated as arrivals this tick.
     livestockSystem(this, dt);
     wildlifeSystem(this, dt);

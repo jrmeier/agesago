@@ -41,8 +41,8 @@ interface Cue {
   gap?: number;
 }
 
-const MOVE: ReadonlySet<Unit['state']> = new Set(['moving', 'toNode', 'toDrop', 'exploring', 'toBuild', 'toShelter']);
-const ACK: ReadonlySet<Unit['state']> = new Set(['moving', 'toNode', 'attacking', 'toBuild', 'exploring']);
+const MOVE: ReadonlySet<Unit['state']> = new Set(['moving', 'toNode', 'toDrop', 'exploring', 'toBuild', 'toRepair', 'toShelter']);
+const ACK: ReadonlySet<Unit['state']> = new Set(['moving', 'toNode', 'attacking', 'toBuild', 'toRepair', 'exploring']);
 
 /**
  * Turns simulation events and the camera into voices.
@@ -146,7 +146,7 @@ export class MatchAudio {
     for (const unit of this.world.units.values()) {
       if (unit.state === 'gathering') {
         this.offer({ kind: workKind(unit.gatherType), pos: unit.pos, owner: unit.owner, key: `work:${unit.id}`, gap: 0.75 });
-      } else if (unit.state === 'building') {
+      } else if (unit.state === 'building' || unit.state === 'repairing') {
         this.offer({ kind: 'build', pos: unit.pos, owner: unit.owner, key: `work:${unit.id}`, gap: 0.7 });
       } else if (MOVE.has(unit.state)) {
         const mounted = UNITS[unit.kind].unitClass === 'cavalry';

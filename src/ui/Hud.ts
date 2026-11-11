@@ -17,6 +17,7 @@ import {
   buildingRole,
   canAfford,
   constructionLabel,
+  repairLabel,
   costEntries,
   formatCost,
   keyLabel,
@@ -487,7 +488,7 @@ export class Hud {
       const line = same ? lineOf(kinds[0]) : null;
       setText(this.el.name, line && line.tier > 0 ? (units.length > 1 ? `${units.length} × ${line.title}` : line.title) : selectionName(kinds));
       const capacity = carryCap(this.world, units[0], units[0].carry?.type ?? units[0].gatherType ?? 'wood');
-      setText(this.el.status, foreign ? this.ownerName(owner) : kinds.every(k => k === 'priest') && !units.some(u => u.carry || u.gatherType || ['toBuild', 'building', 'toTend', 'tending'].includes(u.state))
+      setText(this.el.status, foreign ? this.ownerName(owner) : kinds.every(k => k === 'priest') && !units.some(u => u.carry || u.gatherType || ['toBuild', 'building', 'toRepair', 'repairing', 'toTend', 'tending'].includes(u.state))
         ? (units.some(u => u.relic) ? 'Carrying a relic · Move beside your temple to enshrine' : 'Move to standing stones for relics · Order on ally to heal, enemy to convert')
         : kinds.every(k => k === 'transport') ? `Passengers ${units.reduce((n, u) => n + (u.passengers?.length ?? 0), 0)}/${units.length * 10} · Order land units onto a ship near shore; Unload then choose a coast`
         : kinds.every(k => k === 'fishingBoat') ? 'Order onto water fish · Delivers food to your dock'
@@ -613,6 +614,8 @@ export class Hud {
       const head = b.queueKinds?.[0];
       const total = head ? trainTime(this.world, b, head) : BALANCE.trainTime;
       setText(this.el.status, trainLabel(b.queue, b.progress, total, 0, true));
+    } else if (b.hp < b.maxHp && b.kind !== 'farm') {
+      setText(this.el.status, repairLabel(b.hp, b.maxHp, document.body.classList.contains('touch')));
     } else {
       const farmer = own ? this.world.units.get(this.world.farmers.get(b.id) ?? -1) : undefined;
       const staffed = farmer?.gatherNode === b.id && ['toNode', 'gathering', 'toDrop'].includes(farmer.state);

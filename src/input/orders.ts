@@ -1,5 +1,5 @@
 import { BUILDINGS } from '../core/buildings';
-import type { Building, Command, EntityId, PlayerId, UnitKind, Vec2 } from '../core/types';
+import { GAIA, type Building, type Command, type EntityId, type PlayerId, type UnitKind, type Vec2 } from '../core/types';
 import { isAnimal } from '../core/units';
 
 /** What lies under a right-click / tap, already resolved against the scene and the fog. */
@@ -85,6 +85,20 @@ export function resolveBuildingOrder(workerIds: readonly EntityId[], b: OrderBui
   if (b.kind === 'corral') return { type: 'tend', unitIds, buildingId: b.id };
   if (BUILDINGS[b.kind].garrison) return { type: 'garrison', unitIds, buildingId: b.id };
   return null;
+}
+
+/**
+ * Workers ordered onto a damaged, completed building that is their own or an ally's → 'repair'
+ * (a farm is worked rather than repaired by right-click). Null otherwise.
+ */
+export function resolveRepairOrder(
+  workerIds: readonly EntityId[],
+  b: Pick<Building, 'id' | 'kind' | 'complete' | 'owner' | 'hp' | 'maxHp'> | undefined,
+  isEnemy: (owner: PlayerId) => boolean
+): Extract<Command, { type: 'repair' }> | null {
+  if (!workerIds.length || !b || !b.complete || b.kind === 'farm' || b.owner === GAIA || isEnemy(b.owner)) return null;
+  if (!(b.hp > 0 && b.hp < b.maxHp)) return null;
+  return { type: 'repair', unitIds: [...workerIds], targetId: b.id };
 }
 
 /**

@@ -237,6 +237,14 @@ export function builderSpot(b: Building, from: Vec2, slot: number): Vec2 {
 /** Send capable land units to work on an owned foundation ('toBuild' → 'building' on arrival). */
 export function sendBuilders(world: World, unitIds: EntityId[], b: Building): void {
   const units = unitIds.map((id) => world.units.get(id)).filter((u): u is Unit => !!u && canWork(u.kind) && u.state !== 'garrisoned' && u.owner === b.owner);
+  if (!sendWorkers(world, units, b, 'toBuild') && unitIds.length) reject(world, 'unreachable');
+}
+
+/**
+ * Walk `units` to spread-out spots around `b` and record the job in world.buildState
+ * ('toBuild' for construction, 'toRepair' for repair). Returns how many got a path.
+ */
+export function sendWorkers(world: World, units: Unit[], b: Building, state: 'toBuild' | 'toRepair'): number {
   const cancelled = cancelExplore(world, units);
   // Slots are laid out around the edge point nearest the group's centre, so they never collide.
   const c = { x: 0, z: 0 };
@@ -252,10 +260,15 @@ export function sendBuilders(world: World, unitIds: EntityId[], b: Building): vo
     clearEconomyJob(world, u);
     u.path = path;
     world.buildState.set(u.id, b.id);
-    world.setState(u, 'toBuild');
+    world.setState(u, state);
   });
   settleCancelled(world, cancelled);
-  if (unitIds.length && !sent) reject(world, 'unreachable');
+  return sent;
+}
+
+/** Unit states that keep a world.buildState entry (construction and repair). */
+export function onBuildJob(u: Unit): boolean {
+  return u.state === 'toBuild' || u.state === 'building' || u.state === 'toRepair' || u.state === 'repairing';
 }
 
 /** Help build a foundation, or staff a completed permanent farm. */
@@ -343,12 +356,12 @@ function buildersOf(world: World, id: EntityId): Unit[] {
     if (bid !== id) continue;
     world.buildState.delete(uid);
     const u = world.units.get(uid);
-    if (u && (u.state === 'toBuild' || u.state === 'building')) out.push(u);
+    if (u && onBuildJob(u)) out.push(u);
   }
   return out;
 }
 
-function idle(world: World, u: Unit): void {
+export function idle(world: World, u: Unit): void {
   u.path = [];
   world.setState(u, 'idle');
 }
@@ -371,7 +384,7 @@ export function buildSystem(world: World, dt: number, arrived: Unit[]): void {
   const workers = new Map<EntityId, number>();
   for (const [uid, bid] of world.buildState) {
     const u = world.units.get(uid);
-    if (!u || (u.state !== 'toBuild' && u.state !== 'building')) {
+    if (!u || !onBuildJob(u)) {
       world.buildState.delete(uid); // took another order
       continue;
     }

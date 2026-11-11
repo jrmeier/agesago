@@ -127,6 +127,12 @@ export function constructionLabel(progress: number): string {
   return `Under construction ${pct}%`;
 }
 
+/** "Damaged 62% · Right-click with workers to repair" for a hurt building (tap on touch). */
+export function repairLabel(hp: number, maxHp: number, touch: boolean): string {
+  const pct = Math.floor(Math.min(1, Math.max(0, maxHp > 0 ? hp / maxHp : 0)) * 100);
+  return `Damaged ${pct}% · ${touch ? 'Tap' : 'Right-click'} it with workers to repair`;
+}
+
 /** What a complete building does, for the building panel. `occupants` is how many villagers are inside. */
 export function buildingRole(kind: BuildingKind, _food?: number, _farmFood?: number, occupants?: number, workers?: number): string {
   const spec = BUILDINGS[kind];
