@@ -118,7 +118,10 @@ describe('formation orders', () => {
     orderMove(world, [slow.id, fast.id, fast.id], { x: 120, z: 22.5 });
     const starts = [slow, fast].map((u) => ({ ...u.pos }));
     run(world, 1);
-    [slow, fast].forEach((u, i) => expect(distance(u.pos, starts[i])).toBeCloseTo(UNITS.hoplite.speed, 8));
+    // Paced to arrive together: nobody exceeds the slowest speed, the longer route walks at it.
+    const walked = [slow, fast].map((u, i) => distance(u.pos, starts[i]));
+    for (const d of walked) { expect(d).toBeLessThanOrEqual(UNITS.hoplite.speed + 1e-8); expect(d).toBeGreaterThan(UNITS.hoplite.speed * 0.9); }
+    expect(Math.max(...walked)).toBeCloseTo(UNITS.hoplite.speed, 8);
     fast.path = [{ x: 120, z: fast.pos.z }];
     const x = fast.pos.x;
     run(world, 1);

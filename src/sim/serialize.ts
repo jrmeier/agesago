@@ -19,6 +19,7 @@ import type { ExplorationSite, PriestOrder } from './systems/explorationRewards'
 import { normalizeWonderRules, type GameResult, type WonderCountdown, type WonderRules } from './systems/victory';
 
 /**
+ * 10: M17-1 group formations (Unit.formation: id, shared speed cap, arrival facing, slot).
  * 9: M16-2 siege engines (Unit.deployed, Unit.packTimer, 'packing'/'unpacking' states). Older
  *    saves hold no siege, so they load with no pack state.
  * 8: M16-7 wonder victory (match wonderRules, systems.wonder countdown, Building.completedAt).
@@ -31,8 +32,8 @@ import { normalizeWonderRules, type GameResult, type WonderCountdown, type Wonde
  * 3: M14-1 in-place building upgrades (Building.tier, Building.upgrading).
  * 2: M8 research (researched techs, ages, market prices, building research queues).
  */
-export const SAVE_VERSION = 9;
-/** Oldest version that still loads; v2 buildings load at tier 0 with no upgrade running. */
+export const SAVE_VERSION = 10;
+/** Oldest version that still loads; v2 buildings load at tier 0 with no upgrade running, v2–9 units out of formation. */
 export const MIN_SAVE_VERSION = 2;
 
 /** Plain JSON, with ordered entries: iteration order affects scans, training and exploration. */
@@ -125,8 +126,9 @@ function decode(runs: number[], grid: Uint8Array): void {
 
 /**
  * Save at a tick boundary. Set world.seed to the original generateMap seed first.
- * Captures every World-owned system state. Exact continuation of formation/jam steering
- * still requires snapshot/restore exports from movement.ts's private WeakMaps (another lane).
+ * Captures every World-owned system state. Formation speed caps and facings live on Unit.formation;
+ * exact continuation of jam re-pathing and post-arrival slot keeping still requires snapshot/restore
+ * exports from movement.ts's private WeakMaps (another lane).
  * explore.ts's private empty-frontier cache also affects its per-tick work budget and must
  * be restored for exact continuation on fully explored regions. See the contract-gap tests.
  */
@@ -275,6 +277,10 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
       delete u.xp;
     }
     delete saved.systems.damageLog;
+  }
+  for (const u of saved.units) {
+    const f = u.formation;
+    if (saved.version < 10 || (f && !(Number.isFinite(f?.slot?.x) && Number.isFinite(f?.slot?.z)))) delete u.formation;
   }
   restoreMap(world.units, saved.units.map((u) => [u.id, u]));
   restoreMap(world.nodes, saved.nodes.map((n) => [n.id, n]));

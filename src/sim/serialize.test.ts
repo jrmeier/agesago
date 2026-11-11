@@ -231,17 +231,42 @@ describe('world save/load', () => {
     expect(save.players[0].visibility.runs.length).toBeLessThan(a.visibility.state.length / 10);
   });
 
-  it('documents the movement contract gap: mixed-speed formations lose their private speed cap on load', () => {
+  it('keeps a mixed-speed formation and its shared speed cap across save/load', () => {
     const a = fresh();
     const tc = a.townCenter!.pos;
     const v = a.spawnUnit('villager', { x: tc.x + 6, z: tc.z + 5 });
     const scout = a.spawnUnit('scout', { x: tc.x + 7, z: tc.z + 5 });
-    a.dispatch({ type: 'move', unitIds: [v.id, scout.id], target: { x: tc.x + 9, z: tc.z - 6 } });
+    a.dispatch({ type: 'move', unitIds: [v.id, scout.id], target: { x: tc.x + 9, z: tc.z - 6 }, formation: 'line' });
     run(a, 5);
-    const b = deserializeWorld(serializeWorld(a), hf);
-    a.tick(DT);
-    b.tick(DT);
-    expect(b.units.get(scout.id)!.pos).not.toEqual(a.units.get(scout.id)!.pos);
+    const save = serializeWorld(a);
+    expect(save.version).toBe(SAVE_VERSION);
+    const saved = save.units.find((u) => u.id === scout.id)!.formation!;
+    expect(saved).toMatchObject({ id: Math.min(v.id, scout.id), speed: expect.any(Number) });
+    const b = deserializeWorld(JSON.parse(JSON.stringify(save)), hf);
+    expect(b.units.get(scout.id)!.formation).toEqual(saved);
+    run(a, 20);
+    run(b, 20);
+    expect(b.units.get(scout.id)!.pos).toEqual(a.units.get(scout.id)!.pos);
+    expect(b.units.get(v.id)!.pos).toEqual(a.units.get(v.id)!.pos);
+  });
+
+  it('loads pre-formation saves (v2-v9) with units out of formation', () => {
+    const a = fresh();
+    const tc = a.townCenter!.pos;
+    const s1 = a.spawnUnit('hoplite', { x: tc.x + 6, z: tc.z + 5 });
+    const s2 = a.spawnUnit('scout', { x: tc.x + 7, z: tc.z + 5 });
+    a.dispatch({ type: 'move', unitIds: [s1.id, s2.id], target: { x: tc.x + 9, z: tc.z - 6 } });
+    run(a, 2);
+    for (const version of [2, 3, 4, 5, 6, 7, 8]) {
+      const old = deserializeWorld(JSON.parse(JSON.stringify({ ...serializeWorld(a), version })), hf);
+      expect(old.units.get(s1.id)!.formation).toBeUndefined();
+    }
+    const v9 = { ...serializeWorld(a), version: 9 };
+    const b = deserializeWorld(v9, hf);
+    expect(b.units.get(s1.id)!.formation).toBeUndefined();
+    expect(b.units.get(s1.id)!.path.length).toBeGreaterThan(0);
+    run(b, 200);
+    expect(b.units.get(s1.id)!.state).toBe('idle');
   });
 
   it('documents the exploration contract gap: the private empty-frontier cache changes the search budget', () => {

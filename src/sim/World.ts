@@ -353,7 +353,7 @@ export class World {
       case 'tend': orderTend(this, cmd.unitIds, cmd.buildingId, by); break;
       case 'gateLivestock': orderGateLivestock(this, cmd.buildingId, cmd.open, by); break;
       case 'move':
-        orderMove(this, cmd.unitIds, cmd.target);
+        orderMove(this, cmd.unitIds, cmd.target, cmd);
         break;
       case 'gather': {
         const boats = cmd.unitIds.filter(id => this.units.get(id)?.kind === 'fishingBoat');
@@ -390,7 +390,7 @@ export class World {
         if (cmd.unitIds.length) orderAttack(this, cmd.unitIds, cmd.targetId, by);
         break;
       case 'attackMove':
-        orderAttackMove(this, cmd.unitIds, cmd.target);
+        orderAttackMove(this, cmd.unitIds, cmd.target, cmd);
         break;
       case 'stop':
         for (const id of cmd.unitIds) {

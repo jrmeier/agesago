@@ -2,10 +2,10 @@ import { villagerPose } from '../camera/FollowCamera';
 import type { EntityViews, ScreenRect } from '../render/EntityViews';
 import type { PickIntent } from '../render/picking';
 import { CAMERA_LABELS, type CameraRig } from '../camera/CameraRig';
-import { canWork, isShip } from '../core/units';
+import { canWork, defaultFormation, isShip } from '../core/units';
 import { canGarrison } from '../sim/systems/defence';
 import { BUILDINGS } from '../core/buildings';
-import { GAIA, type Building, type BuildingKind, type Command, type EntityId, type PropPlacement, type Stance, type UnitKind, type Vec2 } from '../core/types';
+import { GAIA, type Building, type BuildingKind, type Command, type EntityId, type FormationKind, type PropPlacement, type Stance, type UnitKind, type Vec2 } from '../core/types';
 import type { Selection } from '../game/Selection';
 import type { World } from '../sim/World';
 import { Alerts } from '../ui/Alerts';
@@ -86,7 +86,7 @@ export function resolveLongPress(args: {
 }): { type: 'toggle'; id: EntityId } | Extract<Command, { type: 'attackMove' }> | null {
   if (args.ownUnitId !== null) return { type: 'toggle', id: args.ownUnitId };
   const soldiers = args.selected.filter((u) => isMilitary(u.kind)).map((u) => u.id);
-  return resolveAttackMove(soldiers, args.ground);
+  return resolveAttackMove(soldiers, args.ground, defaultFormation(args.selected.filter((u) => isMilitary(u.kind)).map((u) => u.kind)));
 }
 
 /**
@@ -616,6 +616,11 @@ export class Controls {
   }
 
   /** Selected units the local player owns (enemy selections are inspect-only). */
+  /** Group formation sent with move orders (M17-4 adds a picker; until then the per-selection default). */
+  private formationFor(ids: readonly EntityId[]): FormationKind {
+    return defaultFormation(ids.flatMap((id) => this.deps.world.units.get(id)?.kind ?? []));
+  }
+
   private ownUnitIds(): EntityId[] {
     return [...this.deps.selection.ids].filter((id) => this.isOwnUnit(id));
   }
@@ -771,7 +776,7 @@ export class Controls {
     const unitIds = this.ownUnitIds();
     const ground = this.groundAt(x, y);
     if (attackMove) {
-      const cmd = resolveAttackMove(unitIds, ground);
+      const cmd = resolveAttackMove(unitIds, ground, this.formationFor(unitIds));
       if (cmd) {
         world.dispatch(cmd);
         views.flashMarker(cmd.target);
@@ -838,7 +843,7 @@ export class Controls {
     }
     const node = id !== null ? world.nodes.get(id) : undefined;
     const nodeExplored = !!node && world.visibility.isExplored(node.pos.x, node.pos.z);
-    const cmd = resolveOrder(movers, { nodeId: node?.id ?? null, nodeExplored, ground: node && nodeExplored ? null : ground });
+    const cmd = resolveOrder(movers, { nodeId: node?.id ?? null, nodeExplored, ground: node && nodeExplored ? null : ground }, this.formationFor(movers));
     if (!cmd) return;
     world.dispatch(cmd);
     if (cmd.type === 'move') views.flashMarker(cmd.target);
@@ -857,7 +862,7 @@ export class Controls {
     }
     const hit = this.hitEntity(this.pickAt(x, y));
     const attack = resolveTargetOrder({ unitIds, rallyBuildingId: null }, hit, null, (o) => world.areEnemies(world.localPlayer, o));
-    const cmd = attack ?? resolveAttackMove(unitIds, this.groundAt(x, y));
+    const cmd = attack ?? resolveAttackMove(unitIds, this.groundAt(x, y), this.formationFor(unitIds));
     if (cmd) {
       world.dispatch(cmd);
       if (cmd.type === 'attackMove') views.flashMarker(cmd.target);

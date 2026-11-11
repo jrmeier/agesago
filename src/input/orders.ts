@@ -1,5 +1,5 @@
 import { BUILDINGS } from '../core/buildings';
-import { GAIA, type Building, type Command, type EntityId, type PlayerId, type UnitKind, type Vec2 } from '../core/types';
+import { GAIA, type Building, type Command, type EntityId, type FormationKind, type PlayerId, type UnitKind, type Vec2 } from '../core/types';
 import { isAnimal } from '../core/units';
 
 /** What lies under a right-click / tap, already resolved against the scene and the fog. */
@@ -16,11 +16,11 @@ export interface OrderTarget {
  * Order for the selection: gather from an explored node (the sim turns that into a move for
  * scouts), otherwise move to the ground point — unexplored ground is a valid destination.
  */
-export function resolveOrder(unitIds: readonly EntityId[], t: OrderTarget): Command | null {
+export function resolveOrder(unitIds: readonly EntityId[], t: OrderTarget, formation?: FormationKind): Command | null {
   if (!unitIds.length) return null;
   if (t.nodeId !== null && t.nodeExplored) return { type: 'gather', unitIds: [...unitIds], nodeId: t.nodeId };
   if (!t.ground) return null;
-  return { type: 'move', unitIds: [...unitIds], target: { ...t.ground } };
+  return { type: 'move', unitIds: [...unitIds], target: { ...t.ground }, ...(formation ? { formation } : {}) };
 }
 
 /** A unit or building under the pointer, as far as targeting cares. */
@@ -61,10 +61,11 @@ export function resolveTargetOrder(
 /** Attack-move for the selection to a ground point (null with nothing to send or nowhere to go). */
 export function resolveAttackMove(
   unitIds: readonly EntityId[],
-  ground: Vec2 | null
+  ground: Vec2 | null,
+  formation?: FormationKind
 ): Extract<Command, { type: 'attackMove' }> | null {
   if (!unitIds.length || !ground) return null;
-  return { type: 'attackMove', unitIds: [...unitIds], target: { ...ground } };
+  return { type: 'attackMove', unitIds: [...unitIds], target: { ...ground }, ...(formation ? { formation } : {}) };
 }
 
 /** The parts of a building that decide what workers do when ordered onto it. */

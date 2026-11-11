@@ -36,6 +36,21 @@ export interface Player {
 
 /** How a unit reacts to enemies it can see. */
 export type Stance = 'aggressive' | 'defensive' | 'standGround' | 'passive';
+/** Group move layout: 'none' = loose ring (old behaviour, own speeds); the rest march at the slowest member's speed. */
+export type FormationKind = 'none' | 'line' | 'column' | 'box';
+export const FORMATION_KINDS: readonly FormationKind[] = ['none', 'line', 'column', 'box'];
+
+/** A unit's place in a group move in progress (serialized; cleared on arrival, combat or a new order). */
+export interface UnitFormation {
+  /** Lowest member id of the group that was ordered together. */
+  id: EntityId;
+  /** Shared speed cap (slowest member); absent for 'none'. */
+  speed?: number;
+  /** Heading to face on arrival (radians, as Unit.facing). */
+  facing?: number;
+  /** This unit's slot: the final waypoint of the path it was given. */
+  slot: Vec2;
+}
 
 export interface Vec2 {
   x: number;
@@ -285,6 +300,8 @@ export interface Unit {
   deployed?: boolean;
   /** Seconds left of a pack or unpack under way (absent when none). */
   packTimer?: number;
+  /** Group move in progress (formation id, shared speed cap, arrival facing). */
+  formation?: UnitFormation;
 }
 
 /** Veterancy rank: 0 Basic, 1 Advanced, 2 Elite. */
@@ -357,7 +374,8 @@ export type Entity = Unit | ResourceNode | Building;
 export type Command =
   | { type: 'tend'; unitIds: EntityId[]; buildingId: EntityId }
   | { type: 'gateLivestock'; buildingId: EntityId; open: boolean }
-  | { type: 'move'; unitIds: EntityId[]; target: Vec2 }
+  /** `formation` defaults to defaultFormation(units); `facing` (radians) overrides the travel direction. */
+  | { type: 'move'; unitIds: EntityId[]; target: Vec2; formation?: FormationKind; facing?: number }
   | { type: 'gather'; unitIds: EntityId[]; nodeId: EntityId }
   /** Train one unit (default: the building's first trainable kind, e.g. a villager at the TC). */
   | { type: 'train'; buildingId: EntityId; unit?: UnitKind }
@@ -366,7 +384,7 @@ export type Command =
   /** Attack a unit or building. */
   | { type: 'attack'; unitIds: EntityId[]; targetId: EntityId }
   /** Walk to a point, fighting any enemy met on the way. */
-  | { type: 'attackMove'; unitIds: EntityId[]; target: Vec2 }
+  | { type: 'attackMove'; unitIds: EntityId[]; target: Vec2; formation?: FormationKind; facing?: number }
   /** Drop current orders and stand still. */
   | { type: 'stop'; unitIds: EntityId[] }
   | { type: 'stance'; unitIds: EntityId[]; stance: Stance }

@@ -1,5 +1,5 @@
-import type { EntityId, Unit, Vec2 } from '../../core/types';
-import { isAnimal, isShip, UNITS } from '../../core/units';
+import type { EntityId, FormationKind, Unit, UnitFormation, Vec2 } from '../../core/types';
+import { defaultFormation, isAnimal, isShip, UNITS } from '../../core/units';
 import { BALANCE } from '../balance';
 import { NAV_CELL } from '../nav';
 import type { NavGrid, Rect } from '../nav';
@@ -44,47 +44,211 @@ function direction(units: readonly Unit[], target: Vec2): Vec2 {
   return d > 1e-6 ? { x: x / d, z: z / d } : { x: Math.sin(units[0].facing), z: Math.cos(units[0].facing) };
 }
 
-/** Compact, direction-facing rows. Results match input order; ranged units occupy the rear rows. */
-export function formationSlots(nav: NavGrid, units: readonly Unit[], target: Vec2): (Vec2 | null)[] {
+type Role = 'melee' | 'ranged' | 'cavalry';
+/** A formation slot in spacing units: `lateral` to the right, `ahead` towards the front (0 = front rank). */
+interface LayoutSlot { lateral: number; ahead: number; role: Role }
+
+function roleOf(u: Unit): Role {
+  const cls = UNITS[u.kind]?.unitClass;
+  return cls === 'archer' ? 'ranged' : cls === 'cavalry' ? 'cavalry' : 'melee';
+}
+
+
+/** One centred rank of `count` slots, `ahead` ranks behind the front. */
+function rank(out: LayoutSlot[], count: number, ahead: number, role: Role): void {
+  for (let k = 0; k < count; k++) out.push({ lateral: k - (count - 1) / 2, ahead: -ahead, role });
+}
+
+/** Line: melee front ranks, ranged behind, cavalry split onto both flanks; at most three ranks per block. */
+function lineLayout(melee: number, ranged: number, cavalry: number): LayoutSlot[] {
+  const out: LayoutSlot[] = [];
+  const centre = melee + ranged;
+  const cols = centre <= 4 ? centre : Math.max(4, Math.ceil(centre / 3));
+  const meleeRows = cols ? Math.ceil(melee / cols) : 0;
+  for (let r = 0; r < meleeRows; r++) rank(out, Math.min(cols, melee - r * cols), r, 'melee');
+  for (let r = 0; r * cols < ranged; r++) rank(out, Math.min(cols, ranged - r * cols), meleeRows + r, 'ranged');
+  // Wings stand beside the melee ranks (or the ranged ranks when there is no melee), never further back.
+  const wingRows = Math.max(1, Math.min(3, meleeRows || Math.ceil(ranged / Math.max(1, cols))));
+  const left = Math.ceil(cavalry / 2);
+  for (const [count, side] of [[left, -1], [cavalry - left, 1]]) {
+    const width = Math.ceil(count / wingRows);
+    for (let k = 0; k < count; k++) {
+      out.push({ lateral: side * ((cols - 1) / 2 + 1 + k % width), ahead: -Math.floor(k / width), role: 'cavalry' });
+    }
+  }
+  return out;
+}
+
+/** Column: two or three abreast; melee lead, ranged in the middle, cavalry as rear guard. */
+function columnLayout(melee: number, ranged: number, cavalry: number): LayoutSlot[] {
+  const n = melee + ranged + cavalry;
+  const width = n <= 2 ? 1 : n <= 12 ? 2 : 3;
+  const roles: Role[] = [...Array<Role>(melee).fill('melee'), ...Array<Role>(ranged).fill('ranged'), ...Array<Role>(cavalry).fill('cavalry')];
+  const out: LayoutSlot[] = [];
+  for (let r = 0; r * width < n; r++) {
+    const count = Math.min(width, n - r * width);
+    for (let k = 0; k < count; k++) out.push({ lateral: k - (count - 1) / 2, ahead: -r, role: roles[r * width + k] });
+  }
+  return out;
+}
+
+/** Box: a hollow square filled front edge first, then both sides, then the rear; ranged take the rear. */
+function boxLayout(melee: number, ranged: number, cavalry: number): LayoutSlot[] {
+  const n = melee + ranged + cavalry;
+  if (n <= 3) return lineLayout(melee, ranged, cavalry);
+  const side = Math.ceil(n / 4) + 1;
+  const half = (side - 1) / 2;
+  const centreOut = (a: number, b: number) => Math.abs(a) - Math.abs(b) || a - b;
+  const edge = Array.from({ length: side }, (_, k) => k - half).sort(centreOut);
+  const cells: { lateral: number; ahead: number }[] = edge.map((lateral) => ({ lateral, ahead: 0 }));
+  for (let r = 1; r < side - 1; r++) cells.push({ lateral: -half, ahead: -r }, { lateral: half, ahead: -r });
+  cells.push(...edge.map((lateral) => ({ lateral, ahead: 1 - side })));
+  const roles: Role[] = [...Array<Role>(melee).fill('melee'), ...Array<Role>(cavalry).fill('cavalry'), ...Array<Role>(ranged).fill('ranged')];
+  return roles.map((role, i) => ({ ...cells[i], role }));
+}
+
+/** Ring layout ('none'): golden-angle spiral, no ranks or roles. Offsets are in metres, not spacing. */
+function ringLayout(n: number): LayoutSlot[] {
+  return Array.from({ length: n }, (_, i) => {
+    const o = formationOffset(i);
+    return { lateral: o.x, ahead: o.z, role: 'melee' as Role };
+  });
+}
+
+/** Slot layout for `units` in spacing units, independent of the map (exported for tests). */
+export function formationLayout(units: readonly Unit[], formation: FormationKind): LayoutSlot[] {
+  if (formation === 'none') return ringLayout(units.length);
+  let melee = 0, ranged = 0, cavalry = 0;
+  for (const u of units) {
+    const role = roleOf(u);
+    if (role === 'ranged') ranged++;
+    else if (role === 'cavalry') cavalry++;
+    else melee++;
+  }
+  if (!melee && !ranged) { melee = cavalry; cavalry = 0; } // an all-cavalry group forms its own centre
+  const layout = formation === 'column' ? columnLayout(melee, ranged, cavalry)
+    : formation === 'box' ? boxLayout(melee, ranged, cavalry) : lineLayout(melee, ranged, cavalry);
+  if (!units.some((u) => roleOf(u) !== 'cavalry')) for (const s of layout) s.role = 'cavalry';
+  return layout;
+}
+
+function headingOf(units: readonly Unit[], target: Vec2, facing: number | undefined): Vec2 {
+  return facing !== undefined && Number.isFinite(facing) ? { x: Math.sin(facing), z: Math.cos(facing) } : direction(units, target);
+}
+
+/**
+ * Formation slots around `target`, oriented along the travel direction (or `facing`). Results match
+ * input order. Each role fills its own slots greedily: slots front-first pick the unassigned unit whose
+ * position relative to the group centre is nearest, ties by id, so the plan is deterministic and O(n²).
+ */
+export function formationSlots(nav: NavGrid, units: readonly Unit[], target: Vec2,
+  formation: FormationKind = 'line', facing?: number): (Vec2 | null)[] {
   if (!units.length) return [];
   if (units.length === 1) return [nav.nearestFree(target)];
-  const forward = direction(units, target);
+  const forward = headingOf(units, target, facing);
   const right = { x: forward.z, z: -forward.x };
-  const columns = units.length <= 4 ? units.length : Math.ceil(Math.sqrt(units.length));
-  const spacing = Math.ceil((Math.max(...units.map(radiusOf)) * 2 + 0.2) / NAV_CELL) * NAV_CELL;
-  const ranked = units.map((u, i) => ({ u, i, ranged: UNITS[u.kind]?.unitClass === 'archer' }));
-  ranked.sort((a, b) => Number(a.ranged) - Number(b.ranged)
-    || (a.u.pos.x * right.x + a.u.pos.z * right.z) - (b.u.pos.x * right.x + b.u.pos.z * right.z)
-    || a.u.id - b.u.id);
-  const frontCount = ranked.filter((r) => !r.ranged).length;
-  const frontRows = Math.ceil(frontCount / columns);
-  const rows = frontRows + Math.ceil((units.length - frontCount) / columns);
+  const ring = formation === 'none';
+  const spacing = ring ? 1 : Math.ceil((Math.max(...units.map(radiusOf)) * 2 + 0.2) / NAV_CELL) * NAV_CELL;
+  const minGap = (ring ? Math.ceil((Math.max(...units.map(radiusOf)) * 2 + 0.2) / NAV_CELL) * NAV_CELL : spacing) * 0.8;
+  const layout = formationLayout(units, formation);
+  // Centre the block on the target so the formation, not its front rank, stands there.
+  let mid = 0;
+  if (!ring) {
+    let lo = Infinity, hi = -Infinity;
+    for (const s of layout) { lo = Math.min(lo, s.ahead); hi = Math.max(hi, s.ahead); }
+    mid = (lo + hi) / 2;
+  }
+  let cx = 0, cz = 0;
+  for (const u of units) { cx += u.pos.x; cz += u.pos.z; }
+  cx /= units.length; cz /= units.length;
+  const local = units.map((u) => ({
+    lateral: ((u.pos.x - cx) * right.x + (u.pos.z - cz) * right.z) / spacing,
+    ahead: ((u.pos.x - cx) * forward.x + (u.pos.z - cz) * forward.z) / spacing,
+  }));
+  const order = units.map((_, i) => i).sort((a, b) => units[a].id - units[b].id);
+  const allCavalry = layout.every((s) => s.role === 'cavalry');
+  const roles = units.map((u) => ring ? 'melee' : allCavalry ? 'cavalry' : roleOf(u));
   const anchor = nav.nearestFree(target);
   if (!anchor) return units.map(() => null);
   const reg = nav.regionOfCell(anchor);
+  const taken = new Uint8Array(units.length);
   const reserved: Vec2[] = [];
   const slots: (Vec2 | null)[] = units.map(() => null);
-  ranked.forEach(({ i, ranged }, rank) => {
-    const index = ranged ? rank - frontCount : rank;
-    const row = Math.floor(index / columns) + (ranged ? frontRows : 0);
-    const count = Math.min(columns, (ranged ? units.length - frontCount : frontCount) - Math.floor(index / columns) * columns);
-    const lateral = (index % columns - (count - 1) / 2) * spacing;
-    const ahead = ((rows - 1) / 2 - row) * spacing;
-    const desired = { x: anchor.x + right.x * lateral + forward.x * ahead, z: anchor.z + right.z * lateral + forward.z * ahead };
+  for (const s of layout) {
+    const ahead = s.ahead - mid;
+    let best = -1, bestD = Infinity;
+    for (const i of order) {
+      if (taken[i] || roles[i] !== s.role) continue;
+      const d = (local[i].lateral - s.lateral) ** 2 + (local[i].ahead - ahead) ** 2;
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best < 0) continue;
+    taken[best] = 1;
+    const desired = { x: anchor.x + (right.x * s.lateral + forward.x * ahead) * spacing,
+      z: anchor.z + (right.z * s.lateral + forward.z * ahead) * spacing };
     const slot = nav.nearestFreeCell(desired, reg, (p) => reserved.every((r) =>
-      (r.x - p.x) ** 2 + (r.z - p.z) ** 2 >= spacing * spacing * 0.64));
+      (r.x - p.x) ** 2 + (r.z - p.z) ** 2 >= minGap * minGap));
     if (slot) reserved.push(slot);
-    slots[i] = slot;
-  });
+    slots[best] = slot;
+  }
   return slots;
 }
 
-interface GroupMember {
-  path: Vec2[];
-  speed: number;
-  facing: number;
-  slot: Vec2;
+const MIN_PACE = 0.4;
+
+function routeLength(from: Vec2, path: readonly Vec2[]): number {
+  let total = 0;
+  let prev = from;
+  for (const p of path) { total += Math.hypot(p.x - prev.x, p.z - prev.z); prev = p; }
+  return total;
 }
+
+export interface GroupOrder {
+  formation?: FormationKind;
+  /** Facing override in radians (default: the group's travel direction). */
+  facing?: number;
+}
+export interface PlannedMove { unit: Unit; path: Vec2[]; formation?: UnitFormation }
+
+/**
+ * Per-unit paths to formation slots, with a shared speed cap for real formations. Each unit paths to
+ * its own slot (robust around trees and buildings, and the jam repath keeps working); a unit whose
+ * slot is unreachable falls back to a path to the target itself. Land and ships plan separately.
+ */
+export function planGroupMove(world: World, units: Unit[], target: Vec2, order: GroupOrder = {}): PlannedMove[] {
+  const land = units.filter((u) => !isShip(u.kind)), ships = units.filter((u) => isShip(u.kind));
+  if (land.length && ships.length) return [...planGroupMove(world, land, target, order), ...planGroupMove(world, ships, target, order)];
+  if (!units.length) return [];
+  const formation = order.formation ?? defaultFormation(units.map((u) => u.kind));
+  const nav = navFor(world, units[0]);
+  const slots = formationSlots(nav, units, target, formation, order.facing);
+  const forward = headingOf(units, target, order.facing);
+  const grouped = units.length > 1;
+  const speed = grouped && formation !== 'none' ? Math.min(...units.map((u) => speedOf(u, world))) : undefined;
+  const id = Math.min(...units.map((u) => u.id));
+  const routes = units.map((unit, i) => {
+    const slot = slots[i];
+    return (slot && routeForUnit(world, unit, slot)) || (grouped ? routeForUnit(world, unit, target) : null);
+  });
+  // Pace each member so the block arrives together: the longest route walks at the shared (slowest)
+  // speed, shorter ones proportionally slower (never below MIN_PACE of it, to avoid crawling).
+  const lengths = routes.map((path, i) => path ? routeLength(units[i].pos, path) : 0);
+  const longest = Math.max(1e-6, ...lengths);
+  const facing = formation !== 'none' || order.facing !== undefined ? Math.atan2(forward.x, forward.z) : undefined;
+  const planned: PlannedMove[] = [];
+  units.forEach((unit, i) => {
+    const path = routes[i];
+    if (!path) return;
+    const end = path.at(-1) ?? unit.pos;
+    const pace = speed !== undefined ? speed * Math.max(MIN_PACE, lengths[i] / longest) : undefined;
+    planned.push({ unit, path, formation: grouped ? {
+      id, ...(pace !== undefined ? { speed: pace } : {}), ...(facing !== undefined ? { facing } : {}),
+      slot: { x: end.x, z: end.z },
+    } : undefined });
+  });
+  return planned;
+}
+
 interface Progress {
   path: Vec2[];
   waypoint: Vec2;
@@ -101,7 +265,6 @@ interface Body {
   pushZ: number;
 }
 interface Steering {
-  members: WeakMap<Unit, GroupMember>;
   resting: WeakMap<Unit, { path: Vec2[]; slot: Vec2 }>;
   progress: WeakMap<Unit, Progress>;
   bodies: Body[];
@@ -113,42 +276,42 @@ const steering = new WeakMap<World, Steering>();
 function steeringOf(world: World): Steering {
   let st = steering.get(world);
   if (!st) {
-    st = { members: new WeakMap(), resting: new WeakMap(), progress: new WeakMap(), bodies: [], hash: new Map(),
+    st = { resting: new WeakMap(), progress: new WeakMap(), bodies: [], hash: new Map(),
       stride: Math.ceil(world.hf.width / HASH_CELL) + 3, repathCursor: 0 };
     steering.set(world, st);
   }
   return st;
 }
 
-/** 'move' command: assign distinct slots and a shared speed, dropping gather and explore work. */
-export function orderMove(world: World, unitIds: EntityId[], target: Vec2): void {
+/** 'move' command: formation slots and a shared speed, dropping gather and explore work. */
+export function orderMove(world: World, unitIds: EntityId[], target: Vec2, order: GroupOrder = {}): void {
   const units = [...new Set(unitIds)].map((id) => world.units.get(id)).filter((u): u is Unit => !!u);
   if (!units.length) return;
-  const land = units.filter(u => !isShip(u.kind)), ships = units.filter(u => isShip(u.kind));
-  if (land.length && ships.length) { orderMove(world, land.map(u => u.id), target); orderMove(world, ships.map(u => u.id), target); return; }
-  const nav = navFor(world, units[0]);
   const st = steeringOf(world);
   const cancelled = cancelExplore(world, units);
-  const slots = formationSlots(nav, units, target);
-  const speed = Math.min(...units.map((u) => speedOf(u, world)));
-  const forward = direction(units, target);
-  let moved = 0;
-  units.forEach((u, i) => {
-    const slot = slots[i];
-    const path = slot && routeForUnit(world, u, slot);
-    if (!path) return;
-    moved++;
+  const planned = planGroupMove(world, units, target, order);
+  for (const { unit: u, path, formation } of planned) {
     clearEconomyJob(world, u);
     u.path = path;
     if (u.kind === 'sheep' && u.owner !== 0) u.leashAnchor = { ...(path.at(-1) ?? u.pos) };
     st.progress.delete(u);
     st.resting.delete(u);
-    if (units.length > 1) st.members.set(u, { path, speed, facing: Math.atan2(forward.x, forward.z), slot: path.at(-1) ?? u.pos });
-    else st.members.delete(u);
+    if (formation) u.formation = formation;
+    else delete u.formation;
     world.setState(u, 'moving');
-  });
+  }
   settleCancelled(world, cancelled);
-  if (!moved) world.events.emit({ type: 'rejected', reason: 'unreachable' });
+  if (!planned.length) world.events.emit({ type: 'rejected', reason: 'unreachable' });
+}
+
+/** The unit's formation record, if its current path still leads to its slot (other orders replace paths). */
+function liveFormation(u: Unit): UnitFormation | undefined {
+  const f = u.formation;
+  if (!f) return undefined;
+  const end = u.path[u.path.length - 1];
+  if (end && Math.abs(end.x - f.slot.x) < 1e-6 && Math.abs(end.z - f.slot.z) < 1e-6) return f;
+  delete u.formation;
+  return undefined;
 }
 
 /** Idle bodies step aside for movers; a deployed siege engine does not. */
@@ -240,7 +403,7 @@ export function movementSystem(world: World, dt: number): Unit[] {
   for (const body of st.bodies) {
     const { u } = body;
     if (!body.moving) {
-      st.members.delete(u);
+      if (u.formation) delete u.formation;
       st.progress.delete(u);
       let rest = st.resting.get(u);
       if (rest && (rest.path !== u.path || u.state !== 'idle')) { st.resting.delete(u); rest = undefined; }
@@ -261,9 +424,8 @@ export function movementSystem(world: World, dt: number): Unit[] {
       continue;
     }
     st.resting.delete(u);
-    let member = st.members.get(u);
-    // Other systems replace path arrays when issuing orders; stale formation caps expire automatically.
-    if (member && member.path !== u.path) { st.members.delete(u); member = undefined; }
+    // Other systems replace paths when issuing orders, and combat clears it; stale caps expire here.
+    const member = liveFormation(u);
     const speed = Math.min(speedOf(u, world), member?.speed ?? Infinity);
     const pushScale = Math.min(1, speed * 0.75 / (Math.hypot(body.pushX, body.pushZ) || 1));
     let remaining = dt;
@@ -295,10 +457,10 @@ export function movementSystem(world: World, dt: number): Unit[] {
     if (!u.path.length) {
       arrived.push(u);
       if (member) {
-        u.facing = member.facing;
+        if (member.facing !== undefined) u.facing = member.facing;
         st.resting.set(u, { path: u.path, slot: member.slot });
       }
-      st.members.delete(u);
+      delete u.formation;
       st.progress.delete(u);
       if (u.state === 'moving') world.setState(u, 'idle');
     } else {
@@ -326,10 +488,11 @@ export function movementSystem(world: World, dt: number): Unit[] {
     const path = routeForUnit(world, u, end, 1.2);
     progress.stalled = 0;
     if (path) {
+      const member = liveFormation(u);
       u.path = path;
       st.progress.delete(u);
-      const member = st.members.get(u);
-      if (member) member.path = path;
+      const e = path[path.length - 1];
+      if (member && e) member.slot = { x: e.x, z: e.z };
     }
     searches++;
     if (searches >= REPATHS_PER_TICK || world.nav.expanded - expanded >= REPATH_WORK) {

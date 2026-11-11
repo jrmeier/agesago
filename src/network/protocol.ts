@@ -2,7 +2,7 @@ import { CIV_IDS, type CivId } from '../core/civilizations';
 import { MAP_SIZES, MAP_TYPES, type MapSize, type MapType } from '../core/maps';
 import { BUILDINGS } from '../core/buildings';
 import { TECHS } from '../core/techs';
-import type { Command } from '../core/types';
+import { FORMATION_KINDS, type Command, type FormationKind } from '../core/types';
 import { UNITS } from '../core/units';
 import { WONDER_SECONDS_MAX, WONDER_SECONDS_MIN, type WonderRules } from '../core/wonder';
 
@@ -41,7 +41,9 @@ export function validCommand(v: unknown): v is Command {
   if (!object(v) || typeof v.type !== 'string') return false;
   if ('unitIds' in v && !ids(v.unitIds)) return false;
   switch (v.type) {
-    case 'move': case 'attackMove': return ids(v.unitIds) && point(v.target);
+    case 'move': case 'attackMove': return ids(v.unitIds) && point(v.target)
+      && (v.formation === undefined || FORMATION_KINDS.includes(v.formation as FormationKind))
+      && (v.facing === undefined || typeof v.facing === 'number' && Number.isFinite(v.facing));
     case 'gather': return ids(v.unitIds) && id(v.nodeId);
     case 'heal': case 'convert':
     case 'attack': case 'repair': return ids(v.unitIds) && id(v.targetId);

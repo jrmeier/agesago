@@ -80,6 +80,7 @@ describe('touch long-press attack-move', () => {
       type: 'attackMove',
       unitIds: [4, 5],
       target: ground,
+      formation: 'line',
     });
   });
 
@@ -204,7 +205,7 @@ describe('orders through overlapping friendly villagers', () => {
       expect(s.views.pick(s.ndc, s.camera)).toBe(s.targetId);
       s.click(mode);
       const ground = pickGround(screenRay(s.camera, s.point.x, s.point.y, 800, 800), s.world.hf);
-      expect(s.commands).toEqual([{ type: 'move', unitIds: [s.selected.id], target: ground }]);
+      expect(s.commands).toEqual([{ type: 'move', unitIds: [s.selected.id], target: ground, formation: 'none' }]);
     });
 
     it(`${mode} gathers berries through a tree canopy`, () => {

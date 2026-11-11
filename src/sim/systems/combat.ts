@@ -10,7 +10,7 @@ import { canRepair } from './repair';
 import { navFor, route, routeForUnit } from './passage';
 import { cancelExplore, settleCancelled } from './explore';
 import { clearEconomyJob, resumeGatherJob, sendToDrop, sendToFarm, sendToNode } from './gather';
-import { formationOffset } from './movement';
+import { planGroupMove, type GroupOrder } from './movement';
 import { siteApproach } from './sites';
 import { playerHasFlag } from './research';
 import { awardKill, recordDamage } from './veterancy';
@@ -292,27 +292,23 @@ export function orderAttack(world: World, unitIds: EntityId[], targetId: EntityI
   settleCancelled(world, cancelled);
 }
 
-/** 'attackMove': walk to `target` in formation, fighting visible enemies met on the way. */
-export function orderAttackMove(world: World, unitIds: EntityId[], target: Vec2): void {
-  const list = units(world, unitIds);
+/** 'attackMove': walk to `target` in formation, fighting visible enemies met on the way (combat breaks it). */
+export function orderAttackMove(world: World, unitIds: EntityId[], target: Vec2, order: GroupOrder = {}): void {
+  const list = [...new Set(units(world, unitIds))];
   if (!list.length) return;
   const cancelled = clearWork(world, list);
-  let moved = 0;
-  list.forEach((u, i) => {
-    const o = formationOffset(i);
-    let dest = { x: target.x + o.x, z: target.z + o.z };
-    let path = routeForUnit(world, u, dest);
-    if (!path && i > 0) path = routeForUnit(world, u, (dest = { ...target }));
-    if (!path) return;
-    moved++;
+  const planned = planGroupMove(world, list, target, order);
+  for (const { unit: u, path, formation } of planned) {
     const cs = stateOf(world, u);
     cs.order = 'attackMove';
-    cs.dest = dest;
+    cs.dest = { ...(path.at(-1) ?? u.pos) };
     u.path = path;
+    if (formation) u.formation = formation;
+    else delete u.formation;
     world.setState(u, 'moving');
-  });
+  }
   settleCancelled(world, cancelled);
-  if (!moved) world.events.emit({ type: 'rejected', reason: 'unreachable' });
+  if (!planned.length) world.events.emit({ type: 'rejected', reason: 'unreachable' });
 }
 
 /** 'stop': drop every order and stand still. */
@@ -400,6 +396,7 @@ function engage(world: World, u: Unit, t: Target, explicit: boolean): void {
   cs.anchor = explicit ? null : { ...u.pos };
   cs.seen = world.time;
   u.path = [];
+  delete u.formation; // combat breaks the formation; units do not re-form afterwards
   world.setState(u, 'attacking');
 }
 

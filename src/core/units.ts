@@ -1,6 +1,6 @@
 import type { CivId } from './civilizations';
 import type { AuraId } from './auras';
-import type { Age, BuildingKind, ProjectileKind, Stockpile, UnitKind } from './types';
+import type { Age, BuildingKind, FormationKind, ProjectileKind, Stockpile, UnitKind } from './types';
 
 /**
  * Unit data table — stats, costs and counters for every unit kind. Single source of truth
@@ -425,4 +425,12 @@ export const RANKS: readonly [RankSpec, RankSpec, RankSpec] = [
 export function canRank(kind: UnitKind): boolean {
   const c = UNITS[kind].unitClass;
   return (c === 'infantry' || c === 'archer' || c === 'cavalry') && !isChampion(kind);
+}
+
+/** Default group formation for a selection: soldiers-only march in 'line'; anything with villagers, ships or priests moves loosely. */
+export function defaultFormation(kinds: readonly UnitKind[]): FormationKind {
+  return kinds.length > 1 && kinds.every((k) => {
+    const cls = UNITS[k]?.unitClass;
+    return cls === 'infantry' || cls === 'archer' || cls === 'cavalry';
+  }) ? 'line' : 'none';
 }
