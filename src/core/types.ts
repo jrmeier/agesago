@@ -517,8 +517,8 @@ export type SimEvent =
   | { type: 'damaged'; id: EntityId; hp: number; maxHp: number; by: EntityId | null }
   /** A unit or building was destroyed (followed by 'removed'). */
   | { type: 'died'; id: EntityId; kind: EntityKind; owner: PlayerId; pos: Vec2 }
-  /** A ranged attack was launched; renderers draw it flying for `flight` seconds. */
-  | { type: 'projectile'; kind: ProjectileKind; from: Vec2; to: Vec2; flight: number; targetId: EntityId }
+  /** A ranged attack was launched; renderers draw it flying for `flight` seconds. `by` is the shooter. */
+  | { type: 'projectile'; kind: ProjectileKind; from: Vec2; to: Vec2; flight: number; targetId: EntityId; by?: EntityId }
   /** A player lost everything (or resigned). */
   | { type: 'defeated'; player: PlayerId; reason: 'conquest' | 'resign' }
   /** The game is decided: every surviving player is on the winning team (or the wonder owner's team). */

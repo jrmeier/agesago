@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { BUILDINGS, BUILDING_UPGRADES, FARM_FOOD } from '../core/buildings';
 import { detectQuality, type Quality } from '../core/quality';
-import { isAnimal, UNITS } from '../core/units';
+import { isAnimal, packs, UNITS } from '../core/units';
 import {
   GAIA,
   SEA_LEVEL,
@@ -56,7 +56,9 @@ import {
 import { ENEMY_RING, MOVE_MARKER, SELECTION } from './palette';
 import { auraRingRadius } from './auraRings';
 import { choosePick, ndcToCanvas, ORDER_PICK_RANK, PICK_RANK, rectContains, type PickCandidate, type PickIntent } from './picking';
+import { ImpactPuffs } from './impacts';
 import { ProjectilePool } from './projectiles';
+import { packTime } from '../sim/systems/siege';
 import { createShadowTexture } from './shadow';
 import { OrderOverlay } from './OrderOverlay';
 import { orderRoutes, type OrderRoute } from './orderRoutes';
@@ -282,6 +284,11 @@ export class EntityViews {
   /** Capture bars over buildings someone is capturing (M18-4). */
   readonly captureBars: CaptureBars;
   private readonly projectiles: ProjectilePool;
+  private readonly impacts: ImpactPuffs;
+  /** Sim time of each siege engine's last shot or ram blow, so its throw lines up with the sim. */
+  private readonly lastFire = new Map<EntityId, number>();
+  /** Interpolated sim clock for this frame (projectiles and impacts run on it). */
+  private simNow = 0;
   private readonly deaths: DeathGhosts;
 
   constructor(
@@ -360,6 +367,8 @@ export class EntityViews {
     this.captureBars = new CaptureBars(this.object);
     this.projectiles = new ProjectilePool(this.object, quality);
     this.deaths = new DeathGhosts(this.object, quality);
+    this.impacts = new ImpactPuffs(this.object, quality);
+    this.projectiles.onLand = (kind, x, y, z, targetId) => this.onLand(kind, x, y, z, targetId);
 
     this.world.events.on('died', (e) => this.onDied(e));
     this.world.events.on('spawned', (e) => {
@@ -370,8 +379,10 @@ export class EntityViews {
       else this.mountNode(entity);
     });
     this.world.events.on('projectile', (e) => {
-      this.projectiles.launch(e.kind, e.from, e.to, e.flight, (x, z) => this.groundY(x, z));
+      if (e.by !== undefined && this.isSiege(e.by)) this.lastFire.set(e.by, this.world.time);
+      this.projectiles.launch(e.kind, e.from, e.to, e.flight, (x, z) => this.groundY(x, z), { start: this.world.time, targetId: e.targetId });
     });
+    this.world.events.on('damaged', (e) => this.onBlow(e.id, e.by));
     this.world.events.on('removed', (e) => this.unmount(e.id));
     this.world.events.on('promoted', (e) => {
       if (this.promotions.length >= 32) this.promotions.shift();
@@ -437,6 +448,8 @@ export class EntityViews {
     this.syncFog();
     this.cullChunks(camera);
     const t = clamp01(alpha);
+    // The sim clock interpolated like unit positions: alpha 0 is the start of the last tick.
+    this.simNow = this.world.time - (1 - t) / BALANCE.tickRate;
     this.syncUnits(t, time);
     this.explorationView.sync();
     this.syncBuildings(camera);
@@ -446,7 +459,9 @@ export class EntityViews {
     this.syncAuraRings(t);
     this.syncMarker(time);
     this.syncOrders(time);
-    this.projectiles.update(time);
+    // Impacts first, so puffs from shots landing this frame are born at this frame's clock.
+    this.impacts.update(this.simNow);
+    this.projectiles.update(this.simNow);
     this.deaths.update(time, (owner, x, z, rubble) => this.ghostShown(owner, x, z, rubble));
   }
 
@@ -659,7 +674,9 @@ export class EntityViews {
       object: avatar.object,
       avatar,
       shadow,
-      pose: (u, t) => avatar.setPose(this.visualPose(u), t, u.kind === 'villager' ? (u.carry?.type ?? null) : null),
+      pose: UNITS[unit.kind].unitClass === 'siege'
+        ? (u, t) => avatar.setPose(this.visualPose(u), t, null, this.siegeState(u))
+        : (u, t) => avatar.setPose(this.visualPose(u), t, u.kind === 'villager' ? (u.carry?.type ?? null) : null),
       die: (age) => avatar.setPose('die', age),
       setOpacity: (opacity) => avatar.setOpacity(opacity),
     };
@@ -781,6 +798,7 @@ export class EntityViews {
   }
 
   private unmount(id: EntityId): void {
+    this.lastFire.delete(id);
     const villager = this.villagers.get(id);
     if (villager) {
       this.object.remove(villager.object, villager.shadow);
@@ -1349,6 +1367,51 @@ export class EntityViews {
     }
     if (isTravelling(unit)) return movingPose(unit.kind);
     return 'idle';
+  }
+
+  private isSiege(id: EntityId): boolean {
+    const unit = this.world.units.get(id);
+    return unit !== undefined && UNITS[unit.kind].unitClass === 'siege';
+  }
+
+  /** Set-up progress (0 packed .. 1 deployed) and seconds since the last shot, on the sim clock. */
+  private siegeState(unit: Unit): { deploy: number; sinceFire: number } {
+    const fired = this.lastFire.get(unit.id);
+    const sinceFire = fired === undefined ? Infinity : Math.max(0, this.simNow - fired);
+    if (!packs(unit.kind)) return { deploy: 1, sinceFire };
+    const full = packTime(this.world, unit.owner, unit.kind);
+    const left = unit.packTimer === undefined || full <= 0 ? 0 : Math.min(1, unit.packTimer / full);
+    if (unit.state === 'unpacking') return { deploy: 1 - left, sinceFire };
+    if (unit.state === 'packing') return { deploy: left, sinceFire };
+    return { deploy: unit.deployed ? 1 : 0, sinceFire };
+  }
+
+  /** A ram's blow: time its beam swing, and knock grit off a building it hits. */
+  private onBlow(targetId: EntityId, by: EntityId | null): void {
+    if (by === null) return;
+    const ram = this.world.units.get(by);
+    if (!ram || UNITS[ram.kind].unitClass !== 'siege' || UNITS[ram.kind].projectile) return;
+    this.lastFire.set(by, this.world.time);
+    if (!this.sight().isVisible(ram.pos.x, ram.pos.z)) return;
+    const reach = UNITS[ram.kind].radius + 0.9;
+    const x = ram.pos.x + Math.sin(ram.facing) * reach;
+    const z = ram.pos.z + Math.cos(ram.facing) * reach;
+    const kind = this.world.buildings.has(targetId) ? 'debris' : 'dust';
+    this.impacts.spawn(kind, x, this.groundY(x, z) + (kind === 'debris' ? 0.9 : 0), z, 0.9);
+  }
+
+  /** Siege shots kick up dust where they land, and grit off a building they hit. */
+  private onLand(kind: string, x: number, y: number, z: number, targetId: EntityId | null): void {
+    if (kind !== 'boulder' && kind !== 'bolt') return;
+    if (!this.sight().isVisible(x, z)) return;
+    const size = kind === 'boulder' ? 2 : 0.8;
+    const building = targetId === null ? undefined : this.world.buildings.get(targetId);
+    if (building) {
+      const spec = BUILDINGS[building.kind].size;
+      const near = Math.hypot(x - building.pos.x, z - building.pos.z) <= Math.max(spec.w, spec.d) * 0.75 + 1;
+      if (near) this.impacts.spawn('debris', x, y + 0.8, z, size * 0.8);
+    }
+    this.impacts.spawn('dust', x, y, z, size);
   }
 
   private inRange(unit: Unit): boolean {

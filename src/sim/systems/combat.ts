@@ -783,7 +783,7 @@ function strike(world: World, u: Unit, t: Target): void {
   const from = { x: u.pos.x, z: u.pos.z };
   const near = nearestPoint(from, t);
   const { aim, flight } = isUnit(t) ? aimAt(world, u.owner, from, t) : { aim: { x: near.x, z: near.z }, flight: dist(from, near) / BALANCE.projectileSpeed };
-  world.events.emit({ type: 'projectile', kind: spec.projectile, from, to: aim, flight, targetId: t.id });
+  world.events.emit({ type: 'projectile', kind: spec.projectile, from, to: aim, flight, targetId: t.id, by: u.id });
   const hit: PendingHit = { at: world.time + flight, targetId: t.id, aim, by: u.id, kind: u.kind, owner: u.owner, from };
   if (u.rank) hit.rank = u.rank;
   world.projectiles.push(hit);
@@ -1192,7 +1192,7 @@ function enemiesInRange(world: World, b: Building, range: number): Unit[] {
 function shootBuilding(world: World, b: Building, t: Unit, pierce: number): void {
   const from = { x: b.pos.x, z: b.pos.z };
   const { aim, flight } = aimAt(world, b.owner, from, t);
-  world.events.emit({ type: 'projectile', kind: 'arrow', from, to: aim, flight, targetId: t.id });
+  world.events.emit({ type: 'projectile', kind: 'arrow', from, to: aim, flight, targetId: t.id, by: b.id });
   world.projectiles.push({ at: world.time + flight, targetId: t.id, aim, by: b.id, kind: 'archer', owner: b.owner, from, pierce });
 }
 

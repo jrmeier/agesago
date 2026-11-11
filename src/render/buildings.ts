@@ -19,7 +19,7 @@ export interface BuildingModelOptions {
   /** The building's own upgrade tier (M14-1), clamped by modelTier to its chain length. */
   tier?: number;
   /**
-   * Owner's civilization: picks the wonder's monument and the fortress style (Hellenic when
+   * Owner's civilization: picks the wonder's monument, the fortress style and the siege workshop's hall (Hellenic when
    * absent), and upgraded tiers carry its finial (see tierModels.civCrest). Other kinds are only
    * tinted, in buildingVisuals.
    */
@@ -531,6 +531,77 @@ function fortressParts(civ: CivId | undefined, color: number): THREE.BufferGeome
   return parts;
 }
 
+/**
+ * Siege workshop (M16-3): a long timber hall open to the front yard, where an engine stands half
+ * built under a gin-pole crane beside stacked timber. The hall follows the owner's civ:
+ * Hellenes a tiled gable on a stone plinth, Romans red tiles over brick with an arched door,
+ * Persians a flat crenellated mud-brick roof, Celts a steep thatch on round posts.
+ */
+function workshopParts(civ: CivId | undefined, color: number): THREE.BufferGeometry[] {
+  const style = civ ?? 'hellenes';
+  const walls = style === 'romans' ? 0xb7684a : style === 'persians' ? 0xc9a77a : style === 'celts' ? 0x9b7b56 : 0xe2dbc3;
+  const hallZ = -0.85, hallD = 2.7, hallW = 4.4, wallH = 1.75;
+  const parts: THREE.BufferGeometry[] = [];
+  // Plinth, back and side walls; the front stays open between corner posts.
+  parts.push(block([hallW + 0.14, 0.2, hallD + 0.14], style === 'celts' ? 0x7d6a52 : STONE, [0, 0.1, hallZ]));
+  parts.push(part(bevelBox(hallW, wallH, 0.2), walls, [0, 0.2 + wallH / 2, hallZ - hallD / 2 + 0.1]));
+  for (const side of [-1, 1]) parts.push(part(bevelBox(0.2, wallH, hallD), walls, [side * (hallW / 2 - 0.1), 0.2 + wallH / 2, hallZ]));
+  const front = hallZ + hallD / 2;
+  for (const x of [-1.45, 1.45]) {
+    parts.push(style === 'celts'
+      ? part(new THREE.CylinderGeometry(0.11, 0.13, wallH, 7), TREE_TRUNK, [x, 0.2 + wallH / 2, front - 0.1])
+      : part(bevelBox(0.26, wallH, 0.26), walls, [x, 0.2 + wallH / 2, front - 0.1]));
+  }
+  parts.push(block([hallW, 0.18, 0.24], style === 'romans' ? 0xc9b08a : TREE_TRUNK, [0, 0.2 + wallH - 0.09, front - 0.1]));
+  if (style === 'romans') {
+    // A brick arch over the wide door and bonding courses along the walls.
+    parts.push(part(new THREE.TorusGeometry(1.2, 0.12, 4, 10, Math.PI), 0xa4553a, [0, 0.62, front - 0.05]));
+    for (const y of [0.7, 1.3]) parts.push(block([hallW + 0.02, 0.06, hallD + 0.02], 0xd2c3a2, [0, y, hallZ]));
+  }
+  const top = 0.2 + wallH;
+  if (style === 'persians') {
+    // Flat roof with a crenellated parapet and a team-coloured awning over the door.
+    parts.push(block([hallW + 0.2, 0.16, hallD + 0.2], 0xb8966a, [0, top + 0.08, hallZ]));
+    for (let i = 0; i < 9; i++) {
+      const x = -hallW / 2 + 0.1 + i * ((hallW - 0.2) / 8);
+      parts.push(block([0.2, 0.26, 0.2], walls, [x, top + 0.29, front]));
+      parts.push(block([0.2, 0.26, 0.2], walls, [x, top + 0.29, hallZ - hallD / 2]));
+    }
+    parts.push(block([2.9, 0.05, 0.6], color, [0, top - 0.25, front + 0.25], [0.25, 0, 0]));
+  } else {
+    const thatch = style === 'celts';
+    const rise = thatch ? 1.1 : style === 'romans' ? 0.75 : 0.85;
+    // Ridge runs front to back, so the gable faces the yard.
+    const roof = roofParts(hallW + 0.3, hallD + 0.4, top, rise, thatch, 3);
+    parts.push(...roof.map(piece => piece.translate(0, 0, hallZ)));
+    if (!thatch) parts.push(...gableParts(hallW, hallD, top, rise, walls).map(piece => piece.translate(0, 0, hallZ)));
+    else parts.push(...gableParts(hallW, hallD, top, rise, 0x8a6a45).map(piece => piece.translate(0, 0, hallZ)));
+    if (style === 'hellenes') parts.push(part(new THREE.ConeGeometry(0.1, 0.24, 4), 0xb89b53, [0, top + rise + 0.12, front + 0.15]));
+  }
+  // Inside: a beam on trestles and spare wheels against the back wall.
+  parts.push(block([2.4, 0.12, 0.12], WOOD, [0, 0.75, hallZ - 0.5]));
+  for (const x of [-1, 1]) parts.push(block([0.1, 0.55, 0.4], TREE_TRUNK, [x, 0.48, hallZ - 0.5]));
+  for (const x of [-1.6, -1.3]) parts.push(part(new THREE.CylinderGeometry(0.42, 0.42, 0.08, 10), WOOD, [x, 0.62, hallZ - hallD / 2 + 0.3], [1, 1, 1], [Math.PI / 2, 0, 0]));
+  // Yard: a half-built catapult frame, an arm waiting to be fitted, a timber stack and a crane.
+  const yardZ = 1.35;
+  for (const side of [-1, 1]) {
+    parts.push(block([0.1, 0.1, 1.2], WOOD, [-0.6 + side * 0.32, 0.3, yardZ]));
+    parts.push(block([0.08, 0.6, 0.08], WOOD, [-0.6 + side * 0.32, 0.6, yardZ + 0.35]));
+    parts.push(part(new THREE.CylinderGeometry(0.25, 0.25, 0.07, 10), WOOD, [-0.6 + side * 0.42, 0.25, yardZ - 0.35], [1, 1, 1], [0, 0, Math.PI / 2]));
+  }
+  parts.push(block([0.7, 0.1, 0.1], TREE_TRUNK, [-0.6, 0.9, yardZ + 0.35]));
+  parts.push(block([0.4, 0.13, 0.13], color, [-0.6, 0.9, yardZ + 0.3]));
+  parts.push(block([0.09, 0.09, 1.1], TREE_TRUNK, [0.25, 0.08, yardZ + 0.2], [0, 0.6, Math.PI / 2]));
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3 - i; j++) {
+    parts.push(part(new THREE.CylinderGeometry(0.1, 0.1, 1.3, 6), 0x9a7448, [1.0 + j * 0.21 + i * 0.105, 0.1 + i * 0.18, 1.7], [1, 1, 1], [Math.PI / 2, 0, 0]));
+  }
+  parts.push(block([0.12, 2.7, 0.12], TREE_TRUNK, [1.8, 1.35, 0.75]));
+  parts.push(part(new THREE.CylinderGeometry(0.05, 0.05, 1.7, 6), WOOD, [1.35, 2.45, 1.1], [1, 1, 1], [0.6, 0, 0.9]));
+  parts.push(block([0.02, 1.1, 0.02], 0xc9b48a, [0.8, 1.75, 1.45]));
+  parts.push(block([0.2, 0.16, 0.2], STONE, [0.8, 1.15, 1.45]));
+  return parts;
+}
+
 /** Grounded, centred ancient economy buildings; the renderer supplies world position and yaw. */
 export function buildingModel(kind: BuildingKind, opts?: BuildingModelOptions): THREE.Group {
   if (kind === 'townCenter') return buildTownCenter(0, opts);
@@ -741,13 +812,7 @@ export function buildingModel(kind: BuildingKind, opts?: BuildingModelOptions): 
     parts.push(block([0.08, 0.16, 0.08], 0xb89b53, [-0.28, 0.85, 0.4]));
     parts.push(block([0.08, 0.16, 0.08], 0xb89b53, [0.28, 0.85, -0.4]));
   } else if (kind === 'siegeWorkshop') {
-    // Placeholder (M16-3 brings the real model): a timber shed with a wide door and a crane beam.
-    parts.push(part(bevelBox(4.2, 1.9, 3.2), 0xb39468, [0, 0.98, -0.6]));
-    parts.push(...roofParts(4.5, 3.5, 1.95, 0.8, false, 3).map(piece => piece.translate(0, 0, -0.6)));
-    parts.push(block([1.8, 1.5, 0.06], TREE_TRUNK, [0, 0.78, 1.02]));
-    parts.push(block([0.14, 2.9, 0.14], TREE_TRUNK, [1.75, 1.45, 1.75]));
-    parts.push(part(new THREE.CylinderGeometry(0.06, 0.06, 2.4, 6), WOOD, [1.2, 2.6, 1.75], [1, 1, 1], [0, 0, Math.PI / 2.6]));
-    for (const x of [-1.2, -0.4]) parts.push(part(new THREE.CylinderGeometry(0.35, 0.35, 0.1, 10), WOOD, [x, 0.36, 1.65], [1, 1, 1], [Math.PI / 2, 0, 0]));
+    parts.push(...workshopParts(opts?.civ, opts?.color ?? 0x9e3b26));
   } else {
     for (let i = 0; i < 6; i++) {
       parts.push(block([0.27, 0.045, 3.66], 0x8f6944, [-1.61 + i * 0.64, 0.075, 0]));

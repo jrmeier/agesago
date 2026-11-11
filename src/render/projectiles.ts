@@ -1,10 +1,23 @@
 import * as THREE from 'three';
 import type { Quality } from '../core/quality';
-import type { Vec2 } from '../core/types';
+import type { EntityId, ProjectileKind, Vec2 } from '../core/types';
 import { projectileGeometry, type ProjKind } from './modelBridge';
 
 export const LAUNCH_HEIGHT = 1.25;
 export const IMPACT_HEIGHT = 0.8;
+
+/** Peak height over the straight line: boulders lob high, bolts fly almost flat. */
+export function arcHeight(kind: ProjectileKind, dist: number): number {
+  if (kind === 'boulder') return Math.min(6, 1.2 + dist * 0.3);
+  if (kind === 'bolt') return Math.min(0.9, 0.15 + dist * 0.035);
+  return Math.min(2.8, 0.45 + dist * 0.15);
+}
+
+/** Where a shot lands; boulders and bolts land on the ground (y is the terrain there). */
+export type LandFn = (kind: ProjKind, x: number, y: number, z: number, targetId: EntityId | null) => void;
+
+const TINT: Partial<Record<ProjKind, number>> = { boulder: 0x8f8a80, bolt: 0x6b4a2e };
+const DEFAULT_TINT = 0xd7c4a1;
 
 interface Pending {
   kind: ProjKind;
@@ -16,6 +29,8 @@ interface Pending {
   z1: number;
   flight: number;
   arc: number;
+  start: number | null;
+  targetId: EntityId | null;
 }
 
 interface Slot {
@@ -30,11 +45,17 @@ interface Slot {
   arc: number;
   spin: number;
   angle: number;
+  targetId: EntityId | null;
+  mat: THREE.MeshLambertMaterial;
 }
 
 /**
  * Pooled shots. `launch` queues a flight; `update` moves active meshes on a ballistic arc
  * and returns finished ones to the pool. The update loop does not allocate.
+ *
+ * Pass the sim clock to `update` and the event's sim time as `start`, so a shot takes exactly the
+ * sim's flight time (at any game speed, and frozen while paused) and lands as the damage does.
+ * `onLand` hears every shot that reaches its end (not one evicted early from a full pool).
  */
 export class ProjectilePool {
   readonly object = new THREE.Group();
@@ -44,6 +65,7 @@ export class ProjectilePool {
   private readonly dir = new THREE.Vector3();
   private readonly up = new THREE.Vector3(0, 1, 0);
   private readonly quat = new THREE.Quaternion();
+  onLand: LandFn | null = null;
 
   constructor(parent: THREE.Object3D, quality?: Pick<Quality, 'tier'>) {
     this.object.name = 'projectiles';
@@ -51,19 +73,30 @@ export class ProjectilePool {
     parent.add(this.object);
   }
 
-  launch(kind: ProjKind, from: Vec2, to: Vec2, flight: number, groundY: (x: number, z: number) => number): void {
+  launch(
+    kind: ProjKind,
+    from: Vec2,
+    to: Vec2,
+    flight: number,
+    groundY: (x: number, z: number) => number,
+    opts?: { start?: number; targetId?: EntityId | null },
+  ): void {
     if (this.pending.length >= this.max) this.pending.shift();
     const dist = Math.hypot(to.x - from.x, to.z - from.z);
+    const siege = kind === 'boulder' || kind === 'bolt';
     this.pending.push({
       kind,
       x0: from.x,
       y0: groundY(from.x, from.z) + LAUNCH_HEIGHT,
       z0: from.z,
       x1: to.x,
-      y1: groundY(to.x, to.z) + IMPACT_HEIGHT,
+      // A boulder or bolt comes down to the ground at its aim point.
+      y1: groundY(to.x, to.z) + (siege ? 0.15 : IMPACT_HEIGHT),
       z1: to.z,
       flight: Math.max(0.05, flight),
-      arc: Math.min(2.8, 0.45 + dist * 0.15),
+      arc: arcHeight(kind, dist),
+      start: opts?.start ?? null,
+      targetId: opts?.targetId ?? null,
     });
   }
 
@@ -81,18 +114,22 @@ export class ProjectilePool {
     }
     slot.kind = shot.kind;
     slot.mesh.geometry = projectileGeometry(shot.kind);
+    slot.mat.color.setHex(TINT[shot.kind] ?? DEFAULT_TINT);
+    slot.targetId = shot.targetId;
     slot.mesh.userData.projectileKind = shot.kind;
     slot.from.set(shot.x0, shot.y0, shot.z0);
     slot.to.set(shot.x1, shot.y1, shot.z1);
-    slot.start = time;
+    slot.start = shot.start ?? time;
     slot.last = time;
     slot.flight = shot.flight;
     slot.arc = shot.arc;
     slot.angle = (shot.x0 + shot.z0) * 0.17;
-    slot.spin = shot.kind === 'stone' ? 6.5 : 0;
+    slot.spin = shot.kind === 'stone' ? 6.5 : shot.kind === 'boulder' ? 2.6 : 0;
     slot.active = true;
     slot.mesh.visible = true;
     this.place(slot, 0);
+    // A shot armed after its whole flight (a long frame) still lands.
+    this.step(slot, time);
   }
 
   private step(slot: Slot, time: number): void {
@@ -101,9 +138,10 @@ export class ProjectilePool {
     if (u >= 1) {
       slot.active = false;
       slot.mesh.visible = false;
+      this.onLand?.(slot.kind, slot.to.x, slot.to.y, slot.to.z, slot.targetId);
       return;
     }
-    if (slot.kind === 'stone') {
+    if (slot.spin) {
       const dt = Math.min(0.25, Math.max(0, time - slot.last));
       slot.angle += dt * slot.spin;
     }
@@ -119,7 +157,7 @@ export class ProjectilePool {
       slot.from.y + (slot.to.y - slot.from.y) * u + arc,
       slot.from.z + (slot.to.z - slot.from.z) * u,
     );
-    if (slot.kind === 'stone') {
+    if (slot.spin) {
       mesh.rotation.set(slot.angle, slot.angle * 0.73, slot.angle * 0.41);
       return;
     }
@@ -143,10 +181,8 @@ export class ProjectilePool {
   }
 
   private makeSlot(): Slot {
-    const mesh = new THREE.Mesh(
-      projectileGeometry('arrow'),
-      new THREE.MeshLambertMaterial({ color: 0xd7c4a1 }),
-    );
+    const mat = new THREE.MeshLambertMaterial({ color: DEFAULT_TINT });
+    const mesh = new THREE.Mesh(projectileGeometry('arrow'), mat);
     mesh.name = 'projectile';
     mesh.visible = false;
     mesh.frustumCulled = false;
@@ -166,6 +202,8 @@ export class ProjectilePool {
       arc: 1,
       spin: 0,
       angle: 0,
+      targetId: null,
+      mat,
     };
     this.slots.push(slot);
     return slot;

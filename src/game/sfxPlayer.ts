@@ -30,6 +30,9 @@ const DUR: Record<SfxKind, number> = {
   arrow: 0.12,
   stone: 0.1,
   javelin: 0.11,
+  catapult: 0.42,
+  bolt: 0.16,
+  siegeHit: 0.4,
   death: 0.36,
   ui: 0.045,
   age: 0.9,
@@ -223,6 +226,24 @@ export class ProceduralSfx implements SfxSink {
       case 'javelin':
         tone(420, 'triangle', 0, 0.09, g * 0.35);
         knock(0, 0.07, 600, g * 0.3);
+        break;
+      case 'catapult':
+        // Winch creak, then the arm slamming into the padded crossbar.
+        tone(110, 'sawtooth', 0, 0.12, g * 0.18);
+        knock(0.1, 0.22, 140, g * 1.1);
+        tone(62, 'sine', 0.1, 0.3, g * 0.7);
+        break;
+      case 'bolt':
+        // Torsion string snap: a sharp twang that drops in pitch.
+        tone(310, 'square', 0, 0.12, g * 0.22);
+        tone(155, 'triangle', 0.01, 0.14, g * 0.3);
+        knock(0, 0.05, 2400, g * 0.4);
+        break;
+      case 'siegeHit':
+        // Heavy crunch: low noise burst over a thud.
+        knock(0, 0.32, 320, g * 1.2);
+        knock(0.03, 0.2, 900, g * 0.4);
+        tone(48, 'sine', 0, 0.36, g * 0.8);
         break;
       case 'death':
         tone(440, 'sine', 0, 0.32, g * 0.45);

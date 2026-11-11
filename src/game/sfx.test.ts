@@ -173,6 +173,47 @@ describe('positional sound', () => {
     far.ear.dispose();
   });
 
+  it('creaks a catapult on the shot and crunches where the boulder lands, on the sim clock', () => {
+    const match = world(new Map());
+    match.world.events.emit({ type: 'projectile', kind: 'boulder', from: { x: 6, z: 0 }, to: { x: 20, z: 0 }, flight: 2, targetId: 1, by: 9 });
+    expect(match.sink.played.map((voice) => voice.kind)).toEqual(['catapult']);
+    match.ear.pulse([], true, 0.016);
+    match.world.time = 11.9;
+    match.ear.pulse([], true, 0.016);
+    expect(match.sink.played).toHaveLength(1);
+    match.world.time = 12;
+    match.ear.pulse([], true, 0.016);
+    expect(match.sink.played.map((voice) => voice.kind)).toEqual(['catapult', 'siegeHit']);
+    expect(match.sink.played[1].pos).toEqual({ x: 20, z: 0 });
+    match.world.time = 20;
+    match.ear.pulse([], true, 0.016);
+    expect(match.sink.played).toHaveLength(2);
+    match.ear.dispose();
+  });
+
+  it('snaps a bolt shooter and keeps a landing in the fog silent', () => {
+    const match = world(new Map());
+    match.world.events.emit({ type: 'projectile', kind: 'bolt', from: { x: 6, z: 0 }, to: { x: 60, z: 0 }, flight: 1, targetId: 1, by: 9 });
+    expect(match.sink.played.map((voice) => voice.kind)).toEqual(['bolt']);
+    match.world.time = 11;
+    match.ear.pulse([], true, 0.016);
+    expect(match.sink.played).toHaveLength(1);
+    match.ear.dispose();
+  });
+
+  it('crunches a ram blow instead of a sword clash', () => {
+    const units = new Map<EntityId, Unit>([
+      [1, unit({ id: 1, owner: 1, pos: { x: 2, z: 0 }, kind: 'ram' })],
+      [2, unit({ id: 2, owner: 2, pos: { x: 3, z: 0 } })],
+      [3, unit({ id: 3, owner: 1, pos: { x: 2, z: 1 }, kind: 'swordsman' })],
+    ]);
+    const match = world(units);
+    match.world.events.emit({ type: 'damaged', id: 2, hp: 5, maxHp: 10, by: 1 });
+    match.world.events.emit({ type: 'damaged', id: 2, hp: 4, maxHp: 10, by: 3 });
+    expect(match.sink.played.map((voice) => voice.kind)).toEqual(['siegeHit', 'clash']);
+    match.ear.dispose();
+  });
+
   it('does not sound an arrow that leaves the fog', () => {
     const silent = world(new Map());
     silent.world.events.emit({

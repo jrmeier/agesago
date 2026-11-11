@@ -42,6 +42,12 @@ interface Cue {
 }
 
 const MOVE: ReadonlySet<Unit['state']> = new Set(['moving', 'toNode', 'toDrop', 'exploring', 'toBuild', 'toRepair', 'toShelter']);
+/** Siege shots thud where they land; the sim resolves the hit at the same moment. */
+interface Landing {
+  at: number;
+  pos: Vec2;
+}
+
 const ACK: ReadonlySet<Unit['state']> = new Set(['moving', 'toNode', 'attacking', 'toBuild', 'toRepair', 'exploring']);
 
 /**
@@ -52,6 +58,7 @@ export class MatchAudio {
   private readonly pool = new VoicePool();
   private readonly clock = new SoundClock();
   private readonly off: Array<() => void> = [];
+  private readonly landings: Landing[] = [];
   private ear: SfxEar = { at: { x: 0, z: 0 }, right: { x: 1, z: 0 } };
   private readonly onPointer: (event: Event) => void;
 
@@ -60,9 +67,9 @@ export class MatchAudio {
     private readonly sink: SfxSink = new ProceduralSfx(),
   ) {
     const bus = world.events;
-    this.off.push(bus.on('damaged', (event) => this.onDamaged(event.id)));
+    this.off.push(bus.on('damaged', (event) => this.onDamaged(event.id, event.by)));
     this.off.push(bus.on('died', (event) => this.offer({ kind: 'death', pos: event.pos, owner: event.owner, key: `die:${event.id}`, gap: 0.05 })));
-    this.off.push(bus.on('projectile', (event) => this.onProjectile(event.kind, event.from)));
+    this.off.push(bus.on('projectile', (event) => this.onProjectile(event.kind, event.from, event.to, event.flight)));
     this.off.push(bus.on('constructed', (event) => this.onConstructed(event.id)));
     this.off.push(bus.on('spawned', (event) => this.onSpawned(event.id, event.kind)));
     this.off.push(bus.on('researched', (event) => this.onOwned(event.owner, 'research')));
@@ -79,6 +86,7 @@ export class MatchAudio {
 
   /** Repeating work, footsteps, and the beds for the land in view. */
   pulse(samples: readonly Vec2[], live: boolean, dt: number): void {
+    this.land();
     if (live) this.work();
     this.sink.setAmbient(ambienceOf(samples.map((pos) => this.sample(pos))));
     this.sink.tick(dt);
@@ -87,11 +95,18 @@ export class MatchAudio {
   dispose(): void {
     for (const unlisten of this.off) unlisten();
     this.off.length = 0;
+    this.landings.length = 0;
     if (typeof document !== 'undefined') document.removeEventListener('pointerdown', this.onPointer, true);
     this.sink.dispose();
   }
 
-  private onDamaged(id: EntityId): void {
+  private onDamaged(id: EntityId, by: EntityId | null): void {
+    // A ram's blow is a heavy crunch, whatever it hits.
+    const ram = by === null ? undefined : this.unit(by);
+    if (ram && UNITS[ram.kind].unitClass === 'siege' && !UNITS[ram.kind].projectile) {
+      this.offer({ kind: 'siegeHit', pos: ram.pos, owner: ram.owner, key: `ram:${ram.id}`, gap: 0.3 });
+      return;
+    }
     const unit = this.unit(id);
     if (unit) {
       this.offer({ kind: 'clash', pos: unit.pos, owner: unit.owner, key: `hit:${id}`, gap: 0.12 });
@@ -101,11 +116,26 @@ export class MatchAudio {
     if (building) this.offer({ kind: 'clash', pos: building.pos, owner: building.owner, key: `hit:${id}`, gap: 0.12 });
   }
 
-  private onProjectile(kind: ProjectileKind, from: Vec2): void {
+  private onProjectile(kind: ProjectileKind, from: Vec2, to: Vec2, flight: number): void {
+    const siege = kind === 'boulder' || kind === 'bolt';
+    if (siege && this.landings.length < 32) this.landings.push({ at: this.world.time + flight, pos: { x: to.x, z: to.z } });
     const vis = this.world.visibilityOf(this.world.localPlayer);
     if (!vis.isVisible(from.x, from.z)) return;
-    // Placeholder sounds for siege shots: a boulder thuds like a stone, a bolt hisses like a javelin.
-    this.offer({ kind: kind === 'boulder' ? 'stone' : kind === 'bolt' ? 'javelin' : kind, pos: from, owner: this.world.localPlayer });
+    this.offer({ kind: kind === 'boulder' ? 'catapult' : kind, pos: from, owner: this.world.localPlayer });
+  }
+
+  /** Sound siege shots whose flight is over, where they land (if that spot is in sight). */
+  private land(): void {
+    let keep = 0;
+    for (const landing of this.landings) {
+      if (landing.at > this.world.time + 1e-6) {
+        this.landings[keep++] = landing;
+        continue;
+      }
+      if (!this.world.visibilityOf(this.world.localPlayer).isVisible(landing.pos.x, landing.pos.z)) continue;
+      this.offer({ kind: 'siegeHit', pos: landing.pos, owner: this.world.localPlayer, key: 'siege-land', gap: 0.08 });
+    }
+    this.landings.length = keep;
   }
 
   private onConstructed(id: EntityId): void {

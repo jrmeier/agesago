@@ -221,6 +221,11 @@ describe('military rendering', () => {
     const camera = cameraAt(15, 10);
     const group = views.object.getObjectByName('projectiles')!;
     const visible = () => group.children.filter((child) => child.visible);
+    // Shots fly on the sim clock: alpha 1 puts the frame at world.time.
+    const at = (time: number) => {
+      world.time = time;
+      views.sync(1, time, camera);
+    };
 
     world.events.emit({
       type: 'projectile',
@@ -230,19 +235,19 @@ describe('military rendering', () => {
       flight: 1,
       targetId: 1,
     });
-    views.sync(0, 0, camera);
+    at(0);
     expect(visible()).toHaveLength(1);
     const arrow = visible()[0];
     expect(arrow.position.x).toBeCloseTo(10, 1);
     const launched = group.children.length;
 
-    views.sync(0, 0.5, camera);
+    at(0.5);
     expect(arrow.position.x).toBeCloseTo(15, 1);
     expect(arrow.position.y).toBeGreaterThan(3.2);
     const along = new THREE.Vector3(0, 1, 0).applyQuaternion(arrow.quaternion);
     expect(along.x).toBeGreaterThan(0.85);
 
-    views.sync(0, 1.05, camera);
+    at(1.05);
     expect(arrow.visible).toBe(false);
 
     world.events.emit({
@@ -253,14 +258,14 @@ describe('military rendering', () => {
       flight: 1,
       targetId: 1,
     });
-    views.sync(0, 1.05, camera);
+    at(1.05);
     expect(group.children.length).toBe(launched);
     const stone = visible()[0];
     expect(stone.userData.projectileKind).toBe('stone');
     const spin = stone.rotation.x;
-    views.sync(0, 1.55, camera);
+    at(1.55);
     expect(stone.rotation.x).not.toBeCloseTo(spin, 2);
-    views.sync(0, 2.2, camera);
+    at(2.2);
     expect(visible()).toHaveLength(0);
   });
 

@@ -12,7 +12,8 @@ import {
 import { createSoldier, createTradeCart, projectileGeometry as modelProjectile } from './models';
 import { applyUnitTiers, BASE_TIERS, ownedLambert, sameTiers, Shimmer, type UnitTiers } from './tiers';
 import { createShip } from './navalModels';
-import { isShip, UNITS } from '../core/units';
+import { isShip } from '../core/units';
+import { createSiegeEngine, isSiegeKind, type SiegeKind, type SiegeModel } from './siegeModels';
 import { createPriest } from './explorationModels';
 import { rubbleGeometry as propsRubble } from './props';
 
@@ -24,9 +25,18 @@ import { rubbleGeometry as propsRubble } from './props';
 
 export type ProjKind = ProjectileKind;
 
+/** Siege engine pose inputs from the renderer (see siegeModels.ts). */
+export interface SiegeState {
+  /** 0 packed .. 1 set up. */
+  deploy: number;
+  /** Seconds since the engine last fired or struck (Infinity if it has not). */
+  sinceFire: number;
+}
+
 export interface UnitAvatar {
   object: THREE.Object3D;
-  setPose(pose: string, time: number, carry?: VillagerCarry | null): void;
+  /** `siege` carries a siege engine's set-up progress and time since its last shot; others ignore it. */
+  setPose(pose: string, time: number, carry?: VillagerCarry | null, siege?: SiegeState): void;
   setOpacity(opacity: number): void;
   /**
    * Show research tiers (tool metal, armour tint, line trim/crest) by rewriting vertex
@@ -44,8 +54,8 @@ function withUpgrades(base: Omit<UnitAvatar, 'setTiers' | 'shimmer'>): UnitAvata
   return {
     object: base.object,
     setOpacity: base.setOpacity,
-    setPose(pose, time, carry): void {
-      base.setPose(pose, time, carry);
+    setPose(pose, time, carry, siege): void {
+      base.setPose(pose, time, carry, siege);
       glow?.update(time);
     },
     setTiers(next: UnitTiers): boolean {
@@ -306,6 +316,23 @@ function fromSoldier(kind: UnitKind, color: number, seed: number, factory: Soldi
   };
 }
 
+function fromSiege(kind: SiegeKind, color: number, seed: number): Omit<UnitAvatar, 'setTiers' | 'shimmer'> {
+  const model: SiegeModel = createSiegeEngine(kind, { color, seed });
+  tag(model.object, kind, color);
+  ownTree(model.object);
+  markDisposableGeos(model.object);
+  return {
+    object: model.object,
+    setPose(pose: string, time: number, _carry?: VillagerCarry | null, siege?: SiegeState): void {
+      model.object.userData.pose = pose;
+      const next = pose === 'walk' || pose === 'attack' || pose === 'die' ? pose : 'idle';
+      if (next === 'die') model.setPose('die', time, { progress: Math.min(1, time / DIE_SECONDS), deploy: siege?.deploy ?? 0 });
+      else model.setPose(next, time, { deploy: siege?.deploy ?? 0, sinceFire: siege?.sinceFire ?? Infinity });
+    },
+    setOpacity: (opacity) => setTreeOpacity(model.object, opacity),
+  };
+}
+
 function placeholder(kind: UnitKind, color: number, seed: number): Omit<UnitAvatar, 'setTiers' | 'shimmer'> {
   const object = new THREE.Group();
   object.name = kind;
@@ -357,8 +384,7 @@ export function createUnitAvatar(kind: UnitKind, color: number, seed: number): U
 function createBaseAvatar(kind: UnitKind, color: number, seed: number): Omit<UnitAvatar, 'setTiers' | 'shimmer'> {
   if (isShip(kind)) return fromSoldier(kind, color, seed, createShip as unknown as SoldierFactory);
   if (kind === 'priest') return fromSoldier(kind, color, seed, createPriest as unknown as SoldierFactory);
-  // Placeholder siege bodies (real models are M16-3): a wheeled cart reads as an engine.
-  if (UNITS[kind].unitClass === 'siege') return fromSoldier(kind, color, seed, createTradeCart as unknown as SoldierFactory);
+  if (isSiegeKind(kind)) return fromSiege(kind, color, seed);
   if (kind === 'tradeCart') return fromSoldier(kind, color, seed, createTradeCart as unknown as SoldierFactory);
   if (kind === 'deer' || kind === 'boar' || kind === 'sheep') {
     const model = createAnimal(kind);
@@ -391,21 +417,52 @@ function alignLongAxisToY(geo: THREE.BufferGeometry): void {
   geo.computeBoundingBox();
 }
 
-/** Arrow / javelin / stone mesh. Long axis is +Y so callers can aim that axis along velocity. */
+/** A rough catapult boulder about 0.5 across (before the unit scale): a squashed, chipped icosahedron. */
+function boulderGeometry(): THREE.BufferGeometry {
+  const geo = new THREE.IcosahedronGeometry(0.26, 0);
+  const pos = geo.getAttribute('position');
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    // Same jitter for shared corners, so the faces stay closed.
+    const k = 0.86 + 0.14 * Math.abs(Math.sin(x * 41.3 + y * 17.9 + z * 29.7));
+    pos.setXYZ(i, x * k, y * k * 0.86, z * k);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** A bolt shooter's bolt along +Y: shaft, iron head and three flights. */
+function boltGeometry(): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [
+    new THREE.CylinderGeometry(0.024, 0.024, 1.2, 5),
+    new THREE.ConeGeometry(0.05, 0.18, 4).translate(0, 0.69, 0),
+  ];
+  for (let i = 0; i < 3; i++) parts.push(new THREE.BoxGeometry(0.11, 0.2, 0.008).translate(0.05, -0.48, 0).rotateY((i / 3) * Math.PI * 2));
+  const flat = parts.map((p) => (p.index ? p.toNonIndexed() : p));
+  for (const p of parts) p.dispose();
+  for (const p of flat) p.deleteAttribute('uv');
+  const merged = mergeGeometries(flat, false);
+  for (const p of flat) p.dispose();
+  if (!merged) throw new Error('bolt parts failed to merge');
+  merged.computeVertexNormals();
+  return merged;
+}
+
+/** Arrow / javelin / stone / boulder / bolt mesh. Long axis is +Y so callers can aim that axis along velocity. */
 export function projectileGeometry(kind: ProjKind): THREE.BufferGeometry {
   const cached = projectileCache.get(kind);
   if (cached) return cached;
   const factory = projectileFactory();
   let geo: THREE.BufferGeometry;
-  // Placeholder siege shots (M16-3 brings real ones): a boulder is a big stone, a bolt a javelin.
-  const base = kind === 'boulder' ? 'stone' : kind === 'bolt' ? 'javelin' : kind;
-  if (factory) {
-    geo = factory(base).clone();
-    if (base !== 'stone') alignLongAxisToY(geo);
-  } else if (base === 'arrow') geo = ARROW_GEO;
-  else if (base === 'javelin') geo = JAVELIN_GEO;
-  else geo = STONE_GEO.clone();
-  if (kind === 'boulder') geo = geo.clone().scale(4, 4, 4);
+  if (kind === 'boulder') geo = boulderGeometry();
+  else if (kind === 'bolt') geo = boltGeometry();
+  else if (factory) {
+    geo = factory(kind).clone();
+    if (kind !== 'stone') alignLongAxisToY(geo);
+  } else if (kind === 'arrow') geo = ARROW_GEO;
+  else if (kind === 'javelin') geo = JAVELIN_GEO;
+  else geo = STONE_GEO;
+  geo.computeBoundingSphere();
   geo.userData.shared = 1;
   projectileCache.set(kind, geo);
   return geo;
