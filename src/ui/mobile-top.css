@@ -177,8 +177,9 @@ body.touch .hud-top > .age-chip {
   z-index: 6;
 }
 
-/* An opened map covers that corner. */
-body.touch:has(.minimap:not(.collapsed)) .hud-top > .age-chip {
+/* An opened map covers that corner, and an open sheet puts its close button there (landscape). */
+body.touch:has(.minimap:not(.collapsed)) .hud-top > .age-chip,
+body.touch:is(.menu-build, .menu-train, .menu-orders) .hud-top > .age-chip {
   display: none;
 }
 

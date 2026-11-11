@@ -747,9 +747,10 @@ body.placing .selection-panel * {
   letter-spacing: 0.05em;
 }
 
-/* Build grid: compact ivory tiles, at most 124px wide, six across on a desktop. */
+/* Build grid: compact ivory tiles, at most 124px wide, seven across on a desktop. */
 .build-grid {
-  --cols: 6;
+  /* 7 × 3 holds every building (19 with the wonder) without a fourth row covering the map centre. */
+  --cols: 7;
   order: 2;
   flex: 1 0 100%;
   display: grid;
