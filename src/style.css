@@ -3438,11 +3438,17 @@ body.touch.menu-train #market-panel {
   color: var(--crimson);
 }
 
+/* "n/2" in the tile's top-left corner (the hotkey hint has the top-right), so a limited building's
+   tile is no taller than the others (a fourth line overflowed the 94 px phone-landscape sheet). */
 .build-limit {
+  position: absolute;
+  top: 3px;
+  left: 5px;
   font-size: 10px;
   font-weight: 700;
   line-height: 1.1;
   opacity: 0.8;
+  pointer-events: none;
 }
 
 .build-lock:empty {
