@@ -116,6 +116,11 @@ test('visible camera button cycles all views with accessible names', async ({ pa
     if (info.project.name === 'phone') await button.tap(); else await button.click();
     await mode(page, view);
     await expect(button).toContainText(label); await expect(button).toHaveAccessibleName(new RegExp(`Camera: ${label}`));
-    if (view !== 'rts') await page.screenshot({ path: info.outputPath(`${view}.png`) });
+    // The rig is really in this view and keeps rendering frames in it. Polled state, not a
+    // screenshot: under a loaded machine page.screenshot can stall waiting for fonts.
+    const frame = await page.evaluate(() => (window as any).game.renderer.webgl.info.render.frame as number);
+    await expect.poll(() => page.evaluate(() => (window as any).game.rig.mode), { timeout: 15_000 }).toBe(view);
+    await expect.poll(() => page.evaluate(() => (window as any).game.renderer.webgl.info.render.frame as number), { timeout: 15_000 })
+      .toBeGreaterThan(frame + 2);
   }
 });
