@@ -1,5 +1,5 @@
 import type { Building, EntityId, PlayerId, Unit, UnitKind } from '../../core/types';
-import { isAnimal, isShip } from '../../core/units';
+import { isAnimal, isShip, UNITS } from '../../core/units';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
 import { builderSpot } from './build';
@@ -10,9 +10,9 @@ import { inReach, siteApproach } from './sites';
 
 const reject = (world: World, reason: 'invalid-target' | 'unreachable') => world.events.emit({ type: 'rejected', reason });
 
-/** Any own land unit can shelter: villagers, soldiers, scouts, priests, carts (not ships or animals). */
+/** Any own land unit can shelter: villagers, soldiers, scouts, priests, carts (not ships, animals or siege engines). */
 export function canGarrison(kind: UnitKind): boolean {
-  return !isShip(kind) && !isAnimal(kind);
+  return !isShip(kind) && !isAnimal(kind) && UNITS[kind].unitClass !== 'siege';
 }
 
 /** Arrows one garrisoned unit of `kind` adds to its building's volley. */

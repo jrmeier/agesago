@@ -308,6 +308,18 @@ describe('soldier garrisons (M15-3)', () => {
     expect(tower.occupants ?? []).toHaveLength(0);
   });
 
+  it('does not take siege engines (M16-2): they cannot be repaired or healed', () => {
+    const w = field();
+    const tower = finish(w, 'watchTower', { x: 30, z: 24 });
+    const ram = w.spawnUnit('ram', { x: 30, z: 28 }, 1);
+    const cat = w.spawnUnit('catapult', { x: 32, z: 28 }, 1);
+    w.dispatch({ type: 'garrison', unitIds: [ram.id, cat.id], buildingId: tower.id });
+    for (let i = 0; i < 200; i++) w.tick(0.05);
+    expect(tower.occupants ?? []).toHaveLength(0);
+    expect(ram.state).not.toBe('garrisoned');
+    expect(cat.state).not.toBe('garrisoned');
+  });
+
   it('adds an arrow per villager and foot archer or slinger, none per melee soldier', () => {
     expect(volley([])).toBe(1);
     expect(volley(['hoplite', 'swordsman', 'horseman'])).toBe(1);

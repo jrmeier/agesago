@@ -2,7 +2,8 @@ import { villagerPose } from '../camera/FollowCamera';
 import type { EntityViews, ScreenRect } from '../render/EntityViews';
 import type { PickIntent } from '../render/picking';
 import { CAMERA_LABELS, type CameraRig } from '../camera/CameraRig';
-import { canWork, isAnimal, isShip } from '../core/units';
+import { canWork, isShip } from '../core/units';
+import { canGarrison } from '../sim/systems/defence';
 import { BUILDINGS } from '../core/buildings';
 import { GAIA, type Building, type BuildingKind, type Command, type EntityId, type PropPlacement, type Stance, type UnitKind, type Vec2 } from '../core/types';
 import type { Selection } from '../game/Selection';
@@ -808,7 +809,7 @@ export class Controls {
     const workers = this.workerIds();
     // Every own land unit (soldiers too) can shelter in a finished garrison building; every land worker can construct or farm.
     const buildingWorkers = ownBuilding?.complete && BUILDINGS[ownBuilding.kind].garrison
-      ? unitIds.filter(uid => { const u = world.units.get(uid); return !!u && !isShip(u.kind) && !isAnimal(u.kind) && u.hp > 0 && u.relic === undefined; }) : workers;
+      ? unitIds.filter(uid => { const u = world.units.get(uid); return !!u && canGarrison(u.kind) && u.hp > 0 && u.relic === undefined; }) : workers;
     // A damaged own or allied building is repaired by every land worker in the selection (before garrisoning).
     const repairCmd = resolveRepairOrder(workers, building, (o) => world.areEnemies(world.localPlayer, o));
     const buildCmd = repairCmd ?? (ownBuilding ? resolveBuildingOrder(buildingWorkers, ownBuilding) : null);
