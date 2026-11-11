@@ -165,6 +165,32 @@ shrink, so each speed bonus applies to a smaller part of the trip.
 current-age buildings, but the City Age has only one (the Academy), so the Empire Age could never
 be researched. The rule is now "two, or every kind that age has if it has fewer".
 
+## Building upgrades (M14-2)
+
+In-place upgrades (`BUILDING_UPGRADES` in `src/core/buildings.ts`) are priced against the
+alternative: building another one. An upgrade costs no builder time, no extra footprint and no
+walk, and concentrates hit points and arrows in one spot, so it is deliberately a little worse
+per resource than building new. Tiers stack and are applied before research (Masonry,
+Fletching and friends still multiply on top).
+
+| Chain | Age | Cost | Time | Adds | Versus building new |
+| --- | --- | --- | --- | --- | --- |
+| House → Large House | Town | 60 wood, 20 stone | 20 s | hp ×1.5, +5 pop | New house: 30 wood per 5 pop (6/pop). Upgrade: 80 per 5 pop (16/pop), plus 275 hp. Houses stay the cheap default; the upgrade is for a cramped base or a late-game stone sink. |
+| Watch Tower → Guard Tower | City | 100 wood, 50 stone | 30 s | hp ×1.4, +1 arrow, +1 range | New tower: 130 per arrow and 900 hp, 45 s of builder time. Guard: 150 per arrow (1.15×) with +360 hp and the extra range. |
+| Guard → Fortress Tower | Empire | 50 wood, 175 stone | 45 s | hp ×1.5, +1 arrow, +2/+2 armour | 225 per arrow (1.7× a new tower), paid for by +630 hp and the armour that makes it shrug off archers. Stone-heavy, for the Empire economy. |
+| Palisade → Reinforced Palisade | Town | 4 wood, 2 stone | 5 s | hp ×1.5, +1/+1 armour | New segment: 0.021 res/hp. Upgrade: 0.043 res/hp (2×), but it thickens an existing line without a second row. |
+| Stone Wall → Fortified Stone Wall | City | 5 stone | 8 s | hp ×1.4, +1/+1 armour | New segment: 0.005 stone/hp. Upgrade: 0.010 stone/hp (2×), same reasoning. Stacks with the academy's Fortified Walls. |
+| Town Center → Town Hall | Town | 200 wood, 100 stone | 40 s | hp ×1.15, +1 arrow, +5 garrison | A Town Center can't be built new; compare to a watch tower (130 per arrow, 5 garrison) next to it: 300 buys an arrow, 5 garrison and 360 hp, but the TC trains no villagers for 40 s. |
+| Town Hall → City Hall | City | 300 wood, 200 stone, 100 gold | 60 s | hp ×1.15, +1 arrow, +5 garrison, +1/+1 armour | 600 per arrow + garrison + armour; about two Guard Towers' worth of defence in the one building the enemy must kill. |
+| City Hall → Imperial Palace | Empire | 400 stone, 250 gold | 80 s | hp ×1.2, +2 arrows, +1/+1 armour | 325 per arrow, the best arrow rate in the chain, because it costs 80 s of villager production in the late game. |
+| Barracks / Archery Range / Stable level 2 | City | 150 wood, 100 gold | 40 s | trains 20% faster, hp ×1.1 | A second building (175 wood) doubles throughput; level 2 adds only 20% for 250. Its real value is the gate: the Empire Age unit-line techs (Silver Shields, Champions, Master Archers, Lead-Shot Slingers, Tarantine Horsemen, Clibanarii) need a level-2 building of their kind. |
+
+Guard Tower and Fortress Tower used to be global academy techs (350 and 550 resources for every
+tower at once). Per tower they are now cheaper for one or two towers and dearer for a tower
+line, which rewards picking the towers that matter. Saves from before M14-2 that researched
+them load with every watch tower at the matching tier (`src/sim/serialize.ts`, save v4).
+Fortified Town Center (academy-free TC tech, City Age) still exists and stacks with the TC tiers.
+
 ## Rerunning
 
 ```sh

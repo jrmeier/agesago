@@ -10,7 +10,7 @@ import { completeResearch, statOf } from './systems/research';
 import { armorOf, damageTo, unitMaxHp } from './systems/stats';
 import { awardKill, gainXp } from './systems/veterancy';
 import { generateMap } from './mapgen';
-import { deserializeWorld, serializeWorld } from './serialize';
+import { deserializeWorld, SAVE_VERSION, serializeWorld } from './serialize';
 import { defaultPlayers, World } from './World';
 
 const DT = 1 / BALANCE.tickRate;
@@ -268,7 +268,7 @@ describe('rank persistence', () => {
     const victim = spawn(w, 'villager', 2, { x: tc.pos.x + 8, z: tc.pos.z + 6 });
     applyDamage(w, victim, 3, vet.id, 1, vet.pos);
     const data = serializeWorld(w);
-    expect(data.version).toBe(4);
+    expect(data.version).toBe(SAVE_VERSION); // 4 since veterancy (M15-1); 5 after M14-2 chains
     const b = deserializeWorld(data, hf);
     const loaded = b.units.get(vet.id)!;
     expect(loaded.rank).toBe(1);

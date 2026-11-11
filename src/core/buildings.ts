@@ -291,6 +291,10 @@ export interface BuildingUpgradeEffects {
   arrows?: number;
   /** Extra garrison slots (buildings with a garrison only). */
   garrison?: number;
+  /** Extra attack range (buildings that shoot only). */
+  range?: number;
+  /** Units train this many times faster here (1.2 = 20% faster); multiplies across tiers. */
+  trainSpeed?: number;
 }
 
 /** One step of a building's upgrade chain: tier N-1 → N. */
@@ -311,14 +315,62 @@ export interface BuildingUpgradeSpec {
 
 /**
  * Per-building upgrade chains, indexed by current tier: chain[0] takes tier 0 → 1, chain[1]
- * takes 1 → 2. M14-2 adds the remaining chains (towers, Town Center, military buildings).
+ * takes 1 → 2. Costs are argued in docs/BALANCE.md ("Building upgrades"). The tower chain
+ * replaced the academy's global Guard/Fortress Tower techs (M14-2); old saves migrate in serialize.ts.
  */
+const MILITARY_LEVEL_2: BuildingUpgradeEffects = { hpMul: 1.1, trainSpeed: 1.2 };
+
 export const BUILDING_UPGRADES: Partial<Record<BuildingKind, readonly BuildingUpgradeSpec[]>> = {
   house: [
     {
       id: 'largeHouse', title: 'Large House', tier: 1, cost: { wood: 60, stone: 20 }, time: 20, age: 1,
       effects: { hpMul: 1.5, popBonus: 5 },
     },
+  ],
+  watchTower: [
+    {
+      id: 'guardTower', title: 'Guard Tower', tier: 1, cost: { wood: 100, stone: 50 }, time: 30, age: 2,
+      effects: { hpMul: 1.4, arrows: 1, range: 1 },
+    },
+    {
+      id: 'fortressTower', title: 'Fortress Tower', tier: 2, cost: { wood: 50, stone: 175 }, time: 45, age: 3,
+      effects: { hpMul: 1.5, arrows: 1, armor: { melee: 2, pierce: 2 } },
+    },
+  ],
+  palisade: [
+    {
+      id: 'reinforcedPalisade', title: 'Reinforced Palisade', tier: 1, cost: { wood: 4, stone: 2 }, time: 5, age: 1,
+      effects: { hpMul: 1.5, armor: { melee: 1, pierce: 1 } },
+    },
+  ],
+  stoneWall: [
+    {
+      id: 'fortifiedStoneWall', title: 'Fortified Stone Wall', tier: 1, cost: { stone: 5 }, time: 8, age: 2,
+      effects: { hpMul: 1.4, armor: { melee: 1, pierce: 1 } },
+    },
+  ],
+  townCenter: [
+    {
+      id: 'townTownCenter', title: 'Town Hall', tier: 1, cost: { wood: 200, stone: 100 }, time: 40, age: 1,
+      effects: { hpMul: 1.15, arrows: 1, garrison: 5 },
+    },
+    {
+      id: 'cityTownCenter', title: 'City Hall', tier: 2, cost: { wood: 300, stone: 200, gold: 100 }, time: 60, age: 2,
+      effects: { hpMul: 1.15, arrows: 1, garrison: 5, armor: { melee: 1, pierce: 1 } },
+    },
+    {
+      id: 'empireTownCenter', title: 'Imperial Palace', tier: 3, cost: { stone: 400, gold: 250 }, time: 80, age: 3,
+      effects: { hpMul: 1.2, arrows: 2, armor: { melee: 1, pierce: 1 } },
+    },
+  ],
+  barracks: [
+    { id: 'barracksLevel2', title: 'Large Barracks', tier: 1, cost: { wood: 150, gold: 100 }, time: 40, age: 2, effects: MILITARY_LEVEL_2 },
+  ],
+  archeryRange: [
+    { id: 'archeryRangeLevel2', title: 'Large Archery Range', tier: 1, cost: { wood: 150, gold: 100 }, time: 40, age: 2, effects: MILITARY_LEVEL_2 },
+  ],
+  stable: [
+    { id: 'stableLevel2', title: 'Large Stable', tier: 1, cost: { wood: 150, gold: 100 }, time: 40, age: 2, effects: MILITARY_LEVEL_2 },
   ],
 };
 
@@ -336,9 +388,14 @@ export interface TierStats {
   attack: number;
   arrows: number;
   garrison: number;
+  range: number;
+  /** Training speed multiplier (train time is divided by it). */
+  trainSpeed: number;
 }
 
-const BASE_TIER: TierStats = { hpMul: 1, popBonus: 0, armorMelee: 0, armorPierce: 0, attack: 0, arrows: 0, garrison: 0 };
+const BASE_TIER: TierStats = {
+  hpMul: 1, popBonus: 0, armorMelee: 0, armorPierce: 0, attack: 0, arrows: 0, garrison: 0, range: 0, trainSpeed: 1,
+};
 const tierCache = new Map<string, TierStats>();
 
 /** Sum of every upgrade effect a `kind` building at `tier` has. Tier 0 (or absent) is the base table. */
@@ -357,6 +414,8 @@ export function tierStats(kind: BuildingKind, tier = 0): TierStats {
     t.attack += e.attack ?? 0;
     t.arrows += e.arrows ?? 0;
     t.garrison += e.garrison ?? 0;
+    t.range += e.range ?? 0;
+    t.trainSpeed *= e.trainSpeed ?? 1;
   }
   tierCache.set(key, t);
   return t;

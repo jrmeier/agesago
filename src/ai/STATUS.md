@@ -48,7 +48,8 @@ costs are read from `TECHS` (nothing hard-coded, so Balance can retune them).
   villagers work that resource. TC techs: wovenTunics at 12 villagers or when raided, donkeyPacks
   at 20, census and townWatch in the Town Age, oxCarts in the City Age. Forge lines follow the
   army's class make-up (3+ units and a quarter of the army). Unit lines start at `lineUnits` of
-  that kind. guardTower needs towers; masonry and ballistics need a ranged army. The profile
+  that kind (tier-3 lines also need a level-2 building, which the AI does not build yet, M14-3).
+  Masonry and ballistics need a ranged army; tower upgrades are per building now (M14-2). The profile
   weights each group (0 skips it).
 - **Budget.** One tech at a time per building, a `gap` between starts, and a food reserve for
   villagers while it is still booming. The TC rests 45 s between techs that block villagers, and

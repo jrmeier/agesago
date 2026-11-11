@@ -11,16 +11,19 @@ import type { ExploreState } from './systems/explore';
 import type { GatherState } from './systems/gather';
 import { clearStatCache } from './systems/research';
 import { buildingRect } from './systems/sites';
+import { removeProduction } from './productionQueue';
 import type { NavalJob, Landing } from './systems/naval';
 import type { ExplorationSite, PriestOrder } from './systems/explorationRewards';
 import type { GameResult } from './systems/victory';
 
 /**
+ * 5: M14-2 upgrade chains. The academy's Guard/Fortress Tower techs became per-building tiers:
+ *    older saves that researched them load with every watch tower at the matching tier.
  * 4: M15-1 veterancy (unit xp/rank, damage log). Older saves load with every unit at rank 0, xp 0.
  * 3: M14-1 in-place building upgrades (Building.tier, Building.upgrading).
  * 2: M8 research (researched techs, ages, market prices, building research queues).
  */
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 /** Oldest version that still loads; v2 buildings load at tier 0 with no upgrade running. */
 export const MIN_SAVE_VERSION = 2;
 
@@ -156,6 +159,45 @@ export function serializeWorld(world: World): SaveData {
   });
 }
 
+/** Removed academy techs (M14-2) and the watch-tower tier each one now means; queued ones refund. */
+const LEGACY_TOWER_TECHS: Record<string, { tier: number; cost: Partial<Stockpile> }> = {
+  guardTower: { tier: 1, cost: { food: 100, wood: 250 } },
+  fortressTower: { tier: 2, cost: { food: 300, stone: 250 } },
+};
+
+/**
+ * v4 → v5: a player who researched Guard/Fortress Tower gets every watch tower (foundations too)
+ * at that tier, and the techs leave `researched`. A legacy tech still queued is dropped and refunded.
+ */
+function migrateTowerTechs(saved: SaveData): void {
+  const legacy = (t: string): boolean => Object.hasOwn(LEGACY_TOWER_TECHS, t);
+  for (const p of saved.players) {
+    if (!Array.isArray(p.researched)) continue;
+    const tier = Math.max(0, ...p.researched.filter(legacy).map((t) => LEGACY_TOWER_TECHS[t].tier));
+    p.researched = p.researched.filter((t) => !legacy(t));
+    if (!tier) continue;
+    for (const b of saved.buildings) {
+      if (b.owner === p.player.id && b.kind === 'watchTower') b.tier = Math.max(b.tier ?? 0, tier);
+    }
+  }
+  for (const b of saved.buildings) {
+    if (!b.research?.some(legacy)) continue;
+    const owner = saved.players.find((p) => p.player.id === b.owner);
+    for (let i = b.research.length - 1; i >= 0; i--) {
+      const t = b.research[i];
+      if (!legacy(t)) continue;
+      removeProduction(b, 'research', i);
+      b.research.splice(i, 1);
+      if (i === 0) b.researchProgress = 0;
+      if (owner) for (const [r, n] of Object.entries(LEGACY_TOWER_TECHS[t].cost)) owner.stock[r as keyof Stockpile] += n;
+    }
+    if (b.research.length === 0) {
+      delete b.research;
+      delete b.researchProgress;
+    }
+  }
+}
+
 function restoreMap<K, V>(map: Map<K, V>, entries: [K, V][]): void {
   map.clear();
   for (const [key, value] of entries) map.set(key, value);
@@ -210,6 +252,7 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
       delete b.upgrading;
     }
   }
+  if (saved.version < 5) migrateTowerTechs(saved);
   restoreMap(world.buildings, saved.buildings.map((b) => [b.id, b]));
   for (const b of world.buildings.values()) {
     const spec = BUILDINGS[b.kind];

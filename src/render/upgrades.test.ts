@@ -109,15 +109,14 @@ describe('building upgrade tiers', () => {
     expect(modelTier('watchTower', NaN)).toBe(0);
   });
 
-  it('reads tiers from researched techs', () => {
+  it('reads tiers from researched techs and the building\'s own tier', () => {
     expect(buildingRenderTier(undefined, 'watchTower')).toBe(0);
-    expect(buildingRenderTier(set('guardTower'), 'watchTower')).toBe(1);
-    expect(buildingRenderTier(set('guardTower', 'fortressTower'), 'watchTower')).toBe(2);
     expect(buildingRenderTier(set('fortifiedTownCenter'), 'townCenter')).toBe(1);
-    expect(buildingRenderTier(set('guardTower'), 'townCenter')).toBe(0);
-    // A per-building upgrade tier (M14-1) raises the rendered tier; global techs still apply.
+    expect(buildingRenderTier(set('fortifiedTownCenter'), 'watchTower')).toBe(0);
+    // Per-building upgrade tiers (M14-1/M14-2: towers upgrade one at a time now).
     expect(buildingRenderTier(undefined, 'watchTower', 1)).toBe(1);
-    expect(buildingRenderTier(set('guardTower', 'fortressTower'), 'watchTower', 1)).toBe(2);
+    expect(buildingRenderTier(set(), 'watchTower', 2)).toBe(2);
+    expect(buildingRenderTier(set('fortifiedTownCenter'), 'townCenter', 3)).toBe(3);
   });
 
   it('swaps a building visual to its upgraded model in place', () => {

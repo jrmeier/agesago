@@ -1,6 +1,6 @@
 import type { CivId } from '../core/civilizations';
 import { AGE_NAMES, TECHS, techsAt, type Age, type Stat, type TechId } from '../core/techs';
-import type { BuildingSpec } from '../core/buildings';
+import { BUILDINGS, buildingTitle, type BuildingSpec } from '../core/buildings';
 import type { Building, BuildingKind, RejectReason, Stockpile, UnitKind } from '../core/types';
 import { UNITS, type UnitSpec } from '../core/units';
 import { productionOrder } from '../sim/productionQueue';
@@ -46,6 +46,10 @@ export function lockText(tech: TechId, block: RejectReason | null, v: TechView):
     case 'requires': {
       const missing = spec.requires?.find((t) => !v.researched.has(t));
       if (missing) return `Requires ${TECHS[missing].name}`;
+      if (spec.requiresBuilding) {
+        const { kind, tier } = spec.requiresBuilding;
+        return `Requires a ${buildingTitle(kind, tier)} (${BUILDINGS[kind].name} level ${tier + 1})`;
+      }
       if (spec.ageUp !== undefined) {
         const needed = v.ageBuildingsNeeded ?? AGE_BUILDINGS_NEEDED;
         return `Requires ${needed} ${AGE_NAMES[v.age]} building${needed === 1 ? '' : 's'} (${Math.min(v.ageBuildings, needed)}/${needed})`;

@@ -100,7 +100,7 @@ export function buildingAttack(
   const tier = tierStats(b.kind, b.tier);
   return {
     pierce: buildingStat(world, b.owner, b.kind, 'attack.pierce', a.pierce + tier.attack),
-    range: buildingStat(world, b.owner, b.kind, 'range', a.range),
+    range: buildingStat(world, b.owner, b.kind, 'range', a.range + tier.range),
     reload: a.reload,
     arrows: Math.round(buildingStat(world, b.owner, b.kind, 'arrows', a.arrows + tier.arrows)),
   };

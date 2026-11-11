@@ -52,6 +52,14 @@ export function isQueued(world: World, owner: PlayerId, tech: TechId): boolean {
   return false;
 }
 
+/** True when `owner` has a complete `kind` building upgraded to at least `tier` (M14-2). */
+export function hasBuildingTier(world: World, owner: PlayerId, kind: BuildingKind, tier: number): boolean {
+  for (const b of world.buildings.values()) {
+    if (b.owner === owner && b.kind === kind && b.complete && (b.tier ?? 0) >= tier) return true;
+  }
+  return false;
+}
+
 /**
  * Can `owner` start `tech` now (ignoring cost when `ignoreCost`)? Used by the sim, AI and HUD
  * (to grey buttons and explain why). Does not check that a particular building exists.
@@ -69,6 +77,7 @@ export function researchBlock(
   if (p.researched.has(tech) || isQueued(world, owner, tech)) return 'researched';
   if (p.age < spec.age) return 'age';
   if (spec.requires?.some((t) => !p.researched.has(t))) return 'requires';
+  if (spec.requiresBuilding && !hasBuildingTier(world, owner, spec.requiresBuilding.kind, spec.requiresBuilding.tier)) return 'requires';
   if (spec.ageUp !== undefined) {
     if (spec.ageUp !== p.age + 1) return 'age';
     if (ageBuildings(world, owner, p.age).length < ageBuildingsNeeded(p.age)) return 'requires';

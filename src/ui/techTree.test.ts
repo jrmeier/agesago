@@ -105,7 +105,7 @@ describe('tech tree model', () => {
     expect(find(tree, 'townAge').unlocks[0]).toBe('the Town Age');
     expect(find(tree, 'hoplite').unlocks).toEqual(['Upgrades to Veteran Hoplite', 'Upgrades to Phalangite', 'Upgrades to Silver Shield']);
     expect(find(tree, 'veteranHoplite').unlocks).toEqual(['Phalangites', 'Hoplite line → Veteran Hoplite']);
-    expect(find(tree, 'guardTower').unlocks).toContain('Watch Tower → Guard Tower');
+    expect(find(tree, 'fortifiedTownCenter').unlocks).toContain('Town Center → Fortified Town Center');
     expect(find(tree, 'ironAxe').source).toBe(`Researched at ${BUILDINGS[TECHS.ironAxe.at].name}`);
   });
 

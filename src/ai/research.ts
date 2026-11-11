@@ -97,8 +97,6 @@ export const RULES: Rule[] = [
     (tech): Rule => ({ tech, group: 'line', base: 40 - 8 * (TECHS[tech].line!.tier - 1), when: (f) => (f.units[TECHS[tech].line!.unit] ?? 0) >= f.p.lineUnits })
   ),
   // Defences.
-  { tech: 'guardTower', group: 'defence', base: 30, when: (f) => !!f.built.watchTower },
-  { tech: 'fortressTower', group: 'defence', base: 20, when: (f) => !!f.built.watchTower },
   { tech: 'ballistics', group: 'defence', base: 32, when: (f) => f.classes.archer >= f.p.lineUnits },
   { tech: 'masonry', group: 'defence', base: 26, when: (f) => f.classes.archer >= f.p.lineUnits || (f.raided && !!f.built.watchTower) },
 ];

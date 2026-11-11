@@ -417,6 +417,13 @@ describe('unit lines', () => {
       player.age = (spec.age - 1) as 0 | 1 | 2;
       expect(researchBlock(world, 1, tech)).toBe('age');
       player.age = spec.age;
+      expect(!!spec.requiresBuilding).toBe(spec.line!.tier === 3);
+      if (spec.requiresBuilding) {
+        // Tier-3 lines need a level-2 building of that kind (M14-2).
+        expect(spec.requiresBuilding).toEqual({ kind: spec.at, tier: 1 });
+        expect(researchBlock(world, 1, tech)).toBe('requires');
+        at.tier = spec.requiresBuilding.tier;
+      }
       const before = new Map(spec.effects.map((e) => [e.stat, statOf(world, 1, { unit }, e.stat, 10)]));
       const hp = u.maxHp;
       expect(researchBlock(world, 1, tech)).toBeNull();
@@ -557,11 +564,11 @@ describe('academy', () => {
 // ---- Building upgrades (M8-11) ----
 
 describe('building upgrades', () => {
-  function volley(techs: TechId[]): number {
+  /** Arrows a watch tower at upgrade `tier` (M14-2: per-building, was a global tech) fires in half a second. */
+  function volley(tier: number): number {
     const world = arena();
     world.players.get(1)!.age = 3;
-    research(world, 1, ...techs);
-    building(world, 'watchTower', { x: 50, z: 50 });
+    building(world, 'watchTower', { x: 50, z: 50 }).tier = tier;
     for (let i = 0; i < 3; i++) {
       const e = world.spawnUnit('hoplite', { x: 54 + i, z: 50 }, 2);
       world.dispatch({ type: 'stance', unitIds: [e.id], stance: 'passive' }, 2);
@@ -573,24 +580,11 @@ describe('building upgrades', () => {
     return n;
   }
 
-  it('Guard Tower fires one more arrow, Fortress Tower one more again', () => {
-    const base = volley([]);
+  it('a Guard Tower fires one more arrow, a Fortress Tower one more again', () => {
+    const base = volley(0);
     expect(base).toBe(BUILDINGS.watchTower.attack!.arrows);
-    expect(volley(['guardTower'])).toBe(base + 1);
-    expect(volley(['guardTower', 'fortressTower'])).toBe(base + 2);
-  });
-
-  it('Guard Tower: +40% HP on standing towers and +1 range', () => {
-    const world = arena();
-    world.players.get(1)!.age = 3;
-    const t = building(world, 'watchTower', { x: 50, z: 50 });
-    research(world, 1, 'guardTower');
-    expect(t.maxHp).toBe(Math.round(BUILDINGS.watchTower.hp * 1.4));
-    expect(t.hp).toBe(t.maxHp);
-    expect(statOf(world, 1, { building: 'watchTower' }, 'range', BUILDINGS.watchTower.attack!.range)).toBe(BUILDINGS.watchTower.attack!.range + 1);
-    // A tower founded after the upgrade is built up to the new maximum.
-    const site = layFoundation(world, 'watchTower', { x: 60, z: 50 }, 0, 1);
-    expect(site.maxHp).toBe(t.maxHp);
+    expect(volley(1)).toBe(base + 1);
+    expect(volley(2)).toBe(base + 2);
   });
 
   it('Fortified Town Center: +20% HP, +1 arrow and 2 more beds', () => {

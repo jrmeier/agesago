@@ -1,3 +1,4 @@
+import { tierStats } from '../../core/buildings';
 import type { Building, EntityId, UnitKind, Vec2 } from '../../core/types';
 import { isShip, UNITS, trainable } from '../../core/units';
 import { ensureProductionQueue, productionOrder, removeProduction } from '../productionQueue';
@@ -19,9 +20,9 @@ function emitProgress(world: World, b: Building): void {
   });
 }
 
-/** Seconds for `b` to train one `kind` (its owner's research applied). */
+/** Seconds for `b` to train one `kind` (its owner's research and the building's upgrade tier applied). */
 export function trainTime(world: World, b: Building, kind: UnitKind): number {
-  return unitStat(world, b.owner, kind, 'trainTime', UNITS[kind].trainTime);
+  return unitStat(world, b.owner, kind, 'trainTime', UNITS[kind].trainTime) / tierStats(b.kind, b.tier).trainSpeed;
 }
 
 /** Units queued anywhere by `owner` (they count against the pop cap before they exist). */

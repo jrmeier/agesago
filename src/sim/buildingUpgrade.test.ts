@@ -62,7 +62,7 @@ describe('upgrade table', () => {
     for (const chain of Object.values(BUILDING_UPGRADES)) chain!.forEach((u, i) => expect(u.tier).toBe(i + 1));
     expect(nextUpgrade('house', 0)).toBe(LARGE_HOUSE);
     expect(nextUpgrade('house', 1)).toBeUndefined();
-    expect(nextUpgrade('barracks')).toBeUndefined();
+    expect(nextUpgrade('storehouse')).toBeUndefined();
     expect(tierStats('house', 1)).toMatchObject({ hpMul: 1.5, popBonus: 5 });
     expect(popBonusOf('house', 0)).toBe(5);
     expect(popBonusOf('house', 1)).toBe(10);
@@ -94,13 +94,13 @@ describe('upgradeBuilding', () => {
     try_(foundation);
 
     try_(addBuilding(w, 'house', 60, 40, 2));
-    try_(addBuilding(w, 'barracks', 40, 60));
+    try_(addBuilding(w, 'storehouse', 40, 60));
 
     const top = addBuilding(w, 'house', 40, 50);
     top.tier = 1;
     try_(top);
 
-    expect(upgradeBlock(w, w.townCenter!, 1)).toBe('max-tier');
+    expect(upgradeBlock(w, addBuilding(w, 'granary', 60, 60), 1)).toBe('max-tier');
 
     // A building with something in its production queue is busy.
     house.queue = 1;

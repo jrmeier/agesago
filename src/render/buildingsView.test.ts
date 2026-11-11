@@ -148,9 +148,10 @@ describe('buildings, ghost and picking', () => {
     const axe = unitObject.getObjectByName('axe') as THREE.Mesh;
     const axeColors = Array.from(axe.geometry.getAttribute('color').array);
 
-    world.players.get(1)!.researched.add('guardTower');
+    tower.tier = 1;
+    world.events.emit({ type: 'buildingUpgraded', id: tower.id, owner: 1, tier: 1 });
     world.players.get(1)!.researched.add('bronzeAxe');
-    world.events.emit({ type: 'researched', owner: 1, tech: 'guardTower' });
+    world.events.emit({ type: 'researched', owner: 1, tech: 'bronzeAxe' });
     views.sync(0, 0.1, camera);
     expect(views.object.getObjectByName('building:watchTower')).toBe(group);
     expect(height()).toBeGreaterThan(before + 0.5);

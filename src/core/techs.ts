@@ -80,6 +80,8 @@ export interface TechSpec {
   /** Minimum age to start it. */
   age: Age;
   requires?: TechId[];
+  /** Needs a complete building of `kind` upgraded to at least `tier` (M14-2: tier-3 unit lines need a level-2 building). */
+  requiresBuilding?: { kind: BuildingKind; tier: number };
   effects: Modifier[];
   /** Researching this advances the player to that age. */
   ageUp?: Age;
@@ -300,7 +302,7 @@ const table = {
   },
   silverShield: {
     name: 'Silver Shields', description: 'Phalangites become Silver Shields: +20% HP, +2 attack, +1 armour.',
-    at: 'barracks', cost: { food: 500, gold: 300 }, time: 75, age: 3, requires: ['phalangite'],
+    at: 'barracks', cost: { food: 500, gold: 300 }, time: 75, age: 3, requires: ['phalangite'], requiresBuilding: { kind: 'barracks', tier: 1 },
     effects: [mul('hoplite', 'hp', 1.2), add('hoplite', 'attack.melee', 2), ...armor('hoplite', 1, 1)],
     line: { unit: 'hoplite', tier: 3, title: 'Silver Shield' },
   },
@@ -318,7 +320,7 @@ const table = {
   },
   championSwordsman: {
     name: 'Champion Swordsmen', description: 'Heavy Swordsmen become Champions: +30% HP, +2 attack, +1 armour.',
-    at: 'barracks', cost: { food: 500, gold: 300 }, time: 75, age: 3, requires: ['heavySwordsman'],
+    at: 'barracks', cost: { food: 500, gold: 300 }, time: 75, age: 3, requires: ['heavySwordsman'], requiresBuilding: { kind: 'barracks', tier: 1 },
     effects: [mul('swordsman', 'hp', 1.3), add('swordsman', 'attack.melee', 2), ...armor('swordsman', 1, 1)],
     line: { unit: 'swordsman', tier: 3, title: 'Champion Swordsman' },
   },
@@ -336,7 +338,7 @@ const table = {
   },
   masterArcher: {
     name: 'Master Archers', description: 'Cretan Archers become Master Archers: +20% HP, +2 attack, +1 range.',
-    at: 'archeryRange', cost: { wood: 500, gold: 300 }, time: 75, age: 3, requires: ['cretanArcher'],
+    at: 'archeryRange', cost: { wood: 500, gold: 300 }, time: 75, age: 3, requires: ['cretanArcher'], requiresBuilding: { kind: 'archeryRange', tier: 1 },
     effects: [mul('archer', 'hp', 1.2), add('archer', 'attack.pierce', 2), add('archer', 'range', 1)],
     line: { unit: 'archer', tier: 3, title: 'Master Archer' },
   },
@@ -354,7 +356,7 @@ const table = {
   },
   leadShotSlinger: {
     name: 'Lead-Shot Slingers', description: 'Rhodian Slingers become Lead-Shot Slingers: +25% HP, +2 attack, +1 pierce armour.',
-    at: 'archeryRange', cost: { food: 500, stone: 250 }, time: 75, age: 3, requires: ['rhodianSlinger'],
+    at: 'archeryRange', cost: { food: 500, stone: 250 }, time: 75, age: 3, requires: ['rhodianSlinger'], requiresBuilding: { kind: 'archeryRange', tier: 1 },
     effects: [mul('slinger', 'hp', 1.25), add('slinger', 'attack.pierce', 2), add('slinger', 'armor.pierce', 1)],
     line: { unit: 'slinger', tier: 3, title: 'Lead-Shot Slinger' },
   },
@@ -372,7 +374,7 @@ const table = {
   },
   tarantineHorseman: {
     name: 'Tarantine Horsemen', description: 'Prodromoi become Tarantine Horsemen: +25% HP, +2 attack, +1 armour, 10% faster.',
-    at: 'stable', cost: { food: 600, gold: 200 }, time: 75, age: 3, requires: ['prodromos'],
+    at: 'stable', cost: { food: 600, gold: 200 }, time: 75, age: 3, requires: ['prodromos'], requiresBuilding: { kind: 'stable', tier: 1 },
     effects: [mul('scout', 'hp', 1.25), add('scout', 'attack.melee', 2), ...armor('scout', 1, 1), mul('scout', 'speed', 1.1)],
     line: { unit: 'scout', tier: 3, title: 'Tarantine Horseman' },
   },
@@ -390,7 +392,7 @@ const table = {
   },
   clibanarius: {
     name: 'Clibanarii', description: 'Cataphracts become Clibanarii: +20% HP, +3 attack, +1 armour.',
-    at: 'stable', cost: { food: 600, gold: 600 }, time: 80, age: 3, requires: ['cataphract'],
+    at: 'stable', cost: { food: 600, gold: 600 }, time: 80, age: 3, requires: ['cataphract'], requiresBuilding: { kind: 'stable', tier: 1 },
     effects: [mul('horseman', 'hp', 1.2), add('horseman', 'attack.melee', 3), ...armor('horseman', 1, 1)],
     line: { unit: 'horseman', tier: 3, title: 'Clibanarius' },
   },
@@ -452,18 +454,6 @@ const table = {
     name: 'Fortified Walls', description: 'Walls and gates +60% HP and +2 armour.',
     at: 'academy', cost: { food: 200, stone: 100 }, time: 50, age: 2,
     effects: (['palisade', 'stoneWall', 'gate'] as const).flatMap((k) => [mul(k, 'hp', 1.6), ...armor(k, 2, 2)]),
-  },
-  guardTower: {
-    name: 'Guard Tower', description: 'Watch Towers become Guard Towers: +40% HP, +1 arrow, +1 range.',
-    at: 'academy', cost: { food: 100, wood: 250 }, time: 45, age: 2,
-    effects: [mul('watchTower', 'hp', 1.4), add('watchTower', 'arrows', 1), add('watchTower', 'range', 1)],
-    upgrade: { kind: 'watchTower', tier: 1, title: 'Guard Tower' },
-  },
-  fortressTower: {
-    name: 'Fortress Tower', description: 'Guard Towers become stone Fortress Towers: +50% HP, +1 arrow, +2 armour.',
-    at: 'academy', cost: { food: 300, stone: 250 }, time: 70, age: 3, requires: ['guardTower'],
-    effects: [mul('watchTower', 'hp', 1.5), add('watchTower', 'arrows', 1), ...armor('watchTower', 2, 2)],
-    upgrade: { kind: 'watchTower', tier: 2, title: 'Fortress Tower' },
   },
 
   // ---- Market ----
