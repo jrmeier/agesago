@@ -19,7 +19,8 @@ async function cast(page: Page): Promise<{ soldiers: number[]; villager: number 
     const tc = g.world.townCenter.pos;
     const spot = { x: tc.x - 26, z: tc.z - 16 };
     if (!g.rig.rts.hf.isWalkable(spot.x, spot.z)) throw new Error('spot is not walkable');
-    g.rig.focusOn(spot);
+    // Look a little south of the cast so it sits above the (tall, since M15-2) selection panel.
+    g.rig.focusOn({ x: spot.x, z: spot.z + 7 });
     const villager = g.world.spawnUnit('villager', spot);
     const soldiers = [0, 1, 2].map((i) => g.world.spawnUnit('swordsman', { x: spot.x - 5, z: spot.z - 2 + i * 1.6 }).id);
     return { soldiers, villager: villager.id };
