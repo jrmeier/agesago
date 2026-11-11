@@ -32,6 +32,7 @@ export const BUILD_HOTKEYS: Partial<Record<BuildingKind, string>> = {
   temple: 'Shift+KeyO',
   dock: 'Shift+KeyK',
   wonder: 'Shift+KeyG',
+  fortress: 'Shift+KeyN',
 };
 
 const SHIFT = 'Shift+';
@@ -122,6 +123,18 @@ export function placementVerdict(
     return { ok: false, text: shortfallText(missing) };
   }
   return { ok: false, text: check.reason ? REASON_TEXT[check.reason] : 'Can’t build here' };
+}
+
+/** "1/2" for kinds with a per-player limit (M16-5), '' otherwise. `owned` counts foundations. */
+export function limitLabel(kind: BuildingKind, owned: number): string {
+  const limit = BUILDINGS[kind].limit;
+  return limit === undefined ? '' : `${Math.min(owned, limit)}/${limit}`;
+}
+
+/** Lock text once the player owns as many as allowed: "Limit reached (2/2)". */
+export function limitLockText(kind: BuildingKind, owned: number): string {
+  const limit = BUILDINGS[kind].limit;
+  return limit !== undefined && owned >= limit ? `Limit reached (${limitLabel(kind, owned)})` : '';
 }
 
 /** "Under construction 42%" for foundations. */

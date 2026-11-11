@@ -55,6 +55,11 @@ export interface UnitSpec {
   xp?: number;
   /** Auras it emits while alive (M16-4; heroes use these). */
   auras?: AuraId[];
+  /**
+   * Champion (M16-5): an elite, gold-heavy fortress unit. Champions never gather, build or
+   * tend (see canWork) and are capped per player only by the fortress limit.
+   */
+  champion?: boolean;
 }
 
 /** Hack (melee), pierce and crush (siege) amounts; crush is optional (see crushOf). */
@@ -81,11 +86,42 @@ export function rawDamage(attack: DamageTypes, armor: DamageTypes): number {
     + Math.max(0, crushOf(attack) - crushOf(armor));
 }
 
+/*
+ * Champions (M16-5). Every infantry champion shares one stat block and every cavalry champion
+ * another, so the civs stay even; only names and kit differ. Balance (src/sim/champions.test.ts):
+ * an infantry champion (240 res) beats 3 swordsmen and a cavalry champion (300 res) beats
+ * 2 horsemen, but each loses cost for cost to its counter (4 slingers / 3.75 hoplites).
+ */
+const CHAMPION_INFANTRY = {
+  // Crush 2 and +8 vs siege like every melee infantry (M16-1, M16-2); unit crush armour soaks the crush.
+  unitClass: 'infantry', hp: 170, speed: 2.4, sight: 7, attack: { melee: 14, pierce: 0, crush: 2 },
+  armor: { melee: 4, pierce: 1 }, range: 0.6, reload: 1.6, bonus: { siege: 8 }, cost: { food: 90, gold: 150 },
+  trainTime: 24, trainedAt: 'fortress', radius: 0.34, age: 2, champion: true,
+} as const satisfies Omit<UnitSpec, 'name' | 'civ'>;
+const CHAMPION_CAVALRY = {
+  // Crush 1 and +10 vs siege like the horseman line (M16-1, M16-2).
+  unitClass: 'cavalry', hp: 220, speed: 4.6, sight: 9, attack: { melee: 14, pierce: 0, crush: 1 },
+  armor: { melee: 3, pierce: 3 }, range: 0.7, reload: 1.8, bonus: { archer: 6, siege: 10 }, cost: { food: 100, gold: 200 },
+  trainTime: 28, trainedAt: 'fortress', radius: 0.58, age: 2, champion: true,
+} as const satisfies Omit<UnitSpec, 'name' | 'civ'>;
+
+function champion(base: typeof CHAMPION_INFANTRY | typeof CHAMPION_CAVALRY, name: string, civ: CivId): UnitSpec {
+  return { ...base, name, civ, attack: { ...base.attack }, armor: { ...base.armor }, bonus: { ...base.bonus }, cost: { ...base.cost } };
+}
+
 export const UNITS: Record<UnitKind, UnitSpec> = {
   phalangiteGuard: {name:'Phalangite Guard',civ:'hellenes',unitClass:'infantry',hp:65,speed:2.1,sight:6,attack:{melee:6,pierce:0,crush:2},armor:{melee:1,pierce:1},range:.9,reload:2,bonus:{cavalry:12,siege:8},cost:{food:60,wood:35},trainTime:14,trainedAt:'barracks',radius:.32,age:1},
   legionary: {name:'Legionary',civ:'romans',unitClass:'infantry',hp:65,speed:2.3,sight:6,attack:{melee:8,pierce:0,crush:2},armor:{melee:2,pierce:1},range:.5,reload:2,bonus:{siege:8},cost:{food:65,gold:25},trainTime:15,trainedAt:'barracks',radius:.32,age:1},
   immortal: {name:'Immortal',civ:'persians',unitClass:'archer',hp:40,speed:2.3,sight:8,attack:{melee:0,pierce:5},armor:{melee:0,pierce:1},range:7,reload:2,bonus:{archer:3},projectile:'arrow',cost:{wood:35,gold:55},trainTime:15,trainedAt:'archeryRange',radius:.3,age:1},
   raider: {name:'Raider',civ:'celts',unitClass:'infantry',hp:55,speed:2.7,sight:7,attack:{melee:8,pierce:0,crush:2},armor:{melee:1,pierce:1},range:.5,reload:2,bonus:{siege:8},cost:{food:60,gold:20},trainTime:14,trainedAt:'barracks',radius:.32,age:1},
+  spartanHoplite: champion(CHAMPION_INFANTRY, 'Spartan Hoplite', 'hellenes'),
+  agema: champion(CHAMPION_CAVALRY, 'Agema Rider', 'hellenes'),
+  praetorian: champion(CHAMPION_INFANTRY, 'Praetorian', 'romans'),
+  equites: champion(CHAMPION_CAVALRY, 'Equites', 'romans'),
+  appleBearer: champion(CHAMPION_INFANTRY, 'Apple Bearer', 'persians'),
+  savaran: champion(CHAMPION_CAVALRY, 'Savar', 'persians'),
+  gaesatae: champion(CHAMPION_INFANTRY, 'Gaesatae', 'celts'),
+  nobleRider: champion(CHAMPION_CAVALRY, 'Noble Rider', 'celts'),
   deer: {
     name: 'Deer', unitClass: 'wildlife', hp: 12, speed: 4, sight: 0,
     attack: { melee: 0, pierce: 0 }, armor: { melee: 0, pierce: 0 },
@@ -301,9 +337,20 @@ export function isAnimal(kind: UnitKind): kind is 'deer' | 'boar' | 'sheep' {
   return kind === 'deer' || kind === 'boar' || kind === 'sheep';
 }
 
-/** Units a building can train, in menu order. */
+/** Champions fielded by players without a civilization (legacy saves), so their fortress still trains. */
+export const DEFAULT_CHAMPION_CIV: CivId = 'hellenes';
+
+/**
+ * Units a building can train, in menu order. Unique units need their civ; champions fall back to
+ * DEFAULT_CHAMPION_CIV's when `civ` is absent.
+ */
 export function trainable(building: BuildingKind, civ?: CivId): UnitKind[] {
-  return (Object.keys(UNITS) as UnitKind[]).filter((k) => UNITS[k].trainedAt === building && (!UNITS[k].civ || UNITS[k].civ === civ));
+  return (Object.keys(UNITS) as UnitKind[]).filter((k) => {
+    const u = UNITS[k];
+    if (u.trainedAt !== building) return false;
+    if (!u.civ) return true;
+    return u.civ === (civ ?? (u.champion ? DEFAULT_CHAMPION_CIV : undefined));
+  });
 }
 
 /**
@@ -323,9 +370,17 @@ export function unitArmor(kind: UnitKind): Required<DamageTypes> {
   return { melee: a.melee, pierce: a.pierce, crush: crushOf(a, UNIT_CRUSH_ARMOR) };
 }
 
-/** Trained land units can take explicit economy orders; idle units never seek work. */
+/** Elite fortress units (M16-5). */
+export function isChampion(kind: UnitKind): boolean {
+  return UNITS[kind].champion === true;
+}
+
+/**
+ * Trained land units can take explicit economy orders; idle units never seek work.
+ * Champions are soldiers only: they never gather, build or tend.
+ */
 export function canWork(kind: UnitKind): boolean {
-  return UNITS[kind].trainedAt !== null && !isAnimal(kind) && !isShip(kind) && UNITS[kind].unitClass !== 'siege';
+  return UNITS[kind].trainedAt !== null && !isAnimal(kind) && !isShip(kind) && UNITS[kind].unitClass !== 'siege' && !isChampion(kind);
 }
 
 // ---- Veterancy (M15-1, after 0 A.D.'s Promotion + Loot) ----

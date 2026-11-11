@@ -42,6 +42,8 @@ export interface BuildingSpec {
   age?: Age;
   /** Auras it emits once complete (M16-4). */
   auras?: AuraId[];
+  /** Most a player may own at once, foundations included (like 0 A.D. EntityLimits). */
+  limit?: number;
 }
 
 export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
@@ -301,6 +303,24 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     hp: 8000,
     armor: { melee: 10, pierce: 15 },
     age: 3,
+  },
+  fortress: {
+    name: 'Fortress',
+    size: { w: 5, d: 5 },
+    cost: { wood: 200, stone: 650 },
+    buildTime: 160,
+    popBonus: 0,
+    drop: [],
+    walkable: false,
+    buildable: true,
+    sight: 12,
+    hp: 5200,
+    // Stone-wall-level armour under the M16-1 crush model (the M16-5 spec's 4/10 predated it).
+    armor: { melee: 12, pierce: 20 },
+    age: 2,
+    garrison: 20,
+    attack: { pierce: 7, range: 9, reload: 2, arrows: 4 },
+    limit: 2,
   },
 };
 

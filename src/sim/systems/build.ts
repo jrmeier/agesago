@@ -32,6 +32,19 @@ export function ageLocked(world: World, kind: BuildingKind, by: PlayerId): boole
   return (BUILDINGS[kind].age ?? 0) > ageOf(world, by);
 }
 
+/** How many `kind` buildings `by` owns, foundations included. */
+export function ownedCount(world: World, kind: BuildingKind, by: PlayerId): number {
+  let n = 0;
+  for (const b of world.buildings.values()) if (b.owner === by && b.kind === kind) n++;
+  return n;
+}
+
+/** `by` already owns as many `kind` buildings as BUILDINGS[kind].limit allows (M16-5). */
+export function atLimit(world: World, kind: BuildingKind, by: PlayerId): boolean {
+  const limit = BUILDINGS[kind].limit;
+  return limit !== undefined && ownedCount(world, kind, by) >= limit;
+}
+
 /** Legacy food metadata for new farms; permanent production does not consume this value. */
 export function farmFood(world: World, owner: PlayerId): number {
   return Math.round(buildingStat(world, owner, 'farm', 'farmFood', FARM_FOOD));
@@ -117,6 +130,10 @@ export function orderBuild(world: World, unitIds: EntityId[], kind: BuildingKind
   }
   if (ageLocked(world, kind, by)) {
     reject(world, 'age');
+    return;
+  }
+  if (atLimit(world, kind, by)) {
+    reject(world, 'limit');
     return;
   }
   const check = canPlace(world, kind, pos, rot, by);

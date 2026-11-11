@@ -84,11 +84,16 @@ const VILLAGER_SCALE = 1.35;
 const VILLAGER_SIZE: SpriteSize = { width: 0.7 * VILLAGER_SCALE, height: 1.0 * VILLAGER_SCALE };
 const SCOUT_SCALE = 1.1;
 const SCOUT_SIZE: SpriteSize = { width: 1.4 * SCOUT_SCALE, height: 2.0 * SCOUT_SCALE };
+/** Scouts, horsemen and cavalry champions share the mounted shadow and picking size. */
+const mountedLike = (kind: UnitKind): boolean =>
+  kind === 'scout' || kind === 'horseman' || (UNITS[kind].champion === true && UNITS[kind].unitClass === 'cavalry');
 const GATHER_POSE: Record<string, VillagerPose> = { wood: 'chop', food: 'forage', gold: 'mine', stone: 'mine' };
 const UNIT_SCALE: Record<UnitKind, number> = {
   villager: VILLAGER_SCALE,
   scout: SCOUT_SCALE,
   phalangiteGuard: 1.3, legionary: 1.3, immortal: 1.25, raider: 1.3,
+  spartanHoplite: 1.4, praetorian: 1.4, appleBearer: 1.4, gaesatae: 1.4,
+  agema: 1.2, equites: 1.2, savaran: 1.2, nobleRider: 1.2,
   hoplite: 1.3,
   swordsman: 1.3,
   slinger: 1.25,
@@ -107,6 +112,8 @@ const BAR_Y: Record<UnitKind, number> = {
   villager: 1.7,
   scout: 2.45,
   phalangiteGuard: 1.9, legionary: 1.9, immortal: 1.8, raider: 1.9,
+  spartanHoplite: 2.05, praetorian: 2.05, appleBearer: 2.05, gaesatae: 2.05,
+  agema: 2.5, equites: 2.5, savaran: 2.5, nobleRider: 2.5,
   hoplite: 1.9,
   swordsman: 1.9,
   slinger: 1.75,
@@ -142,6 +149,7 @@ const BUILDING_HEIGHT: Record<BuildingKind, number> = {
   temple: 3.6,
   dock: 2.2,
   wonder: 6.2,
+  fortress: 5.2,
 };
 /** Extra height of upgraded watch towers (Guard 1, Fortress 2) over BUILDING_HEIGHT. */
 const TOWER_TIER_EXTRA = [0, 1.1, 1.6];
@@ -562,7 +570,7 @@ export class EntityViews {
     const shadow = new THREE.Mesh(this.shadowGeo, this.shadowMat);
     shadow.renderOrder = 2;
     shadow.userData.noShadow = 1;
-    shadow.scale.setScalar(unit.kind === 'scout' || unit.kind === 'horseman' ? 1.7 : 1);
+    shadow.scale.setScalar(mountedLike(unit.kind) ? 1.7 : 1);
     const view: UnitView = {
       object: avatar.object,
       avatar,
@@ -573,7 +581,7 @@ export class EntityViews {
     };
     this.object.add(view.object, shadow);
     this.villagers.set(unit.id, view);
-    this.sizeOf.set(unit.id, unit.kind === 'scout' || unit.kind === 'horseman' ? SCOUT_SIZE : VILLAGER_SIZE);
+    this.sizeOf.set(unit.id, mountedLike(unit.kind) ? SCOUT_SIZE : VILLAGER_SIZE);
     this.placeUnit(unit, 1, 0);
   }
 

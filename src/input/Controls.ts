@@ -398,6 +398,13 @@ export class Controls {
     // Age-locked kinds stay greyed in the build menu ("Requires Town Age").
     const age = this.deps.world.players.get(this.deps.world.localPlayer)?.age ?? 0;
     if (ageLockText(BUILDINGS[kind].age, age)) return;
+    // Limited kinds (the fortress) stay greyed at "Limit reached (2/2)"; the sim rejects them too.
+    const limit = BUILDINGS[kind].limit;
+    if (limit !== undefined) {
+      let owned = 0;
+      for (const b of this.deps.world.buildings.values()) if (b.owner === this.deps.world.localPlayer && b.kind === kind) owned++;
+      if (owned >= limit) return;
+    }
     this.showBox(null);
     this.touchBox = null;
     this.deps.input.touch.disarmBox();

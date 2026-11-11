@@ -748,7 +748,61 @@ export function createScout(opts?: { color?: number; cloak?: number; seed?: numb
   return { object, setPose };
 }
 
-export type SoldierKind = 'phalangiteGuard' | 'legionary' | 'immortal' | 'raider' | 'hoplite' | 'swordsman' | 'slinger' | 'archer' | 'horseman';
+export type ChampionKind = 'spartanHoplite' | 'agema' | 'praetorian' | 'equites' | 'appleBearer' | 'savaran' | 'gaesatae' | 'nobleRider';
+export type SoldierKind = 'phalangiteGuard' | 'legionary' | 'immortal' | 'raider' | 'hoplite' | 'swordsman' | 'slinger' | 'archer' | 'horseman' | ChampionKind;
+
+/**
+ * Champions (M16-5) reuse a line soldier and add one merged "champion-kit" mesh: a cloak, a tall
+ * plume or headdress and civ-specific trim. `cloak`/`plume` are fixed civ colours so champions
+ * read apart from line troops at a glance; the player colour stays on the base model and pennant.
+ */
+const CHAMPION_KIT: Record<ChampionKind, { base: 'hoplite' | 'swordsman' | 'horseman'; cloak: number; plume: number; trim: number }> = {
+  spartanHoplite: { base: 'hoplite', cloak: 0x9b1d14, plume: 0xc22a1a, trim: 0xd9b24a },
+  praetorian: { base: 'swordsman', cloak: 0x6b1f3a, plume: 0xc22a1a, trim: 0xe0c060 },
+  appleBearer: { base: 'hoplite', cloak: 0xf1ead6, plume: 0xf1ead6, trim: 0xe6c24a },
+  gaesatae: { base: 'swordsman', cloak: 0x2f5a8a, plume: 0xd8c08a, trim: 0xe6c24a },
+  agema: { base: 'horseman', cloak: 0x6a2d7a, plume: 0xf1ead6, trim: 0xd9b24a },
+  equites: { base: 'horseman', cloak: 0xa3221a, plume: 0xc22a1a, trim: 0xe0c060 },
+  savaran: { base: 'horseman', cloak: 0xb08a3a, plume: 0x2c4a7a, trim: 0x9aa1a8 },
+  nobleRider: { base: 'horseman', cloak: 0x3f6a3a, plume: 0xd8c08a, trim: 0xe6c24a },
+};
+
+function createChampion(kind: ChampionKind, opts?: { color?: number; seed?: number }): SoldierModel {
+  const kit = CHAMPION_KIT[kind];
+  const model = createSoldier(kit.base, opts);
+  model.object.name = kind;
+  const mounted = kit.base === 'horseman';
+  // The kit rides on the rider or upper body so it follows every pose without per-frame work.
+  const anchor = model.object.getObjectByName(mounted ? 'rider' : 'body')!;
+  const head = mounted ? 0.46 : 0.43;
+  const pieces = [
+    // Long cloak down the back.
+    part(new THREE.BoxGeometry(0.27, mounted ? 0.42 : 0.4, 0.025), kit.cloak, [0, mounted ? 0.14 : 0.14, -0.13], [1, 1, 1], [0.12, 0, 0]),
+    // Tall plume, wider than any line crest.
+    part(new THREE.BoxGeometry(0.04, 0.14, 0.26), kit.plume, [0, head + 0.2, -0.02]),
+    // Gilded collar/torc.
+    part(new THREE.BoxGeometry(0.2, 0.03, 0.18), kit.trim, [0, head - 0.1, 0]),
+  ];
+  if (kind === 'appleBearer') pieces.push(part(new THREE.IcosahedronGeometry(0.05, 0), kit.trim, [0.16, 0.0, 0.12]));
+  if (kind === 'gaesatae') pieces.push(part(new THREE.BoxGeometry(0.24, 0.2, 0.2), 0x3a6aa0, [0, 0.2, 0.0]));
+  const extra = new THREE.Mesh(merge(pieces), (model.object.getObjectByProperty('isMesh', true) as THREE.Mesh).material);
+  extra.name = 'champion-kit';
+  extra.castShadow = extra.receiveShadow = true;
+  anchor.add(extra);
+  if (kind === 'savaran') {
+    // Scale barding over the horse.
+    const horse = model.object.getObjectByName('horse')!;
+    const barding = new THREE.Mesh(merge([
+      part(new THREE.BoxGeometry(0.62, 0.22, 1.0), kit.trim, [0, -0.02, -0.03]),
+      part(new THREE.BoxGeometry(0.3, 0.26, 0.2), kit.trim, [0, 0.05, 0.52], [1, 1, 1], [-0.35, 0, 0]),
+    ]), extra.material);
+    barding.name = 'champion-barding';
+    barding.castShadow = barding.receiveShadow = true;
+    horse.add(barding);
+  }
+  model.object.userData.champion = kind;
+  return model;
+}
 export type SoldierPose = 'idle' | 'walk' | 'attack' | 'die';
 /** Die uses progress 0..1, supplied either directly or as { progress }. */
 export type SoldierPoseExtra = number | { progress?: number };
@@ -829,6 +883,7 @@ function fallingPose(object: THREE.Group, rig: THREE.Group): (progress: number) 
 
 /** Ancient soldiers facing +z, one shared material and no geometry work in setPose. */
 export function createSoldier(kind: SoldierKind, opts?: { color?: number; seed?: number }): SoldierModel {
+  if (kind in CHAMPION_KIT) return createChampion(kind as ChampionKind, opts);
   const unique = {phalangiteGuard:'hoplite',legionary:'swordsman',immortal:'archer',raider:'swordsman'} as const;
   if (kind in unique) {
     const base = unique[kind as keyof typeof unique];

@@ -28,6 +28,8 @@ import type { World } from '../sim/World';
 import {
   BUILD_HOTKEYS,
   buildableKinds,
+  limitLabel,
+  limitLockText,
   buildingRole,
   canAfford,
   constructionLabel,
@@ -420,6 +422,13 @@ export class Hud {
       const spec = BUILDINGS[kind];
       const btn = tile(`#i-b-${kind}`, spec.name, spec.cost, BUILD_HOTKEYS[kind]);
       btn.dataset.build = kind;
+      if (spec.limit !== undefined) {
+        // "0/2": how many of a limited building the player has (foundations count).
+        const badge = document.createElement('span');
+        badge.className = 'build-limit';
+        badge.textContent = limitLabel(kind, 0);
+        btn.querySelector('.build-name')?.after(badge);
+      }
       grid.append(btn);
       this.buildButtons.set(kind, btn);
     }
@@ -866,9 +875,27 @@ export class Hud {
   /** Grey out build buttons the stockpile can't pay for (only touches the DOM when that changes). */
   private updateAffordable(): void {
     const age = this.playerAge();
+    const owned = this.ownedLimited();
     this.affordKey = markAffordable(this.buildButtons, (k) => BUILDINGS[k].cost, this.world.stock, this.affordKey, (k) =>
-      ageLockText(BUILDINGS[k].age, age)
+      ageLockText(BUILDINGS[k].age, age) || limitLockText(k, owned.get(k) ?? 0)
     );
+    for (const [k, n] of owned) {
+      const badge = this.buildButtons.get(k)?.querySelector<HTMLElement>('.build-limit');
+      if (badge) setText(badge, limitLabel(k, n));
+    }
+  }
+
+  /** Local player's count of every limited building kind (foundations included). */
+  private ownedLimited(): Map<BuildingKind, number> {
+    const owned = new Map<BuildingKind, number>();
+    for (const k of this.buildButtons.keys()) if (BUILDINGS[k].limit !== undefined) owned.set(k, 0);
+    if (!owned.size) return owned;
+    const local = this.world.localPlayer;
+    for (const b of this.world.buildings.values()) {
+      const n = b.owner === local ? owned.get(b.kind) : undefined;
+      if (n !== undefined) owned.set(b.kind, n + 1);
+    }
+    return owned;
   }
 
   private updateTrainAffordable(b: Building): void {

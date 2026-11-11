@@ -14,7 +14,7 @@ export interface BuildingModelOptions {
   seed?: number;
   /** Upgrade tier from buildingTier(): watch tower 0..2, town centre 0..1. Other kinds ignore it. */
   tier?: number;
-  /** Owner's civilization; picks the wonder's monument style (Hellenic temple when absent). */
+  /** Owner's civilization: picks the wonder's monument and the fortress style (Hellenic when absent; other kinds are only tinted, in buildingVisuals). */
   civ?: CivId;
 }
 
@@ -397,6 +397,127 @@ function wonderParts(civ: CivId | undefined, color: number): THREE.BufferGeometr
   return parts;
 }
 
+/**
+ * Fortress (M16-5): a walled stronghold with corner towers around a keep, styled per civ.
+ * Hellenes: ashlar walls, square towers and a pedimented keep. Romans: a castrum with round towers,
+ * an arched gate and a red-tiled principia. Persians: tall mudbrick walls with stepped merlons and a
+ * columned apadana. Celts: an earth rampart topped by a palisade, round timber towers and a thatched
+ * roundhouse. Built in a ~5 × 5 box; fitFootprint scales it to the footprint. Gate faces +z.
+ */
+function fortressParts(civ: CivId | undefined, color: number): THREE.BufferGeometry[] {
+  const parts: THREE.BufferGeometry[] = [];
+  const style = civ ?? 'hellenes';
+  const half = 2.1;
+  const corners: [number, number][] = [[-half, -half], [half, -half], [-half, half], [half, half]];
+  // Gate opening on the front wall: two wall halves with a gap of `gap`.
+  const gap = 1.1;
+  const sideLen = half * 2;
+  const frontLen = (sideLen - gap) / 2;
+  function walls(height: number, thick: number, hex: number): void {
+    parts.push(block([sideLen, height, thick], hex, [0, height / 2, -half]));
+    for (const x of [-half, half]) parts.push(block([thick, height, sideLen], hex, [x, height / 2, 0]));
+    for (const side of [-1, 1]) parts.push(block([frontLen, height, thick], hex, [side * (gap / 2 + frontLen / 2), height / 2, half]));
+  }
+  function merlons(height: number, thick: number, hex: number, size = 0.22, step = 0.5, stepped = false): void {
+    const runs: [number, number, number, boolean][] = [
+      [-half, half, -half, true], [-half, half, half, true], [-half, half, -half, false], [-half, half, half, false],
+    ];
+    for (const [from, to, at, alongX] of runs) {
+      for (let a = from + step / 2; a < to; a += step) {
+        if (alongX && at === half && Math.abs(a) < gap / 2 + 0.1) continue;
+        const pos: Triple = alongX ? [a, height + size / 2, at] : [at, height + size / 2, a];
+        const size3: Triple = alongX ? [size, size, thick] : [thick, size, size];
+        parts.push(block(size3, hex, pos));
+        if (stepped) parts.push(block(alongX ? [size * 0.5, size * 0.5, thick] : [thick, size * 0.5, size * 0.5], hex,
+          [pos[0], height + size + size * 0.25, pos[2]]));
+      }
+    }
+  }
+  if (style === 'celts') {
+    // Sloped earth rampart, palisade on top, round timber towers with conical thatch.
+    for (const [w, d, x, z] of [[5, 0.8, 0, -half], [5, 0.8, 0, half], [0.8, 5, -half, 0], [0.8, 5, half, 0]] as const) {
+      parts.push(part(bevelBox(w, 0.7, d, 0.25), 0x6f5a3a, [x, 0.35, z]));
+    }
+    walls(1.9, 0.18, WOOD);
+    for (let a = -half; a <= half + 1e-6; a += 0.3) {
+      for (const [x, z] of [[a, -half], [-half, a], [half, a]] as [number, number][]) parts.push(block([0.14, 0.25, 0.14], TREE_TRUNK, [x, 2.0, z]));
+      if (Math.abs(a) > gap / 2) parts.push(block([0.14, 0.25, 0.14], TREE_TRUNK, [a, 2.0, half]));
+    }
+    for (const [x, z] of corners) {
+      parts.push(part(new THREE.CylinderGeometry(0.5, 0.55, 2.6, 8), WOOD, [x, 1.3, z]));
+      parts.push(part(new THREE.ConeGeometry(0.72, 0.9, 8), 0xc9a95e, [x, 3.05, z]));
+    }
+    parts.push(part(new THREE.CylinderGeometry(1.1, 1.15, 1.5, 10), 0xa8865a, [0, 0.75, -0.4]));
+    parts.push(part(new THREE.ConeGeometry(1.5, 1.7, 10), 0xc9a95e, [0, 2.35, -0.4]));
+    for (const side of [-1, 1]) parts.push(block([0.2, 2.2, 0.2], TREE_TRUNK, [side * (gap / 2 + 0.1), 1.1, half]));
+    parts.push(block([gap + 0.4, 0.2, 0.3], TREE_TRUNK, [0, 2.2, half]));
+    parts.push(block([0.5, 0.4, 0.03], color, [0, 1.75, half + 0.16]));
+    return parts;
+  }
+  if (style === 'romans') {
+    const wall = 0xcdbfa6;
+    walls(2.0, 0.42, wall);
+    merlons(2.0, 0.42, 0xd8ccb4, 0.24, 0.5);
+    for (const [x, z] of corners) {
+      parts.push(part(new THREE.CylinderGeometry(0.62, 0.68, 2.8, 10), wall, [x, 1.4, z]));
+      parts.push(part(new THREE.CylinderGeometry(0.7, 0.66, 0.16, 10), 0xd8ccb4, [x, 2.88, z]));
+      parts.push(part(new THREE.ConeGeometry(0.72, 0.6, 10), 0xa6553a, [x, 3.26, z]));
+    }
+    // Arched gate between two square gate towers.
+    for (const side of [-1, 1]) parts.push(block([0.6, 2.7, 0.7], wall, [side * (gap / 2 + 0.3), 1.35, half]));
+    parts.push(block([gap, 0.6, 0.7], wall, [0, 2.4, half]));
+    parts.push(part(new THREE.CylinderGeometry(gap / 2, gap / 2, 0.72, 10, 1, false, 0, Math.PI), 0x8f8470,
+      [0, 2.1, half], [1, 1, 1], [Math.PI / 2, 0, Math.PI / 2]));
+    parts.push(block([0.7, 0.45, 0.04], color, [0, 2.4, half + 0.37]));
+    // Principia: a tiled hall in the middle.
+    parts.push(part(bevelBox(2.4, 1.5, 1.6), 0xe3d9c2, [0, 0.75, -0.5]));
+    parts.push(...gableParts(2.4, 1.6, 1.5, 0.55, 0xe3d9c2).map(piece => piece.translate(0, 0, -0.5)));
+    parts.push(...roofParts(2.65, 1.85, 1.5, 0.6, false, 3).map(piece => piece.translate(0, 0, -0.5)));
+    return parts;
+  }
+  if (style === 'persians') {
+    const brick = 0xd2b47e;
+    walls(2.4, 0.45, brick);
+    merlons(2.4, 0.45, 0xe0c48e, 0.26, 0.42, true);
+    for (const [x, z] of corners) {
+      parts.push(block([1.05, 3.1, 1.05], brick, [x, 1.55, z]));
+      parts.push(block([1.15, 0.12, 1.15], 0x3e6f9a, [x, 2.7, z]));
+      for (const dx of [-0.35, 0, 0.35]) parts.push(block([0.2, 0.3, 0.2], 0xe0c48e, [x + dx, 3.25, z + 0.42]));
+    }
+    // Glazed-brick gateway band and a columned apadana.
+    for (const side of [-1, 1]) parts.push(block([0.55, 3.0, 0.7], brick, [side * (gap / 2 + 0.27), 1.5, half]));
+    parts.push(block([gap, 0.6, 0.7], brick, [0, 2.7, half]));
+    parts.push(block([gap + 1.1, 0.16, 0.05], 0x3e6f9a, [0, 2.55, half + 0.36]));
+    parts.push(block([0.6, 0.35, 0.03], color, [0, 2.75, half + 0.37]));
+    parts.push(block([2.6, 0.3, 2.0], 0xc9ad78, [0, 0.15, -0.4]));
+    for (let i = 0; i < 4; i++) for (const z of [0.4, -1.2]) {
+      parts.push(part(new THREE.CylinderGeometry(0.09, 0.11, 1.6, 6), 0xece2c8, [-0.9 + i * 0.6, 1.1, z]));
+    }
+    parts.push(block([2.5, 0.25, 1.9], 0xe0c48e, [0, 2.0, -0.4]));
+    parts.push(block([2.6, 0.08, 2.0], 0x3e6f9a, [0, 2.15, -0.4]));
+    return parts;
+  }
+  // Hellenes: ashlar circuit, square towers with crenellations and a pedimented keep.
+  const ashlar = 0xd9d1bb;
+  walls(1.9, 0.4, ashlar);
+  merlons(1.9, 0.4, 0xe6dfca, 0.22, 0.48);
+  for (const [x, z] of corners) {
+    parts.push(block([1.0, 2.8, 1.0], ashlar, [x, 1.4, z]));
+    parts.push(block([1.08, 0.12, 1.08], 0xe6dfca, [x, 2.86, z]));
+    for (const [dx, dz] of [[-0.38, -0.38], [0.38, -0.38], [-0.38, 0.38], [0.38, 0.38]]) {
+      parts.push(block([0.24, 0.28, 0.24], 0xe6dfca, [x + dx, 3.06, z + dz]));
+    }
+  }
+  for (const side of [-1, 1]) parts.push(block([0.5, 2.5, 0.6], ashlar, [side * (gap / 2 + 0.25), 1.25, half]));
+  parts.push(block([gap + 1, 0.3, 0.62], 0xe6dfca, [0, 2.3, half]));
+  parts.push(block([0.6, 0.38, 0.03], color, [0, 1.95, half + 0.32]));
+  parts.push(part(bevelBox(2.0, 2.4, 1.6), ashlar, [0, 1.2, -0.6]));
+  parts.push(...gableParts(2.0, 1.6, 2.4, 0.6, 0xe6dfca).map(piece => piece.translate(0, 0, -0.6)));
+  parts.push(...roofParts(2.25, 1.85, 2.4, 0.65, false, 3).map(piece => piece.translate(0, 0, -0.6)));
+  parts.push(part(new THREE.ConeGeometry(0.1, 0.24, 4), 0xb89b53, [0, 3.2, 0.32]));
+  return parts;
+}
+
 /** Grounded, centred ancient economy buildings; the renderer supplies world position and yaw. */
 export function buildingModel(kind: BuildingKind, opts?: BuildingModelOptions): THREE.Group {
   if (kind === 'townCenter') return buildTownCenter(0, opts);
@@ -555,6 +676,9 @@ export function buildingModel(kind: BuildingKind, opts?: BuildingModelOptions): 
     parts.push(...academyParts());
   } else if (kind === 'wonder') {
     parts.push(...wonderParts(opts?.civ, opts?.color ?? 0x9e3b26));
+  } else if (kind === 'fortress') {
+    parts.push(...fortressParts(opts?.civ, opts?.color ?? 0x9e3b26));
+    object.userData.civ = opts?.civ ?? 'hellenes';
   } else if (kind === 'watchTower') {
     // Square stone shaft, a timber fighting floor and a crenellated head. Faces +z.
     parts.push(block([1.9, 0.28, 1.9], STONE, [0, 0.14, 0]));
@@ -635,6 +759,7 @@ export function buildingModel(kind: BuildingKind, opts?: BuildingModelOptions): 
       : kind === 'forge' ? 2.2
       : kind === 'market' ? 2.0
       : kind === 'academy' ? 2.4
+      : kind === 'fortress' ? 4.2
       : 1.7;
     const x = w / 2 - 0.38, z = d / 2 - 0.4;
     parts.push(block([0.055, height - 0.06, 0.055], TREE_TRUNK, [x, (height + 0.06) / 2, z]));

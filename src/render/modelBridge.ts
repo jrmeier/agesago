@@ -104,6 +104,8 @@ const PENNANT_Y: Record<UnitKind, number> = {
   villager: 0.92,
   scout: 1.62,
   phalangiteGuard: 1.2, legionary: 1.2, immortal: 1.15, raider: 1.2,
+  spartanHoplite: 1.2, praetorian: 1.2, appleBearer: 1.2, gaesatae: 1.2,
+  agema: 1.7, equites: 1.7, savaran: 1.7, nobleRider: 1.7,
   hoplite: 1.2,
   swordsman: 1.2,
   ram: 1.3, catapult: 1.5, boltShooter: 1.3,

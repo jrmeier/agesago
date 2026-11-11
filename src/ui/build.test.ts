@@ -71,6 +71,7 @@ describe('build hotkeys', () => {
       'siegeWorkshop',
       'academy',
       'wonder',
+      'fortress',
     ]);
     const keys = kinds.map((k) => BUILD_HOTKEYS[k]);
     expect(keys.every(Boolean)).toBe(true);

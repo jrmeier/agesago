@@ -71,6 +71,37 @@ Siege units take several population slots (`UnitSpec.pop`), do not rank up and c
 Checked in `src/sim/siege.test.ts`: 3 rams bring down a stone wall segment in about 14.5 s
 (10 swordsmen still need over 60 s); 10 swordsmen kill an unescorted ram in a few seconds.
 
+## Fortress and champions (M16-5)
+
+The **Fortress** is a City Age stronghold (5 × 5, 5,200 HP, 12/20 armour like a stone wall under the crush model, 4 arrows of 7 pierce at
+range 9 with nobody inside, garrison 20, 200 wood + 650 stone). Each player may own at most **two**
+(`BuildingSpec.limit`, foundations included); a third `build` is rejected with `'limit'` and the
+build menu shows the count ("1/2", then "Limit reached (2/2)").
+
+Each civilization trains one infantry and one cavalry **champion** there, from the City Age:
+
+| Civ | Infantry | Cavalry |
+|---|---|---|
+| Hellenes | Spartan Hoplite | Agema Rider |
+| Romans | Praetorian | Equites |
+| Persians | Apple Bearer | Savar |
+| Celts | Gaesatae | Noble Rider |
+
+All infantry champions share one stat block (170 HP, 14 melee, 4/1 armour, 90 food + 150 gold) and
+all cavalry champions another (220 HP, 14 melee, 3/3 armour, +6 vs archers, 100 food + 200 gold),
+so civs stay even. Champions never gather, build or tend and take no line upgrades. Players with no
+civilization (legacy saves) field the Hellenic pair.
+
+Margins (`src/sim/champions.test.ts`: City Age, no techs, equal cost, five jittered line-ups;
+"value left" counts survivors weighted by remaining HP). Measured at the time of writing:
+
+| Fight (equal cost) | Result | Test floor |
+|---|---|---|
+| 5 infantry champions vs 15 Swordsmen | champions win, ~50% value left | win, ≥ 40% |
+| 4 cavalry champions vs 8 Horsemen | champions win, ~50–55% value left | win, ≥ 40% |
+| 5 infantry champions vs 20 Slingers (hard counter) | slingers win, ~35–45% left | lose, counter ≥ 25% |
+| 4 cavalry champions vs 15 Hoplites (hard counter) | hoplites win, ~77% left | lose, counter ≥ 60% |
+
 ## The scripted build order
 
 `src/bench/pacing.ts` plays player 1 on a real generated map (`generateMap(seed, 2)`, the real

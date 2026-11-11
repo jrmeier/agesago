@@ -11,7 +11,7 @@ import type { ResearchProfile, TechGroup } from './profile';
 const TYPES: ResourceType[] = ['food', 'wood', 'gold', 'stone'];
 const WORKING: ReadonlySet<UnitState> = new Set(['toNode', 'gathering', 'toDrop']);
 /** Kinds that don't count toward the two-buildings rule for aging up (mirrors research.ts). */
-const NOT_AGE_BUILDINGS = new Set<BuildingKind>(['townCenter', 'house', 'farm', 'palisade', 'stoneWall', 'gate']);
+const NOT_AGE_BUILDINGS = new Set<BuildingKind>(['townCenter', 'house', 'farm', 'palisade', 'stoneWall', 'gate', 'fortress']);
 /** Buildings the AI adds to qualify for the next age, in order of preference, by current age. */
 const AGE_PICKS: Record<number, BuildingKind[]> = {
   0: ['storehouse', 'granary', 'barracks', 'miningCamp'],

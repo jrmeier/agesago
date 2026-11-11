@@ -6,8 +6,8 @@ import type { Command } from '../core/types';
 import { UNITS } from '../core/units';
 import { WONDER_SECONDS_MAX, WONDER_SECONDS_MIN, type WonderRules } from '../core/wonder';
 
-/** 8: siege engines (pop costs, pack/unpack, splash). 7: wonder buildings and the wonder victory option (MatchConfig.wonder). 6: 'repair' command and passive ship healing at docks. 5: upgrade chains replace the tower techs. 4: in-place building upgrades (upgradeBuilding/cancelUpgrade). 3: trained land units can work. */
-export const NETWORK_VERSION = 8;
+/** 9: fortress and champions (M16-5). 8: siege engines (pop costs, pack/unpack, splash). 7: wonder buildings and the wonder victory option (MatchConfig.wonder). 6: 'repair' command and passive ship healing at docks. 5: upgrade chains replace the tower techs. 4: in-place building upgrades (upgradeBuilding/cancelUpgrade). 3: trained land units can work. */
+export const NETWORK_VERSION = 9;
 export const TICKS_PER_TURN = 4;
 export const HASH_EVERY = 25;
 export const MAX_COMMANDS = 64;

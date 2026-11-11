@@ -27,7 +27,7 @@ describe('formation orders', () => {
     const world = worldOn(field((x, z) => x < 120 && z >= 100));
     let land = 0, water = 0;
     for (const kind of Object.keys(UNITS) as UnitKind[]) {
-      const z = isShip(kind) ? 110 + water++ * 8 : 10 + land++ * 4;
+      const z = isShip(kind) ? 110 + water++ * 8 : 10 + land++ * 3;
       const u = world.spawnUnit(kind, { x: 10, z });
       expect(speedOf(u)).toBe(UNITS[kind].speed);
       orderMove(world, [u.id], { x: 100, z: u.pos.z });

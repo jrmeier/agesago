@@ -15,8 +15,8 @@ import { applyResearch } from './upgrades';
 /** Most techs a building may have queued at once. */
 export const MAX_RESEARCH_QUEUE = 5;
 
-/** Building kinds that don't count toward the "two buildings from your current age" rule. */
-const NOT_AGE_BUILDINGS = new Set<BuildingKind>(['townCenter', 'house', 'farm', 'corral', 'palisade', 'stoneWall', 'gate']);
+/** Building kinds that don't count toward the "two buildings from your current age" rule (the fortress is optional, M16-5). */
+const NOT_AGE_BUILDINGS = new Set<BuildingKind>(['townCenter', 'house', 'farm', 'corral', 'palisade', 'stoneWall', 'gate', 'fortress']);
 /**
  * Kinds that count toward aging up but do not raise how many are needed: the City Age still asks
  * for one building, the Academy or the Siege Workshop (M16-2).

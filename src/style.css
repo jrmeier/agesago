@@ -3437,6 +3437,13 @@ body.touch.menu-train #market-panel {
   color: var(--crimson);
 }
 
+.build-limit {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+  opacity: 0.8;
+}
+
 .build-lock:empty {
   display: none;
 }

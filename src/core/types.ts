@@ -63,6 +63,15 @@ export type UnitKind =
   | 'slinger'
   | 'archer'
   | 'horseman'
+  /** Champions (M16-5): trained only at the fortress, one infantry and one cavalry per civ. */
+  | 'spartanHoplite'
+  | 'agema'
+  | 'praetorian'
+  | 'equites'
+  | 'appleBearer'
+  | 'savaran'
+  | 'gaesatae'
+  | 'nobleRider'
   /** Walks between markets for gold (M8-12). */
   | 'tradeCart'
   /** Heals allies, converts enemies and carries relics. */
@@ -103,7 +112,9 @@ export type BuildingKind =
   /** M16-7: Empire Age monument; standing through its countdown wins the match. */
   | 'wonder'
   /** M16-2: City Age siege engines and their techs. */
-  | 'siegeWorkshop';
+  | 'siegeWorkshop'
+  /** M16-5: City Age stronghold that trains champions; at most BUILDINGS.fortress.limit each. */
+  | 'fortress';
 export type EntityKind = UnitKind | NodeKind | BuildingKind;
 
 export const NODE_RESOURCE: Record<NodeKind, ResourceType> = {
@@ -422,7 +433,9 @@ export type RejectReason =
   /** The building is busy (e.g. a Town Center aging up can't queue more). */
   | 'busy'
   /** The building has no further upgrade. */
-  | 'max-tier';
+  | 'max-tier'
+  /** The player already has the most of this building allowed (BuildingSpec.limit). */
+  | 'limit';
 
 /** Result of checking whether a building fits at a spot (World.canPlace). */
 export interface PlacementCheck {
