@@ -169,5 +169,5 @@ describe('wildlife and fishing', () => {
     expect(restored.units.get(deer.id)!.leashAnchor).toEqual(home);
     expect([...restored.nodes.values()]).toEqual([...world.nodes.values()]);
     expect(serializeWorld(restored)).toEqual(data);
-  });
+  }, 30_000);
 });

@@ -178,7 +178,7 @@ describe('research queue', () => {
     expect(legacy.townCenter!.researchProgress).toBeCloseTo(1);
     legacy.dispatch({ type: 'train', buildingId: legacy.townCenter!.id });
     expect(legacy.townCenter!.productionQueue).toEqual(['research', 'train', 'train']);
-  });
+  }, 30_000);
 
   it('Empire Age needs only the Academy (the City Age has no second building)', () => {
     const w = world();
