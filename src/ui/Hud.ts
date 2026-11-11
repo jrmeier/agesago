@@ -2,7 +2,7 @@ import type { AuraId } from '../core/auras';
 import { BUILDINGS, BUILDING_UPGRADES, FARM_FOOD, buildingTitle, nextUpgrade } from '../core/buildings';
 import { AGE_NAMES, TECHS, buildingTier, techsAt, unitLine, type Age, type TechId } from '../core/techs';
 import type { Building, BuildingKind, ResourceType, Stockpile, Unit, UnitKind } from '../core/types';
-import { canGuard, canPatrol, canWork, UNITS, trainable } from '../core/units';
+import { canGuard, canPatrol, canWork, captureRate, UNITS, trainable } from '../core/units';
 import type { Selection } from '../game/Selection';
 import { shownSelection, sightFromState, stepLastSeen, type LastSeenBuilding } from '../render/lastSeen';
 import { BALANCE } from '../sim/balance';
@@ -633,6 +633,8 @@ export class Hud {
     setHidden(unload, !own.some(u => u.kind === 'transport' && (u.passengers?.length ?? 0) > 0));
     setHidden(card.querySelector<HTMLButtonElement>('[data-cmd="patrol"]'), !own.some((u) => canPatrol(u.kind)));
     setHidden(card.querySelector<HTMLButtonElement>('[data-cmd="guard"]'), !own.some((u) => canGuard(u.kind)));
+    // Raze (M18-4): soldiers capture buildings by default, this attacks one to destroy it.
+    setHidden(card.querySelector<HTMLButtonElement>('[data-cmd="raze"]'), !own.some((u) => captureRate(u.kind) > 0));
     const fighters = own.filter((u) => isMilitary(u.kind) || u.kind === 'scout');
     card.classList.toggle('no-stances', !fighters.length);
     const stance = sharedStance(fighters);

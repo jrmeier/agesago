@@ -3,6 +3,7 @@ import { BUILDINGS, BUILDING_UPGRADES, FARM_FOOD } from '../core/buildings';
 import { detectQuality, type Quality } from '../core/quality';
 import { isAnimal, UNITS } from '../core/units';
 import {
+  GAIA,
   SEA_LEVEL,
   type Building,
   type BuildingKind,
@@ -34,8 +35,10 @@ import {
   type LastSeenBuilding,
   type Sight,
 } from './lastSeen';
-import { HealthBars } from './hpBars';
+import { CaptureBars, HealthBars } from './hpBars';
 import { PromotionSparkles, RankChevrons } from './rankMarks';
+import { capturePointsOf } from '../sim/systems/capture';
+import { maxCapturePoints } from '../core/buildings';
 import { chunkCoord, SpatialInstances } from './instanceChunks';
 import { berryLodGeometry, goldLodGeometry, stoneLodGeometry, stoneNodeGeometry, treeLodGeometry } from './lod';
 import { createUnitAvatar, type UnitAvatar } from './modelBridge';
@@ -55,6 +58,9 @@ import { auraRingRadius } from './auraRings';
 import { choosePick, ndcToCanvas, ORDER_PICK_RANK, PICK_RANK, rectContains, type PickCandidate, type PickIntent } from './picking';
 import { ProjectilePool } from './projectiles';
 import { createShadowTexture } from './shadow';
+
+/** Gaia's share on a capture bar (M18-4): weathered stone grey. */
+const NEUTRAL_CAPTURE = 0x9a9488;
 
 /** Screen-space rectangle in CSS pixels relative to the canvas. */
 export interface ScreenRect {
@@ -262,6 +268,8 @@ export class EntityViews {
   private readonly sparkles: PromotionSparkles;
   /** Promotions since the last sync; their sparkles start at the next frame time. */
   private readonly promotions: Array<{ id: EntityId; rank: Rank }> = [];
+  /** Capture bars over buildings someone is capturing (M18-4). */
+  readonly captureBars: CaptureBars;
   private readonly projectiles: ProjectilePool;
   private readonly deaths: DeathGhosts;
 
@@ -337,6 +345,7 @@ export class EntityViews {
     this.bars = new HealthBars(this.object);
     this.chevrons = new RankChevrons(this.object);
     this.sparkles = new PromotionSparkles(this.object);
+    this.captureBars = new CaptureBars(this.object);
     this.projectiles = new ProjectilePool(this.object, quality);
     this.deaths = new DeathGhosts(this.object, quality);
 
@@ -356,13 +365,15 @@ export class EntityViews {
       if (this.promotions.length >= 32) this.promotions.shift();
       this.promotions.push({ id: e.id, rank: e.rank });
     });
-    // A decayed building turned neutral (M18-3): rebuild it in Gaia colours.
-    this.world.events.on('abandoned', (e) => {
+    // A decayed building turned neutral (M18-3), or one captured (M18-4): rebuild it in its new colours.
+    const recolour = (e: { id: EntityId }) => {
       const building = this.world.buildings.get(e.id);
       if (!building || !this.buildingViews.has(e.id)) return;
       this.dropBuildingView(e.id);
       this.mountBuilding(building);
-    });
+    };
+    this.world.events.on('abandoned', recolour);
+    this.world.events.on('captured', recolour);
     this.world.events.on('researched', (e) => this.onResearched(e.owner));
     this.world.events.on('buildingUpgraded', (e) => { if (this.buildingViews.has(e.id)) this.tierDirty.add(e.id); });
     this.world.events.on('constructed', (e) => {
@@ -833,6 +844,7 @@ export class EntityViews {
 
   private syncHealth(alpha: number, camera: THREE.Camera): void {
     this.bars.begin(camera);
+    this.captureBars.begin(camera);
     for (const unit of this.world.units.values()) {
       if (!this.unitShown(unit)) continue;
       if (!this.wantsHealth(unit.hp, unit.maxHp, unit.id)) continue;
@@ -850,12 +862,29 @@ export class EntityViews {
         continue;
       }
       this.pushBuildingBar(building.kind, building.pos, building.hp, building.maxHp, building.id);
+      if (building.capture && mode === 'live') this.pushCaptureBar(building);
     }
     for (const [id, snap] of this.lastSeen) {
       if (this.world.buildings.has(id) || !this.memoryViews.has(id)) continue;
       this.pushBuildingBar(snap.kind, snap.pos, snap.hp, snap.maxHp, snap.id);
     }
     this.bars.end();
+    this.captureBars.end();
+  }
+
+  /** Owner's share against the leading challenger's, just under the hp bar (M18-4). */
+  private pushCaptureBar(building: Building): void {
+    const max = maxCapturePoints(building.kind);
+    if (max <= 0) return;
+    const cp = capturePointsOf(this.world, building);
+    let rival = -1;
+    for (let i = 0; i < cp.length; i++) if (i !== building.owner && cp[i] > 0 && (rival < 0 || cp[i] > cp[rival])) rival = i;
+    if (rival < 0) return;
+    const { w } = BUILDINGS[building.kind].size;
+    const width = Math.min(2.2, Math.max(0.8, w * 0.55));
+    const y = this.groundY(building.pos.x, building.pos.z) + this.buildingHeight(building.kind, building.id) + 0.8;
+    const color = (p: PlayerId) => (p === GAIA ? NEUTRAL_CAPTURE : this.ownerColor(p));
+    this.captureBars.push(building.pos.x, y, building.pos.z, cp[building.owner] / max, width, color(building.owner), color(rival));
   }
 
   /** Chevrons over every shown veteran, and sparkles for promotions seen since the last frame. */

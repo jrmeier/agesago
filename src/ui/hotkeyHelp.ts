@@ -57,10 +57,11 @@ export function hotkeyHelpRows(): HotkeyRow[] {
   const mouse: HotkeyRow[] = [
     { keys: 'LMB', label: 'Select. Drag a box to select several.' },
     { keys: 'Shift+LMB', label: 'Add to the selection, or keep placing buildings.' },
-    { keys: 'RMB', label: 'Move, gather, or attack. On a damaged own or allied building: repair (costs half its price for a full repair).' },
+    { keys: 'RMB', label: 'Move, gather, attack, or capture a building. On a damaged own or allied building: repair (costs half its price for a full repair).' },
     { keys: 'Corral', label: 'Move two owned sheep into the pasture; order a land unit onto it to breed and harvest surplus. Enclose with palisades and gates.' },
     { keys: 'Gate', label: 'Select a gate and use its livestock passage button. Your people always retain passage.' },
-    { keys: 'Ctrl+RMB', label: 'Attack-move along the way.' },
+    { keys: 'Ctrl+RMB', label: 'Attack-move along the way. On an enemy building: attack it to destroy instead of capturing.' },
+    { keys: 'Capture', label: 'Right-click an enemy or neutral building with soldiers to capture it (walls, gates and farms can only be destroyed). Units garrisoned inside, and your own territory, win it back. The Raze order button destroys instead.' },
     { keys: 'Alt+RMB', label: 'Guard the own or allied unit or building under the cursor.' },
     { keys: 'Territory', label: 'Build inside your borders. Watch towers, docks and Town Centers may also go on neutral land; nothing goes on another player’s land. Buildings cut off from your Town Centers slowly lose health unless someone is garrisoned inside, then collapse (houses, farms, walls) or turn neutral.' },
   ];

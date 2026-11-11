@@ -74,6 +74,16 @@ export class BurstCounter {
 }
 
 /** "A villager was killed" / "3 villagers were killed". */
+/**
+ * Capture toast (M18-4): "Your Barracks was captured by Rival 1" when we lost it, "Captured a
+ * Barracks from Rival 1" (or "Captured a neutral Barracks") when we took it.
+ */
+export function captureText(kind: BuildingKind, lost: boolean, other: string | null): string {
+  const name = BUILDINGS[kind].name;
+  if (lost) return other ? `Your ${name} was captured by ${other}` : `Your ${name} was captured`;
+  return other ? `Captured a ${name} from ${other}` : `Captured a neutral ${name}`;
+}
+
 export function deathText(count: number): string {
   return count === 1 ? 'A villager was killed' : `${count} villagers were killed`;
 }

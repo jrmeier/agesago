@@ -1,6 +1,6 @@
 import { BUILDINGS } from '../core/buildings';
 import { GAIA, type Building, type Command, type EntityId, type FormationKind, type PlayerId, type UnitKind, type Vec2 } from '../core/types';
-import { canGuard, isAnimal } from '../core/units';
+import { canGuard, captureRate, isAnimal } from '../core/units';
 
 /** What lies under a right-click / tap, already resolved against the scene and the fog. */
 export interface OrderTarget {
@@ -56,6 +56,37 @@ export function resolveTargetOrder(
   }
   if (!ground) return null;
   return { type: 'rally', buildingId: sel.rallyBuildingId, pos: { ...ground } };
+}
+
+/** A building under the pointer, as far as capture and raze orders care (M18-4). */
+export interface BuildingHit {
+  id: EntityId;
+  owner: PlayerId;
+  /** The local player can currently see it. */
+  visible: boolean;
+  /** Complete and of a kind with capture points (not a wall, gate, farm or foundation). */
+  capturable: boolean;
+}
+
+/**
+ * Selected units onto a visible enemy or neutral (Gaia) building (M18-4): 'capture' when it can
+ * be captured and someone selected has a capture attack (soldiers), otherwise 'attack'. `raze`
+ * (Ctrl+RMB, the Raze button) always attacks to destroy. A neutral building nobody can capture is
+ * only attacked when razing. Null for own / allied / unseen buildings or an empty selection.
+ */
+export function resolveBuildingAttack(
+  units: readonly { id: EntityId; kind: UnitKind }[],
+  b: BuildingHit | null,
+  raze: boolean,
+  isEnemy: (owner: PlayerId) => boolean,
+): Extract<Command, { type: 'attack' | 'capture' }> | null {
+  if (!units.length || !b || !b.visible) return null;
+  const neutral = b.owner === GAIA;
+  if (!neutral && !isEnemy(b.owner)) return null;
+  const unitIds = units.map((u) => u.id);
+  if (!raze && b.capturable && units.some((u) => captureRate(u.kind) > 0)) return { type: 'capture', unitIds, targetId: b.id };
+  if (neutral && !raze) return null;
+  return { type: 'attack', unitIds, targetId: b.id };
 }
 
 /** Attack-move for the selection to a ground point (null with nothing to send or nowhere to go). */

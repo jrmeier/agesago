@@ -4,7 +4,7 @@ import type { PickIntent } from '../render/picking';
 import { CAMERA_LABELS, type CameraRig } from '../camera/CameraRig';
 import { canGuard, canPatrol, canWork, defaultFormation, isShip } from '../core/units';
 import { canGarrison } from '../sim/systems/defence';
-import { BUILDINGS } from '../core/buildings';
+import { BUILDINGS, maxCapturePoints } from '../core/buildings';
 import { GAIA, type Building, type BuildingKind, type Command, type EntityId, type FormationKind, type PropPlacement, type Stance, type UnitKind, type Vec2 } from '../core/types';
 import type { Selection } from '../game/Selection';
 import type { World } from '../sim/World';
@@ -28,7 +28,7 @@ import type { GestureEvent } from './gestures';
 import { GROUP_KEYS, HOTKEYS, TRAIN_SLOT_KEYS, groupForKey } from './hotkeys';
 import { IdleCycler, idleVillagers } from './idle';
 import { LMB, RMB, type DragState, type Input } from './Input';
-import { resolveAttackMove, resolveBuildingOrder, resolveGuard, resolvePatrol, resolveOrder, resolveRepairOrder, resolveTargetOrder, resolveTradeOrder, type HitEntity } from './orders';
+import { resolveAttackMove, resolveBuildingAttack, resolveBuildingOrder, resolveGuard, resolvePatrol, resolveOrder, resolveRepairOrder, resolveTargetOrder, resolveTradeOrder, type HitEntity } from './orders';
 import { pickGround, projectToCanvas, screenRay, toNdc } from './pickGround';
 import { Placement } from './Placement';
 import { focusNextScout, onScoutFocus } from './scouts';
@@ -91,8 +91,9 @@ export function resolveLongPress(args: {
 
 /**
  * Player intent → sim commands: click / box / A select (RTS only; boxes and A take only the
- * local player's units, a click may inspect a visible enemy), RMB on a visible enemy unit or
- * building = attack, on an explored node = gather, on a foundation / farm = construct / farm, on a
+ * local player's units, a click may inspect a visible enemy), RMB on a visible enemy unit = attack,
+ * on a visible enemy or neutral building = capture with soldiers (attack otherwise; Ctrl+RMB, the
+ * Raze button, or attack-move targeting attack it to destroy, M18-4), on an explored node = gather, on a foundation / farm = construct / farm, on a
  * damaged own or allied building = repair,
  * on ground (explored or not) = move; Ctrl+RMB = attack-move. With only an own training
  * building selected, RMB sets its rally point (on a node / unit / building: rally to it) and
@@ -154,6 +155,8 @@ export class Controls {
   private patrolPoints: Vec2[] | null = null;
   /** Guard armed (a kind of targeting): the next click / tap on an own or allied unit or building guards it. */
   private guardArmed = false;
+  /** Raze armed (M18-4): the next click / tap on an enemy or neutral building attacks it to destroy. */
+  private razing = false;
   /** Pause menu is up: orders and placement wait. Camera input is skipped by Game. */
   private suspended = false;
   /** Help, placement, or targeting already used Escape this frame, so it must not also pause. */
@@ -193,6 +196,8 @@ export class Controls {
       this.rallyEcho.delete(e.id);
     });
     world.events.on('abandoned', (e) => selection.remove([e.id]));
+    // A building we lost to capture (M18-4) leaves our selection, like one that was destroyed.
+    world.events.on('captured', (e) => { if (e.previousOwner === world.localPlayer) selection.remove([e.id]); });
     onScoutFocus(world, (id) => selection.set([id]));
     selection.onChange(() => {
       if (this.placement.active && !this.workerIds().length) this.placement.cancel();
@@ -249,6 +254,7 @@ export class Controls {
       else if (btn.dataset.cmd === 'attackMove') this.setTargeting(!this.targeting || !!this.patrolPoints || this.guardArmed);
       else if (btn.dataset.cmd === 'patrol') this.setPatrolling(!this.patrolPoints);
       else if (btn.dataset.cmd === 'guard') this.setGuarding(!this.guardArmed);
+      else if (btn.dataset.cmd === 'raze') this.setRazing(!this.razing);
       else if (btn.dataset.cmd === 'stop') this.stop();
       else if (btn.dataset.stance) this.setStance(btn.dataset.stance as Stance);
     });
@@ -792,6 +798,12 @@ export class Controls {
     const { views, world } = this.deps;
     const unitIds = this.ownUnitIds();
     const ground = this.groundAt(x, y);
+    // Soldiers onto an enemy or neutral building: capture; Ctrl+RMB attacks it to destroy (M18-4).
+    const siege = unitIds.length ? this.buildingAttackAt(x, y, attackMove) : null;
+    if (siege) {
+      world.dispatch(siege);
+      return;
+    }
     if (attackMove) {
       const cmd = resolveAttackMove(unitIds, ground, this.formationFor(unitIds));
       if (cmd) {
@@ -895,8 +907,17 @@ export class Controls {
       this.setTargeting(false);
       return;
     }
+    if (this.razing) {
+      const raze = this.buildingAttackAt(x, y, true);
+      if (raze) world.dispatch(raze);
+      else world.events.emit({ type: 'rejected', reason: 'invalid-target' });
+      if (!keepArmed) this.setTargeting(false);
+      return;
+    }
     const hit = this.hitEntity(this.pickAt(x, y));
-    const attack = resolveTargetOrder({ unitIds, rallyBuildingId: null }, hit, null, (o) => world.areEnemies(world.localPlayer, o));
+    // Attack-move armed: a building under the click is attacked (razed), not captured.
+    const attack = this.buildingAttackAt(x, y, true)
+      ?? resolveTargetOrder({ unitIds, rallyBuildingId: null }, hit, null, (o) => world.areEnemies(world.localPlayer, o));
     const cmd = attack ?? resolveAttackMove(unitIds, this.groundAt(x, y), this.formationFor(unitIds));
     if (cmd) {
       world.dispatch(cmd);
@@ -907,7 +928,7 @@ export class Controls {
 
   private setTargeting(on: boolean): void {
     if (on && !this.ownUnitIds().length) on = false;
-    this.targeting = on; this.unloading = false; this.patrolPoints = null; this.guardArmed = false;
+    this.targeting = on; this.unloading = false; this.patrolPoints = null; this.guardArmed = false; this.razing = false;
     document.body.classList.toggle('targeting', on);
     this.syncTargetButtons();
   }
@@ -931,7 +952,8 @@ export class Controls {
   private syncTargetButtons(): void {
     const patrol = !!this.patrolPoints;
     const card = document.getElementById('command-card');
-    card?.querySelector('[data-cmd="attackMove"]')?.setAttribute('aria-pressed', String(this.targeting && !patrol && !this.guardArmed && !this.unloading));
+    card?.querySelector('[data-cmd="attackMove"]')?.setAttribute('aria-pressed', String(this.targeting && !patrol && !this.guardArmed && !this.unloading && !this.razing));
+    card?.querySelector('[data-cmd="raze"]')?.setAttribute('aria-pressed', String(this.razing));
     card?.querySelector('[data-cmd="patrol"]')?.setAttribute('aria-pressed', String(patrol));
     card?.querySelector('[data-cmd="guard"]')?.setAttribute('aria-pressed', String(this.guardArmed));
   }
@@ -964,6 +986,32 @@ export class Controls {
     const t = world.units.get(cmd.targetId) ?? world.buildings.get(cmd.targetId);
     if (t) views.flashMarker(t.pos);
     return true;
+  }
+
+  /** Arm (or disarm) Raze: the next click / tap on an enemy or neutral building attacks it to destroy. */
+  private setRazing(on: boolean): void {
+    this.setTargeting(on);
+    if (!this.targeting) return;
+    this.razing = true;
+    this.syncTargetButtons();
+  }
+
+  /** Capture (or, with `raze`, attack) order for the selection onto the building at a screen point. */
+  private buildingAttackAt(x: number, y: number, raze: boolean): Command | null {
+    const { world } = this.deps;
+    const id = this.pickAt(x, y, 'order');
+    const b = id !== null ? world.buildings.get(id) : undefined;
+    const hit = b ? this.hitEntity(b.id) : null;
+    const units = this.ownUnitIds().flatMap((uid) => {
+      const u = world.units.get(uid);
+      return u ? [{ id: uid, kind: u.kind }] : [];
+    });
+    return resolveBuildingAttack(
+      units,
+      b && hit ? { id: b.id, owner: b.owner, visible: hit.visible, capturable: b.complete && maxCapturePoints(b.kind) > 0 } : null,
+      raze,
+      (o) => world.areEnemies(world.localPlayer, o),
+    );
   }
 
   private stop(): void {

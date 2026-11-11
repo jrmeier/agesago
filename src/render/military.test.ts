@@ -10,6 +10,7 @@ import {
   type Vec2,
 } from '../core/types';
 import { defaultPlayers, PLAYER_COLORS, World } from '../sim/World';
+import { VISIBLE } from '../sim/visibility';
 import { CORPSE_SECONDS, RUBBLE_SECONDS } from './deaths';
 import { EntityViews } from './EntityViews';
 import { HP_GREEN, HP_RED, hpColor } from './hpBars';
@@ -448,5 +449,31 @@ describe('military rendering', () => {
     views.sync(0, 0.2, cameraAt(42, 46));
     expect(unitObject(views, enemy.id).visible).toBe(true);
     expect((ring().material as THREE.MeshBasicMaterial).color.getHex()).toBe(ENEMY_RING);
+  });
+});
+
+describe('capture bars (M18-4)', () => {
+  beforeAll(installCanvasMock);
+
+  it('draws the owner share against the leading challenger only while a building is being captured', () => {
+    const world = makeWorld();
+    world.visibility.state.fill(VISIBLE);
+    const views = new EntityViews(world);
+    const camera = cameraAt(46, 40);
+    const house = place(world, views, 'house', { x: 46, z: 40 }, 2);
+    const back = () => views.object.getObjectByName('capture-back') as THREE.InstancedMesh;
+    const fill = () => views.object.getObjectByName('capture-fill') as THREE.InstancedMesh;
+    views.sync(0, 0, camera);
+    expect(views.captureBars.count).toBe(0);
+    expect(fill().visible).toBe(false);
+
+    house.capture = [0, 100, 175];
+    views.sync(0, 0.1, camera);
+    expect(views.captureBars.count).toBe(1);
+    const color = new THREE.Color();
+    fill().getColorAt(0, color);
+    expect(color.getHex()).toBe(PLAYER_COLORS[1]);
+    back().getColorAt(0, color);
+    expect(color.getHex()).toBe(PLAYER_COLORS[0]);
   });
 });

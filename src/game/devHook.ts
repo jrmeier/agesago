@@ -1,5 +1,5 @@
 import type { Stat, Subject } from '../core/techs';
-import type { Age, BuildingKind, EntityId, Stockpile } from '../core/types';
+import type { Age, BuildingKind, EntityId, PlayerId, Stockpile, Vec2 } from '../core/types';
 import { BALANCE } from '../sim/balance';
 import { completeBuilding, layFoundation } from '../sim/systems/build';
 import { clearStatCache, statOf } from '../sim/systems/research';
@@ -21,6 +21,12 @@ export interface DevHook {
   statOf(subject: Subject, stat: Stat, base: number): number;
   /** Jump the local player to `age`. */
   setAge(age: Age): void;
+  /**
+   * Place a finished `kind` building for `owner` (e.g. an enemy) on the first free spot spiralling
+   * out from `near` (on ground the local player has explored), ignoring territory and cost;
+   * returns its id (or null). Capture e2e (M18-4).
+   */
+  placeFor(kind: BuildingKind, owner: PlayerId, near: Vec2): EntityId | null;
   /** Set a building's hit points (clamped to 1..maxHp) without killing it; returns the new hp. */
   setHp(id: EntityId, hp: number): number | null;
   /** Give unit `id` experience (promotes it like a kill would). Returns its rank, or null. */
@@ -56,6 +62,22 @@ export function devHook(world: World): DevHook {
       }
       world.stockOf(local()).wood -= 1000;
       world.stockOf(local()).stone -= 1000;
+      return null;
+    },
+    placeFor(kind, owner, near) {
+      // Only the site matters (checked on the local player's explored map): territory, spacing and cost don't.
+      const siteOk = (reason?: string) => !reason || ['territory', 'enemy-territory', 'town-spacing', 'insufficient-resources'].includes(reason);
+      for (let r = 0; r <= 20; r += 1) {
+        for (let a = 0; a < (r ? 16 : 1); a++) {
+          const ang = (a / 16) * Math.PI * 2;
+          const pos = { x: near.x + Math.cos(ang) * r, z: near.z + Math.sin(ang) * r };
+          if (!siteOk(world.canPlace(kind, pos, 0, local()).reason)) continue;
+          const b = layFoundation(world, kind, pos, 0, owner);
+          completeBuilding(world, b);
+          b.hp = b.maxHp;
+          return b.id;
+        }
+      }
       return null;
     },
     fastForward(seconds) {

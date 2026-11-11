@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Unit, Vec2 } from '../core/types';
-import { resolveAttackMove, resolveBuildingOrder, resolveGuard, resolvePatrol, resolveOrder, resolveRepairOrder, resolveTargetOrder } from './orders';
+import { resolveAttackMove, resolveBuildingAttack, resolveBuildingOrder, resolveGuard, resolvePatrol, resolveOrder, resolveRepairOrder, resolveTargetOrder } from './orders';
 import { focusNextScout, nextScout, onScoutFocus } from './scouts';
 
 describe('order resolution under fog', () => {
@@ -205,5 +205,37 @@ describe('guard targeting', () => {
     expect(resolveGuard(soldiers, null, enemy)).toBeNull();
     expect(resolveGuard([soldiers[0]], { id: 1, owner: 1, pos: { x: 0, z: 0 }, visible: true, kind: 'hoplite' }, enemy)).toBeNull();
     expect(resolveGuard([soldiers[1]], { id: 9, owner: 1, pos: { x: 0, z: 0 }, visible: true }, enemy)).toBeNull();
+  });
+});
+
+describe('capture and raze orders (M18-4)', () => {
+  const enemy = (owner: number) => owner === 2;
+  const house = { id: 50, owner: 2, visible: true, capturable: true };
+  const soldiers = [{ id: 1, kind: 'swordsman' as const }, { id: 2, kind: 'ram' as const }];
+  const villagers = [{ id: 3, kind: 'villager' as const }];
+
+  it('soldiers capture an enemy building by default and attack it when razing', () => {
+    expect(resolveBuildingAttack(soldiers, house, false, enemy)).toEqual({ type: 'capture', unitIds: [1, 2], targetId: 50 });
+    expect(resolveBuildingAttack(soldiers, house, true, enemy)).toEqual({ type: 'attack', unitIds: [1, 2], targetId: 50 });
+  });
+
+  it('walls and selections without a capture attack attack instead', () => {
+    expect(resolveBuildingAttack(soldiers, { ...house, capturable: false }, false, enemy)).toEqual({ type: 'attack', unitIds: [1, 2], targetId: 50 });
+    expect(resolveBuildingAttack(villagers, house, false, enemy)).toEqual({ type: 'attack', unitIds: [3], targetId: 50 });
+  });
+
+  it('neutral buildings are captured by soldiers and only attacked when razing', () => {
+    const ruin = { ...house, owner: 0 };
+    expect(resolveBuildingAttack(soldiers, ruin, false, enemy)?.type).toBe('capture');
+    expect(resolveBuildingAttack(villagers, ruin, false, enemy)).toBeNull();
+    expect(resolveBuildingAttack(villagers, ruin, true, enemy)?.type).toBe('attack');
+  });
+
+  it('own, allied and unseen buildings are no target', () => {
+    expect(resolveBuildingAttack(soldiers, { ...house, owner: 1 }, false, enemy)).toBeNull();
+    expect(resolveBuildingAttack(soldiers, { ...house, owner: 3 }, true, enemy)).toBeNull();
+    expect(resolveBuildingAttack(soldiers, { ...house, visible: false }, false, enemy)).toBeNull();
+    expect(resolveBuildingAttack([], house, false, enemy)).toBeNull();
+    expect(resolveBuildingAttack(soldiers, null, false, enemy)).toBeNull();
   });
 });

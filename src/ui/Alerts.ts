@@ -1,6 +1,6 @@
 import type { Vec2 } from '../core/types';
 import type { World } from '../sim/World';
-import { AlertLimiter, BurstCounter, attackText, deathText, unlockText } from './alertRules';
+import { AlertLimiter, BurstCounter, attackText, captureText, deathText, unlockText } from './alertRules';
 import { pushPing } from './pings';
 import { TECHS } from '../core/techs';
 import { researchedText } from './research';
@@ -17,6 +17,7 @@ const MAX_SHOWN = 3;
  * small "A villager was killed" toast on 'died' (bursts batched). Toasts share the discovery
  * toast stack (`container`). A local 'researched' shows "Iron Axe researched", and a local
  * 'agedUp' lists what the new age unlocks ("Town Age unlocks: build Forge, Market · train Slinger").
+ * A 'captured' building toasts for the side that lost it and the side that took it (M18-4).
  * `update(time)` must be called every frame.
  */
 export class Alerts {
@@ -52,6 +53,16 @@ export class Alerts {
       if (e.owner !== world.localPlayer) return;
       const civ = world.players.get(e.owner)?.player.civ;
       this.show('age', '#i-age', unlockText(e.age, ageUnlocks(e.age, civ)), this.home());
+    });
+    // Building capture (M18-4): both sides hear about it.
+    world.events.on('captured', (e) => {
+      const lost = e.previousOwner === world.localPlayer;
+      if (!lost && e.owner !== world.localPlayer) return;
+      const other = lost ? e.owner : e.previousOwner;
+      const name = other === 0 ? null : (world.players.get(other)?.player.name ?? `Player ${other}`);
+      pushPing(world, e.pos, 'attack');
+      if (lost) this.show('alert', '#i-alert', captureText(e.kind, true, name), e.pos);
+      else this.show('research', '#i-attack-move', captureText(e.kind, false, name), e.pos);
     });
     world.events.on('researched', (e) => {
       if (e.owner !== world.localPlayer || TECHS[e.tech].ageUp !== undefined) return;

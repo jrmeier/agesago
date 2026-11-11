@@ -109,6 +109,92 @@ export class HealthBars {
   }
 }
 
+const CAPTURE_CAP = 64;
+
+/**
+ * Capture bars (M18-4): one pooled billboard pair per building being captured. The full-width
+ * back is the leading challenger's colour, the fill from the left the owner's share in its colour.
+ */
+export class CaptureBars {
+  readonly object = new THREE.Group();
+  private readonly back: THREE.InstancedMesh;
+  private readonly fill: THREE.InstancedMesh;
+  private readonly dummy = new THREE.Object3D();
+  private readonly color = new THREE.Color();
+  private readonly orient = new THREE.Quaternion();
+  private readonly right = new THREE.Vector3();
+  private readonly forward = new THREE.Vector3();
+  private used = 0;
+
+  constructor(parent: THREE.Object3D) {
+    this.object.name = 'capture-bars';
+    const geo = new THREE.PlaneGeometry(1, 1);
+    geo.userData.shared = 1;
+    const mat = (factor: number) => new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.95, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: factor, polygonOffsetUnits: factor,
+    });
+    this.back = new THREE.InstancedMesh(geo, mat(-3), CAPTURE_CAP);
+    this.fill = new THREE.InstancedMesh(geo, mat(-4), CAPTURE_CAP);
+    this.back.name = 'capture-back';
+    this.fill.name = 'capture-fill';
+    for (const m of [this.back, this.fill]) {
+      m.count = 0;
+      m.frustumCulled = false;
+      m.matrixAutoUpdate = false;
+      m.userData.noShadow = 1;
+      m.visible = false;
+      // Instance colours need a first write before the first draw.
+      m.setColorAt(0, this.color.set(0xffffff));
+    }
+    this.back.renderOrder = 6;
+    this.fill.renderOrder = 7;
+    this.object.add(this.back, this.fill);
+    parent.add(this.object);
+  }
+
+  /** Bars drawn this frame (tests and the e2e read it). */
+  get count(): number {
+    return this.used;
+  }
+
+  begin(camera: THREE.Camera): void {
+    this.used = 0;
+    this.orient.copy(camera.quaternion);
+    this.right.set(1, 0, 0).applyQuaternion(this.orient);
+    this.forward.set(0, 0, 1).applyQuaternion(this.orient);
+  }
+
+  /** One bar: `owned` is the owner's share 0..1. */
+  push(x: number, y: number, z: number, owned: number, width: number, ownerColor: number, challengerColor: number): void {
+    if (this.used >= CAPTURE_CAP) return;
+    const i = this.used++;
+    const t = owned < 0 ? 0 : owned > 1 ? 1 : owned;
+    this.dummy.position.set(x, y, z);
+    this.dummy.quaternion.copy(this.orient);
+    this.dummy.scale.set(width, BAR_H, 1);
+    this.dummy.updateMatrix();
+    this.back.setMatrixAt(i, this.dummy.matrix);
+    this.back.setColorAt(i, this.color.set(challengerColor));
+    const span = Math.max(0.02, t) * width;
+    this.dummy.position.set(x, y, z).addScaledVector(this.right, -(width - span) * 0.5).addScaledVector(this.forward, 0.02);
+    this.dummy.scale.set(span, BAR_H, 1);
+    this.dummy.updateMatrix();
+    this.fill.setMatrixAt(i, this.dummy.matrix);
+    this.fill.setColorAt(i, this.color.set(ownerColor));
+  }
+
+  end(): void {
+    for (const m of [this.back, this.fill]) {
+      m.count = this.used;
+      m.visible = this.used > 0;
+      if (!this.used) continue;
+      m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    }
+  }
+}
+
 export function hpColor(fraction: number, out: THREE.Color): THREE.Color {
   const t = fraction < 0 ? 0 : fraction > 1 ? 1 : fraction;
   if (t >= 0.5) return out.copy(YELLOW).lerp(GREEN, (t - 0.5) * 2);
