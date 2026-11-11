@@ -1,8 +1,9 @@
 import type { CivId } from '../core/civilizations';
 import { unitLine, type TechId } from '../core/techs';
-import type { Building, BuildingKind, Stance, Stockpile, Unit, UnitKind } from '../core/types';
+import type { Building, BuildingKind, Command, Stance, Stockpile, Unit, UnitKind } from '../core/types';
 import { crushOf, isAnimal, UNIT_CRUSH_ARMOR, UNITS, trainable, type UnitSpec } from '../core/units';
 import { TRAIN_SLOT_KEYS } from '../input/hotkeys';
+import { batchTime } from '../sim/systems/train';
 import { canAfford } from './build';
 
 /** Stance buttons, in command-card order. */
@@ -18,9 +19,18 @@ export function isMilitary(kind: UnitKind): boolean {
   return kind !== 'villager' && kind !== 'scout' && kind !== 'tradeCart' && kind !== 'priest' && kind !== 'fishingBoat' && kind !== 'merchantShip' && kind !== 'transport' && !isAnimal(kind);
 }
 
-/** Shift-click / Shift+hotkey queues five. */
+/**
+ * Shift-click / Shift+hotkey orders a batch of five (one 'train' command with count 5). The sim
+ * adds it to the last queue entry when that is the same kind and not yet started (up to the batch
+ * limit), else it starts a new batch.
+ */
 export function trainBatch(shift: boolean): number {
   return shift ? 5 : 1;
+}
+
+/** The 'train' command for `n` units: count is left out for a single unit. */
+export function trainCommand(buildingId: number, unit: UnitKind, n: number): Command {
+  return n > 1 ? { type: 'train', buildingId, unit, count: n } : { type: 'train', buildingId, unit };
 }
 
 export interface TrainEntry {
@@ -57,15 +67,23 @@ export function canTrainAt(b: Pick<Building, 'kind' | 'complete'>): boolean {
 
 export interface QueueView {
   kinds: UnitKind[];
+  /** Units in each entry (batch), parallel to kinds. */
+  counts: number[];
   /** Head-of-queue progress 0..1. */
   head: number;
 }
 
-/** What the queue strip shows: queued kinds head first and the head's progress. */
-export function queueView(b: Pick<Building, 'kind' | 'queue' | 'queueKinds' | 'progress'>): QueueView {
+/** What the queue strip shows: queued kinds and batch sizes head first, and the head's progress. */
+export function queueView(b: Pick<Building, 'kind' | 'queue' | 'queueKinds' | 'queueCounts' | 'progress'>): QueueView {
   const kinds = b.queueKinds?.length ? [...b.queueKinds] : Array.from({ length: b.queue }, () => trainable(b.kind)[0] ?? 'villager');
-  const head = kinds.length ? Math.min(1, Math.max(0, b.progress / UNITS[kinds[0]].trainTime)) : 0;
-  return { kinds, head };
+  const counts = kinds.map((_, i) => b.queueCounts?.[i] ?? 1);
+  const head = kinds.length ? Math.min(1, Math.max(0, b.progress / batchTime(UNITS[kinds[0]].trainTime, counts[0]))) : 0;
+  return { kinds, counts, head };
+}
+
+/** "x5" badge for a batch; empty for a single unit. */
+export function batchBadge(count: number): string {
+  return count > 1 ? `x${count}` : '';
 }
 
 /** Kinds by count, most common first (ties keep UNITS order). */

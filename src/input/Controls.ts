@@ -15,7 +15,7 @@ import { ageLockText, unitAge } from '../ui/research';
 import { Discoveries } from '../ui/Discoveries';
 import { explorerIds } from '../ui/format';
 import { HotkeyHelp } from '../ui/hotkeyHelp';
-import { canTrainAt, isMilitary, kindForSlotKey, trainBatch } from '../ui/military';
+import { canTrainAt, isMilitary, kindForSlotKey, trainBatch, trainCommand } from '../ui/military';
 import { RallyFlag } from '../ui/RallyFlag';
 import { LootFloaters } from '../ui/LootFloaters';
 import { AgeChip } from '../ui/AgeChip';
@@ -394,8 +394,7 @@ export class Controls {
       for (const code of TRAIN_SLOT_KEYS) {
         const unit = plain(code) ? kindForSlotKey(trainer.kind, code, world.players.get(trainer.owner)?.player.civ) : null;
         if (!unit || trainer.upgrading || ageLockText(unitAge(unit), world.players.get(world.localPlayer)?.age ?? 0)) continue;
-        const n = trainBatch(!!input.keyMods(code)?.shift);
-        for (let i = 0; i < n; i++) world.dispatch({ type: 'train', buildingId: trainer.id, unit });
+        world.dispatch(trainCommand(trainer.id, unit, trainBatch(!!input.keyMods(code)?.shift)));
       }
     }
     for (const code of GROUP_CODES) {

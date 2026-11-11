@@ -10,7 +10,7 @@ import { productionOrder } from '../sim/productionQueue';
 import { corralSheep, corralWorker, HERD_CAP } from '../sim/systems/livestock';
 import { carryCap } from '../sim/systems/gather';
 import { activeAuras } from '../sim/systems/auras';
-import { trainTime } from '../sim/systems/train';
+import { batchCount, headTrainTime } from '../sim/systems/train';
 import { researchBlock, statOf } from '../sim/systems/research';
 import { upgradeBlock } from '../sim/systems/buildingUpgrade';
 import { HOTKEYS } from '../input/hotkeys';
@@ -45,12 +45,14 @@ import {
 import { formatCount, groupStatus, portraitKind, selectionName, showExplore, trainLabel, trainProgress } from './format';
 import {
   STANCES,
+  batchBadge,
   canTrainAt,
   hpLabel,
   isMilitary,
   sharedStance,
   totalHp,
   trainBatch,
+  trainCommand,
   trainEntries,
 } from './military';
 import { auraChips } from './auras';
@@ -397,11 +399,11 @@ export class Hud {
     }, AGE_BANNER_MS);
   }
 
-  /** Queue `kind` at the building whose training panel is open (five with Shift). */
+  /** Queue `kind` at the building whose training panel is open (a batch of five with Shift). */
   private trainAt(kind: UnitKind, shift: boolean): void {
     const id = this.trainBuildingId;
     if (id === null) return;
-    for (let i = 0; i < trainBatch(shift); i++) this.world.dispatch({ type: 'train', buildingId: id, unit: kind });
+    this.world.dispatch(trainCommand(id, kind, trainBatch(shift)));
   }
 
   private setStock(stock: Stockpile, pop: number, popCap: number): void {
@@ -698,9 +700,8 @@ export class Hud {
     } else if (panel && panel.research?.length && productionOrder(panel)[0] === 'research') {
       setText(this.el.status, researchLabel(panel.research[0], panel.researchProgress ?? 0, panel.research.length));
     } else if (trainer && b.queue > 0) {
-      const head = b.queueKinds?.[0];
-      const total = head ? trainTime(this.world, b, head) : BALANCE.trainTime;
-      setText(this.el.status, trainLabel(b.queue, b.progress, total, 0, true));
+      // The head batch trains as one: "+N queued" counts the units behind it.
+      setText(this.el.status, trainLabel(b.queue - batchCount(b, 0) + 1, b.progress, headTrainTime(this.world, b), 0, true));
     } else if (b.hp < b.maxHp && b.kind !== 'farm') {
       setText(this.el.status, repairLabel(b.hp, b.maxHp, document.body.classList.contains('touch')));
     } else {
@@ -749,9 +750,8 @@ export class Hud {
   private updateQueue(b: Building): void {
     const q = this.el.queue;
     if (!q) return;
-    const kind = b.queueKinds?.[0];
-    const view = queueItems(b, kind ? trainTime(this.world, b, kind) : undefined);
-    const key = `${b.id}|${view.items.map((it) => (it.type === 'tech' ? `t:${it.tech}` : it.unit)).join(',')}`;
+    const view = queueItems(b, b.queueKinds?.length ? headTrainTime(this.world, b) : undefined);
+    const key = `${b.id}|${view.items.map((it) => (it.type === 'tech' ? `t:${it.tech}` : `${it.unit}x${it.count}`)).join(',')}`;
     if (key !== this.queueKey) {
       this.queueKey = key;
       this.queueHead = '';
@@ -766,7 +766,8 @@ export class Hud {
         } else {
           const doing = i === 0 ? ' (training)' : ' (queued)';
           const name = unitLine(this.world.players.get(b.owner)?.researched ?? new Set(), it.unit).title;
-          item.title = `${name}${doing} — click to cancel`;
+          const batch = it.count > 1 ? ` ×${it.count}` : '';
+          item.title = `${name}${batch}${doing} — click to cancel${batch ? ' the batch' : ''}`;
         }
         item.setAttribute('aria-label', item.title);
         item.addEventListener('click', (e) => {
@@ -775,6 +776,13 @@ export class Hud {
           else this.world.dispatch({ type: 'cancelTrain', buildingId: b.id, index: it.index });
         });
         item.append(icon(it.type === 'tech' ? techIcon(it.tech) : `#i-${it.unit}`, 'queue-icon'));
+        const badge = it.type === 'unit' ? batchBadge(it.count) : '';
+        if (badge) {
+          const count = document.createElement('span');
+          count.className = 'queue-count';
+          count.textContent = badge;
+          item.append(count);
+        }
         if (i === 0) {
           const bar = document.createElement('span');
           bar.className = 'queue-fill';
@@ -946,8 +954,9 @@ export class Hud {
     if (!tc) return;
     const cost = BALANCE.trainCost.food;
     const touch = document.body.classList.contains('touch');
-    setText(this.trainSub, trainLabel(tc.queue, tc.progress, BALANCE.trainTime, cost, touch));
-    const p = trainProgress(tc.queue, tc.progress, BALANCE.trainTime);
+    const total = headTrainTime(this.world, tc);
+    setText(this.trainSub, trainLabel(tc.queue - batchCount(tc, 0) + 1, tc.progress, total, cost, touch));
+    const p = trainProgress(tc.queue, tc.progress, total);
     const offset = (RING * (1 - p)).toFixed(1);
     if (this.trainRing && offset !== this.ringOffset) {
       this.ringOffset = offset;

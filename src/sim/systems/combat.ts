@@ -1038,6 +1038,7 @@ export function destroyBuilding(world: World, b: Building): void {
   world.events.emit({ type: 'died', id: b.id, kind: b.kind, owner: b.owner, pos: { x: b.pos.x, z: b.pos.z } });
   b.queue = 0;
   b.queueKinds = [];
+  b.queueCounts = [];
   b.progress = 0;
   removeBuilding(world, b);
   clearTargets(world, b.id);

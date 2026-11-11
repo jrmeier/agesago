@@ -376,7 +376,7 @@ export class World {
         break;
       }
       case 'train':
-        if (this.buildings.get(cmd.buildingId)?.owner === by) orderTrain(this, cmd.buildingId, cmd.unit);
+        if (this.buildings.get(cmd.buildingId)?.owner === by) orderTrain(this, cmd.buildingId, cmd.unit, cmd.count);
         break;
       case 'build':
         orderBuild(this, cmd.unitIds, cmd.kind, cmd.pos, cmd.rot, by);

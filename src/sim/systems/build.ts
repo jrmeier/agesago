@@ -50,13 +50,15 @@ export function farmFood(world: World, owner: PlayerId): number {
   return Math.round(buildingStat(world, owner, 'farm', 'farmFood', FARM_FOOD));
 }
 
-export function affordable(world: World, cost: Partial<Stockpile>, by: PlayerId): boolean {
+/** Can `by` pay `cost` `times` over (default once)? */
+export function affordable(world: World, cost: Partial<Stockpile>, by: PlayerId, times = 1): boolean {
   const stock = world.stockOf(by);
-  for (const [r, n] of Object.entries(cost) as [ResourceType, number][]) if (stock[r] < n) return false;
+  for (const [r, n] of Object.entries(cost) as [ResourceType, number][]) if (stock[r] < n * times) return false;
   return true;
 }
 
-export function pay(world: World, cost: Partial<Stockpile>, sign: 1 | -1, by: PlayerId): void {
+/** Charge `cost` × `sign` (a negative multiple refunds). */
+export function pay(world: World, cost: Partial<Stockpile>, sign: number, by: PlayerId): void {
   const stock = world.stockOf(by);
   for (const [r, n] of Object.entries(cost) as [ResourceType, number][]) stock[r] -= sign * n;
 }

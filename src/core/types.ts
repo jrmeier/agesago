@@ -343,10 +343,12 @@ export interface Building {
   completedAt?: number;
   /** Construction progress 0..1 (1 when complete). */
   buildProgress: number;
-  /** Units queued for training, in order (head is in progress). */
+  /** Units queued for training, counting every unit of every batch (head is in progress). */
   queue: number;
-  /** Kinds of the queued units, same length as `queue` (head first). */
+  /** Kind of each queue entry (batch), head first. */
   queueKinds?: UnitKind[];
+  /** Units in each queue entry, parallel to queueKinds; absent (older saves) means 1 each. */
+  queueCounts?: number[];
   /** FIFO order across training and research; absent in legacy v2 saves. */
   productionQueue?: ('train' | 'research')[];
   /** Seconds of training completed on the current queue head. */
@@ -386,8 +388,9 @@ export type Command =
   | { type: 'move'; unitIds: EntityId[]; target: Vec2; formation?: FormationKind; facing?: number }
   | { type: 'gather'; unitIds: EntityId[]; nodeId: EntityId }
   /** Train one unit (default: the building's first trainable kind, e.g. a villager at the TC). */
-  | { type: 'train'; buildingId: EntityId; unit?: UnitKind }
-  /** Remove queue entry `index` (0 = the one in training) and refund its cost. */
+  /** Queue `count` (1..MAX_TRAIN_BATCH, default 1) units as one batch; see orderTrain. */
+  | { type: 'train'; buildingId: EntityId; unit?: UnitKind; count?: number }
+  /** Remove queue entry (batch) `index` (0 = the one in training) and refund its whole cost. */
   | { type: 'cancelTrain'; buildingId: EntityId; index: number }
   /** Attack a unit or building. */
   | { type: 'attack'; unitIds: EntityId[]; targetId: EntityId }

@@ -161,6 +161,27 @@ cost, paid by the repairer's owner one whole resource at a time as the hp go up;
 pay the next unit stops repairing. A damaged ship near an own finished dock heals for free at
 `dockHealRate` (1.5 hp/s).
 
+**Batch training (M15-4).** Shift-click or Shift+hotkey on a train button orders a batch of five as
+one queue entry, as 0 A.D.'s BatchTimeModifier does. A batch of `n` (1–10) takes
+
+```
+batch_time = unit_train_time × n ^ BALANCE.batchExponent      (batchExponent = 0.8)
+```
+
+so five villagers take 8 × 5^0.8 ≈ 29.0 s instead of 40 s (≈ 5.8 s each), and ten take ≈ 50.5 s.
+All units of the batch appear together when it completes. The whole batch is paid when it is
+ordered and refunded in full when cancelled. Ordering it needs pop room for every unit (counting
+units already queued anywhere; siege takes `UnitSpec.pop` slots each). A batch that has not started also waits, without progress, until
+the owner has pop room for all of it, for example after a house is lost. A batch order joins the
+last queue entry when that entry is the same kind, has not started, has no research queued after it,
+and stays at ten units or fewer. Otherwise it starts a new entry. Single orders, including all AI
+orders, always add their own one-unit entry, so the AI trains exactly as before.
+
+**Age cost scale.** Villagers here gather about 0.7–0.8 resources/s and train in 8 s, so incomes
+are roughly 4× an AoE2 game's. That puts the scripted economy at about 900/min at 10 min,
+2,300/min at 15 min and 3,000/min at 25 min. Each age costs a few minutes of that income on top
+of the army upkeep:
+
 **Age cost scale.** Villagers here gather about 0.7–0.8 resources/s and train in 8 s, so incomes
 are roughly 4× an AoE2 game's. That puts the scripted economy at about 700/min at 3 min,
 2,300/min at 10 min, 2,700/min at 15 min and 3,700/min at 20 min. Each age costs modest

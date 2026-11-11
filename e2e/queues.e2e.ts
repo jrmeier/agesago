@@ -145,5 +145,40 @@ test('queue cancel, the rally flag, and the idle badge work', async ({ page }, t
   const after = await page.evaluate(() => (window as any).game.world.stock.food as number);
   expect(after - before).toBe(50);
   if (phone) await expect(page.locator('body')).toHaveClass(/touch/);
+
+  // Shift on a train button orders five as one batch: one queue entry with an x5 badge, paid up front.
+  await page.evaluate(() => {
+    const g = (window as any).game;
+    g.world.stock.food = 1000;
+    // Room for the whole batch: pad the pop cap with a finished house (cap counts complete buildings).
+    const tc = g.world.townCenter;
+    if (g.world.popCapOf(1) - g.world.popOf(1) < 5) {
+      const id = g.world.allocId();
+      g.world.buildings.set(id, {
+        ...tc, id, kind: 'house', queue: 0, queueKinds: [], queueCounts: [], productionQueue: [],
+        pos: { x: tc.pos.x + 40, z: tc.pos.z + 40 }, rally: undefined,
+      });
+    }
+  });
+  const villagerBtn = '#train-grid [data-train="villager"]';
+  await expect(page.locator(villagerBtn)).toBeVisible();
+  const food = await page.evaluate(() => (window as any).game.world.stock.food as number);
+  if (phone) await page.locator(villagerBtn).tap({ modifiers: ['Shift'] });
+  else await page.locator(villagerBtn).click({ modifiers: ['Shift'] });
+  await expect(queued).toHaveCount(1);
+  await expect(page.locator('#train-queue .queue-item .queue-count')).toHaveText('x5');
+  const batch = await page.evaluate(() => {
+    const g = (window as any).game;
+    return { queue: g.world.townCenter.queue, counts: g.world.townCenter.queueCounts, food: g.world.stock.food };
+  });
+  expect(batch).toEqual({ queue: 5, counts: [5], food: food - 250 });
+  if (phone) {
+    const q = await queued.boundingBox();
+    expect(q && q.width >= 44 && q.height >= 44).toBe(true);
+  }
+  // Cancelling the batch refunds all five.
+  await activate(page, '#train-queue .queue-item', phone);
+  await expect(queued).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).game.world.stock.food as number)).toBe(food);
   expect(errors).toEqual([]);
 });

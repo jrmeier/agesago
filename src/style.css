@@ -906,6 +906,27 @@ body.placing .selection-panel * {
   height: 100%;
 }
 
+.queue-count {
+  position: absolute;
+  left: 50%;
+  bottom: 1px;
+  transform: translateX(-50%);
+  padding: 0 3px;
+  border-radius: 6px;
+  background: rgba(20, 12, 6, 0.82);
+  color: #f3e3c0;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 11px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+body.touch .queue-count {
+  font-size: 11px;
+  line-height: 13px;
+}
+
 .queue-fill {
   position: absolute;
   left: 0;

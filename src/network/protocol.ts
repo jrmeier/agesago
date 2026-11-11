@@ -5,9 +5,10 @@ import { TECHS } from '../core/techs';
 import { FORMATION_KINDS, type Command, type FormationKind } from '../core/types';
 import { UNITS } from '../core/units';
 import { WONDER_SECONDS_MAX, WONDER_SECONDS_MIN, type WonderRules } from '../core/wonder';
+import { BALANCE } from '../sim/balance';
 
-/** 11: the 'guard' order. 10: the 'patrol' command. 9: fortress and champions (M16-5). 8: siege engines (pop costs, pack/unpack, splash). 7: wonder buildings and the wonder victory option (MatchConfig.wonder). 6: 'repair' command and passive ship healing at docks. 5: upgrade chains replace the tower techs. 4: in-place building upgrades (upgradeBuilding/cancelUpgrade). 3: trained land units can work. */
-export const NETWORK_VERSION = 11;
+/** 12: batch training ('train' count, M15-4). 11: the 'guard' order. 10: the 'patrol' command. 9: fortress and champions (M16-5). 8: siege engines (pop costs, pack/unpack, splash). 7: wonder buildings and the wonder victory option (MatchConfig.wonder). 6: 'repair' command and passive ship healing at docks. 5: upgrade chains replace the tower techs. 4: in-place building upgrades (upgradeBuilding/cancelUpgrade). 3: trained land units can work. */
+export const NETWORK_VERSION = 12;
 export const TICKS_PER_TURN = 4;
 export const HASH_EVERY = 25;
 export const MAX_COMMANDS = 64;
@@ -53,7 +54,8 @@ export function validCommand(v: unknown): v is Command {
     case 'attack': case 'repair': case 'guard': return ids(v.unitIds) && id(v.targetId);
     case 'stop': case 'explore': return ids(v.unitIds);
     case 'stance': return ids(v.unitIds) && ['aggressive', 'defensive', 'standGround', 'passive'].includes(String(v.stance));
-    case 'train': return id(v.buildingId) && (v.unit === undefined || typeof v.unit === 'string' && Object.hasOwn(UNITS, v.unit));
+    case 'train': return id(v.buildingId) && (v.unit === undefined || typeof v.unit === 'string' && Object.hasOwn(UNITS, v.unit))
+      && (v.count === undefined || typeof v.count === 'number' && Number.isInteger(v.count) && v.count >= 1 && v.count <= BALANCE.maxTrainBatch);
     case 'cancelTrain': case 'cancelResearch': return id(v.buildingId) && index(v.index);
     case 'gateLivestock': return id(v.buildingId) && typeof v.open === 'boolean';
     case 'tend': case 'construct': case 'garrison': return ids(v.unitIds) && id(v.buildingId);

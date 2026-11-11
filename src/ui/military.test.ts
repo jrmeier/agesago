@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Stockpile } from '../core/types';
 import { UNITS } from '../core/units';
+import { BALANCE } from '../sim/balance';
 import { portraitKind, selectionName } from './format';
 import {
   canTrainAt,
@@ -13,7 +14,9 @@ import {
   sharedStance,
   totalHp,
   trainBatch,
+  trainCommand,
   trainEntries,
+  batchBadge,
 } from './military';
 
 const stock = (s: Partial<Stockpile>): Stockpile => ({ food: 0, wood: 0, gold: 0, stone: 0, ...s });
@@ -109,6 +112,20 @@ describe('training panel', () => {
     expect(v.head).toBeCloseTo(7 / UNITS.swordsman.trainTime);
     // Older sims without queueKinds: assume the default unit.
     expect(queueView({ kind: 'townCenter', queue: 2, progress: 0 }).kinds).toEqual(['villager', 'villager']);
-    expect(queueView({ kind: 'townCenter', queue: 0, progress: 0 })).toEqual({ kinds: [], head: 0 });
+    expect(queueView({ kind: 'townCenter', queue: 0, progress: 0 })).toEqual({ kinds: [], counts: [], head: 0 });
+  });
+
+  it('shows batch sizes, and the head progress across the whole batch', () => {
+    const v = queueView({ kind: 'barracks', queue: 6, queueKinds: ['hoplite', 'archer'], queueCounts: [5, 1], progress: 4 });
+    expect(v.counts).toEqual([5, 1]);
+    expect(v.head).toBeCloseTo(4 / (UNITS.hoplite.trainTime * 5 ** BALANCE.batchExponent));
+    expect(queueView({ kind: 'townCenter', queue: 2, queueKinds: ['villager', 'villager'], progress: 0 }).counts).toEqual([1, 1]);
+    expect(batchBadge(5)).toBe('x5');
+    expect(batchBadge(1)).toBe('');
+  });
+
+  it('sends one batched train command for shift orders', () => {
+    expect(trainCommand(7, 'hoplite', trainBatch(true))).toEqual({ type: 'train', buildingId: 7, unit: 'hoplite', count: 5 });
+    expect(trainCommand(7, 'hoplite', trainBatch(false))).toEqual({ type: 'train', buildingId: 7, unit: 'hoplite' });
   });
 });

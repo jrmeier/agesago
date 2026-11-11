@@ -1,6 +1,7 @@
 import { BUILDINGS } from '../core/buildings';
 import type { Building, BuildingKind, Command, EntityId, PlayerId, ResourceType, Stockpile, Unit, Vec2 } from '../core/types';
 import { isAnimal, popCost } from '../core/units';
+import { buildingQueuedPop } from '../sim/systems/train';
 import type { World } from '../sim/World';
 import type { Intel } from './intel';
 import type { Profile } from './profile';
@@ -67,7 +68,7 @@ export function snapshot(world: World, player: PlayerId, explorers?: ReadonlySet
   for (const b of world.buildings.values()) {
     if (b.owner !== player) continue;
     s.buildings.push(b);
-    for (let i = 0; i < b.queue; i++) s.popUsed += popCost(b.queueKinds?.[i] ?? 'villager');
+    s.popUsed += buildingQueuedPop(b);
     s.count[b.kind] = (s.count[b.kind] ?? 0) + 1;
     if (!b.complete) s.building[b.kind] = (s.building[b.kind] ?? 0) + 1;
     if (b.kind === 'townCenter' && !s.tc) s.tc = b;

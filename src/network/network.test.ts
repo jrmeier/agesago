@@ -81,6 +81,8 @@ describe('online command relay', () => {
     expect(validClientMessage(input([{ type: 'repair', unitIds: [1], targetId: -1 }]))).toBe(false);
     expect(validClientMessage(input(Array.from({ length: 65 }, () => ({ type: 'resign' }))))).toBe(false);
     expect(validClientMessage(input([{ type: 'research', buildingId: 1, tech: '__proto__' }]))).toBe(false);
+    expect(validClientMessage(input([{ type: 'train', buildingId: 1, unit: 'hoplite', count: 5 }]))).toBe(true);
+    for (const count of [0, 11, 2.5, '5']) expect(validClientMessage(input([{ type: 'train', buildingId: 1, count }]))).toBe(false);
   });
   it('accepts the wonder victory option in a room config and rejects malformed ones', () => {
     const create = (wonder: unknown) => ({ type: 'create', version: NETWORK_VERSION, config: { seed: 1, players: 2, wonder }, name: 'Host' });

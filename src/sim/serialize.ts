@@ -4,6 +4,7 @@ import { BUILDINGS, MARKET, nextUpgrade } from '../core/buildings';
 import { packs, UNITS } from '../core/units';
 import { TECHS } from '../core/techs';
 import type { Age, Building, EntityId, Heightfield, MarketResource, Player, PlayerId, ResourceNode, Stockpile, TechId, Unit } from '../core/types';
+import { BALANCE } from './balance';
 import { generateMap } from './mapgen';
 import { World } from './World';
 import type { CombatState, FleeState, PendingHit } from './systems/combat';
@@ -19,6 +20,7 @@ import type { ExplorationSite, PriestOrder } from './systems/explorationRewards'
 import { normalizeWonderRules, type GameResult, type WonderCountdown, type WonderRules } from './systems/victory';
 
 /**
+ * 13: M15-4 batch training (Building.queueCounts); older saves load every queue entry as 1 unit.
  * 12: M17-3 guard order (CombatState.order 'guard' with CombatState.guard); older saves have no guards.
  * 11: M17-2 patrol routes on units (Unit.patrol); older saves have none.
  * 10: M17-1 group formations (Unit.formation: id, shared speed cap, arrival facing, slot).
@@ -34,7 +36,7 @@ import { normalizeWonderRules, type GameResult, type WonderCountdown, type Wonde
  * 3: M14-1 in-place building upgrades (Building.tier, Building.upgrading).
  * 2: M8 research (researched techs, ages, market prices, building research queues).
  */
-export const SAVE_VERSION = 12;
+export const SAVE_VERSION = 13;
 /** Oldest version that still loads; v2 buildings load at tier 0 with no upgrade running, v2–9 units out of formation. */
 export const MIN_SAVE_VERSION = 2;
 
@@ -313,6 +315,8 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
       delete u.packTimer;
     }
   }
+  // Pre-batch saves: every queue entry is one unit.
+  if (saved.version < 13) for (const b of saved.buildings) delete b.queueCounts;
   restoreMap(world.buildings, saved.buildings.map((b) => [b.id, b]));
   for (const b of world.buildings.values()) {
     const spec = BUILDINGS[b.kind];
@@ -351,9 +355,16 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
       throw new Error('Invalid save: building upgrade');
     }
     if (b.research?.some((t) => !Object.hasOwn(TECHS, t))) throw new Error('Invalid save: research queue');
+    // One 'train' production entry per queue entry (batch); b.queue counts units.
+    const entries = b.queueKinds?.length || b.queue;
+    if (b.queueCounts !== undefined && (!Array.isArray(b.queueCounts) || b.queueCounts.length !== entries
+      || b.queueCounts.some((n) => !Number.isInteger(n) || n < 1 || n > BALANCE.maxTrainBatch)
+      || b.queueCounts.reduce((sum, n) => sum + n, 0) !== b.queue)) {
+      throw new Error('Invalid save: training batches');
+    }
     if (b.productionQueue !== undefined && (!Array.isArray(b.productionQueue)
       || b.productionQueue.some((k) => k !== 'train' && k !== 'research')
-      || b.productionQueue.filter((k) => k === 'train').length !== b.queue
+      || b.productionQueue.filter((k) => k === 'train').length !== entries
       || b.productionQueue.filter((k) => k === 'research').length !== (b.research?.length ?? 0))) {
       throw new Error('Invalid save: production queue');
     }

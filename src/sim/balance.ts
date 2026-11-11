@@ -17,6 +17,10 @@ export const BALANCE = {
   farmInterval: 0.85,
   trainCost: { food: 50 },
   trainTime: 8,
+  /** A batch of n units trains in unitTrainTime × n^batchExponent seconds (0 A.D.'s BatchTimeModifier). */
+  batchExponent: 0.8,
+  /** Most units one queue entry (batch) may hold. */
+  maxTrainBatch: 10,
   /**
    * Legacy display value only. The real cap is World.popCap (houses + Town Center, ≤ MAX_POP),
    * which 'train' enforces.
