@@ -1,10 +1,14 @@
 import * as THREE from 'three';
-import { BUILDINGS } from '../core/buildings';
+import { BUILDINGS, BUILDING_UPGRADES } from '../core/buildings';
 import type { CivId } from '../core/civilizations';
 import type { BuildingKind } from '../core/types';
 import { TREE_TRUNK, SELECTION } from './palette';
 import { bowParts, merge, modelMaterial, part, type Triple } from './models';
 import { amphoraParts, bevelBox, block, cartGeometry, crateParts, gableParts, roofParts } from './props';
+import {
+  civCrest, fortifiedWallParts, largeHouseParts, militaryLevel2Parts, reinforcedPalisadeParts, townCenterTierParts,
+  upgradeScaffoldParts,
+} from './tierModels';
 
 const STONE = 0xc5bea6;
 const WOOD = 0x82603b;
@@ -12,10 +16,16 @@ const WOOD = 0x82603b;
 export interface BuildingModelOptions {
   color?: number;
   seed?: number;
-  /** Upgrade tier from buildingTier(): watch tower 0..2, town centre 0..1. Other kinds ignore it. */
+  /** The building's own upgrade tier (M14-1), clamped by modelTier to its chain length. */
   tier?: number;
-  /** Owner's civilization: picks the wonder's monument and the fortress style (Hellenic when absent; other kinds are only tinted, in buildingVisuals). */
+  /**
+   * Owner's civilization: picks the wonder's monument and the fortress style (Hellenic when
+   * absent), and upgraded tiers carry its finial (see tierModels.civCrest). Other kinds are only
+   * tinted, in buildingVisuals.
+   */
   civ?: CivId;
+  /** Fortified Town Center research: corner bastions on the Town Center at any tier. */
+  fortified?: boolean;
 }
 
 /**
@@ -40,9 +50,9 @@ function fitFootprint(object: THREE.Group, kind: BuildingKind, anchors: Record<s
   object.userData.anchors = fitted;
 }
 
-/** Clamp a requested upgrade tier to what a kind can show. */
+/** Clamp a requested upgrade tier to what a kind can show: one model per step of its upgrade chain. */
 export function modelTier(kind: BuildingKind, tier: number | undefined): number {
-  const max = kind === 'watchTower' ? 2 : kind === 'townCenter' ? 1 : 0;
+  const max = BUILDING_UPGRADES[kind]?.length ?? 0;
   const t = Number.isFinite(tier) ? Math.trunc(tier as number) : 0;
   return Math.max(0, Math.min(max, t));
 }
@@ -55,7 +65,7 @@ function section(object: THREE.Group, name: string, pieces: THREE.BufferGeometry
 }
 
 /** Ancient civic centre, ground-anchored with its portico facing +z. */
-export function buildTownCenter(baseHeight: number, opts?: { color?: number; tier?: number }): THREE.Group {
+export function buildTownCenter(baseHeight: number, opts?: BuildingModelOptions): THREE.Group {
   const parts = [
     part(bevelBox(3.25, 0.26, 3.25), 0xb4ae98, [0, 0.13, 0]),
     part(bevelBox(3.03, 0.15, 3.03), 0xc9c2a9, [0, 0.335, 0]),
@@ -85,11 +95,13 @@ export function buildTownCenter(baseHeight: number, opts?: { color?: number; tie
     parts.push(block([1.84, 0.08, 0.06], 0x446c78, [side * 0.79, 3.24, 1.62], [0, 0, -side * angle]));
     parts.push(block([0.4, 0.57, 0.025], 0x685a43, [side * 1.445, 1.77, -0.47], [0, Math.PI / 2, 0]));
   }
-  const fortified = modelTier('townCenter', opts?.tier) >= 1;
+  const tier = modelTier('townCenter', opts?.tier);
+  const fortified = opts?.fortified === true;
   if (fortified) parts.push(...fortifiedTownCenterParts());
+  parts.push(...townCenterTierParts(tier, opts?.color ?? 0x9e3b26, opts?.civ));
   const shellEnd = parts.length;
-  // The fortified centre trades its porch jars for masonry to stay inside the triangle budget.
-  if (!fortified) {
+  // Fortified and upgraded centres trade their porch jars for masonry to stay inside the triangle budget.
+  if (!fortified && tier === 0) {
     parts.push(...amphoraParts(-1.33, 0.41, 0.7, 0.7));
     parts.push(...amphoraParts(1.34, 0.41, 0.6, 0.65));
   }
@@ -102,7 +114,7 @@ export function buildTownCenter(baseHeight: number, opts?: { color?: number; tie
   parts.push(block([0.27, 0.045, 0.038], SELECTION, [-1.235, 3.96, -0.78]));
   const object = new THREE.Group();
   object.name = 'town-center';
-  object.userData.tier = modelTier('townCenter', opts?.tier);
+  object.userData.tier = tier;
   const material = modelMaterial();
   const sections: [string, THREE.BufferGeometry[]][] = [
     ['plinth', parts.slice(0, 4)], ['agora', parts.slice(4, shellEnd)],
@@ -134,7 +146,7 @@ function fortifiedTownCenterParts(): THREE.BufferGeometry[] {
 }
 
 /** Guard Tower (tier 1) and Fortress Tower (tier 2); both carry a team banner. */
-function upgradedTowerParts(tier: number, color: number): THREE.BufferGeometry[] {
+function upgradedTowerParts(tier: number, color: number, civ?: CivId): THREE.BufferGeometry[] {
   const parts: THREE.BufferGeometry[] = [];
   const masonry = tier >= 2 ? 0xc9c0a6 : 0xb7ad92;
   let top: number;
@@ -192,6 +204,7 @@ function upgradedTowerParts(tier: number, color: number): THREE.BufferGeometry[]
   parts.push(block([0.06, 1.3, 0.06], TREE_TRUNK, [0, top + 0.65, 0]));
   parts.push(block([0.5, 0.34, 0.03], color, [0.28, top + 1.08, 0]));
   parts.push(part(new THREE.OctahedronGeometry(0.06, 0), 0xb89b53, [0, top + 1.33, 0]));
+  parts.push(...civCrest(civ, tier === 1 ? [0, 4.48, 0.79] : [0, 4.96, 0.84], 0.8));
   return parts;
 }
 
@@ -529,7 +542,13 @@ export function buildingModel(kind: BuildingKind, opts?: BuildingModelOptions): 
   object.userData.tier = tier;
   let anchors: Record<string, Triple> = {};
   const parts = [block([w, 0.06, d], kind === 'farm' ? 0x73533a : 0xaaa18a, [0, 0.03, 0])];
-  if (kind === 'house') {
+  if (kind === 'house' && tier > 0) {
+    parts.push(...largeHouseParts(seed, opts?.civ));
+  } else if (kind === 'palisade' && tier > 0) {
+    parts.push(...reinforcedPalisadeParts(opts?.civ));
+  } else if (kind === 'stoneWall' && tier > 0) {
+    parts.push(...fortifiedWallParts(opts?.civ));
+  } else if (kind === 'house') {
     parts.push(part(bevelBox(2.15, 1.48, 2.07), 0xe2dbc3, [0, 0.8, -0.09]));
     parts.push(block([2.19, 0.22, 2.11], STONE, [0, 0.17, -0.09]));
     parts.push(...gableParts(2.15, 2.07, 1.54, 0.65, 0xe2dbc3));
@@ -654,7 +673,7 @@ export function buildingModel(kind: BuildingKind, opts?: BuildingModelOptions): 
     for (const x of [-1.01, 1.01]) parts.push(block([0.08, 0.33, 0.44], STONE, [x, 0.265, 1.32]));
     parts.push(block([1.92, 0.015, 0.34], 0x527779, [0, 0.285, 1.32]));
   } else if (kind === 'watchTower' && tier > 0) {
-    parts.push(...upgradedTowerParts(tier, opts?.color ?? 0x9e3b26));
+    parts.push(...upgradedTowerParts(tier, opts?.color ?? 0x9e3b26, opts?.civ));
   } else if (kind === 'forge') {
     const forge = forgeParts();
     parts.push(...forge.parts);
@@ -746,6 +765,7 @@ export function buildingModel(kind: BuildingKind, opts?: BuildingModelOptions): 
     }
   }
   const military = kind === 'barracks' || kind === 'archeryRange' || kind === 'stable';
+  if (military && tier > 0) parts.push(...militaryLevel2Parts(kind, opts?.civ));
   // Upgraded towers fly their banner from the roof instead of a corner pole.
   if ((military || opts?.color !== undefined) && !(kind === 'watchTower' && tier > 0)) {
     const height =
@@ -753,8 +773,10 @@ export function buildingModel(kind: BuildingKind, opts?: BuildingModelOptions): 
       : kind === 'archeryRange' ? 3.48
       : kind === 'stable' ? 2.82
       : kind === 'watchTower' ? 4.4
-      : kind === 'stoneWall' || kind === 'gate' ? 2.1
-      : kind === 'palisade' ? 1.8
+      : kind === 'stoneWall' ? (tier > 0 ? 2.6 : 2.1)
+      : kind === 'gate' ? 2.1
+      : kind === 'palisade' ? (tier > 0 ? 2.2 : 1.8)
+      : kind === 'house' && tier > 0 ? 3.1
       : kind === 'farm' ? 0.5
       : kind === 'forge' ? 2.2
       : kind === 'market' ? 2.0
@@ -769,6 +791,18 @@ export function buildingModel(kind: BuildingKind, opts?: BuildingModelOptions): 
   section(object, kind, parts, modelMaterial());
   fitFootprint(object, kind, anchors);
   return object;
+}
+
+/**
+ * Scaffold cage shown while a finished building upgrades in place (M14-4): one merged mesh in
+ * footprint coordinates, reaching just above `top` (the current model's height).
+ */
+export function upgradeScaffold(kind: BuildingKind, top: number): THREE.Mesh {
+  const { w, d } = BUILDINGS[kind].size;
+  const mesh = new THREE.Mesh(merge(upgradeScaffoldParts(w, d, top)), modelMaterial());
+  mesh.name = 'upgrade-scaffolding';
+  mesh.castShadow = mesh.receiveShadow = true;
+  return mesh;
 }
 
 /** Four additive, prebuilt stages. setProgress only flips visibility, including on rewind. */

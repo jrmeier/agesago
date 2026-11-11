@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BUILDINGS, FARM_FOOD } from '../core/buildings';
+import { BUILDINGS, BUILDING_UPGRADES, FARM_FOOD } from '../core/buildings';
 import { detectQuality, type Quality } from '../core/quality';
 import { isAnimal, UNITS } from '../core/units';
 import {
@@ -39,7 +39,7 @@ import { PromotionSparkles, RankChevrons } from './rankMarks';
 import { chunkCoord, SpatialInstances } from './instanceChunks';
 import { berryLodGeometry, goldLodGeometry, stoneLodGeometry, stoneNodeGeometry, treeLodGeometry } from './lod';
 import { createUnitAvatar, type UnitAvatar } from './modelBridge';
-import { applyCarryCapacity, buildingRenderTier, unitTiers } from './tiers';
+import { applyCarryCapacity, buildingFortified, unitTiers } from './tiers';
 import {
   berryBushGeometry,
   carcassGeometry,
@@ -153,8 +153,23 @@ const BUILDING_HEIGHT: Record<BuildingKind, number> = {
   wonder: 6.2,
   fortress: 5.2,
 };
-/** Extra height of upgraded watch towers (Guard 1, Fortress 2) over BUILDING_HEIGHT. */
-const TOWER_TIER_EXTRA = [0, 1.1, 1.6];
+/** Extra height of upgraded tiers over BUILDING_HEIGHT (health bars, picking), by kind and tier. */
+const TIER_EXTRA: Partial<Record<BuildingKind, readonly number[]>> = {
+  watchTower: [0, 1.1, 1.6],
+  house: [0, 1.2],
+  townCenter: [0, 0.6, 1.1, 1.2],
+  archeryRange: [0, 0.6],
+  palisade: [0, 0.4],
+  stoneWall: [0, 0.5],
+};
+
+/** Fraction done of a building's running in-place upgrade, or null when it is not upgrading. */
+function upgradeFraction(building: Building): number | null {
+  const up = building.upgrading;
+  if (!up) return null;
+  const time = BUILDING_UPGRADES[building.kind]?.[up.to - 1]?.time ?? 0;
+  return time > 0 ? Math.min(1, Math.max(0, up.progress / time)) : 0;
+}
 
 /**
  * Visuals for every sim entity: chunked instanced resources (near mesh + far LOD),
@@ -621,8 +636,8 @@ export class EntityViews {
 
   private mountBuilding(building: Building): void {
     if (this.buildingViews.has(building.id)) return;
-    const visual = createBuildingVisual(building.kind, this.ownerColor(building.owner),
-      buildingRenderTier(this.researchedBy(building.owner), building.kind, building.tier), this.world.players.get(building.owner)?.player.civ);
+    const visual = createBuildingVisual(building.kind, this.ownerColor(building.owner), building.tier ?? 0,
+      this.world.players.get(building.owner)?.player.civ, buildingFortified(this.researchedBy(building.owner), building.kind));
     visual.object.userData.entityId = building.id;
     this.poseBuilding(visual, building.kind, building.pos, building.rot);
     visual.setProgress(building.buildProgress, building.complete);
@@ -670,7 +685,7 @@ export class EntityViews {
 
   private refreshTier(building: Building, view: BuildingVisual): void {
     if (!this.tierDirty.delete(building.id)) return;
-    if (!view.setTier(buildingRenderTier(this.researchedBy(building.owner), building.kind, building.tier))) return;
+    if (!view.setTier(building.tier ?? 0, buildingFortified(this.researchedBy(building.owner), building.kind))) return;
     this.applyBuildingShadows(view.object);
     if (this.fog) this.fogBuilding(view.object);
   }
@@ -678,9 +693,10 @@ export class EntityViews {
   /** Roof height above the ground of a building's model (hp bars and upgrade badges sit over it). */
   buildingHeight(kind: BuildingKind, id: EntityId): number {
     const base = BUILDING_HEIGHT[kind];
-    if (kind !== 'watchTower') return base;
+    const extra = TIER_EXTRA[kind];
+    if (!extra) return base;
     const tier = (this.buildingViews.get(id) ?? this.memoryViews.get(id))?.tier ?? 0;
-    return base + (TOWER_TIER_EXTRA[tier] ?? 0);
+    return base + (extra[tier] ?? 0);
   }
 
   private onDied(e: { id: EntityId; kind: EntityKind; owner: PlayerId; pos: Vec2 }): void {
@@ -791,8 +807,13 @@ export class EntityViews {
       if (building.kind === 'farm') {
         view.setFarmFood(building.complete ? FARM_FOOD : 0);
       }
-      const showBar = !building.complete || this.selected.has(building.id);
-      view.setBar(showBar, building.buildProgress, camera);
+      const upgrade = upgradeFraction(building);
+      if (view.setUpgrading(upgrade)) {
+        this.applyBuildingShadows(view.object);
+        if (this.fog) this.fogBuilding(view.object);
+      }
+      const showBar = !building.complete || upgrade !== null || this.selected.has(building.id);
+      view.setBar(showBar, upgrade ?? building.buildProgress, camera);
       view.object.visible = true;
     }
     for (const [id, view] of this.memoryViews) {

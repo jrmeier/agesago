@@ -2,7 +2,7 @@ import { CIVS, type CivId } from '../core/civilizations';
 import * as THREE from 'three';
 import { BUILDINGS, FARM_FOOD, footprint } from '../core/buildings';
 import { SEA_LEVEL, type BuildingKind, type Heightfield, type Vec2 } from '../core/types';
-import { buildingModel, foundationModel, modelTier } from './buildings';
+import { buildingModel, foundationModel, modelTier, upgradeScaffold } from './buildings';
 import { prefersReducedMotion } from './tiers';
 
 /** Placement ghost tints. Outline uses these directly; the model lerps toward them. */
@@ -34,11 +34,18 @@ export interface BuildingVisual {
   /** Billboard progress bar. Shown while the building is selected or still under construction. */
   setBar(show: boolean, progress: number, camera: THREE.Camera): void;
   /**
-   * Swap to the model for an upgrade tier (watch tower 0..2, town centre 0..1) in place.
+   * Swap to the model for an upgrade tier (clamped by modelTier) and, for the Town Center, the
+   * Fortified Town Center bastions, in place.
    * Returns true when meshes were replaced, so the caller can re-apply fog and shadows.
    */
-  setTier(tier: number): boolean;
+  setTier(tier: number, fortified?: boolean): boolean;
   readonly tier: number;
+  /**
+   * Scaffold overlay while the building upgrades in place: `progress` 0..1, or null when idle.
+   * Returns true when the scaffold mesh was created, so the caller can re-apply fog and shadows.
+   */
+  setUpgrading(progress: number | null): boolean;
+  readonly upgrading: boolean;
 }
 
 /** Lowest terrain sample under the rotated footprint, clamped to sea level. */
@@ -60,15 +67,17 @@ export function footprintMinY(hf: Heightfield, kind: BuildingKind, pos: Vec2, ro
   return min === Infinity ? SEA_LEVEL : min;
 }
 
-export function createBuildingVisual(kind: BuildingKind, color?: number, tier = 0, civ?: CivId): BuildingVisual {
+export function createBuildingVisual(kind: BuildingKind, color?: number, tier = 0, civ?: CivId, fortified = false): BuildingVisual {
   const root = new THREE.Group();
   root.name = kind === 'townCenter' ? 'town-center' : `building:${kind}`;
   let currentTier = modelTier(kind, tier);
-  let stages = foundationModel(kind, { tier: currentTier, civ });
+  let currentFortified = kind === 'townCenter' && fortified;
+  let stages = foundationModel(kind, { tier: currentTier, civ, fortified: currentFortified });
   let foundation = stages.object;
   foundation.name = 'foundation';
   ownMaterials(foundation);
-  let finished = finishedFor(kind, color, currentTier, civ);
+  let finished = finishedFor(kind, color, currentTier, civ, currentFortified);
+  let scaffold: THREE.Mesh | null = null;
   paintArchitecture(foundation,civ,kind);
   paintArchitecture(finished,civ,kind);
   const bar = progressBar();
@@ -89,24 +98,51 @@ export function createBuildingVisual(kind: BuildingKind, color?: number, tier = 
     get tier(): number {
       return currentTier;
     },
-    setTier(next: number): boolean {
+    get upgrading(): boolean {
+      return scaffold?.visible === true;
+    },
+    setTier(next: number, nextFortified = false): boolean {
       const t = modelTier(kind, next);
-      if (t === currentTier) return false;
+      const f = kind === 'townCenter' && nextFortified;
+      if (t === currentTier && f === currentFortified) return false;
       currentTier = t;
+      currentFortified = f;
       root.remove(foundation, finished);
       disposeTree(foundation);
       disposeTree(finished);
-      stages = foundationModel(kind, { tier: t, civ });
+      // The scaffold is sized to the old model; the next upgrade builds a fresh one.
+      if (scaffold) {
+        root.remove(scaffold);
+        disposeTree(scaffold);
+        scaffold = null;
+      }
+      stages = foundationModel(kind, { tier: t, civ, fortified: f });
       foundation = stages.object;
       foundation.name = 'foundation';
       ownMaterials(foundation);
-      finished = finishedFor(kind, color, t, civ);
+      finished = finishedFor(kind, color, t, civ, f);
       paintArchitecture(foundation,civ,kind);
       paintArchitecture(finished,civ,kind);
       root.add(foundation, finished);
       bar.position.y = modelTop(finished) + 0.55;
       visual.setProgress(lastProgress, lastComplete);
       return true;
+    },
+    setUpgrading(progress: number | null): boolean {
+      const active = progress !== null && lastComplete;
+      if (!active) {
+        if (scaffold) scaffold.visible = false;
+        return false;
+      }
+      let created = false;
+      if (!scaffold) {
+        scaffold = upgradeScaffold(kind, modelTop(finished));
+        ownMaterials(scaffold);
+        root.add(scaffold);
+        created = true;
+      }
+      scaffold.visible = true;
+      return created;
     },
     setProgress(progress: number, complete: boolean): void {
       lastProgress = progress;
@@ -190,11 +226,11 @@ export function tintGhost(ghost: THREE.Group, valid: boolean): void {
   });
 }
 
-function finishedFor(kind: BuildingKind, color?: number, tier = 0, civ?: CivId): THREE.Object3D {
+function finishedFor(kind: BuildingKind, color?: number, tier = 0, civ?: CivId, fortified = false): THREE.Object3D {
   const group = new THREE.Group();
   group.name = 'finished';
   // Farms keep the animated tilled field (crops track food); other kinds use the ancient-world models.
-  const model = kind === 'farm' ? farmField() : buildingModel(kind, { seed: 1, color, tier, civ });
+  const model = kind === 'farm' ? farmField() : buildingModel(kind, { seed: 1, color, tier, civ, fortified });
   if (kind !== 'farm') ownMaterials(model);
   group.add(model);
   if (kind === 'forge') addForgeEffects(group, model.userData.anchors as Record<string, [number, number, number]> | undefined);

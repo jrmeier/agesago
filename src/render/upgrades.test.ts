@@ -2,14 +2,15 @@ import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { qualityTier } from '../core/quality';
 import { currentSettings, initSettings, replaceSettings } from '../game/settings';
-import { BUILDINGS } from '../core/buildings';
+import { BUILDING_UPGRADES, BUILDINGS } from '../core/buildings';
+import { CIV_IDS } from '../core/civilizations';
 import type { TechId } from '../core/techs';
 import type { BuildingKind } from '../core/types';
 import { buildingModel, foundationModel, modelTier } from './buildings';
 import { createBuildingVisual } from './buildingVisuals';
 import { createUnitAvatar } from './modelBridge';
 import { createSoldier, createTradeCart, createVillager } from './models';
-import { applyCarryCapacity, applyUnitTiers, BASE_TIERS, buildingRenderTier, Shimmer, TOOL_TINT, unitTiers } from './tiers';
+import { applyCarryCapacity, applyUnitTiers, BASE_TIERS, buildingFortified, Shimmer, TOOL_TINT, unitTiers } from './tiers';
 
 function meshes(object: THREE.Object3D): THREE.Mesh<THREE.BufferGeometry>[] {
   const out: THREE.Mesh<THREE.BufferGeometry>[] = [];
@@ -98,25 +99,122 @@ describe('building upgrade tiers', () => {
     expect(positions(buildingModel('watchTower', { tier: 1 }))).not.toEqual(positions(buildingModel('watchTower', { tier: 2 })));
   });
 
-  it('fortifies the Town Center at tier 1 and clamps tiers per kind', () => {
+  it('adds Fortified Town Center bastions at any tier and clamps tiers to each chain', () => {
     const base = buildingModel('townCenter');
-    const fortified = buildingModel('townCenter', { tier: 1 });
+    const fortified = buildingModel('townCenter', { fortified: true });
     expect(triangles(fortified)).toBeLessThanOrEqual(2500);
     expect(positions(fortified)).not.toEqual(positions(base));
-    expect(modelTier('townCenter', 5)).toBe(1);
+    expect(positions(buildingModel('townCenter', { tier: 3, fortified: true })))
+      .not.toEqual(positions(buildingModel('townCenter', { tier: 3 })));
+    expect(modelTier('townCenter', 5)).toBe(3);
     expect(modelTier('watchTower', 9)).toBe(2);
-    expect(modelTier('house', 2)).toBe(0);
+    expect(modelTier('house', 2)).toBe(1);
+    expect(modelTier('barracks', 4)).toBe(1);
+    expect(modelTier('market', 2)).toBe(0);
     expect(modelTier('watchTower', NaN)).toBe(0);
+    for (const kind of Object.keys(BUILDING_UPGRADES) as BuildingKind[]) expect(modelTier(kind, 99)).toBe(BUILDING_UPGRADES[kind]!.length);
   });
 
-  it('reads tiers from researched techs and the building\'s own tier', () => {
-    expect(buildingRenderTier(undefined, 'watchTower')).toBe(0);
-    expect(buildingRenderTier(set('fortifiedTownCenter'), 'townCenter')).toBe(1);
-    expect(buildingRenderTier(set('fortifiedTownCenter'), 'watchTower')).toBe(0);
-    // Per-building upgrade tiers (M14-1/M14-2: towers upgrade one at a time now).
-    expect(buildingRenderTier(undefined, 'watchTower', 1)).toBe(1);
-    expect(buildingRenderTier(set(), 'watchTower', 2)).toBe(2);
-    expect(buildingRenderTier(set('fortifiedTownCenter'), 'townCenter', 3)).toBe(3);
+  it('reads the Fortified Town Center look from research, not the model tier', () => {
+    expect(buildingFortified(undefined, 'townCenter')).toBe(false);
+    expect(buildingFortified(set(), 'townCenter')).toBe(false);
+    expect(buildingFortified(set('fortifiedTownCenter'), 'townCenter')).toBe(true);
+    expect(buildingFortified(set('fortifiedTownCenter'), 'watchTower')).toBe(false);
+  });
+
+  it('gives every tier of every chain its own model for every civilisation (M14-4)', () => {
+    const civs = [undefined, ...CIV_IDS];
+    const hash = (values: ArrayLike<number>): string => {
+      let h = 2166136261;
+      for (let i = 0; i < values.length; i++) h = Math.imul(h ^ Math.round(values[i] * 1e4), 16777619);
+      return (h >>> 0).toString(16) + ':' + values.length;
+    };
+    const visualSignatures = new Set<string>();
+    for (const kind of Object.keys(BUILDING_UPGRADES) as BuildingKind[]) {
+      const max = BUILDING_UPGRADES[kind]!.length;
+      const heights: number[] = [];
+      const geometry = new Set<string>();
+      for (let tier = 0; tier <= max; tier++) {
+        const tierGeometry = new Set<string>();
+        for (const civ of civs) {
+          const model = buildingModel(kind, { tier, civ, color: 0x204edb });
+          expect(model.userData.tier).toBe(tier);
+          const box = new THREE.Box3().setFromObject(model);
+          const size = box.getSize(new THREE.Vector3());
+          expect(size.x).toBeCloseTo(BUILDINGS[kind].size.w, 5);
+          expect(size.z).toBeCloseTo(BUILDINGS[kind].size.d, 5);
+          expect(box.min.y).toBeCloseTo(0, 5);
+          expect(triangles(model)).toBeLessThanOrEqual(kind === 'townCenter' && tier > 0 ? 3000 : 2500);
+          expect(meshes(model).length).toBeLessThanOrEqual(4);
+          expect(new Set(meshes(model).map(m => m.material)).size).toBe(1);
+          if (civ === undefined) heights.push(box.max.y);
+          tierGeometry.add(hash(positions(model)));
+          // The visual adds the civ's architecture tint, so even tier 0 differs per civilisation.
+          const visual = createBuildingVisual(kind, 0x204edb, tier, civ);
+          const finished = visual.object.getObjectByName('finished')!;
+          visualSignatures.add(`${kind}:${hash([...positions(finished), ...colors(finished)])}`);
+        }
+        // Upgraded tiers carry a civ finial, so their geometry differs per civilisation
+        // (Hellenes share theirs with models built without a civ).
+        expect(tierGeometry.size).toBe(tier === 0 ? 1 : CIV_IDS.length);
+        for (const sig of tierGeometry) {
+          expect(geometry.has(sig)).toBe(false);
+          geometry.add(sig);
+        }
+      }
+      expect(heights[max]).toBeGreaterThanOrEqual(heights[0]);
+    }
+    const combos = (Object.values(BUILDING_UPGRADES) as unknown[][]).reduce((n, chain) => n + (chain.length + 1) * civs.length, 0);
+    // undefined and hellenes share geometry; the hellene tint still sets them apart.
+    expect(visualSignatures.size).toBe(combos);
+  });
+
+  it('builds the named silhouettes: two-storey Large House, Town Center towers, level-2 bases', () => {
+    const top = (kind: BuildingKind, tier: number): number => bounds(buildingModel(kind, { tier })).max.y;
+    expect(top('house', 1)).toBeGreaterThan(top('house', 0) + 1);
+    expect(top('townCenter', 1)).toBeGreaterThan(top('townCenter', 0) + 0.4);
+    expect(top('townCenter', 2)).toBeGreaterThan(top('townCenter', 1) + 0.4);
+    expect(top('townCenter', 3)).toBeGreaterThan(top('townCenter', 2));
+    expect(top('palisade', 1)).toBeGreaterThan(top('palisade', 0) + 0.3);
+    expect(top('stoneWall', 1)).toBeGreaterThan(top('stoneWall', 0) + 0.3);
+    for (const kind of ['barracks', 'archeryRange', 'stable'] as const) {
+      expect(triangles(buildingModel(kind, { tier: 1 }))).toBeGreaterThan(triangles(buildingModel(kind)) + 100);
+    }
+  });
+
+  it('cages an upgrading building in scaffolding and drops it when the tier lands (M14-4)', () => {
+    const visual = createBuildingVisual('townCenter', 0x204edb, 1, 'persians');
+    const root = visual.object;
+    const top = bounds(root.getObjectByName('finished')!).max.y;
+    expect(visual.upgrading).toBe(false);
+    expect(visual.setUpgrading(null)).toBe(false);
+    expect(root.getObjectByName('upgrade-scaffolding')).toBeUndefined();
+    expect(visual.setUpgrading(0.2)).toBe(true);
+    const scaffold = root.getObjectByName('upgrade-scaffolding') as THREE.Mesh;
+    expect(scaffold.visible).toBe(true);
+    expect(visual.upgrading).toBe(true);
+    expect(visual.setUpgrading(0.6)).toBe(false);
+    expect(root.getObjectByName('upgrade-scaffolding')).toBe(scaffold);
+    const cage = bounds(scaffold);
+    const { w, d } = BUILDINGS.townCenter.size;
+    expect(cage.max.y).toBeGreaterThan(top);
+    expect(cage.max.x).toBeLessThanOrEqual(w / 2 + 1e-4);
+    expect(cage.max.z).toBeLessThanOrEqual(d / 2 + 1e-4);
+    expect(cage.min.y).toBeCloseTo(0, 5);
+    expect(triangles(scaffold)).toBeLessThanOrEqual(800);
+    // A cancelled upgrade hides it; the finished upgrade disposes of it with the old model.
+    visual.setUpgrading(null);
+    expect(scaffold.visible).toBe(false);
+    expect(visual.upgrading).toBe(false);
+    visual.setUpgrading(0.9);
+    expect(visual.setTier(2)).toBe(true);
+    expect(root.getObjectByName('upgrade-scaffolding')).toBeUndefined();
+    expect(visual.upgrading).toBe(false);
+    // Foundations under construction never show the upgrade cage.
+    const site = createBuildingVisual('house', 0x204edb);
+    site.setProgress(0.4, false);
+    expect(site.setUpgrading(0.5)).toBe(false);
+    expect(site.object.getObjectByName('upgrade-scaffolding')).toBeUndefined();
   });
 
   it('swaps a building visual to its upgraded model in place', () => {

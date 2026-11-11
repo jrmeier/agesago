@@ -159,6 +159,36 @@ describe('buildings, ghost and picking', () => {
     expect(tower.id).not.toBe(forge.id);
   });
 
+  it('shows scaffolding while a house upgrades, then swaps to the Large House (M14-4)', () => {
+    const world = makeWorld(field(() => 1));
+    const views = new EntityViews(world);
+    const house = place(world, 'house', { x: 60, z: 40 }, 0, true);
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
+    camera.position.set(60, 30, 70);
+    camera.lookAt(60, 0, 40);
+    views.sync(0, 0, camera);
+    const group = views.object.getObjectByName('building:house')!;
+    expect(group.getObjectByName('upgrade-scaffolding')).toBeUndefined();
+    const height = (): number => new THREE.Box3().setFromObject(group.getObjectByName('finished')!).max.y;
+    const before = height();
+
+    house.upgrading = { to: 1, progress: 5 };
+    views.sync(0, 0.1, camera);
+    const scaffold = group.getObjectByName('upgrade-scaffolding')!;
+    expect(scaffold.visible).toBe(true);
+    const bar = group.getObjectByName('progress')!;
+    expect(bar.visible).toBe(true);
+    expect((bar.getObjectByName('progress-fill') as THREE.Mesh).scale.x).toBeCloseTo(5 / 20, 5);
+
+    house.upgrading = undefined;
+    house.tier = 1;
+    world.events.emit({ type: 'buildingUpgraded', id: house.id, owner: 1, tier: 1 });
+    views.sync(0, 0.2, camera);
+    expect(group.getObjectByName('upgrade-scaffolding')).toBeUndefined();
+    expect(height()).toBeGreaterThan(before + 0.8);
+    expect(bar.visible).toBe(false);
+  });
+
   it('keeps permanent farms planted even with exhausted legacy food values', () => {
     const world = makeWorld(field(() => 1));
     const views = new EntityViews(world);
