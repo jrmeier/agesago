@@ -32,11 +32,13 @@ function flat(w: number, d: number): Heightfield {
   };
 }
 
-function arena(opts: { w?: number; civs?: CivId[]; nodes?: MapLayout['nodes'] } = {}): World {
+/** `tcs` moves the Town Centers (player 1, player 2) from the corners, e.g. so building sites are in territory. */
+function arena(opts: { w?: number; civs?: CivId[]; nodes?: MapLayout['nodes']; tcs?: [Vec2, Vec2] } = {}): World {
   const w = opts.w ?? 120;
+  const [tc1, tc2] = opts.tcs ?? [{ x: 4, z: 4 }, { x: w - 4, z: w - 4 }];
   const layout: MapLayout = {
-    townCenter: { x: 4, z: 4 }, villagers: [], scouts: [], props: [], nodes: opts.nodes ?? [],
-    extraStarts: [{ townCenter: { x: w - 4, z: w - 4 }, villagers: [], scouts: [] }],
+    townCenter: tc1, villagers: [], scouts: [], props: [], nodes: opts.nodes ?? [],
+    extraStarts: [{ townCenter: tc2, villagers: [], scouts: [] }],
   };
   const world = new World(flat(w, w), layout, defaultPlayers(2, opts.civs));
   for (const p of [1, 2]) world.visibilityOf(p).state.fill(EXPLORED);
@@ -78,8 +80,11 @@ describe('fortress', () => {
     expect(trainable('fortress', 'romans')).toEqual(['praetorian', 'equites']);
   });
 
+  // Town Centers placed so the fortress sites are inside their owners' territory (M18-3).
+  const FORT_TCS: [Vec2, Vec2] = [{ x: 40, z: 28 }, { x: 92, z: 96 }];
+
   it('needs the City Age', () => {
-    const world = arena();
+    const world = arena({ tcs: FORT_TCS });
     const v = world.spawnUnit('villager', { x: 30, z: 30 }, 1);
     const reasons = rejections(world);
     world.players.get(1)!.age = 1;
@@ -91,17 +96,17 @@ describe('fortress', () => {
   });
 
   it('caps each player at two, foundations included, and frees a slot when one falls', () => {
-    const world = arena();
+    const world = arena({ tcs: FORT_TCS });
     for (const p of [1, 2]) world.players.get(p)!.age = 2;
     const v = world.spawnUnit('villager', { x: 30, z: 30 }, 1);
     const reasons = rejections(world);
     const build = (x: number) => world.dispatch({ type: 'build', unitIds: [v.id], kind: 'fortress', pos: { x, z: 40 }, rot: 0 });
-    build(20);
+    build(25);
     build(35);
     expect(reasons).toEqual([]);
     expect(ownedCount(world, 'fortress', 1)).toBe(2);
     const stone = world.stock.stone;
-    build(50);
+    build(45);
     expect(reasons).toEqual(['limit']);
     expect(world.stock.stone).toBe(stone); // nothing paid
     expect(ownedCount(world, 'fortress', 1)).toBe(2);
@@ -112,7 +117,7 @@ describe('fortress', () => {
     // Cancelling a foundation frees a slot.
     const first = [...world.buildings.values()].find((b) => b.kind === 'fortress' && b.owner === 1)!;
     world.dispatch({ type: 'cancelBuild', buildingId: first.id });
-    build(50);
+    build(45);
     expect(reasons).toEqual(['limit']);
     expect(ownedCount(world, 'fortress', 1)).toBe(2);
     // So does losing a finished one.
@@ -121,7 +126,7 @@ describe('fortress', () => {
     applyDamage(world, second, second.hp + 1, null, 2, second.pos);
     run(world, 0.1);
     expect(ownedCount(world, 'fortress', 1)).toBe(1);
-    build(65);
+    build(55);
     expect(reasons).toEqual(['limit']);
     expect(ownedCount(world, 'fortress', 1)).toBe(2);
   });

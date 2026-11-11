@@ -17,7 +17,8 @@ export function decaying(world: World, b: Building): boolean {
 /**
  * Territory decay (M18-3, after 0 A.D.'s TerritoryDecay). Each decaying building loses
  * TERRITORY.decayRate of its max hp per second. At 0 hp a small building (decayTo 'collapse')
- * is destroyed; anything else turns neutral (see abandonBuilding). Town Centers never decay.
+ * is destroyed; anything else turns neutral (see abandonBuilding). Roots (Town Centers,
+ * fortresses) never decay.
  */
 export function decaySystem(world: World, dt: number): void {
   let doomed: Building[] | null = null;

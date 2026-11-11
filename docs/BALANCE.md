@@ -336,6 +336,7 @@ Borders follow 0 A.D.'s TerritoryInfluence/TerritoryManager (`src/sim/territory.
 | Building | Radius | Weight | Root |
 | --- | --- | --- | --- |
 | Town Center | 22 (+25% of base per age: 27.5, 33, 38.5) | 10 | yes |
+| Fortress | 16 | 8 | yes |
 | Wonder | 12 | 6 | no |
 | Storehouse, granary, mining camp, dock, military, forge, market, temple, academy, watch tower | 8 | 3 | no |
 | House, corral | 6 | 2 | no |
@@ -348,7 +349,7 @@ Borders follow 0 A.D.'s TerritoryInfluence/TerritoryManager (`src/sim/territory.
 - Owned cells 4-connected to a cell holding their owner's root are connected. The rest keep their
   owner but are flagged unconnected, which M18-3 decay uses.
 - Territory reaches 6 cells over water from the shore, so wide channels between islands stay neutral.
-- There is no fortress building yet. When one is added it should be a root with radius 16.
+- The fortress (added after M18-1) is a root too: radius 16, weight 8 (M18-3).
 - Cost: a full recompute on a giant map with 4 players and 61 buildings each, all in the Empire Age,
   takes about 0.7 ms. The per-tick fingerprint check takes under 0.01 ms. Recompute runs only when
   the fingerprint changes, so the cost is not spread across ticks.
@@ -367,7 +368,7 @@ Placement and decay follow 0 A.D.'s BuildRestrictions and TerritoryDecay (`canPl
 - **Decay.** A complete building loses `decayRate` = 0.2% of its max hp per second (1% per 5 s) while
   its centre is off its owner's connected territory. That covers enemy or neutral land, and own land
   cut off from every Town Center. Any garrisoned occupant stops decay, and repair works as usual.
-  Roots (Town Centers) never decay. A building goes from full hp to 0 in about 8 min 20 s.
+  Roots (Town Centers and fortresses) never decay. A building goes from full hp to 0 in about 8 min 20 s.
 - **At 0 hp.** Houses, farms, corrals, palisades, stone walls and gates (`decayTo: 'collapse'`) are
   destroyed: they are cheap, and a Gaia field or wall line would only clutter the map. Everything
   else turns neutral (Gaia) with 25% of max hp (`neutralHp`). Its training and research queues are

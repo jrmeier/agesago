@@ -47,7 +47,7 @@ export interface BuildingSpec {
   /**
    * Territory influence once complete (M18-1, after 0 A.D.'s TerritoryInfluence). `radius` is in
    * world units and the pull falls off linearly to 0 there; `weight` is the pull at the centre.
-   * Roots (Town Centers) anchor territory: land not linked to one of its owner's roots is unconnected.
+   * Roots (Town Centers, fortresses) anchor territory: land not linked to one of its owner's roots is unconnected.
    * Absent: no influence (walls, gates, farms).
    */
   territory?: TerritoryInfluence;
@@ -375,6 +375,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   },
   fortress: {
     name: 'Fortress',
+    // A root like the Town Center (M18-3): anchors its own connected territory and never decays.
+    territory: { radius: 16, weight: 8, root: true },
     size: { w: 5, d: 5 },
     cost: { wood: 200, stone: 650 },
     buildTime: 160,

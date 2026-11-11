@@ -176,6 +176,20 @@ describe('territory decay (M18-3)', () => {
     expect(tc.hp).toBe(tc.maxHp);
   });
 
+  it('fortresses are roots: they anchor their own territory and never decay', () => {
+    const w = arena();
+    w.players.get(1)!.age = 2;
+    expect(BUILDINGS.fortress.territory).toMatchObject({ root: true });
+    const fort = finished(w, 'fortress', NEUTRAL);
+    const tower = finished(w, 'barracks', { x: NEUTRAL.x + 8, z: NEUTRAL.z });
+    run(w, 0.05);
+    expect(w.isConnected(NEUTRAL)).toBe(true);
+    expect(decaying(w, fort)).toBe(false);
+    expect(decaying(w, tower)).toBe(false);
+    run(w, 10);
+    expect(fort.hp).toBe(fort.maxHp);
+  });
+
   it('a decayed house collapses: destroyed, its pop room gone', () => {
     const w = arena();
     const log = record(w);
