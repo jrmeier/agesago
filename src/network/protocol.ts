@@ -6,8 +6,8 @@ import { FORMATION_KINDS, type Command, type FormationKind } from '../core/types
 import { UNITS } from '../core/units';
 import { WONDER_SECONDS_MAX, WONDER_SECONDS_MIN, type WonderRules } from '../core/wonder';
 
-/** 9: fortress and champions (M16-5). 8: siege engines (pop costs, pack/unpack, splash). 7: wonder buildings and the wonder victory option (MatchConfig.wonder). 6: 'repair' command and passive ship healing at docks. 5: upgrade chains replace the tower techs. 4: in-place building upgrades (upgradeBuilding/cancelUpgrade). 3: trained land units can work. */
-export const NETWORK_VERSION = 9;
+/** 10: the 'patrol' command. 9: fortress and champions (M16-5). 8: siege engines (pop costs, pack/unpack, splash). 7: wonder buildings and the wonder victory option (MatchConfig.wonder). 6: 'repair' command and passive ship healing at docks. 5: upgrade chains replace the tower techs. 4: in-place building upgrades (upgradeBuilding/cancelUpgrade). 3: trained land units can work. */
+export const NETWORK_VERSION = 10;
 export const TICKS_PER_TURN = 4;
 export const HASH_EVERY = 25;
 export const MAX_COMMANDS = 64;
@@ -36,6 +36,9 @@ const point = (v: unknown): boolean => object(v) && ['x', 'z'].every(k => typeof
 const ids = (v: unknown): boolean => Array.isArray(v) && v.length <= 512 && v.every(id);
 const resource = (v: unknown): boolean => ['wood', 'food', 'gold', 'stone'].includes(String(v));
 
+/** Most waypoints one patrol order may carry. */
+export const MAX_PATROL_POINTS = 16;
+
 /** Reject malformed input before any peer applies it to its simulation. */
 export function validCommand(v: unknown): v is Command {
   if (!object(v) || typeof v.type !== 'string') return false;
@@ -44,6 +47,7 @@ export function validCommand(v: unknown): v is Command {
     case 'move': case 'attackMove': return ids(v.unitIds) && point(v.target)
       && (v.formation === undefined || FORMATION_KINDS.includes(v.formation as FormationKind))
       && (v.facing === undefined || typeof v.facing === 'number' && Number.isFinite(v.facing));
+    case 'patrol': return ids(v.unitIds) && Array.isArray(v.waypoints) && v.waypoints.length >= 1 && v.waypoints.length <= MAX_PATROL_POINTS && v.waypoints.every(point);
     case 'gather': return ids(v.unitIds) && id(v.nodeId);
     case 'heal': case 'convert':
     case 'attack': case 'repair': return ids(v.unitIds) && id(v.targetId);

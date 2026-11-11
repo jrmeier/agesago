@@ -193,6 +193,46 @@ describe('world save/load', () => {
     expect(() => deserializeWorld(old, hf)).toThrow('before ages and research');
   });
 
+  it('round-trips a patrol mid-route and keeps looping in lockstep', () => {
+    const a = fresh();
+    const tc = a.townCenter!.pos;
+    const h = a.spawnUnit('hoplite', { x: tc.x + 8, z: tc.z + 6 });
+    const far = { x: tc.x + 8, z: tc.z - 8 };
+    a.dispatch({ type: 'patrol', unitIds: [h.id], waypoints: [far] });
+    run(a, 160);
+    const route = a.units.get(h.id)!.patrol;
+    expect(route).toBeDefined();
+    const save = JSON.parse(JSON.stringify(serializeWorld(a)));
+    expect(save.version).toBe(SAVE_VERSION);
+    const b = deserializeWorld(save, hf);
+    expect(b.units.get(h.id)!.patrol).toEqual(route);
+    expect(b.combatState.get(h.id)?.order).toBe('attackMove');
+    const seen = new Set<number>();
+    for (let i = 0; i < 600; i++) {
+      a.tick(DT);
+      b.tick(DT);
+      seen.add(b.units.get(h.id)!.patrol!.index);
+    }
+    expect(seen).toEqual(new Set([0, 1]));
+    expect(hash(b)).toBe(hash(a));
+  });
+
+  it('loads pre-patrol saves (v2-v10) without patrols and rejects a corrupt patrol route', () => {
+    const v2 = { ...serializeWorld(fresh()), version: 2 };
+    expect(deserializeWorld(v2, hf).units.size).toBeGreaterThan(0);
+    const w = fresh();
+    const h = w.spawnUnit('hoplite', { x: w.townCenter!.pos.x + 8, z: w.townCenter!.pos.z + 6 });
+    w.dispatch({ type: 'patrol', unitIds: [h.id], waypoints: [{ x: h.pos.x, z: h.pos.z - 10 }] });
+    for (const version of [2, 3, 4, 5, 6, 7, 8, 9, 10]) {
+      const old = JSON.parse(JSON.stringify(serializeWorld(w)));
+      old.version = version;
+      expect(deserializeWorld(old, hf).units.get(h.id)!.patrol).toBeUndefined();
+    }
+    const bad = JSON.parse(JSON.stringify(serializeWorld(w)));
+    bad.units.find((u: { id: number }) => u.id === h.id).patrol.index = 5;
+    expect(() => deserializeWorld(bad, hf)).toThrow('Invalid save: patrol route');
+  }, 30_000);
+
   it('rejects unsupported versions before regenerating a map', () => {
     expect(() => deserializeWorld({ version: SAVE_VERSION + 1 } as never)).toThrow(`Unsupported save version ${SAVE_VERSION + 1}; expected ${SAVE_VERSION}`);
     expect(() => deserializeWorld({ version: 0 } as never)).toThrow('Unsupported save version 0');

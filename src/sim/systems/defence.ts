@@ -59,6 +59,7 @@ function dropWork(world: World, units: Unit[]): Unit[] {
     world.buildState.delete(u.id);
     world.fleeState.delete(u.id);
     world.combatState.delete(u.id);
+    delete u.patrol;
     for (const [farm, id] of world.farmers) if (id === u.id) world.farmers.delete(farm);
   }
   return cancelled;

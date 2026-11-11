@@ -38,6 +38,7 @@ import {
   combatSystem,
   orderAttack,
   orderAttackMove,
+  orderPatrol,
   orderRally,
   orderStance,
   orderStop,
@@ -330,6 +331,9 @@ export class World {
     cmd = this.ownedOnly(cmd, by);
     if ('unitIds' in cmd && cmd.type !== 'stance') for (const id of cmd.unitIds) {
       this.priestOrders.delete(id); this.navalJobs.delete(id); this.boarding.delete(id); this.landings.delete(id);
+      // Any other unit order ends a patrol (a new patrol replaces it).
+      const u = this.units.get(id);
+      if (u) delete u.patrol;
     }
     // Any other unit order supersedes fighting and fleeing.
     if (
@@ -391,6 +395,9 @@ export class World {
         break;
       case 'attackMove':
         orderAttackMove(this, cmd.unitIds, cmd.target, cmd);
+        break;
+      case 'patrol':
+        orderPatrol(this, cmd.unitIds, cmd.waypoints);
         break;
       case 'stop':
         for (const id of cmd.unitIds) {

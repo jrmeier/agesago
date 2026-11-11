@@ -10,7 +10,7 @@ import { canRepair } from './repair';
 import { navFor, route, routeForUnit } from './passage';
 import { cancelExplore, settleCancelled } from './explore';
 import { clearEconomyJob, resumeGatherJob, sendToDrop, sendToFarm, sendToNode } from './gather';
-import { planGroupMove, type GroupOrder } from './movement';
+import { formationOffset, planGroupMove, type GroupOrder } from './movement';
 import { siteApproach } from './sites';
 import { playerHasFlag } from './research';
 import { awardKill, recordDamage } from './veterancy';
@@ -160,7 +160,11 @@ function bucketsOf(world: World): UnitBuckets {
 
 /** How far `u` looks for enemies on its own (−1: never). */
 function acquireRadius(world: World, u: Unit, cs: CombatState | undefined): number {
-  if (cs?.order === 'attackMove') return Math.max(unitSight(world, u.owner, u.kind), unitRange(world, u.owner, u.kind));
+  if (cs?.order === 'attackMove') {
+    // Patrollers still honour a passive or stand-ground stance (never engage / only what is in range).
+    if (u.patrol && (u.stance === 'passive' || u.stance === 'standGround')) return stanceRadius(world, u, u.stance);
+    return Math.max(unitSight(world, u.owner, u.kind), unitRange(world, u.owner, u.kind));
+  }
   return stanceRadius(world, u, u.stance);
 }
 
@@ -233,6 +237,7 @@ function clearWork(world: World, units: Unit[]): Unit[] {
     clearEconomyJob(world, u);
     world.fleeState.delete(u.id);
     u.target = null;
+    delete u.patrol;
     const cs = world.combatState.get(u.id);
     if (cs) {
       cs.order = null;
@@ -253,6 +258,7 @@ export function releaseCombat(world: World, unitIds: EntityId[]): void {
     const u = world.units.get(id);
     if (!u) continue;
     u.target = null;
+    delete u.patrol;
     world.fleeState.delete(id);
     const cs = world.combatState.get(id);
     if (cs) {
@@ -309,6 +315,85 @@ export function orderAttackMove(world: World, unitIds: EntityId[], target: Vec2,
   }
   settleCancelled(world, cancelled);
   if (!planned.length) world.events.emit({ type: 'rejected', reason: 'unreachable' });
+}
+
+/** Can `u` take a patrol order? Fighting units only: not villagers, ships that can't shoot, or wildlife. */
+function canPatrol(u: Unit): boolean {
+  const a = UNITS[u.kind].attack;
+  return u.kind !== 'villager' && !isAnimal(u.kind) && a.melee + a.pierce > 0;
+}
+
+/**
+ * 'patrol': each unit walks a loop from where it stands through `waypoints` (formation-offset)
+ * and back, again and again, fighting like attack-move. The route lives on `Unit.patrol`; the
+ * current leg is an ordinary attack-move to `route[index]`, so engagement and the leash work
+ * unchanged. Any other order clears it.
+ */
+export function orderPatrol(world: World, unitIds: EntityId[], waypoints: Vec2[]): void {
+  const list = units(world, unitIds).filter(canPatrol);
+  if (!list.length || !waypoints.length) return;
+  const cancelled = clearWork(world, list);
+  let moved = 0;
+  list.forEach((u, i) => {
+    const o = formationOffset(i);
+    const clamp = (p: Vec2) => ({ x: Math.min(world.hf.width, Math.max(0, p.x)), z: Math.min(world.hf.depth, Math.max(0, p.z)) });
+    const route = [{ ...u.pos }, ...waypoints.map((w) => clamp({ x: w.x + o.x, z: w.z + o.z }))];
+    u.patrol = { route, index: 1 };
+    if (!patrolLeg(world, u, stateOf(world, u))) return;
+    moved++;
+  });
+  settleCancelled(world, cancelled);
+  if (!moved) world.events.emit({ type: 'rejected', reason: 'unreachable' });
+}
+
+/**
+ * Head for the patrol point `u` is on (attack-move there), skipping points it can't reach.
+ * False, and the patrol ends, if it can reach none.
+ */
+function patrolLeg(world: World, u: Unit, cs: CombatState): boolean {
+  const p = u.patrol;
+  for (let tries = p?.route.length ?? 0; p && tries > 0; tries--) {
+    const dest = p.route[p.index];
+    const path = routeForUnit(world, u, dest);
+    if (path) {
+      cs.order = 'attackMove';
+      cs.dest = { ...dest };
+      u.path = path;
+      world.setState(u, 'moving');
+      return true;
+    }
+    p.index = (p.index + 1) % p.route.length;
+  }
+  delete u.patrol;
+  cs.order = null;
+  cs.dest = null;
+  return false;
+}
+
+/**
+ * After a fight, rejoin the route at the patrol point nearest to `u` (it stayed within the
+ * leash of where it left), then carry on the loop from there.
+ */
+function resumePatrol(world: World, u: Unit, cs: CombatState): boolean {
+  const p = u.patrol!;
+  let best = p.index;
+  let bestD = dist(u.pos, p.route[best]);
+  for (let k = 0; k < p.route.length; k++) {
+    const d = dist(u.pos, p.route[k]);
+    if (d < bestD - 1e-9) {
+      best = k;
+      bestD = d;
+    }
+  }
+  p.index = best;
+  return patrolLeg(world, u, cs);
+}
+
+/** Arrived at the current patrol point: on to the next, wrapping round to the start. */
+function nextPatrolPoint(world: World, u: Unit, cs: CombatState): void {
+  const p = u.patrol!;
+  p.index = (p.index + 1) % p.route.length;
+  patrolLeg(world, u, cs);
 }
 
 /** 'stop': drop every order and stand still. */
@@ -412,7 +497,9 @@ function disengage(world: World, u: Unit, cs: CombatState): void {
     engage(world, u, next, false);
     return;
   }
-  if (cs.order === 'attackMove' && cs.dest) {
+  if (cs.order === 'attackMove' && u.patrol) {
+    if (resumePatrol(world, u, cs)) return;
+  } else if (cs.order === 'attackMove' && cs.dest) {
     const path = routeForUnit(world, u, cs.dest);
     if (path) {
       u.path = path;
@@ -902,8 +989,11 @@ export function combatSystem(world: World, dt: number, arrived: Unit[]): void {
       continue;
     }
     if (cs?.order === 'attackMove' && u.state === 'idle') {
-      cs.order = null; // arrived
-      cs.dest = null;
+      if (u.patrol) nextPatrolPoint(world, u, cs);
+      else {
+        cs.order = null; // arrived
+        cs.dest = null;
+      }
     }
     const scanning = (u.state === 'idle' && u.stance !== 'passive') || (u.state === 'moving' && cs?.order === 'attackMove');
     if (!scanning || (tick + u.id) % BALANCE.scanTicks !== 0) continue;

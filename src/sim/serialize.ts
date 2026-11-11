@@ -19,6 +19,7 @@ import type { ExplorationSite, PriestOrder } from './systems/explorationRewards'
 import { normalizeWonderRules, type GameResult, type WonderCountdown, type WonderRules } from './systems/victory';
 
 /**
+ * 11: M17-2 patrol routes on units (Unit.patrol); older saves have none.
  * 10: M17-1 group formations (Unit.formation: id, shared speed cap, arrival facing, slot).
  * 9: M16-2 siege engines (Unit.deployed, Unit.packTimer, 'packing'/'unpacking' states). Older
  *    saves hold no siege, so they load with no pack state.
@@ -32,7 +33,7 @@ import { normalizeWonderRules, type GameResult, type WonderCountdown, type Wonde
  * 3: M14-1 in-place building upgrades (Building.tier, Building.upgrading).
  * 2: M8 research (researched techs, ages, market prices, building research queues).
  */
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 11;
 /** Oldest version that still loads; v2 buildings load at tier 0 with no upgrade running, v2–9 units out of formation. */
 export const MIN_SAVE_VERSION = 2;
 
@@ -219,6 +220,12 @@ function migrateTowerTechs(saved: SaveData): void {
   }
 }
 
+function validPatrol(p: Unit['patrol']): boolean {
+  const finite = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
+  return !!p && Array.isArray(p.route) && p.route.length >= 2 && p.route.every((q) => !!q && finite(q.x) && finite(q.z))
+    && Number.isInteger(p.index) && p.index >= 0 && p.index < p.route.length;
+}
+
 function restoreMap<K, V>(map: Map<K, V>, entries: [K, V][]): void {
   map.clear();
   for (const [key, value] of entries) map.set(key, value);
@@ -243,6 +250,7 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   if (!Number.isSafeInteger(data.clocks.nextId) || data.clocks.nextId < 1
     || savedIds.some((id) => !Number.isSafeInteger(id) || id < 1 || id >= data.clocks.nextId)
     || new Set(savedIds).size !== savedIds.length) throw new Error('Invalid save: entity ids or nextId');
+  for (const u of data.units) if (u.patrol !== undefined && !validPatrol(u.patrol)) throw new Error('Invalid save: patrol route');
   for (const p of data.players) if(p.player.civ !== undefined && !civFor(p.player.civ)) throw new Error('Invalid save: civilization');
   for (const u of data.units) {
     if (u.rank !== undefined && u.rank !== 0 && u.rank !== 1 && u.rank !== 2) throw new Error('Invalid save: unit rank');
@@ -281,6 +289,8 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   for (const u of saved.units) {
     const f = u.formation;
     if (saved.version < 10 || (f && !(Number.isFinite(f?.slot?.x) && Number.isFinite(f?.slot?.z)))) delete u.formation;
+    // Pre-patrol saves (before v11) carry no patrol route.
+    if (saved.version < 11) delete u.patrol;
   }
   restoreMap(world.units, saved.units.map((u) => [u.id, u]));
   restoreMap(world.nodes, saved.nodes.map((n) => [n.id, n]));

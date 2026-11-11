@@ -302,6 +302,14 @@ export interface Unit {
   packTimer?: number;
   /** Group move in progress (formation id, shared speed cap, arrival facing). */
   formation?: UnitFormation;
+  /** Patrol route (its first point is where the order was given) and the index of the point being walked to. */
+  patrol?: PatrolRoute;
+}
+
+/** A unit's patrol: it walks `route` in a loop, `route[index]` next, fighting like attack-move. */
+export interface PatrolRoute {
+  route: Vec2[];
+  index: number;
 }
 
 /** Veterancy rank: 0 Basic, 1 Advanced, 2 Elite. */
@@ -385,6 +393,11 @@ export type Command =
   | { type: 'attack'; unitIds: EntityId[]; targetId: EntityId }
   /** Walk to a point, fighting any enemy met on the way. */
   | { type: 'attackMove'; unitIds: EntityId[]; target: Vec2; formation?: FormationKind; facing?: number }
+  /**
+   * Patrol: walk from the current position through `waypoints` and back, again and again,
+   * fighting like attack-move. One waypoint = back and forth. Any other unit order ends it.
+   */
+  | { type: 'patrol'; unitIds: EntityId[]; waypoints: Vec2[] }
   /** Drop current orders and stand still. */
   | { type: 'stop'; unitIds: EntityId[] }
   | { type: 'stance'; unitIds: EntityId[]; stance: Stance }
