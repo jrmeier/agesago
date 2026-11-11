@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CIVS, CIV_IDS } from '../core/civilizations';
 import { BUILDINGS } from '../core/buildings';
 import { TECHS, type TechId } from '../core/techs';
 import type { Stockpile } from '../core/types';
@@ -51,7 +52,16 @@ describe('lock reasons', () => {
     expect(ageLockText(BUILDINGS.academy.age, 1)).toBe('Requires City Age');
     expect(ageLockText(BUILDINGS.academy.age, 2)).toBe('');
     expect(ageLockText(BUILDINGS.house.age, 0)).toBe('');
-    expect(ageLockText(UNITS.archer.age, 0)).toBe('Requires Town Age');
+    for (const kind of ['barracks', 'archeryRange', 'stable'] as const) {
+      expect(ageLockText(BUILDINGS[kind].age, 0)).toBe('');
+    }
+    for (const kind of ['hoplite', 'slinger', 'scout'] as const) {
+      expect(ageLockText(UNITS[kind].age, 0)).toBe('');
+    }
+    for (const kind of ['archer', 'horseman', 'swordsman', ...CIV_IDS.map(civ => CIVS[civ].unit)] as const) {
+      expect(ageLockText(UNITS[kind].age, 0)).toBe('Requires Town Age');
+      expect(ageLockText(UNITS[kind].age, 1)).toBe('');
+    }
   });
 });
 

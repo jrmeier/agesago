@@ -148,7 +148,6 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     sight: 6,
     hp: 1000,
     armor: { melee: 1, pierce: 7 },
-    age: 1,
   },
   stable: {
     name: 'Stable',
@@ -162,7 +161,6 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     sight: 6,
     hp: 1000,
     armor: { melee: 1, pierce: 7 },
-    age: 1,
   },
   watchTower: {
     name: 'Watch Tower',

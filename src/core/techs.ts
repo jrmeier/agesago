@@ -103,7 +103,7 @@ const table = {
   woodlandCraft:{name:'Woodland Craft',description:'Villagers carry 3 more wood; infantry walk 5% faster.',at:'forge',cost:{food:175,gold:100},time:45,age:1,civ:'celts',effects:[add('villager','carry.wood',3),mul('class:infantry','speed',1.05)]},
   // ---- Ages (Town Center) ----
   townAge: {
-    name: 'Town Age', description: 'Advance to the Town Age: archery range, stable, towers, forge and market.',
+    name: 'Town Age', description: 'Advance to the Town Age: archers, horsemen, swordsmen, civilization units, priests, trade carts, merchant ships, triremes, forge, market, watch towers, temple and stone walls.',
     at: 'townCenter', cost: { food: 400 }, time: 60, age: 0, effects: [], ageUp: 1,
   },
   cityAge: {

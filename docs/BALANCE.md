@@ -15,6 +15,16 @@ Every economy tech has to **pay for itself within 5 sim-minutes** of clicking it
 included, with a typical crew of 6–10 villagers on that resource. Bronze Axe should take about
 3 minutes with 8 woodcutters.
 
+## Military unlocks
+
+Village Age allows Barracks, Archery Ranges and Stables, training Hoplites, Slingers and
+Scouts respectively. Two distinct completed Village Age buildings are needed for Town Age;
+Archery Ranges and Stables count toward this requirement.
+
+Town Age unlocks Archers, Horsemen, Swordsmen, civilization unique units, Priests, Trade Carts,
+Merchant Ships and Triremes, plus the Forge, Market, Watch Tower, Temple and Stone Wall.
+Archery Ranges and Stables do not count as Town Age buildings for the City Age requirement.
+
 ## The scripted build order
 
 `src/bench/pacing.ts` plays player 1 on a real generated map (`generateMap(seed, 2)`, the real

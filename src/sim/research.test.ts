@@ -4,8 +4,10 @@ import { TECHS, TECH_IDS, applyStat, unitLine, type TechId } from '../core/techs
 import { GRASS_ONLY, type Building, type BuildingKind, type Heightfield, type MapLayout, type SimEvent } from '../core/types';
 import { World } from './World';
 import { UNITS } from '../core/units';
+import { CIVS, CIV_IDS } from '../core/civilizations';
+import { EXPLORED } from './visibility';
 import { deserializeWorld, serializeWorld } from './serialize';
-import { researchBlock, statOf } from './systems/research';
+import { ageBuildings, ageBuildingsNeeded, researchBlock, statOf } from './systems/research';
 
 function flat(): Heightfield {
   return {
@@ -187,3 +189,86 @@ describe('research queue', () => {
   });
 });
 
+describe('military age gates', () => {
+  it.each([
+    ['barracks', 'hoplite'], ['archeryRange', 'slinger'], ['stable', 'scout'],
+  ] as const)('builds %s and trains %s in Village Age', (kind, unit) => {
+    const w = world();
+    w.visibility.state.fill(EXPLORED);
+    Object.assign(w.stock, { food: 1000, wood: 1000, stone: 1000 });
+    const pos = { x: 40, z: 40 };
+    expect(w.canPlace(kind, pos, 0, 1)).toEqual({ ok: true });
+    w.dispatch({ type: 'build', unitIds: [...w.units.keys()], kind, pos, rot: 0 });
+    const b = [...w.buildings.values()].find(b => b.kind === kind)!;
+    expect(b).toBeDefined();
+    run(w, BUILDINGS[kind].buildTime + 30);
+    expect(b.complete).toBe(true);
+    w.dispatch({ type: 'train', buildingId: b.id, unit });
+    expect(b.queueKinds).toEqual([unit]);
+    run(w, UNITS[unit].trainTime + 0.1);
+    expect([...w.units.values()].some(u => u.kind === unit)).toBe(true);
+    expect(w.players.get(1)!.age).toBe(0);
+  });
+
+  it.each(['archer', 'horseman', 'swordsman', ...CIV_IDS.map(civ => CIVS[civ].unit)] as const)(
+    '%s requires Town Age before it can train', unit => {
+      const w = world();
+      const spec = UNITS[unit];
+      w.players.get(1)!.player.civ = spec.civ;
+      Object.assign(w.stock, { food: 1000, wood: 1000, gold: 1000, stone: 1000 });
+      const b = addBuilding(w, spec.trainedAt!, 40, 40);
+      const rejected: SimEvent[] = [];
+      w.events.on('rejected', e => rejected.push(e));
+      const stock = { ...w.stock };
+      w.dispatch({ type: 'train', buildingId: b.id, unit });
+      expect(rejected).toEqual([{ type: 'rejected', reason: 'age' }]);
+      expect(b.queue).toBe(0);
+      expect(w.stock).toEqual(stock);
+      w.players.get(1)!.age = 1;
+      w.dispatch({ type: 'train', buildingId: b.id, unit });
+      expect(b.queueKinds).toEqual([unit]);
+    }
+  );
+
+  it.each(['forge', 'market', 'watchTower', 'temple', 'stoneWall'] as const)(
+    '%s still requires Town Age for placement', kind => {
+      const w = world();
+      w.visibility.state.fill(EXPLORED);
+      Object.assign(w.stock, { wood: 1000, stone: 1000 });
+      const pos = { x: 40, z: 40 };
+      const rejected: SimEvent[] = [];
+      w.events.on('rejected', e => rejected.push(e));
+      w.dispatch({ type: 'build', unitIds: [], kind, pos, rot: 0 });
+      expect(rejected).toEqual([{ type: 'rejected', reason: 'age' }]);
+      expect([...w.buildings.values()].some(b => b.kind === kind)).toBe(false);
+      w.players.get(1)!.age = 1;
+      w.dispatch({ type: 'build', unitIds: [], kind, pos, rot: 0 });
+      expect([...w.buildings.values()].some(b => b.kind === kind)).toBe(true);
+    }
+  );
+
+  it('counts completed distinct ranges and stables for Town Age, but not City Age', () => {
+    const w = world();
+    Object.assign(w.stock, { food: 10000, gold: 10000 });
+    expect(ageBuildingsNeeded(0)).toBe(2);
+    expect(ageBuildingsNeeded(1)).toBe(2);
+    addBuilding(w, 'archeryRange', 40, 40);
+    addBuilding(w, 'archeryRange', 50, 40);
+    addBuilding(w, 'stable', 60, 40, 2); // another player's building cannot qualify
+    const stable = addBuilding(w, 'stable', 40, 50);
+    stable.complete = false;
+    expect(ageBuildings(w, 1, 0)).toEqual(['archeryRange']);
+    expect(researchBlock(w, 1, 'townAge')).toBe('requires');
+    stable.complete = true;
+    expect(ageBuildings(w, 1, 0)).toEqual(['archeryRange', 'stable']);
+    w.dispatch({ type: 'research', buildingId: w.townCenter!.id, tech: 'townAge' });
+    run(w, TECHS.townAge.time + 0.1);
+    expect(w.players.get(1)!.age).toBe(1);
+    expect(ageBuildings(w, 1, 1)).toEqual([]);
+    expect(researchBlock(w, 1, 'cityAge')).toBe('requires');
+    addBuilding(w, 'forge', 50, 50);
+    expect(researchBlock(w, 1, 'cityAge')).toBe('requires');
+    addBuilding(w, 'market', 60, 50);
+    expect(researchBlock(w, 1, 'cityAge')).toBeNull();
+  });
+});

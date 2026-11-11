@@ -15,7 +15,7 @@ const NOT_AGE_BUILDINGS = new Set<BuildingKind>(['townCenter', 'house', 'farm', 
 /** Buildings the AI adds to qualify for the next age, in order of preference, by current age. */
 const AGE_PICKS: Record<number, BuildingKind[]> = {
   0: ['storehouse', 'granary', 'barracks', 'miningCamp'],
-  1: ['forge', 'market', 'archeryRange'],
+  1: ['forge', 'market'],
 };
 const AGE_UP: Partial<Record<Age, TechId>> = { 0: 'townAge', 1: 'cityAge' };
 /** Seconds the Town Center rests between villager-blocking techs while the economy still grows. */

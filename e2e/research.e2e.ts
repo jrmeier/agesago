@@ -98,6 +98,9 @@ test('age-locked build tiles say which age they need', async ({ page }, testInfo
   await expect(forge).toHaveClass(/locked/);
   await expect(forge.locator('.build-lock')).toHaveText('Requires Town Age');
   await expect(page.locator('#build-grid [data-build="house"]')).not.toHaveClass(/locked/);
+  for (const kind of ['archeryRange', 'stable']) {
+    await expect(page.locator(`#build-grid [data-build="${kind}"]`)).not.toHaveClass(/locked/);
+  }
   if (!phone) await expect(forge.locator('kbd')).toHaveText('J');
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
@@ -149,5 +152,54 @@ test('Town Center production stays FIFO and researched capacity reaches HUD and 
   await repaint();
   await expect(page.locator('#unit-status')).toHaveText('Chopping wood (3/13)');
   expect(scale ** 3).toBeCloseTo(1.3);
+  expect(errors).toEqual([]);
+});
+
+test('Village Age trains basic military while advanced units show Town Age locks', async ({ page }, testInfo) => {
+  const phone = testInfo.project.name === 'phone';
+  const errors = await boot(page);
+  const ids = await page.evaluate(() => {
+    const w = window as any;
+    w.game.paused = true;
+    w.dev.give({ food: 2000, wood: 2000, gold: 2000, stone: 2000 });
+    w.dev.placeComplete('house');
+    return ['barracks', 'archeryRange', 'stable'].map(kind => w.dev.placeComplete(kind));
+  });
+  expect(ids.every(id => id !== null)).toBe(true);
+  const basic = ['hoplite', 'slinger', 'scout'];
+  const advanced = ['swordsman', 'archer', 'horseman'];
+  for (let i = 0; i < ids.length; i++) {
+    await page.evaluate(id => (window as any).game.selection.set([id]), ids[i]);
+    await openSheet(page, phone);
+    const locked = page.locator(`#train-grid [data-train="${advanced[i]}"]`);
+    await expect(locked.locator('.build-lock')).toHaveText('Requires Town Age');
+    const available = page.locator(`#train-grid [data-train="${basic[i]}"]`);
+    await expect(available).not.toHaveClass(/locked/);
+    if (phone) await available.tap();
+    else await available.click();
+    await expect.poll(() => page.evaluate(id => (window as any).game.world.buildings.get(id).queue, ids[i])).toBe(1);
+  }
+  const trained = await page.evaluate(() => {
+    const w = window as any;
+    w.dev.fastForward(20);
+    return [...w.game.world.units.values()].map((u: any) => u.kind);
+  });
+  for (const unit of basic) expect(trained).toContain(unit);
+  await page.evaluate(() => {
+    const w = window as any;
+    w.game.selection.set([w.game.world.townCenter.id]);
+  });
+  await openSheet(page, phone);
+  const town = page.locator('#train-grid [data-research="townAge"]');
+  await expect(town).toHaveAttribute('data-locked', 'false');
+  if (phone) await town.tap();
+  else await town.click();
+  await page.evaluate(() => (window as any).dev.fastForward(61));
+  await expect(page.locator('#res-age')).toHaveText('Town Age');
+  for (let i = 0; i < ids.length; i++) {
+    await page.evaluate(id => (window as any).game.selection.set([id]), ids[i]);
+    await openSheet(page, phone);
+    await expect(page.locator(`#train-grid [data-train="${advanced[i]}"]`)).not.toHaveClass(/locked/);
+  }
   expect(errors).toEqual([]);
 });
