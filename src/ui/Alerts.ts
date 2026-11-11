@@ -1,4 +1,6 @@
-import type { Vec2 } from '../core/types';
+import type { UnitKind, Vec2 } from '../core/types';
+import { isHero, UNITS } from '../core/units';
+import { heroDeathText } from './heroes';
 import type { World } from '../sim/World';
 import { AlertLimiter, BurstCounter, attackText, captureText, deathText, unlockText } from './alertRules';
 import { pushPing } from './pings';
@@ -41,6 +43,11 @@ export class Alerts {
       this.show('alert', '#i-alert', attackText(this.home(), e.pos), e.pos);
     });
     world.events.on('died', (e) => {
+      if (e.owner === world.localPlayer && e.kind in UNITS && isHero(e.kind as UnitKind)) {
+        pushPing(world, e.pos, 'death');
+        this.show('alert', `#i-${e.kind}`, heroDeathText(e.kind as UnitKind), e.pos);
+        return;
+      }
       if (e.owner !== world.localPlayer || e.kind !== 'villager') return;
       this.lastDeath = { ...e.pos };
       pushPing(world, e.pos, 'death');

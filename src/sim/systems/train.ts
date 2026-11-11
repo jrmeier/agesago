@@ -1,11 +1,12 @@
 import { tierStats } from '../../core/buildings';
 import type { Building, EntityId, UnitKind, Vec2 } from '../../core/types';
-import { isShip, popCost, UNITS, trainable } from '../../core/units';
+import { isHero, isShip, popCost, UNITS, trainable } from '../../core/units';
 import { ensureProductionQueue, productionOrder, removeProduction } from '../productionQueue';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
 import { affordable, pay } from './build';
 import { applyRally } from './combat';
+import { heroBlock } from './heroes';
 import { ageOf, unitStat } from './research';
 
 function emitProgress(world: World, b: Building): void {
@@ -85,6 +86,9 @@ function ensureCounts(b: Building): number[] {
  * entry is the same kind, is the last thing in the production queue (no research after it), has
  * not started training, and the merged batch stays within maxTrainBatch. Single orders (the AI's)
  * always add their own entry.
+ *
+ * A hero (M16-6) also needs no other hero alive or queued and its retrain cooldown over
+ * (systems/heroes).
  */
 export function orderTrain(world: World, buildingId: EntityId, unit?: UnitKind, count = 1): void {
   const b = world.buildings.get(buildingId);
@@ -103,6 +107,11 @@ export function orderTrain(world: World, buildingId: EntityId, unit?: UnitKind, 
   }
   if ((UNITS[kind].age ?? 0) > ageOf(world, b.owner)) {
     if (b.owner === world.localPlayer) world.events.emit({ type: 'rejected', reason: 'age' });
+    return;
+  }
+  const heroBlocked = isHero(kind) ? heroBlock(world, b.owner) : null;
+  if (heroBlocked) {
+    if (b.owner === world.localPlayer) world.events.emit({ type: 'rejected', reason: heroBlocked });
     return;
   }
   if (world.popOf(b.owner) + queuedPop(world, b.owner) + count * popCost(kind) > world.popCapOf(b.owner)) {

@@ -98,7 +98,7 @@ const SCOUT_SCALE = 1.1;
 const SCOUT_SIZE: SpriteSize = { width: 1.4 * SCOUT_SCALE, height: 2.0 * SCOUT_SCALE };
 /** Scouts, horsemen and cavalry champions share the mounted shadow and picking size. */
 const mountedLike = (kind: UnitKind): boolean =>
-  kind === 'scout' || kind === 'horseman' || (UNITS[kind].champion === true && UNITS[kind].unitClass === 'cavalry');
+  kind === 'scout' || kind === 'horseman' || ((UNITS[kind].champion === true || UNITS[kind].hero === true) && UNITS[kind].unitClass === 'cavalry');
 const GATHER_POSE: Record<string, VillagerPose> = { wood: 'chop', food: 'forage', gold: 'mine', stone: 'mine' };
 const UNIT_SCALE: Record<UnitKind, number> = {
   villager: VILLAGER_SCALE,
@@ -106,6 +106,7 @@ const UNIT_SCALE: Record<UnitKind, number> = {
   phalangiteGuard: 1.3, legionary: 1.3, immortal: 1.25, raider: 1.3,
   spartanHoplite: 1.4, praetorian: 1.4, appleBearer: 1.4, gaesatae: 1.4,
   agema: 1.2, equites: 1.2, savaran: 1.2, nobleRider: 1.2,
+  leonidas: 1.55, scipio: 1.55, vercingetorix: 1.55, cyrus: 1.3,
   hoplite: 1.3,
   swordsman: 1.3,
   slinger: 1.25,
@@ -126,6 +127,7 @@ const BAR_Y: Record<UnitKind, number> = {
   phalangiteGuard: 1.9, legionary: 1.9, immortal: 1.8, raider: 1.9,
   spartanHoplite: 2.05, praetorian: 2.05, appleBearer: 2.05, gaesatae: 2.05,
   agema: 2.5, equites: 2.5, savaran: 2.5, nobleRider: 2.5,
+  leonidas: 2.3, scipio: 2.3, vercingetorix: 2.3, cyrus: 2.7,
   hoplite: 1.9,
   swordsman: 1.9,
   slinger: 1.75,

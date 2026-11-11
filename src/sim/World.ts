@@ -111,6 +111,8 @@ export interface PlayerState {
   readonly prices: Record<MarketResource, number>;
   /** Total resources taken as loot from kills and razed buildings (M15-5; endgame statistics). */
   readonly looted: Stockpile;
+  /** Sim time from which a new hero may be trained (M16-6): its fall + HERO_COOLDOWN; 0 = never fell. */
+  heroReadyAt: number;
 }
 
 export class World {
@@ -193,6 +195,7 @@ export class World {
         age: 0,
         prices: { wood: MARKET.basePrice, food: MARKET.basePrice, stone: MARKET.basePrice },
         looted: { food: 0, wood: 0, gold: 0, stone: 0 },
+        heroReadyAt: 0,
       });
     }
     const starts: StartLayout[] = [layout, ...(layout.extraStarts ?? [])];

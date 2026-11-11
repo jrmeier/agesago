@@ -749,14 +749,16 @@ export function createScout(opts?: { color?: number; cloak?: number; seed?: numb
 }
 
 export type ChampionKind = 'spartanHoplite' | 'agema' | 'praetorian' | 'equites' | 'appleBearer' | 'savaran' | 'gaesatae' | 'nobleRider';
-export type SoldierKind = 'phalangiteGuard' | 'legionary' | 'immortal' | 'raider' | 'hoplite' | 'swordsman' | 'slinger' | 'archer' | 'horseman' | ChampionKind;
+/** Heroes (M16-6) use the champion kit with a gilded crown on top. */
+export type HeroKind = 'leonidas' | 'scipio' | 'cyrus' | 'vercingetorix';
+export type SoldierKind = 'phalangiteGuard' | 'legionary' | 'immortal' | 'raider' | 'hoplite' | 'swordsman' | 'slinger' | 'archer' | 'horseman' | ChampionKind | HeroKind;
 
 /**
  * Champions (M16-5) reuse a line soldier and add one merged "champion-kit" mesh: a cloak, a tall
  * plume or headdress and civ-specific trim. `cloak`/`plume` are fixed civ colours so champions
  * read apart from line troops at a glance; the player colour stays on the base model and pennant.
  */
-const CHAMPION_KIT: Record<ChampionKind, { base: 'hoplite' | 'swordsman' | 'horseman'; cloak: number; plume: number; trim: number }> = {
+const CHAMPION_KIT: Record<ChampionKind | HeroKind, { base: 'hoplite' | 'swordsman' | 'horseman'; cloak: number; plume: number; trim: number }> = {
   spartanHoplite: { base: 'hoplite', cloak: 0x9b1d14, plume: 0xc22a1a, trim: 0xd9b24a },
   praetorian: { base: 'swordsman', cloak: 0x6b1f3a, plume: 0xc22a1a, trim: 0xe0c060 },
   appleBearer: { base: 'hoplite', cloak: 0xf1ead6, plume: 0xf1ead6, trim: 0xe6c24a },
@@ -765,9 +767,15 @@ const CHAMPION_KIT: Record<ChampionKind, { base: 'hoplite' | 'swordsman' | 'hors
   equites: { base: 'horseman', cloak: 0xa3221a, plume: 0xc22a1a, trim: 0xe0c060 },
   savaran: { base: 'horseman', cloak: 0xb08a3a, plume: 0x2c4a7a, trim: 0x9aa1a8 },
   nobleRider: { base: 'horseman', cloak: 0x3f6a3a, plume: 0xd8c08a, trim: 0xe6c24a },
+  leonidas: { base: 'hoplite', cloak: 0xb3170f, plume: 0xd61f12, trim: 0xf0c94a },
+  scipio: { base: 'swordsman', cloak: 0x7a1030, plume: 0xf1ead6, trim: 0xf0c94a },
+  cyrus: { base: 'horseman', cloak: 0x4a2a7a, plume: 0xf1ead6, trim: 0xf0c94a },
+  vercingetorix: { base: 'swordsman', cloak: 0x2a5a2a, plume: 0xc8a050, trim: 0xf0c94a },
 };
 
-function createChampion(kind: ChampionKind, opts?: { color?: number; seed?: number }): SoldierModel {
+const HERO_KINDS: ReadonlySet<string> = new Set<HeroKind>(['leonidas', 'scipio', 'cyrus', 'vercingetorix']);
+
+function createChampion(kind: ChampionKind | HeroKind, opts?: { color?: number; seed?: number }): SoldierModel {
   const kit = CHAMPION_KIT[kind];
   const model = createSoldier(kit.base, opts);
   model.object.name = kind;
@@ -785,6 +793,15 @@ function createChampion(kind: ChampionKind, opts?: { color?: number; seed?: numb
   ];
   if (kind === 'appleBearer') pieces.push(part(new THREE.IcosahedronGeometry(0.05, 0), kit.trim, [0.16, 0.0, 0.12]));
   if (kind === 'gaesatae') pieces.push(part(new THREE.BoxGeometry(0.24, 0.2, 0.2), 0x3a6aa0, [0, 0.2, 0.0]));
+  if (HERO_KINDS.has(kind)) {
+    // Hero crown: a gold band with four points, above the plume line.
+    pieces.push(part(new THREE.CylinderGeometry(0.1, 0.11, 0.05, 8), kit.trim, [0, head + 0.1, 0]));
+    for (const [x, z] of [[0.08, 0], [-0.08, 0], [0, 0.08], [0, -0.08]] as const) {
+      pieces.push(part(new THREE.ConeGeometry(0.025, 0.08, 4), kit.trim, [x, head + 0.16, z]));
+    }
+    // A broad gilded shoulder mantle.
+    pieces.push(part(new THREE.BoxGeometry(0.3, 0.04, 0.2), kit.trim, [0, head - 0.14, -0.02]));
+  }
   const extra = new THREE.Mesh(merge(pieces), (model.object.getObjectByProperty('isMesh', true) as THREE.Mesh).material);
   extra.name = 'champion-kit';
   extra.castShadow = extra.receiveShadow = true;
@@ -801,6 +818,7 @@ function createChampion(kind: ChampionKind, opts?: { color?: number; seed?: numb
     horse.add(barding);
   }
   model.object.userData.champion = kind;
+  if (HERO_KINDS.has(kind)) model.object.userData.hero = kind;
   return model;
 }
 export type SoldierPose = 'idle' | 'walk' | 'attack' | 'die';
@@ -883,7 +901,7 @@ function fallingPose(object: THREE.Group, rig: THREE.Group): (progress: number) 
 
 /** Ancient soldiers facing +z, one shared material and no geometry work in setPose. */
 export function createSoldier(kind: SoldierKind, opts?: { color?: number; seed?: number }): SoldierModel {
-  if (kind in CHAMPION_KIT) return createChampion(kind as ChampionKind, opts);
+  if (kind in CHAMPION_KIT) return createChampion(kind as ChampionKind | HeroKind, opts);
   const unique = {phalangiteGuard:'hoplite',legionary:'swordsman',immortal:'archer',raider:'swordsman'} as const;
   if (kind in unique) {
     const base = unique[kind as keyof typeof unique];

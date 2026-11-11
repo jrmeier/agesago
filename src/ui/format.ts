@@ -23,6 +23,8 @@ const UNIT_NAMES: Record<UnitKind, [string, string]> = {
   praetorian: ['Praetorian', 'Praetorians'], equites: ['Eques', 'Equites'],
   appleBearer: ['Apple Bearer', 'Apple Bearers'], savaran: ['Savar', 'Savaran'],
   gaesatae: ['Gaesatus', 'Gaesatae'], nobleRider: ['Noble Rider', 'Noble Riders'],
+  leonidas: ['Leonidas', 'Leonidas'], scipio: ['Scipio', 'Scipio'], cyrus: ['Cyrus', 'Cyrus'],
+  vercingetorix: ['Vercingetorix', 'Vercingetorix'],
   tradeCart: ['Trade Cart', 'Trade Carts'],
   priest: ['Priest', 'Priests'],
   fishingBoat: ['Fishing Boat', 'Fishing Boats'],

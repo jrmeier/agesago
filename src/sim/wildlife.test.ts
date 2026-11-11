@@ -165,7 +165,7 @@ describe('wildlife and fishing', () => {
     applyDamage(world, dead, dead.hp, null, 1, { x: 51, z: 50 });
     const data = serializeWorld(world);
     const restored = deserializeWorld(JSON.parse(JSON.stringify(data)));
-    expect(SAVE_VERSION).toBe(14); // M14-1 upgrades (3), M15-1 veterancy (4), M14-2 chains (5), M14-5 repair (6), M15-5 loot (7), M16-7 wonders (8), M16-2 siege (9), M17-1 formations (10), M17-2 patrol (11), M17-3 guard (12), M15-4 batches (13), M18-4 capture (14); wildlife state adds none
+    expect(SAVE_VERSION).toBe(15); // M14-1 upgrades (3), M15-1 veterancy (4), M14-2 chains (5), M14-5 repair (6), M15-5 loot (7), M16-7 wonders (8), M16-2 siege (9), M17-1 formations (10), M17-2 patrol (11), M17-3 guard (12), M15-4 batches (13), M18-4 capture (14), M16-6 heroes (15); wildlife state adds none
     expect(restored.units.get(deer.id)!.leashAnchor).toEqual(home);
     expect([...restored.nodes.values()]).toEqual([...world.nodes.values()]);
     expect(serializeWorld(restored)).toEqual(data);

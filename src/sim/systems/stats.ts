@@ -73,6 +73,25 @@ export function unitAttack(world: World | undefined, owner: PlayerId, kind: Unit
 }
 
 /**
+ * Attack of the living unit `u`: its kind's researched, ranked attack with the auras on it
+ * applied (M16-6 heroes). Same as unitAttack when no aura reaches `u`.
+ */
+export function attackOf(world: World, u: Unit): Required<DamageTypes> {
+  const a = unitAttack(world, u.owner, u.kind, u.rank);
+  if (!world.auraActive.has(u.id)) return a;
+  return {
+    melee: auraStat(world, u, 'attack.melee', a.melee),
+    pierce: auraStat(world, u, 'attack.pierce', a.pierce),
+    crush: auraStat(world, u, 'attack.crush', a.crush),
+  };
+}
+
+/** Seconds between `u`'s attacks: its table reload, researched, with its auras applied. */
+export function unitReload(world: World, u: Unit): number {
+  return auraStat(world, u, 'reload', unitStat(world, u.owner, u.kind, 'reload', UNITS[u.kind].reload));
+}
+
+/**
  * Armour of a unit or building with its owner's research (base table values without `world`).
  * Missing crush armour is UNIT_CRUSH_ARMOR for units and 0 for buildings.
  */
@@ -126,13 +145,14 @@ export function isRanged(kind: UnitKind): boolean {
 }
 
 /**
-/**
  * Damage of one `attacker` blow against `target`: (attack − armour) per type (melee, pierce,
  * crush), at least 1, plus the class bonus against units (buildings get none). With `world`,
  * both sides' research applies; `owner` is the attacker's owner and `rank` its veterancy.
+ * `by`, the striking unit when it still lives, adds the auras on it (attackOf).
  */
-export function damageTo(attacker: UnitKind, target: Unit | Building, world?: World, owner: PlayerId = 0, rank: Rank = 0): number {
-  const base = rawDamage(unitAttack(world, owner, attacker, rank), armorOf(world, target));
+export function damageTo(attacker: UnitKind, target: Unit | Building, world?: World, owner: PlayerId = 0, rank: Rank = 0, by?: Unit): number {
+  const attack = world && by && by.kind === attacker && by.owner === owner ? attackOf(world, by) : unitAttack(world, owner, attacker, rank);
+  const base = rawDamage(attack, armorOf(world, target));
   const bonus = 'stance' in target ? (UNITS[attacker].bonus[UNITS[target.kind].unitClass] ?? 0) : 0;
   return Math.max(1, base) + bonus;
 }

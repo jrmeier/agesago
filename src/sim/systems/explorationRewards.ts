@@ -1,6 +1,6 @@
 import { clearEconomyJob } from './gather';
 import type { EntityId, PlayerId, PropPlacement, Vec2 } from '../../core/types';
-import { isAnimal, isShip } from '../../core/units';
+import { isAnimal, isHero, isShip } from '../../core/units';
 import { TECHS, type TechId } from '../../core/techs';
 import type { World } from '../World';
 import { orderMove } from './movement';
@@ -47,7 +47,7 @@ const distance = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.z - b.z);
 export function orderPriest(world: World, ids: EntityId[], type: PriestOrder['type'], targetId: EntityId, by: PlayerId): void {
   const target = world.units.get(targetId);
   const valid = target && target.owner > 0 && target.state !== 'garrisoned' && !isAnimal(target.kind) && !isShip(target.kind)
-    && (type === 'convert' ? world.areEnemies(by, target.owner) : !world.areEnemies(by, target.owner) && target.hp < target.maxHp)
+    && (type === 'convert' ? world.areEnemies(by, target.owner) && !isHero(target.kind) : !world.areEnemies(by, target.owner) && target.hp < target.maxHp)
     && world.visibilityOf(by).isVisible(target.pos.x, target.pos.z);
   const priests = ids.flatMap(id => { const u = world.units.get(id); return u?.owner === by && u.kind === 'priest' ? [u] : []; });
   if (!valid || !priests.length) { world.events.emit({ type: 'rejected', reason: 'invalid-target' }); return; }
@@ -110,7 +110,7 @@ export function explorationRewardSystem(world: World, dt: number): void {
     const u = world.units.get(id); const target = world.units.get(order.target);
     if (!u || !target || u.kind !== 'priest' || u.state === 'garrisoned' || target.state === 'garrisoned'
       || !world.visibilityOf(u.owner).isVisible(target.pos.x, target.pos.z)
-      || (order.type === 'convert' ? !world.areEnemies(u.owner, target.owner) : world.areEnemies(u.owner, target.owner) || target.hp >= target.maxHp)) {
+      || (order.type === 'convert' ? !world.areEnemies(u.owner, target.owner) || isHero(target.kind) : world.areEnemies(u.owner, target.owner) || target.hp >= target.maxHp)) {
       world.priestOrders.delete(id); continue;
     }
     if (distance(u.pos, target.pos) > PRIEST_RANGE) {

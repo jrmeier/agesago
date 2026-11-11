@@ -32,6 +32,8 @@ export const HOTKEYS = {
   idleVillager: 'Comma',
   scout: 'Period',
   scoutAlt: 'Home',
+  /** Select and centre your hero (M16-6); beside , (idle villager) and . (scout). */
+  hero: 'Semicolon',
   cancel: 'Escape',
   townBell: 'KeyU',
   /** W: free of every build and train key; the tech-tree button and Menu sheet open it too. */

@@ -13,6 +13,7 @@ async function boot(page: Page): Promise<string[]> {
   return errors;
 }
 
+const HEROES = ['leonidas', 'scipio', 'cyrus', 'vercingetorix'];
 const CHAMPIONS = ['spartanHoplite', 'agema', 'praetorian', 'equites', 'appleBearer', 'savaran', 'gaesatae', 'nobleRider'];
 
 test('fortress limit shows in the build menu and the fortress trains champions', async ({ page }, testInfo) => {
@@ -67,9 +68,10 @@ test('fortress limit shows in the build menu and the fortress trains champions',
 
   await page.evaluate((id) => (window as any).game.selection.set([id]), ids[0]);
   const tiles = page.locator('#train-grid [data-train]');
-  await expect(tiles).toHaveCount(2);
-  for (const kind of await tiles.evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.train))) {
-    expect(CHAMPIONS).toContain(kind);
-  }
+  // Two champions, then the civ's hero (M16-6, Empire Age).
+  await expect(tiles).toHaveCount(3);
+  const kinds = await tiles.evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.train));
+  for (const kind of kinds.slice(0, 2)) expect(CHAMPIONS).toContain(kind);
+  expect(HEROES).toContain(kinds[2]);
   expect(errors).toEqual([]);
 });

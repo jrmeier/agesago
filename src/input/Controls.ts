@@ -23,6 +23,8 @@ import { LootFloaters } from '../ui/LootFloaters';
 import { AgeChip } from '../ui/AgeChip';
 import { UpgradeBadges } from '../ui/UpgradeBadges';
 import { SideRail } from '../ui/SideRail';
+import { heroSlot } from '../ui/heroes';
+import { heroOf } from '../sim/systems/heroes';
 import { TechTreePanel, treeInputFor } from '../ui/TechTreePanel';
 import { closeTouchMenus, touchMenuOpen } from '../ui/touchMenus';
 import { ControlGroups, groupCentre } from './controlGroups';
@@ -241,6 +243,7 @@ export class Controls {
     this.alerts = new Alerts(this.discoveries.root, world, (p) => rig.focusOn(p));
     this.rail = new SideRail({
       idle: () => this.nextIdle(),
+      hero: () => this.focusHero(),
       group: (n, assign) => (assign ? this.assignGroup(n, false) : this.recallGroup(n)),
       assign: (n) => this.assignGroup(n, false),
     });
@@ -472,6 +475,7 @@ export class Controls {
     }
     if (input.keyPressed(HOTKEYS.stop) && formationCode !== parseHotkey(HOTKEYS.stop).code) this.stop();
     if (input.keyPressed(HOTKEYS.idleVillager)) this.nextIdle();
+    if (plain(HOTKEYS.hero)) this.focusHero();
     if (input.keyPressed(HOTKEYS.scout) || input.keyPressed('NumpadDecimal') || input.keyPressed(HOTKEYS.scoutAlt)) {
       focusNextScout(world, rig);
     }
@@ -1349,8 +1353,18 @@ export class Controls {
     rig.focusOn(u.pos);
   }
 
+  /** Select and centre the local hero (M16-6), if one lives. */
+  private focusHero(): void {
+    const { world, selection, rig } = this.deps;
+    const hero = heroOf(world, world.localPlayer);
+    if (!hero || hero.state === 'garrisoned') return;
+    selection.set([hero.id]);
+    rig.focusOn(hero.pos);
+  }
+
   private updateRail(): void {
     const { world } = this.deps;
+    this.rail.setHero(heroSlot(world, world.localPlayer));
     if (this.time - this.lastIdleCount >= IDLE_INTERVAL) {
       this.lastIdleCount = this.time;
       this.rail.setIdle(idleVillagers(world.units.values(), world.localPlayer).length);

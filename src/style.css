@@ -1429,6 +1429,62 @@ body.fps-mode .side-rail {
   background: var(--umber-800);
 }
 
+/* Hero slot (M16-6): portrait with a gold ring and an HP bar; dimmed with a clock while the retrain cooldown runs. */
+.hero-btn[hidden] {
+  display: none;
+}
+
+.hero-btn {
+  border-color: #e0b84a;
+  box-shadow:
+    0 0 0 2px #e0b84a,
+    var(--elev-1);
+}
+
+.hero-hp {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: -6px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--umber-950);
+  overflow: hidden;
+}
+
+.hero-hp-fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: #6fbf4a;
+  transform-origin: left center;
+}
+
+.hero-clock {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgb(20 12 4 / 0.6);
+  color: var(--ivory-50);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.hero-btn.cooldown .hero-clock {
+  display: flex;
+}
+
+.hero-btn.cooldown .hero-hp {
+  display: none;
+}
+
+.hero-btn.cooldown svg {
+  filter: grayscale(1);
+}
+
 .group-bar {
   display: flex;
   flex-direction: column;

@@ -20,6 +20,7 @@ import type { ExplorationSite, PriestOrder } from './systems/explorationRewards'
 import { normalizeWonderRules, type GameResult, type WonderCountdown, type WonderRules } from './systems/victory';
 
 /**
+ * 15: M16-6 heroes: per-player retrain cooldown (PlayerState.heroReadyAt). Older saves load ready (0).
  * 14: M18-4 building capture (Building.capture points per player, CombatState.capture). Older
  *    saves load with every building's points all its owner's and nobody capturing.
  * 13: M15-4 batch training (Building.queueCounts); older saves load every queue entry as 1 unit.
@@ -38,7 +39,7 @@ import { normalizeWonderRules, type GameResult, type WonderCountdown, type Wonde
  * 3: M14-1 in-place building upgrades (Building.tier, Building.upgrading).
  * 2: M8 research (researched techs, ages, market prices, building research queues).
  */
-export const SAVE_VERSION = 14;
+export const SAVE_VERSION = 15;
 /** Oldest version that still loads; v2 buildings load at tier 0 with no upgrade running, v2–9 units out of formation. */
 export const MIN_SAVE_VERSION = 2;
 
@@ -62,6 +63,8 @@ export interface SaveData {
     prices: Record<MarketResource, number>;
     /** Loot taken so far (absent before v7). */
     looted?: Stockpile;
+    /** Sim time a new hero may be trained from (absent before v9: 0, ready). */
+    heroReadyAt?: number;
   }[];
   units: Unit[];
   nodes: ResourceNode[];
@@ -150,9 +153,9 @@ export function serializeWorld(world: World): SaveData {
     wonderRules: world.wonderRules,
     width: world.hf.width,
     depth: world.hf.depth,
-    players: [...world.players.values()].map(({ player, stock, visibility, researched, age, prices, looted }) => ({
+    players: [...world.players.values()].map(({ player, stock, visibility, researched, age, prices, looted, heroReadyAt }) => ({
       player, stock, visibility: { version: visibility.version, runs: encode(visibility.state) },
-      researched: [...researched], age, prices, looted: { ...looted },
+      researched: [...researched], age, prices, looted: { ...looted }, heroReadyAt,
     })),
     units: [...world.units.values()],
     nodes: [...world.nodes.values()],
@@ -324,6 +327,8 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
     for (const b of saved.buildings) delete b.capture;
     for (const [, cs] of saved.systems.combat) delete cs.capture;
   }
+  // Pre-hero saves: nobody has lost a hero yet.
+  if (saved.version < 15) for (const p of saved.players) delete p.heroReadyAt;
   restoreMap(world.buildings, saved.buildings.map((b) => [b.id, b]));
   for (const b of world.buildings.values()) {
     const spec = BUILDINGS[b.kind];
@@ -351,6 +356,9 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
       if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) throw new Error('Invalid save: looted');
       state.looted[r] = v;
     }
+    const heroReadyAt = p.heroReadyAt ?? 0;
+    if (typeof heroReadyAt !== 'number' || !Number.isFinite(heroReadyAt) || heroReadyAt < 0) throw new Error('Invalid save: hero cooldown');
+    state.heroReadyAt = heroReadyAt;
   }
   for (const b of world.buildings.values()) {
     // A tier must be a step its chain actually reaches (0 always is).

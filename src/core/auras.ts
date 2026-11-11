@@ -29,6 +29,11 @@ export interface AuraSpec {
   heal?: number;
 }
 
+/** Reach of every hero aura, from the hero's edge. */
+export const HERO_AURA_RADIUS = 8;
+/** Military unit classes ("soldiers"). */
+const SOLDIERS: ModTarget[] = ['class:infantry', 'class:archer', 'class:cavalry'];
+
 const GATHER_STATS: Stat[] = ['gather.food', 'gather.wood', 'gather.gold', 'gather.stone', 'gather.farm'];
 
 const table = {
@@ -50,6 +55,46 @@ const table = {
     affects: ['villager'],
     players: 'own',
     modifiers: GATHER_STATS.map((stat): Modifier => ({ target: 'villager', stat, op: 'mul', value: 1.05 })),
+  },
+  // ---- Hero auras (M16-6): one per civilization's hero, radius HERO_AURA_RADIUS, own units only. ----
+  leonidasHoldTheLine: {
+    name: 'Hold the Line',
+    description: `Your soldiers within ${HERO_AURA_RADIUS} of Leonidas get +2 melee and pierce armour.`,
+    source: { unit: 'leonidas' },
+    radius: HERO_AURA_RADIUS,
+    affects: SOLDIERS,
+    players: 'own',
+    modifiers: [
+      { target: 'allUnits', stat: 'armor.melee', op: 'add', value: 2 },
+      { target: 'allUnits', stat: 'armor.pierce', op: 'add', value: 2 },
+    ],
+  },
+  scipioDrill: {
+    name: 'Drilled Legions',
+    description: `Your infantry within ${HERO_AURA_RADIUS} of Scipio attack 20% faster.`,
+    source: { unit: 'scipio' },
+    radius: HERO_AURA_RADIUS,
+    affects: ['class:infantry'],
+    players: 'own',
+    modifiers: [{ target: 'class:infantry', stat: 'reload', op: 'mul', value: 1 / 1.2 }],
+  },
+  cyrusRoyalEscort: {
+    name: 'Royal Escort',
+    description: `Your cavalry within ${HERO_AURA_RADIUS} of Cyrus move 15% faster.`,
+    source: { unit: 'cyrus' },
+    radius: HERO_AURA_RADIUS,
+    affects: ['class:cavalry'],
+    players: 'own',
+    modifiers: [{ target: 'class:cavalry', stat: 'speed', op: 'mul', value: 1.15 }],
+  },
+  vercingetorixWarCry: {
+    name: 'War Cry',
+    description: `Your infantry and cavalry within ${HERO_AURA_RADIUS} of Vercingetorix get +3 melee attack.`,
+    source: { unit: 'vercingetorix' },
+    radius: HERO_AURA_RADIUS,
+    affects: ['class:infantry', 'class:cavalry'],
+    players: 'own',
+    modifiers: [{ target: 'allUnits', stat: 'attack.melee', op: 'add', value: 3 }],
   },
 } satisfies Record<string, AuraSpec>;
 

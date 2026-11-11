@@ -1,7 +1,7 @@
 import { orderTend } from './livestock';
 import { BUILDINGS, CAPTURE } from '../../core/buildings';
 import type { Building, EntityId, PlayerId, Rank, ResourceType, Stance, Stockpile, Unit, UnitKind, UnitState, Vec2 } from '../../core/types';
-import { canGuard, canPatrol, canWork, captureRate, crushOf, isAnimal, isShip, packs, UNITS } from '../../core/units';
+import { canGuard, canPatrol, canWork, captureRate, crushOf, HERO_COOLDOWN, isAnimal, isHero, isShip, packs, UNITS } from '../../core/units';
 import { GAIA } from '../../core/types';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
@@ -15,7 +15,7 @@ import { siteApproach } from './sites';
 import { playerHasFlag } from './research';
 import { awardKill, recordDamage } from './veterancy';
 import { readyToFire, startUnpack } from './siege';
-import { armorOf, buildingAttack, damageTo, edgeDistance, garrisonCap, isRanged, nearestPoint, unitRadius, unitRange, unitSight, unitSpeed } from './stats';
+import { armorOf, buildingAttack, damageTo, edgeDistance, garrisonCap, isRanged, nearestPoint, unitRadius, unitRange, unitReload, unitSight, unitSpeed } from './stats';
 import { garrisonArrows, orderGarrison } from './defence';
 import { canCapture, reduceCapturePoints } from './capture';
 
@@ -682,7 +682,6 @@ function attackTick(world: World, u: Unit, cs: CombatState, threat: Unit | undef
     disengage(world, u, cs);
     return;
   }
-  const spec = UNITS[u.kind];
   const d = edgeDistance(u, t);
   if (capturing && d <= CAPTURE.range + 1e-6) {
     // Capture (M18-4): stand at the building and drain its capture points every tick.
@@ -713,7 +712,7 @@ function attackTick(world: World, u: Unit, cs: CombatState, threat: Unit | undef
     }
     if (cs.cooldown <= 0) {
       strike(world, u, t);
-      cs.cooldown = spec.reload;
+      cs.cooldown = unitReload(world, u);
     }
     return;
   }
@@ -777,7 +776,7 @@ function backOff(world: World, u: Unit, cs: CombatState, from: Vec2): boolean {
 function strike(world: World, u: Unit, t: Target): void {
   const spec = UNITS[u.kind];
   if (!spec.projectile) {
-    applyDamage(world, t, damageTo(u.kind, t, world, u.owner, u.rank), u.id, u.owner, u.pos);
+    applyDamage(world, t, damageTo(u.kind, t, world, u.owner, u.rank, u), u.id, u.owner, u.pos);
     return;
   }
   const from = { x: u.pos.x, z: u.pos.z };
@@ -815,7 +814,7 @@ function resolveProjectiles(world: World): void {
     if (!t || t.hp <= 0) continue;
     if (isUnit(t) && t.state === 'garrisoned') continue;
     if (isUnit(t) && dist(t.pos, p.aim) > BALANCE.hitRadius) continue; // dodged
-    const amount = p.pierce !== undefined ? Math.max(1, p.pierce - armorOf(world, t).pierce) : damageTo(p.kind, t, world, p.owner, p.rank);
+    const amount = p.pierce !== undefined ? Math.max(1, p.pierce - armorOf(world, t).pierce) : damageTo(p.kind, t, world, p.owner, p.rank, world.units.get(p.by));
     applyDamage(world, t, amount, p.by, p.owner, p.from);
   }
 }
@@ -1055,6 +1054,10 @@ export function killUnit(world: World, u: Unit): void {
     }
   }
   world.events.emit({ type: 'died', id: u.id, kind: u.kind, owner: u.owner, pos: { x: u.pos.x, z: u.pos.z } });
+  if (isHero(u.kind)) {
+    const p = world.players.get(u.owner);
+    if (p) p.heroReadyAt = world.time + HERO_COOLDOWN;
+  }
   world.units.delete(u.id);
   world.gatherState.delete(u.id);
   world.exploreState.delete(u.id);

@@ -102,6 +102,26 @@ Margins (`src/sim/champions.test.ts`: City Age, no techs, equal cost, five jitte
 | 5 infantry champions vs 20 Slingers (hard counter) | slingers win, ~35–45% left | lose, counter ≥ 25% |
 | 4 cavalry champions vs 15 Hoplites (hard counter) | hoplites win, ~77% left | lose, counter ≥ 60% |
 
+## Heroes (M16-6)
+
+Each civilization has one named **hero**, trained at a Fortress in the Empire Age (250 food +
+350 gold, 40 s). A player may have only one hero alive or queued, and after it falls must wait
+**120 s** (`HERO_COOLDOWN`) before training the next; the wait is saved. Heroes never gather,
+build, rank up or get converted. Infantry heroes have 600 HP, 18 melee (+4 vs cavalry), 5/4
+armour and a 1.5 s swing; Cyrus (cavalry) has 700 HP, 4.8 speed and +6 vs archers.
+
+Each hero's aura reaches your own units within 8 of its edge (the hero included when it matches):
+
+| Civ | Hero | Aura | Effect |
+|---|---|---|---|
+| Hellenes | Leonidas | Hold the Line | soldiers +2 melee and pierce armour |
+| Romans | Scipio | Drilled Legions | infantry attack 20% faster (reload ÷ 1.2) |
+| Persians | Cyrus | Royal Escort | cavalry move 15% faster |
+| Celts | Vercingetorix | War Cry | infantry and cavalry +3 melee attack |
+
+Auras now also reach attack (melee, pierce, crush) and attack speed (`reload`), in addition to
+gather, carry, speed and armour. Projectiles use the shooter's auras when they land, if it still lives.
+
 ## The scripted build order
 
 `src/bench/pacing.ts` plays player 1 on a real generated map (`generateMap(seed, 2)`, the real

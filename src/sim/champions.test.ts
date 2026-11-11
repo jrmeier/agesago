@@ -77,7 +77,7 @@ describe('fortress', () => {
     expect(f.garrison).toBe(20);
     expect(f.cost.stone).toBeGreaterThan(f.cost.wood ?? 0);
     expect(f.limit).toBe(2);
-    expect(trainable('fortress', 'romans')).toEqual(['praetorian', 'equites']);
+    expect(trainable('fortress', 'romans')).toEqual(['praetorian', 'equites', 'scipio']);
   });
 
   // Town Centers placed so the fortress sites are inside their owners' territory (M18-3).
@@ -193,8 +193,8 @@ describe('champions', () => {
     expect(kinds).toEqual(expect.arrayContaining(['appleBearer', 'savaran']));
   });
 
-  it('a player without a civilization still fields champions', () => {
-    expect(trainable('fortress')).toEqual(['spartanHoplite', 'agema']);
+  it('a player without a civilization still fields champions and a hero', () => {
+    expect(trainable('fortress')).toEqual(['spartanHoplite', 'agema', 'leonidas']);
   });
 
   it.each(CHAMPIONS)('%s never gathers, builds or tends', (kind) => {

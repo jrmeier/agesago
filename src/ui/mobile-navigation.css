@@ -118,6 +118,12 @@ body.touch .idle-btn {
   height: var(--mobile-tap, 44px);
 }
 
+/* The hero slot goes below the control groups on touch, so the idle / Groups row stays put. */
+body.touch .hero-btn {
+  order: 2;
+  grid-column: 1;
+}
+
 body.touch .idle-count {
   right: -4px;
   bottom: -3px;

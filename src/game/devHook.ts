@@ -2,6 +2,7 @@ import type { Stat, Subject } from '../core/techs';
 import type { Age, BuildingKind, EntityId, PlayerId, Stockpile, Vec2 } from '../core/types';
 import { BALANCE } from '../sim/balance';
 import { completeBuilding, layFoundation } from '../sim/systems/build';
+import { killUnit } from '../sim/systems/combat';
 import { clearStatCache, statOf } from '../sim/systems/research';
 import { gainXp } from '../sim/systems/veterancy';
 import type { World } from '../sim/World';
@@ -31,6 +32,8 @@ export interface DevHook {
   setHp(id: EntityId, hp: number): number | null;
   /** Give unit `id` experience (promotes it like a kill would). Returns its rank, or null. */
   grantXp(id: EntityId, xp: number): number | null;
+  /** Kill unit `id` at once (as if slain); false when there is no such unit. */
+  kill(id: EntityId): boolean;
 }
 
 export function devHook(world: World): DevHook {
@@ -104,6 +107,12 @@ export function devHook(world: World): DevHook {
       if (!unit) return null;
       gainXp(world, unit, xp);
       return unit.rank ?? 0;
+    },
+    kill(id) {
+      const u = world.units.get(id);
+      if (!u) return false;
+      killUnit(world, u);
+      return true;
     },
   };
 }

@@ -33,6 +33,8 @@ export type Stat =
   | 'armor.pierce'
   | 'armor.crush'
   | 'range'
+  /** Seconds between attacks (M16-6 hero auras: ×0.83 ≈ 20% faster). */
+  | 'reload'
   | 'trainTime'
   /** Seconds a siege engine takes to pack or unpack (UnitSpec.packTime). */
   | 'packTime'

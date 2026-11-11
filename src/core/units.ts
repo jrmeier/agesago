@@ -60,6 +60,11 @@ export interface UnitSpec {
    * tend (see canWork) and are capped per player only by the fortress limit.
    */
   champion?: boolean;
+  /**
+   * Hero (M16-6): a named Empire Age fortress unit with an aura. One alive (or queued) per
+   * player, a retrain cooldown after it falls (HERO_COOLDOWN); never works, ranks or converts.
+   */
+  hero?: boolean;
 }
 
 /**
@@ -124,6 +129,25 @@ function champion(base: typeof CHAMPION_INFANTRY | typeof CHAMPION_CAVALRY, name
   return { ...base, name, civ, attack: { ...base.attack }, armor: { ...base.armor }, bonus: { ...base.bonus }, cost: { ...base.cost } };
 }
 
+/*
+ * Heroes (M16-6). Infantry heroes share one stat block and the cavalry hero another; each brings
+ * its civ's aura (core/auras.ts), which is what sets them apart.
+ */
+const HERO_INFANTRY = {
+  unitClass: 'infantry', hp: 600, speed: 2.6, sight: 9, attack: { melee: 18, pierce: 0, crush: 2 },
+  armor: { melee: 5, pierce: 4 }, range: 0.7, reload: 1.5, bonus: { cavalry: 4 }, cost: { food: 250, gold: 350 },
+  trainTime: 40, trainedAt: 'fortress', radius: 0.38, age: 3, hero: true,
+} as const satisfies Omit<UnitSpec, 'name' | 'civ' | 'auras'>;
+const HERO_CAVALRY = {
+  unitClass: 'cavalry', hp: 700, speed: 4.8, sight: 10, attack: { melee: 18, pierce: 0, crush: 1 },
+  armor: { melee: 4, pierce: 5 }, range: 0.8, reload: 1.6, bonus: { archer: 6 }, cost: { food: 250, gold: 350 },
+  trainTime: 40, trainedAt: 'fortress', radius: 0.6, age: 3, hero: true,
+} as const satisfies Omit<UnitSpec, 'name' | 'civ' | 'auras'>;
+
+function hero(base: typeof HERO_INFANTRY | typeof HERO_CAVALRY, name: string, civ: CivId, aura: AuraId): UnitSpec {
+  return { ...base, name, civ, auras: [aura], attack: { ...base.attack }, armor: { ...base.armor }, bonus: { ...base.bonus }, cost: { ...base.cost } };
+}
+
 export const UNITS: Record<UnitKind, UnitSpec> = {
   phalangiteGuard: {name:'Phalangite Guard',civ:'hellenes',unitClass:'infantry',hp:65,speed:2.1,sight:6,attack:{melee:6,pierce:0,crush:2},armor:{melee:1,pierce:1},range:.9,reload:2,bonus:{cavalry:12,siege:8},cost:{food:60,wood:35},trainTime:14,trainedAt:'barracks',radius:.32,age:1},
   legionary: {name:'Legionary',civ:'romans',unitClass:'infantry',hp:65,speed:2.3,sight:6,attack:{melee:8,pierce:0,crush:2},armor:{melee:2,pierce:1},range:.5,reload:2,bonus:{siege:8},cost:{food:65,gold:25},trainTime:15,trainedAt:'barracks',radius:.32,age:1},
@@ -137,6 +161,10 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
   savaran: champion(CHAMPION_CAVALRY, 'Savar', 'persians'),
   gaesatae: champion(CHAMPION_INFANTRY, 'Gaesatae', 'celts'),
   nobleRider: champion(CHAMPION_CAVALRY, 'Noble Rider', 'celts'),
+  leonidas: hero(HERO_INFANTRY, 'Leonidas', 'hellenes', 'leonidasHoldTheLine'),
+  scipio: hero(HERO_INFANTRY, 'Scipio', 'romans', 'scipioDrill'),
+  cyrus: hero(HERO_CAVALRY, 'Cyrus', 'persians', 'cyrusRoyalEscort'),
+  vercingetorix: hero(HERO_INFANTRY, 'Vercingetorix', 'celts', 'vercingetorixWarCry'),
   deer: {
     name: 'Deer', unitClass: 'wildlife', hp: 12, speed: 4, sight: 0,
     attack: { melee: 0, pierce: 0 }, armor: { melee: 0, pierce: 0 },
@@ -352,7 +380,7 @@ export function isAnimal(kind: UnitKind): kind is 'deer' | 'boar' | 'sheep' {
   return kind === 'deer' || kind === 'boar' || kind === 'sheep';
 }
 
-/** Champions fielded by players without a civilization (legacy saves), so their fortress still trains. */
+/** Champions and the hero fielded by players without a civilization (legacy saves), so their fortress still trains. */
 export const DEFAULT_CHAMPION_CIV: CivId = 'hellenes';
 
 /**
@@ -378,7 +406,7 @@ export function trainable(building: BuildingKind, civ?: CivId): UnitKind[] {
     const u = UNITS[k];
     if (u.trainedAt !== building) return false;
     if (!u.civ) return true;
-    return u.civ === (civ ?? (u.champion ? DEFAULT_CHAMPION_CIV : undefined));
+    return u.civ === (civ ?? (u.champion || u.hero ? DEFAULT_CHAMPION_CIV : undefined));
   });
 }
 
@@ -404,12 +432,25 @@ export function isChampion(kind: UnitKind): boolean {
   return UNITS[kind].champion === true;
 }
 
+/** Named heroes (M16-6). */
+export function isHero(kind: UnitKind): boolean {
+  return UNITS[kind].hero === true;
+}
+
+/** Seconds after a player's hero falls before another can be trained (M16-6). */
+export const HERO_COOLDOWN = 120;
+
+/** The hero a player of `civ` trains at the fortress (DEFAULT_CHAMPION_CIV's without a civ). */
+export function heroKindFor(civ?: CivId): UnitKind | undefined {
+  return trainable('fortress', civ).find(isHero);
+}
+
 /**
  * Trained land units can take explicit economy orders; idle units never seek work.
- * Champions are soldiers only: they never gather, build or tend.
+ * Champions and heroes are soldiers only: they never gather, build or tend.
  */
 export function canWork(kind: UnitKind): boolean {
-  return UNITS[kind].trainedAt !== null && !isAnimal(kind) && !isShip(kind) && UNITS[kind].unitClass !== 'siege' && !isChampion(kind);
+  return UNITS[kind].trainedAt !== null && !isAnimal(kind) && !isShip(kind) && UNITS[kind].unitClass !== 'siege' && !isChampion(kind) && !isHero(kind);
 }
 
 // ---- Veterancy (M15-1, after 0 A.D.'s Promotion + Loot) ----
@@ -449,11 +490,11 @@ export const RANKS: readonly [RankSpec, RankSpec, RankSpec] = [
 
 /**
  * Soldiers rank up: infantry, archers and cavalry (scouts included). Villagers, priests, trade
- * carts, ships and wildlife do not, and nor do champions (M16-5), who are already elite.
+ * carts, ships and wildlife do not, and nor do champions (M16-5) and heroes (M16-6), who are already elite.
  */
 export function canRank(kind: UnitKind): boolean {
   const c = UNITS[kind].unitClass;
-  return (c === 'infantry' || c === 'archer' || c === 'cavalry') && !isChampion(kind);
+  return (c === 'infantry' || c === 'archer' || c === 'cavalry') && !isChampion(kind) && !isHero(kind);
 }
 
 /** Default group formation for a selection: soldiers-only march in 'line'; anything with villagers, ships or priests moves loosely. */

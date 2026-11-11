@@ -87,6 +87,11 @@ export type UnitKind =
   | 'savaran'
   | 'gaesatae'
   | 'nobleRider'
+  /** Heroes (M16-6): one named hero per civ, trained at the fortress in the Empire Age; one alive per player. */
+  | 'leonidas'
+  | 'scipio'
+  | 'cyrus'
+  | 'vercingetorix'
   /** Walks between markets for gold (M8-12). */
   | 'tradeCart'
   /** Heals allies, converts enemies and carries relics. */
@@ -486,7 +491,9 @@ export type RejectReason =
   /** The player already has the most of this building allowed (BuildingSpec.limit). */
   | 'limit'
   /** Outside the builder's territory, in enemy territory, or too close to another Town Center (M18-3). */
-  | 'territory';
+  | 'territory'
+  /** A fallen hero cannot be replaced until its retrain cooldown (HERO_COOLDOWN) runs out. */
+  | 'hero-cooldown';
 
 /** Result of checking whether a building fits at a spot (World.canPlace). */
 export interface PlacementCheck {

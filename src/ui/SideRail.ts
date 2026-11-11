@@ -1,3 +1,5 @@
+import type { HeroSlot } from './heroes';
+import { clockText } from './heroes';
 import { closeTouchMenus, touchMenuOpen } from './touchMenus';
 
 /** Holding a group button this long (ms) assigns the current selection to it. */
@@ -5,6 +7,8 @@ export const ASSIGN_HOLD_MS = 500;
 export interface SideRailHandlers {
   /** Idle-villager button: select and centre the next idle villager. */
   idle(): void;
+  /** Hero button: select and centre the local hero (M16-6). */
+  hero(): void;
   /** Group button tapped / clicked (`assign`: Ctrl / Cmd / Alt-click). */
   group(n: number, assign: boolean): void;
   /** Group button held down: assign the selection to it. */
@@ -14,12 +18,15 @@ export interface SideRailHandlers {
 /**
  * The left rail: an idle-villager medallion with a count badge, then control-group buttons
  * 1–9 with their unit counts. Tap / click selects a group (double-tap centres, via the
- * handler), long-press (or Ctrl-click) assigns. Binds #side-rail, #idle-btn and #group-bar.
+ * handler), long-press (or Ctrl-click) assigns. A hero slot (#hero-btn) shows the living hero's
+ * portrait and HP, or the retrain clock after it fell. Binds #side-rail, #idle-btn, #hero-btn and #group-bar.
  */
 export class SideRail {
   private readonly rail = document.getElementById('side-rail');
   private readonly idleBtn = document.getElementById('idle-btn');
   private readonly idleCount: HTMLElement | null;
+  private readonly heroBtn = document.getElementById('hero-btn');
+  private heroKey = '';
   private readonly bar = document.getElementById('group-bar');
   private readonly buttons: HTMLButtonElement[] = [];
   private groupToggle: HTMLButtonElement | null = null;
@@ -36,6 +43,10 @@ export class SideRail {
       (e.currentTarget as HTMLElement).blur();
       this.on.idle();
     });
+    this.heroBtn?.addEventListener('click', (e) => {
+      (e.currentTarget as HTMLElement).blur();
+      this.on.hero();
+    });
     this.rail?.addEventListener('contextmenu', (e) => e.preventDefault());
     this.createGroupChooser();
     for (let n = 1; n <= 9; n++) this.buttons.push(this.groupButton(n));
@@ -49,6 +60,34 @@ export class SideRail {
     if (this.idleCount) this.idleCount.textContent = String(count);
     this.idleBtn.classList.toggle('none-idle', count === 0);
     this.idleBtn.setAttribute('aria-label', `${count} idle villager${count === 1 ? '' : 's'} — select next`);
+  }
+
+  /** The hero slot (only touches the DOM when what it shows changes). */
+  setHero(slot: HeroSlot): void {
+    const btn = this.heroBtn;
+    if (!btn) return;
+    const hp = slot.state === 'alive' ? Math.round(slot.hp * 20) / 20 : 0;
+    const clock = slot.state === 'cooldown' ? clockText(slot.left) : '';
+    const key = slot.state === 'alive' ? `a${slot.kind}:${hp}` : slot.state === 'cooldown' ? `c${clock}` : 'n';
+    if (key === this.heroKey) return;
+    this.heroKey = key;
+    btn.hidden = slot.state === 'none';
+    btn.classList.toggle('cooldown', slot.state === 'cooldown');
+    if (slot.state === 'alive') {
+      btn.querySelector('use')?.setAttribute('href', `#i-${slot.kind}`);
+      btn.dataset.hero = slot.kind;
+      const fill = btn.querySelector<HTMLElement>('.hero-hp-fill');
+      if (fill) fill.style.transform = `scaleX(${hp})`;
+      const label = `Select your hero (;) — ${Math.round(slot.hp * 100)}% health`;
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+    } else if (slot.state === 'cooldown') {
+      const text = btn.querySelector('.hero-clock');
+      if (text) text.textContent = clock;
+      const label = `Your hero fell — a new one can be trained at a Fortress in ${clock}`;
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+    }
   }
 
   /** Group sizes, index 0 = group 1. */

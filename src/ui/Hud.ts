@@ -2,7 +2,7 @@ import type { AuraId } from '../core/auras';
 import { BUILDINGS, BUILDING_UPGRADES, FARM_FOOD, buildingTitle, nextUpgrade } from '../core/buildings';
 import { AGE_NAMES, TECHS, buildingTier, techsAt, unitLine, type Age, type TechId } from '../core/techs';
 import type { Building, BuildingKind, ResourceType, Stockpile, Unit, UnitKind } from '../core/types';
-import { canGuard, canPatrol, canWork, captureRate, UNITS, trainable } from '../core/units';
+import { canGuard, canPatrol, canWork, captureRate, isHero, UNITS, trainable } from '../core/units';
 import type { Selection } from '../game/Selection';
 import { shownSelection, sightFromState, stepLastSeen, type LastSeenBuilding } from '../render/lastSeen';
 import { BALANCE } from '../sim/balance';
@@ -57,6 +57,7 @@ import {
   trainEntries,
 } from './military';
 import { auraChips } from './auras';
+import { heroLockText, heroTileNote } from './heroes';
 import { MarketPanel } from './market';
 import {
   agedUpText,
@@ -243,7 +244,7 @@ export class Hud {
       if (e.reason === 'insufficient-food' || e.reason === 'pop-cap') this.flashTrain();
       if (e.reason === 'insufficient-resources' || e.reason === 'pop-cap') this.flashTrainGrid();
       if (e.reason === 'pop-cap') this.flashPop();
-      if (e.reason === 'age' || e.reason === 'requires' || e.reason === 'busy') this.flashTrainGrid();
+      if (e.reason === 'age' || e.reason === 'requires' || e.reason === 'busy' || e.reason === 'hero-cooldown') this.flashTrainGrid();
     });
     world.events.on('agedUp', (e) => {
       if (e.owner !== world.localPlayer) return;
@@ -477,7 +478,7 @@ export class Hud {
       grid.append(batch);
     }
     for (const e of trainEntries(kind, this.world.stock, this.world.players.get(this.world.localPlayer)?.researched, this.world.players.get(this.world.localPlayer)?.player.civ)) {
-      const btn = tile(`#i-${e.kind}`, e.name, e.cost, e.key, 'Shift-click: queue 5');
+      const btn = tile(`#i-${e.kind}`, e.name, e.cost, e.key, isHero(e.kind) ? heroTileNote(e.kind) : 'Shift-click: queue 5');
       btn.classList.add('train-tile');
       btn.dataset.train = e.kind;
       grid.append(btn);
@@ -965,7 +966,7 @@ export class Hud {
     const age = this.playerAge();
     const upgrading = !!b.upgrading;
     this.trainAffordKey = markAffordable(this.trainButtons, (k) => UNITS[k].cost, this.world.stock, this.trainAffordKey, (k) =>
-      upgrading ? UPGRADING_TEXT : ageLockText(unitAge(k), age)
+      upgrading ? UPGRADING_TEXT : ageLockText(unitAge(k), age) || heroLockText(this.world, this.world.localPlayer, k)
     );
   }
 

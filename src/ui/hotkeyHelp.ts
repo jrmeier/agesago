@@ -24,6 +24,7 @@ const ACTION_LABEL: Record<string, string> = {
   stop: 'Stop',
   idleVillager: 'Select the next idle villager',
   scout: 'Centre on the next scout',
+  hero: 'Select and centre your hero',
   scoutAlt: 'Centre on the next scout',
   cancel: 'Cancel',
   townBell: 'Town bell: villagers run to the nearest shelter',
@@ -40,6 +41,7 @@ export function hotkeyGlyph(code: string): string {
   if (code.startsWith('Shift+')) return `Shift+${hotkeyGlyph(code.slice(6))}`;
   if (code === 'Comma') return ',';
   if (code === 'Period') return '.';
+  if (code === 'Semicolon') return ';';
   if (code === 'Escape') return 'Esc';
   if (code === 'Home') return 'Home';
   if (code === 'Slash') return '?';
