@@ -81,7 +81,8 @@ test('age chip shows progress, opens the Town Center, and the age-up lists unloc
   const phone = testInfo.project.name === 'phone';
   const errors = await boot(page, phone);
   await page.evaluate(() => (window as any).dev.placeComplete('storehouse'));
-  await setStock(page, { food: 280 });
+  // 120 food short of the Town Age (300 food since M13-3).
+  await setStock(page, { food: 180 });
 
   const chip = page.locator('#age-chip');
   await expect(chip).toBeVisible();

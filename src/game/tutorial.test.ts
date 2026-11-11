@@ -23,11 +23,15 @@ function facts(over: Partial<TutorialFacts> = {}): TutorialFacts {
   };
 }
 
-const baseline: TutorialBaseline = { villagers: 3, food: 50 };
+const baseline: TutorialBaseline = { villagers: 3, food: 50, wood: 0 };
 
 describe('tutorial steps', () => {
   it('advances only from sim facts, and skips work that is already done', () => {
     expect(advance('gather', facts(), baseline)).toBe('gather');
+    // A starting stockpile (M13-3) is not progress: only wood or food above the start counts.
+    const stocked: TutorialBaseline = { villagers: 3, food: 200, wood: 200 };
+    expect(advance('gather', facts({ wood: 200, food: 200 }), stocked)).toBe('gather');
+    expect(advance('gather', facts({ wood: 210, food: 200 }), stocked)).toBe('train');
     expect(advance('gather', facts({ gathering: true }), baseline)).toBe('train');
     expect(advance('gather', facts({ wood: 10, villagers: 4, houses: 1 }), baseline)).toBe('scout');
     expect(advance('raid', facts({ raidSpawned: true, raidersAlive: 2 }), baseline)).toBe('raid');

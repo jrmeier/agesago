@@ -30,7 +30,7 @@ export class TutorialCoach {
     const stock = world.stockOf(world.localPlayer);
     if (stock.food < 50) stock.food = 50;
     world.emitStock();
-    this.baseline = { villagers: world.villagerCount, food: world.stockOf(world.localPlayer).food };
+    this.baseline = { villagers: world.villagerCount, food: stock.food, wood: stock.wood };
     this.dismissed = loadDismissed(readHints());
     const root = document.getElementById('tutorial');
     if (!root) return;

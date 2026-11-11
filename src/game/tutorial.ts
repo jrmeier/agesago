@@ -22,6 +22,8 @@ export interface TutorialFacts {
 export interface TutorialBaseline {
   villagers: number;
   food: number;
+  /** Starting wood (BALANCE.startingStock gives some since M13-3), so only gathered wood counts. */
+  wood: number;
 }
 
 const OBJECTIVES: Record<TutorialStep, string> = {
@@ -101,7 +103,7 @@ export function rememberDismissed(dismissed: ReadonlySet<string>, id: string): s
 function met(step: TutorialStep, facts: TutorialFacts, baseline: TutorialBaseline): boolean {
   switch (step) {
     case 'gather':
-      return facts.gathering || facts.wood > 0 || facts.food > baseline.food;
+      return facts.gathering || facts.wood > baseline.wood || facts.food > baseline.food;
     case 'train':
       return facts.villagers > baseline.villagers;
     case 'house':
