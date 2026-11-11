@@ -6,7 +6,8 @@ import { ageLocked } from '../sim/systems/build';
 
 const TYPES: ResourceType[] = ['food', 'wood', 'gold', 'stone'];
 const WORKING: ReadonlySet<UnitState> = new Set(['toNode', 'gathering', 'toDrop']);
-const BUILDING: ReadonlySet<UnitState> = new Set(['toBuild', 'building']);
+/** Building or repairing: the economy leaves them to it. */
+const BUILDING: ReadonlySet<UnitState> = new Set(['toBuild', 'building', 'toRepair', 'repairing']);
 /** Gatherers per node before the AI looks elsewhere. */
 const MAX_LOAD: Record<ResourceType, number> = { wood: 2, food: 3, gold: 4, stone: 4 };
 /** Drop site that serves each resource. */
@@ -77,7 +78,7 @@ export class Economy {
     const { world, player, profile } = this.c;
     const stock = world.stockOf(player);
     const tc = s.tc;
-    if (tc?.complete) {
+    if (tc?.complete && !tc.upgrading && this.c.upgradeHold !== tc.id) {
       while (
         tc.queue < profile.tcQueue &&
         s.villagers.length + tc.queue < profile.targetVillagers &&
@@ -258,7 +259,9 @@ export class Economy {
   private house(s: Snapshot): boolean | null {
     if (s.popCap >= MAX_POP) return null;
     const production = PRODUCTION.reduce((n, k) => n + (s.count[k] ?? 0), 0);
-    const building = s.building.house ?? 0;
+    // Houses going up, and houses becoming Large Houses, add 5 each.
+    let building = s.building.house ?? 0;
+    for (const b of s.buildings) if (b.kind === 'house' && b.upgrading) building++;
     const margin = 2 + (s.villagers.length > 8 ? 2 : 0) + production * 2;
     if (s.popCap + building * 5 - s.popUsed > margin || building >= (s.popCap >= 40 ? 2 : 1)) return null;
     return this.place(s, {

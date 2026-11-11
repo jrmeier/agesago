@@ -348,7 +348,9 @@ export class Research {
     const tcBusy = booming && (world.time < this.tcFreeAt || this.nearAge(f, p));
     // Idle research buildings by kind (one tech at a time each, so training never waits long).
     const idle = new Map<BuildingKind, Building>();
-    for (const b of s.buildings) if (b.complete && !b.research?.length && !idle.has(b.kind)) idle.set(b.kind, b);
+    for (const b of s.buildings) {
+      if (b.complete && !b.research?.length && !b.upgrading && b.id !== this.c.upgradeHold && !idle.has(b.kind)) idle.set(b.kind, b);
+    }
     let best: { tech: TechId; at: Building; score: number } | null = null;
     let want: { tech: TechId; score: number; group: TechGroup; urgent: boolean } | null = null;
     for (const r of RULES) {

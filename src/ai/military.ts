@@ -111,7 +111,7 @@ export class Military {
         this.c.issue({ type: 'rally', buildingId: b.id, pos: rally });
         this.rallied.set(b.id, rally);
       }
-      if (b.queue >= profile.militaryQueue || s.popUsed >= s.popCap) continue;
+      if (b.queue >= profile.militaryQueue || s.popUsed >= s.popCap || b.upgrading || b.id === this.c.upgradeHold) continue;
       const kind = this.chooseUnit(b.kind, s, stock, reserve);
       if (!kind) continue;
       const before = b.queue;

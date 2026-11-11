@@ -38,6 +38,8 @@ export interface Ctx {
   aging: boolean;
   /** Villager training also leaves `reserve` (a short pause to click up to the Town Age). */
   pauseVillagers: boolean;
+  /** A building held idle (no new training or research) so its in-place upgrade can start. */
+  upgradeHold: EntityId | null;
 }
 
 /** One sweep over the world: this player's units and buildings, sorted by role. */

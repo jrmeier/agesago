@@ -1,4 +1,4 @@
-# AI status (M7-2 economy, M8-16 research and ages, M13-6 new age gates)
+# AI status (M7-2 economy, M8-16 research and ages, M13-6 new age gates, M14-6 upgrades and repairs)
 
 The computer player (`AIPlayer`) acts only through `world.dispatch(cmd, player)`. It reads its
 own units, buildings and stock, enemy units it can see right now, enemy buildings it has seen,
@@ -55,7 +55,7 @@ costs are read from `TECHS` (nothing hard-coded, so Balance can retune them).
   villagers work that resource. TC techs: wovenTunics at 12 villagers or when raided, donkeyPacks
   at 20, census and townWatch in the Town Age, oxCarts in the City Age. Forge lines follow the
   army's class make-up (3+ units and a quarter of the army). Unit lines start at `lineUnits` of
-  that kind (tier-3 lines also need a level-2 building, which the AI does not build yet, M14-3).
+  that kind (tier-3 lines also need a level-2 building, which `upkeep.ts` provides in the City Age, M14-6).
   Masonry and ballistics need a ranged army; tower upgrades are per building now (M14-2). The profile
   weights each group (0 skips it).
 - **Budget.** One tech at a time per building, a `gap` between starts, and a food reserve for
@@ -161,10 +161,57 @@ military buildings when the Town Age arrives and a unit line of tier N started i
 
 Bounds are now Town ≤ 7 min, City ≤ 18 min, and the tier-2 line by 25 min (were 14 and 25 for the old costs).
 
+## M14-6: building upgrades and repairs (`upkeep.ts`)
+
+The `Upkeep` planner runs on the build schedule (all difficulties) and issues only
+`upgradeBuilding` and `repair` commands. It starts at most one in-place upgrade at a time, and
+every cost leaves `ctx.reserve` (the age-up) untouched. Priority:
+
+1. **Town Center**: one tier per age (Town Hall in the Town Age, City Hall in the City Age), once
+   the villager boom is done (villagers + queue at the profile target), or at once when raided.
+2. **Watch towers** along their chain when threatened (hit, or an enemy near the base in the last
+   minute), or when it has 300 wood and 300 stone to spare beyond the cost.
+3. **Military buildings to level 2** in the City Age. The kind that trained the most of the
+   current army goes first, once it has trained `lineUnits` of them (the tier-3 line techs require
+   a level-2 building), or when it has 400 wood and 400 gold to spare.
+4. **Large Houses** within 6 of the pop cap with 100 wood to spare.
+
+An upgrade needs an idle building. When the pick is busy, `ctx.upgradeHold` names it. The
+economy (TC villagers), the military (training) and research (techs) then skip it until it is
+idle, for at most 30 s. After that the hold lapses and nothing is held for a minute. The house
+builder counts a house becoming a Large House as +5 pop going up.
+
+**Repairs.** A threat is an enemy soldier or scout in sight within 30 of the base or 12 of one of
+our buildings, or one of ours being hit. Once there has been none for `REPAIR_CALM` (10 s), up to
+`MAX_REPAIRERS` (3) villagers repair the next damaged building. The Town Center comes first, then
+the most damaged building it can pay a quarter of the missing repair cost for (beyond the
+reserve). Farms and buildings under 5% damage are skipped. Repairers are the nearest free
+villagers, with farmers last. The economy leaves `toRepair`/`repairing` villagers alone, and the
+sim sends them back to idle at full hp.
+
+`src/ai/upkeep.test.ts`:
+- Seeds 1–5, moderate, against an idle human, until the City Age: at least one upgraded building
+  and under 1 ms of planning per tick.
+- Barracks level 2 with a hoplite army.
+- The reserve is respected.
+- A busy building is held.
+- A half-dead Town Center is not repaired while an enemy hoplite stands next to it, and is
+  repaired (by at most 3 villagers) once the hoplite is gone.
+
+| seed | City Age | upgrades started (min) | AI ms/tick |
+|---|---|---|---|
+| 1 | 20.3 min | Large House 7.7, Town Hall 11.9 | 0.013 |
+| 2 | 18.7 | Large House 7.6, Town Hall 12.2 | 0.012 |
+| 3 | 21.3 | Town Hall 12.4 | 0.017 |
+| 4 | 21.0 | Town Hall 13.0, Large House 19.2 | 0.012 |
+| 5 | 20.8 | Town Hall 13.1 | 0.013 |
+
 ## Open
 
 - No Empire Age step (6,500 food + 1,000 gold + 600 stone), so no tier-3 lines; tier 3 also needs
   a level-2 building, which is M14-6 (AI building upgrades).
 - No market techs (coinage, caravans) and no trade carts.
-- No walls, fortified walls or machicolations.
+- No walls, fortified walls or machicolations (so no wall upgrades either).
+- No Empire Age, so the AI never reaches tower tier 2, the Imperial Palace, or tier-3 unit lines.
+- The AI does not move gatherers to stone to pay for a repair; it waits until it can afford one.
 - Wonders and relics are out of scope.

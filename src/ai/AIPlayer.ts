@@ -5,6 +5,7 @@ import { Economy } from './economy';
 import { Intel } from './intel';
 import { Military } from './military';
 import { Research } from './research';
+import { Upkeep } from './upkeep';
 import { makeProfile, type AIOptions, type Profile } from './profile';
 
 export type { AIOptions, Difficulty, Personality } from './profile';
@@ -24,7 +25,7 @@ interface Task {
  * map knowledge (no fog for intel or resource finding).
  *
  * Call update() every frame or every sim tick: each call runs at most one planning task (intel,
- * economy, construction, scouting, military), each on its own staggered schedule in sim time,
+ * economy, construction, scouting, military, research, upkeep), each on its own staggered schedule in sim time,
  * so per-call cost stays tiny.
  */
 export class AIPlayer {
@@ -33,6 +34,7 @@ export class AIPlayer {
   readonly economy: Economy;
   readonly military: Military;
   readonly research: Research;
+  readonly upkeep: Upkeep;
   /** Counters for tests and debugging. */
   readonly stats = { commands: 0, rejected: 0, tasks: 0 };
   private readonly ctx: Ctx;
@@ -70,10 +72,12 @@ export class AIPlayer {
       armyFirst: false,
       aging: false,
       pauseVillagers: false,
+      upgradeHold: null,
     };
     this.economy = new Economy(this.ctx);
     this.military = new Military(this.ctx, this.economy);
     this.research = new Research(this.ctx, this.economy);
+    this.upkeep = new Upkeep(this.ctx);
     this.lastTime = world.time;
 
     const p = this.profile;
@@ -87,6 +91,7 @@ export class AIPlayer {
       { name: 'scout', every: 3, next: t + 0.15, run: () => this.economy.scoutPass(this.snap()) },
       { name: 'military', every: p.militaryInterval, next: t + 0.45, run: () => this.military.pass(this.snap()) },
     ];
+    this.tasks.push({ name: 'upkeep', every: p.buildInterval, next: t + 0.75, run: () => this.upkeep.pass(this.snap()) });
     if (p.research) this.tasks.push({ name: 'research', every: p.buildInterval, next: t + 0.6, run: () => this.research.pass(this.snap()) });
 
     this.offs.push(
@@ -94,6 +99,7 @@ export class AIPlayer {
         if (e.owner === player) {
           this.military.onAttacked(e.pos);
           this.research.onAttacked(e.pos);
+          this.upkeep.onAttacked();
         }
       }),
       world.events.on('agedUp', (e) => {
