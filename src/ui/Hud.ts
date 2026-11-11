@@ -794,10 +794,10 @@ export class Hud {
     );
   }
 
-  /** Towers and the Town Center: attack / armour / range with upgrades. Other buildings hide the chips. */
+  /** Building armour (melee/pierce/crush) with upgrades; towers and the Town Center add attack and range. */
   private setBuildingStats(b: Building | null): void {
     const spec = b ? BUILDINGS[b.kind] : null;
-    if (!b || !spec?.attack) {
+    if (!b || !spec) {
       this.setStats(null);
       return;
     }

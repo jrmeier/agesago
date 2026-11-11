@@ -3,7 +3,7 @@ import { CIVS, CIV_IDS } from '../core/civilizations';
 import { BUILDINGS } from '../core/buildings';
 import { TECHS, type TechId } from '../core/techs';
 import type { Stockpile } from '../core/types';
-import { UNITS } from '../core/units';
+import { UNIT_CRUSH_ARMOR, UNITS } from '../core/units';
 import {
   ageLockText,
   agedUpText,
@@ -162,25 +162,31 @@ describe('stat deltas', () => {
   it('shows unit chips with deltas from the stat function', () => {
     const plusTwo = (stat: string, base: number) => (stat === 'attack.melee' ? base + 2 : stat === 'armor.pierce' ? base + 1 : base);
     const chips = upgradedUnitChips(UNITS.hoplite, plusTwo);
+    expect(chips.map((c) => c.icon)).toEqual(['#i-st-melee', '#i-st-crush', '#i-st-armor']);
     expect(chips[0].text).toBe(`${UNITS.hoplite.attack.melee + 2} (+2)`);
     expect(chips[0].title).toContain('(+2)');
-    expect(chips[1].text).toBe(`${UNITS.hoplite.armor.melee}/${UNITS.hoplite.armor.pierce + 1} (+0/+1)`);
+    expect(chips[1].text).toBe(String(UNITS.hoplite.attack.crush));
+    expect(chips[2].text).toBe(`${UNITS.hoplite.armor.melee}/${UNITS.hoplite.armor.pierce + 1}/${UNIT_CRUSH_ARMOR} (+0/+1/+0)`);
     const plain = upgradedUnitChips(UNITS.archer, (_s, base) => base);
     expect(plain.map((c) => c.text)).toEqual([
       String(UNITS.archer.attack.pierce),
-      `${UNITS.archer.armor.melee}/${UNITS.archer.armor.pierce}`,
+      `${UNITS.archer.armor.melee}/${UNITS.archer.armor.pierce}/${UNIT_CRUSH_ARMOR}`,
       String(UNITS.archer.range),
     ]);
   });
 
-  it('shows tower chips with deltas, and nothing for buildings that do not shoot', () => {
+  it('shows tower chips with deltas, and only armour (melee/pierce/crush) for buildings that do not shoot', () => {
     const t = BUILDINGS.watchTower;
     const chips = upgradedBuildingChips(t, (stat, base) => (stat === 'attack.pierce' || stat === 'range' ? base + 1 : base));
     expect(chips.map((c) => c.text)).toEqual([
       `${t.attack!.pierce + 1} (+1)`,
-      `${t.armor.melee}/${t.armor.pierce}`,
+      `${t.armor.melee}/${t.armor.pierce}/0`,
       `${t.attack!.range + 1} (+1)`,
     ]);
-    expect(upgradedBuildingChips(BUILDINGS.house, (_s, b) => b)).toEqual([]);
+    const h = BUILDINGS.house;
+    const house = upgradedBuildingChips(h, (stat, b) => (stat === 'armor.crush' ? b + 1 : b));
+    expect(house.map((c) => c.icon)).toEqual(['#i-st-armor']);
+    expect(house[0].text).toBe(`${h.armor.melee}/${h.armor.pierce}/1 (+0/+0/+1)`);
+    expect(house[0].title).toContain('1 crush');
   });
 });

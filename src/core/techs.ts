@@ -28,8 +28,10 @@ export type Stat =
   | 'sight'
   | 'attack.melee'
   | 'attack.pierce'
+  | 'attack.crush'
   | 'armor.melee'
   | 'armor.pierce'
+  | 'armor.crush'
   | 'range'
   | 'trainTime'
   | 'arrows'
@@ -94,8 +96,10 @@ export interface TechSpec {
 
 const add = (target: ModTarget, stat: Stat, value: number): Modifier => ({ target, stat, op: 'add', value });
 const mul = (target: ModTarget, stat: Stat, value: number): Modifier => ({ target, stat, op: 'mul', value });
-/** +melee/+pierce armour for a target. */
-const armor = (target: ModTarget, m: number, p: number): Modifier[] => [add(target, 'armor.melee', m), add(target, 'armor.pierce', p)];
+/** +melee/+pierce (and optionally +crush) armour for a target. */
+const armor = (target: ModTarget, m: number, p: number, c = 0): Modifier[] => [
+  add(target, 'armor.melee', m), add(target, 'armor.pierce', p), ...(c ? [add(target, 'armor.crush', c)] : []),
+];
 const DEFENCES: BuildingKind[] = ['watchTower', 'townCenter'];
 
 const table = {
@@ -424,14 +428,14 @@ const table = {
 
   // ---- Academy ----
   masonry: {
-    name: 'Masonry', description: 'All buildings +10% HP, +1 melee and +1 pierce armour.',
+    name: 'Masonry', description: 'All buildings +10% HP, +1 melee, +1 pierce and +1 crush armour.',
     at: 'academy', cost: { wood: 175, stone: 150 }, time: 50, age: 2,
-    effects: [mul('allBuildings', 'hp', 1.1), ...armor('allBuildings', 1, 1)],
+    effects: [mul('allBuildings', 'hp', 1.1), ...armor('allBuildings', 1, 1, 1)],
   },
   architecture: {
-    name: 'Architecture', description: 'All buildings another +10% HP, +1 melee and +1 pierce armour.',
+    name: 'Architecture', description: 'All buildings another +10% HP, +1 melee, +1 pierce and +1 crush armour.',
     at: 'academy', cost: { wood: 300, stone: 200 }, time: 70, age: 3, requires: ['masonry'],
-    effects: [mul('allBuildings', 'hp', 1.1), ...armor('allBuildings', 1, 1)],
+    effects: [mul('allBuildings', 'hp', 1.1), ...armor('allBuildings', 1, 1, 1)],
   },
   treadwheelCrane: {
     name: 'Treadwheel Crane', description: 'Villagers build 20% faster.',
@@ -451,9 +455,9 @@ const table = {
     at: 'academy', cost: { food: 200, stone: 100 }, time: 40, age: 2, effects: [], flags: ['machicolations'],
   },
   fortifiedWalls: {
-    name: 'Fortified Walls', description: 'Walls and gates +60% HP and +2 armour.',
+    name: 'Fortified Walls', description: 'Walls and gates +60% HP, +2 melee, +2 pierce and +2 crush armour.',
     at: 'academy', cost: { food: 200, stone: 100 }, time: 50, age: 2,
-    effects: (['palisade', 'stoneWall', 'gate'] as const).flatMap((k) => [mul(k, 'hp', 1.6), ...armor(k, 2, 2)]),
+    effects: (['palisade', 'stoneWall', 'gate'] as const).flatMap((k) => [mul(k, 'hp', 1.6), ...armor(k, 2, 2, 2)]),
   },
 
   // ---- Market ----

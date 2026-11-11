@@ -17,8 +17,10 @@ export interface UnitSpec {
   speed: number;
   /** Fog-of-war sight radius. */
   sight: number;
-  attack: { melee: number; pierce: number };
-  armor: { melee: number; pierce: number };
+  /** Crush (siege) attack defaults to 0; soldiers and villagers carry a little to pull down buildings. */
+  attack: DamageTypes;
+  /** Crush armour defaults to UNIT_CRUSH_ARMOR. */
+  armor: DamageTypes;
   /** Attack range in world units measured edge to edge; ~0.5 for melee. */
   range: number;
   /** Seconds between attacks. */
@@ -40,11 +42,35 @@ export interface UnitSpec {
   xp?: number;
 }
 
+/** Hack (melee), pierce and crush (siege) amounts; crush is optional (see crushOf). */
+export interface DamageTypes {
+  melee: number;
+  pierce: number;
+  crush?: number;
+}
+
+/**
+ * Crush armour of a unit whose table row leaves it out: at least the small crush attack of any
+ * soldier or villager, so those blows hurt units exactly as before and only siege crushes them.
+ */
+export const UNIT_CRUSH_ARMOR = 2;
+
+/** Crush part of an attack or armour (missing = `fallback`). */
+export function crushOf(v: DamageTypes, fallback = 0): number {
+  return v.crush ?? fallback;
+}
+
+/** Σ over damage types of max(0, attack − armour), before the minimum and class bonus. */
+export function rawDamage(attack: DamageTypes, armor: DamageTypes): number {
+  return Math.max(0, attack.melee - armor.melee) + Math.max(0, attack.pierce - armor.pierce)
+    + Math.max(0, crushOf(attack) - crushOf(armor));
+}
+
 export const UNITS: Record<UnitKind, UnitSpec> = {
-  phalangiteGuard: {name:'Phalangite Guard',civ:'hellenes',unitClass:'infantry',hp:65,speed:2.1,sight:6,attack:{melee:6,pierce:0},armor:{melee:1,pierce:1},range:.9,reload:2,bonus:{cavalry:12},cost:{food:60,wood:35},trainTime:14,trainedAt:'barracks',radius:.32,age:1},
-  legionary: {name:'Legionary',civ:'romans',unitClass:'infantry',hp:65,speed:2.3,sight:6,attack:{melee:8,pierce:0},armor:{melee:2,pierce:1},range:.5,reload:2,bonus:{},cost:{food:65,gold:25},trainTime:15,trainedAt:'barracks',radius:.32,age:1},
+  phalangiteGuard: {name:'Phalangite Guard',civ:'hellenes',unitClass:'infantry',hp:65,speed:2.1,sight:6,attack:{melee:6,pierce:0,crush:2},armor:{melee:1,pierce:1},range:.9,reload:2,bonus:{cavalry:12},cost:{food:60,wood:35},trainTime:14,trainedAt:'barracks',radius:.32,age:1},
+  legionary: {name:'Legionary',civ:'romans',unitClass:'infantry',hp:65,speed:2.3,sight:6,attack:{melee:8,pierce:0,crush:2},armor:{melee:2,pierce:1},range:.5,reload:2,bonus:{},cost:{food:65,gold:25},trainTime:15,trainedAt:'barracks',radius:.32,age:1},
   immortal: {name:'Immortal',civ:'persians',unitClass:'archer',hp:40,speed:2.3,sight:8,attack:{melee:0,pierce:5},armor:{melee:0,pierce:1},range:7,reload:2,bonus:{archer:3},projectile:'arrow',cost:{wood:35,gold:55},trainTime:15,trainedAt:'archeryRange',radius:.3,age:1},
-  raider: {name:'Raider',civ:'celts',unitClass:'infantry',hp:55,speed:2.7,sight:7,attack:{melee:8,pierce:0},armor:{melee:1,pierce:1},range:.5,reload:2,bonus:{},cost:{food:60,gold:20},trainTime:14,trainedAt:'barracks',radius:.32,age:1},
+  raider: {name:'Raider',civ:'celts',unitClass:'infantry',hp:55,speed:2.7,sight:7,attack:{melee:8,pierce:0,crush:2},armor:{melee:1,pierce:1},range:.5,reload:2,bonus:{},cost:{food:60,gold:20},trainTime:14,trainedAt:'barracks',radius:.32,age:1},
   deer: {
     name: 'Deer', unitClass: 'wildlife', hp: 12, speed: 4, sight: 0,
     attack: { melee: 0, pierce: 0 }, armor: { melee: 0, pierce: 0 },
@@ -66,7 +92,7 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     hp: 25,
     speed: 2.4,
     sight: 7,
-    attack: { melee: 3, pierce: 0 },
+    attack: { melee: 3, pierce: 0, crush: 1 },
     armor: { melee: 0, pierce: 1 },
     range: 0.5,
     reload: 2,
@@ -82,7 +108,7 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     hp: 45,
     speed: 5.5,
     sight: 15,
-    attack: { melee: 3, pierce: 0 },
+    attack: { melee: 3, pierce: 0, crush: 1 },
     armor: { melee: 0, pierce: 2 },
     range: 0.6,
     reload: 2,
@@ -98,7 +124,7 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     hp: 55,
     speed: 2.1,
     sight: 6,
-    attack: { melee: 5, pierce: 0 },
+    attack: { melee: 5, pierce: 0, crush: 2 },
     armor: { melee: 1, pierce: 1 },
     range: 0.7,
     reload: 2,
@@ -114,7 +140,7 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     hp: 60,
     speed: 2.3,
     sight: 6,
-    attack: { melee: 8, pierce: 0 },
+    attack: { melee: 8, pierce: 0, crush: 2 },
     armor: { melee: 1, pierce: 1 },
     range: 0.5,
     reload: 2,
@@ -166,7 +192,7 @@ export const UNITS: Record<UnitKind, UnitSpec> = {
     hp: 100,
     speed: 4.4,
     sight: 8,
-    attack: { melee: 8, pierce: 0 },
+    attack: { melee: 8, pierce: 0, crush: 1 },
     armor: { melee: 1, pierce: 2 },
     range: 0.7,
     reload: 1.9,
@@ -237,13 +263,20 @@ export function trainable(building: BuildingKind, civ?: CivId): UnitKind[] {
 }
 
 /**
- * Damage dealt by one attack: (attack − armour) per type, at least 1 in total, plus class bonus.
- * Buildings take melee damage reduced by their own armour (see BUILDINGS[k].armor).
+ * Damage dealt by one attack on a unit of `defenderClass`: (attack − armour) per type (melee,
+ * pierce, crush), at least 1 in total, plus class bonus. Missing crush armour is the unit
+ * default (UNIT_CRUSH_ARMOR). Buildings: see damageTo in sim/systems/stats.
  */
-export function damage(attacker: UnitKind, defenderClass: UnitClass, armor: { melee: number; pierce: number }): number {
+export function damage(attacker: UnitKind, defenderClass: UnitClass, armor: DamageTypes): number {
   const a = UNITS[attacker];
-  const base = Math.max(0, a.attack.melee - armor.melee) + Math.max(0, a.attack.pierce - armor.pierce);
-  return Math.max(1, base) + (a.bonus[defenderClass] ?? 0);
+  const arm = { ...armor, crush: crushOf(armor, UNIT_CRUSH_ARMOR) };
+  return Math.max(1, rawDamage(a.attack, arm)) + (a.bonus[defenderClass] ?? 0);
+}
+
+/** A unit kind's table armour with its default crush armour filled in. */
+export function unitArmor(kind: UnitKind): Required<DamageTypes> {
+  const a = UNITS[kind].armor;
+  return { melee: a.melee, pierce: a.pierce, crush: crushOf(a, UNIT_CRUSH_ARMOR) };
 }
 
 /** Trained land units can take explicit economy orders; idle units never seek work. */

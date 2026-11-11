@@ -41,12 +41,16 @@ describe('selection summaries', () => {
 
   it('gives melee soldiers attack + armour chips and ranged ones a range chip', () => {
     const hop = combatChips(UNITS.hoplite);
-    expect(hop.map((c) => c.icon)).toEqual(['#i-st-melee', '#i-st-armor']);
+    expect(hop.map((c) => c.icon)).toEqual(['#i-st-melee', '#i-st-crush', '#i-st-armor']);
     expect(hop[0].text).toBe('5');
     expect(hop[0].title).toContain('+12 vs cavalry');
-    expect(hop[1].text).toBe('1/1');
+    expect(hop[1].text).toBe('2');
+    expect(hop[1].title).toContain('Crush');
+    expect(hop[2].text).toBe('1/1/2');
+    expect(hop[2].title).toContain('2 crush');
     const arch = combatChips(UNITS.archer);
     expect(arch.map((c) => c.icon)).toEqual(['#i-st-pierce', '#i-st-armor', '#i-st-range']);
+    expect(arch[1].text).toBe('0/0/2');
     expect(arch[2].text).toBe('7');
   });
 

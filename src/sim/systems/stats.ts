@@ -1,6 +1,6 @@
 import { BUILDINGS, tierStats } from '../../core/buildings';
 import type { Building, BuildingKind, PlayerId, Rank, Unit, UnitKind, Vec2 } from '../../core/types';
-import { UNITS } from '../../core/units';
+import { UNITS, crushOf, rawDamage, unitArmor, type DamageTypes } from '../../core/units';
 import { BALANCE } from '../balance';
 import { rectDistance } from '../nav';
 import type { World } from '../World';
@@ -59,34 +59,42 @@ export function garrisonCap(world: World, owner: PlayerId, kind: BuildingKind, t
   return base > 0 ? Math.round(buildingStat(world, owner, kind, 'garrison', base + tierStats(kind, tier).garrison)) : 0;
 }
 
-/** Attack of a unit kind for `owner` at veterancy `rank` (base table values without `world`). */
-export function unitAttack(world: World | undefined, owner: PlayerId, kind: UnitKind, rank: Rank = 0): { melee: number; pierce: number } {
+/** Attack of a unit kind for `owner` at veterancy `rank`: melee / pierce / crush (base table values without `world`). */
+export function unitAttack(world: World | undefined, owner: PlayerId, kind: UnitKind, rank: Rank = 0): Required<DamageTypes> {
   const a = UNITS[kind].attack;
-  if (!world) return a;
+  const crush = crushOf(a);
+  if (!world) return { melee: a.melee, pierce: a.pierce, crush };
   return {
     melee: unitStat(world, owner, kind, 'attack.melee', a.melee, rank),
     pierce: unitStat(world, owner, kind, 'attack.pierce', a.pierce, rank),
+    crush: unitStat(world, owner, kind, 'attack.crush', crush, rank),
   };
 }
 
-/** Armour of a unit or building with its owner's research (base table values without `world`). */
-export function armorOf(world: World | undefined, t: Unit | Building): { melee: number; pierce: number } {
+/**
+ * Armour of a unit or building with its owner's research (base table values without `world`).
+ * Missing crush armour is UNIT_CRUSH_ARMOR for units and 0 for buildings.
+ */
+export function armorOf(world: World | undefined, t: Unit | Building): Required<DamageTypes> {
   if ('stance' in t) {
-    const a = UNITS[t.kind].armor;
+    const a = unitArmor(t.kind);
     if (!world) return a;
     return {
       melee: unitStat(world, t.owner, t.kind, 'armor.melee', a.melee, t.rank),
       pierce: unitStat(world, t.owner, t.kind, 'armor.pierce', a.pierce, t.rank),
+      crush: unitStat(world, t.owner, t.kind, 'armor.crush', a.crush, t.rank),
     };
   }
   const a = BUILDINGS[t.kind].armor;
   const tier = tierStats(t.kind, t.tier);
   const melee = a.melee + tier.armorMelee;
   const pierce = a.pierce + tier.armorPierce;
-  if (!world) return t.tier ? { melee, pierce } : a;
+  const crush = crushOf(a);
+  if (!world) return { melee, pierce, crush };
   return {
     melee: buildingStat(world, t.owner, t.kind, 'armor.melee', melee),
     pierce: buildingStat(world, t.owner, t.kind, 'armor.pierce', pierce),
+    crush: buildingStat(world, t.owner, t.kind, 'armor.crush', crush),
   };
 }
 
@@ -117,14 +125,13 @@ export function isRanged(kind: UnitKind): boolean {
 }
 
 /**
- * Damage of one `attacker` blow against `target`: (attack − armour) per type, at least 1, plus
- * the class bonus against units (buildings get none). With `world`, both sides' research
- * applies; `owner` is the attacker's owner and `rank` its veterancy.
+/**
+ * Damage of one `attacker` blow against `target`: (attack − armour) per type (melee, pierce,
+ * crush), at least 1, plus the class bonus against units (buildings get none). With `world`,
+ * both sides' research applies; `owner` is the attacker's owner and `rank` its veterancy.
  */
 export function damageTo(attacker: UnitKind, target: Unit | Building, world?: World, owner: PlayerId = 0, rank: Rank = 0): number {
-  const atk = unitAttack(world, owner, attacker, rank);
-  const arm = armorOf(world, target);
-  const base = Math.max(0, atk.melee - arm.melee) + Math.max(0, atk.pierce - arm.pierce);
+  const base = rawDamage(unitAttack(world, owner, attacker, rank), armorOf(world, target));
   const bonus = 'stance' in target ? (UNITS[attacker].bonus[UNITS[target.kind].unitClass] ?? 0) : 0;
   return Math.max(1, base) + bonus;
 }

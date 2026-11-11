@@ -80,9 +80,10 @@ describe('damage', () => {
   it('hits buildings with their own armour and no class bonus', () => {
     const world = arena();
     const tc = world.townCenterOf(2)!;
-    expect(damageTo('swordsman', tc)).toBe(8 - BUILDINGS.townCenter.armor.melee);
+    // Swords glance off a Town Center's melee armour; their small crush attack still lands.
+    expect(damageTo('swordsman', tc)).toBe(Math.max(0, 8 - BUILDINGS.townCenter.armor.melee) + 2);
     expect(damageTo('archer', tc)).toBe(1);
-    expect(damageTo('hoplite', tc)).toBe(5 - 3);
+    expect(damageTo('hoplite', tc)).toBe(2);
   });
 
   it('exposes per-kind speeds for movement', () => {

@@ -1,7 +1,7 @@
 import { orderTend } from './livestock';
 import { BUILDINGS } from '../../core/buildings';
 import type { Building, EntityId, PlayerId, Rank, ResourceType, Stance, Stockpile, Unit, UnitKind, UnitState, Vec2 } from '../../core/types';
-import { canWork, isAnimal, isShip, UNITS } from '../../core/units';
+import { canWork, crushOf, isAnimal, isShip, UNITS } from '../../core/units';
 import { GAIA } from '../../core/types';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
@@ -268,7 +268,7 @@ export function orderAttack(world: World, unitIds: EntityId[], targetId: EntityI
   const list = units(world, unitIds);
   const cancelled = clearWork(world, list);
   for (const u of list) {
-    if ((isAnimal(u.kind) && u.kind !== 'boar') || (UNITS[u.kind].attack.melee + UNITS[u.kind].attack.pierce <= 0)) continue;
+    if ((isAnimal(u.kind) && u.kind !== 'boar') || (UNITS[u.kind].attack.melee + UNITS[u.kind].attack.pierce + crushOf(UNITS[u.kind].attack) <= 0)) continue;
     stateOf(world, u).order = 'attack';
     engage(world, u, t, true);
   }

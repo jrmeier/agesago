@@ -176,7 +176,7 @@ describe('upgradeBuilding', () => {
     expect(house.hp).toBe(Math.round(newMax / 2));
     expect(w.popCapOf(1)).toBe(capBefore + 5);
     expect((stock.at(-1) as Extract<SimEvent, { type: 'stockpile' }>).popCap).toBe(capBefore + 5);
-    expect(armorOf(w, house)).toEqual(BUILDINGS.house.armor);
+    expect(armorOf(w, house)).toEqual({ crush: 0, ...BUILDINGS.house.armor });
     const reasons = rejections(w);
     w.dispatch({ type: 'upgradeBuilding', buildingId: house.id });
     expect(reasons).toEqual(['max-tier']);

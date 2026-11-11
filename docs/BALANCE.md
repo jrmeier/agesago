@@ -25,6 +25,22 @@ Town Age unlocks Archers, Horsemen, Swordsmen, civilization unique units, Priest
 Merchant Ships and Triremes, plus the Forge, Market, Watch Tower, Temple and Stone Wall.
 Archery Ranges and Stables do not count as Town Age buildings for the City Age requirement.
 
+## Damage types (M16-1)
+
+Attacks and armour have three types: melee (hack), pierce and crush. One blow deals
+Σ max(0, attack − armour) over the three, at least 1, plus the class bonus against units.
+Buildings have high melee and pierce armour and crush armour 0 (Masonry and Architecture add +1
+each, Fortified Walls +2 on walls and gates). Swords and arrows barely scratch them, and crush
+(siege) brings them down. Infantry carry 2 crush, cavalry and villagers 1, and ranged units and
+ships 0. Units default to 2 crush armour (`UNIT_CRUSH_ARMOR`), which soaks that small crush, so
+unit-vs-unit damage is the same as before. Targets with no research, checked in `src/sim/crush.test.ts`:
+
+| 10 Swordsmen vs | Time to destroy |
+| --- | --- |
+| House | 28 s |
+| Stone Wall segment | 120 s |
+| Town Center | 240 s |
+
 ## The scripted build order
 
 `src/bench/pacing.ts` plays player 1 on a real generated map (`generateMap(seed, 2)`, the real

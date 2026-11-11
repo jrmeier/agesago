@@ -35,6 +35,11 @@ test('research a tech at a storehouse, see it queue, finish, and speed up wood',
   });
   expect(ids.store).not.toBeNull();
 
+  // Building info shows melee / pierce / crush armour (M16-1).
+  const armor = page.locator('#unit-stats .stat-chip[title^="Armour"]');
+  await expect(armor).toBeVisible();
+  await expect(armor).toHaveAttribute('title', /\d+ melee \/ \d+ pierce \/ 0 crush/);
+
   await openSheet(page, phone);
   await expect(page.locator('#train-grid .research-head')).toBeVisible();
   const axe = page.locator('#train-grid [data-research="bronzeAxe"]');

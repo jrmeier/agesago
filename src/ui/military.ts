@@ -1,7 +1,7 @@
 import type { CivId } from '../core/civilizations';
 import { unitLine, type TechId } from '../core/techs';
 import type { Building, BuildingKind, Stance, Stockpile, Unit, UnitKind } from '../core/types';
-import { isAnimal, UNITS, trainable, type UnitSpec } from '../core/units';
+import { crushOf, isAnimal, UNIT_CRUSH_ARMOR, UNITS, trainable, type UnitSpec } from '../core/units';
 import { TRAIN_SLOT_KEYS } from '../input/hotkeys';
 import { canAfford } from './build';
 
@@ -100,10 +100,24 @@ export interface StatChip {
   title: string;
 }
 
-/** Attack / armour / range chips for a soldier kind (ranged units get a range chip). */
+/** Melee / pierce / crush armour as one chip ("1/1/2"). */
+export function armorChip(m: number, p: number, c: number): StatChip {
+  return { icon: '#i-st-armor', text: `${m}/${p}/${c}`, title: `Armour: ${m} melee / ${p} pierce / ${c} crush` };
+}
+
+/** Crush attack chip (what pulls buildings down). */
+export function crushChip(c: number | string): StatChip {
+  return { icon: '#i-st-crush', text: String(c), title: `Crush attack ${c} (against buildings)` };
+}
+
+/**
+ * Attack / crush / armour / range chips for a soldier kind: crush only when it has some, range
+ * only for ranged units. Armour reads melee/pierce/crush.
+ */
 export function combatChips(spec: Pick<UnitSpec, 'attack' | 'armor' | 'range' | 'projectile' | 'bonus'>): StatChip[] {
   const ranged = !!spec.projectile;
   const atk = ranged ? spec.attack.pierce : spec.attack.melee;
+  const crush = crushOf(spec.attack);
   const bonus = Object.entries(spec.bonus)
     .map(([cls, n]) => `+${n} vs ${cls}`)
     .join(', ');
@@ -113,12 +127,9 @@ export function combatChips(spec: Pick<UnitSpec, 'attack' | 'armor' | 'range' | 
       text: String(atk),
       title: `${ranged ? 'Pierce' : 'Melee'} attack ${atk}${bonus ? ` (${bonus})` : ''}`,
     },
-    {
-      icon: '#i-st-armor',
-      text: `${spec.armor.melee}/${spec.armor.pierce}`,
-      title: `Armour: ${spec.armor.melee} melee / ${spec.armor.pierce} pierce`,
-    },
   ];
+  if (crush > 0) chips.push(crushChip(crush));
+  chips.push(armorChip(spec.armor.melee, spec.armor.pierce, crushOf(spec.armor, UNIT_CRUSH_ARMOR)));
   if (ranged) chips.push({ icon: '#i-st-range', text: String(spec.range), title: `Range ${spec.range}` });
   return chips;
 }

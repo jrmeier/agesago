@@ -1,4 +1,5 @@
 import type { Age, BuildingKind, ResourceType, Stockpile, TechId } from './types';
+import type { DamageTypes } from './units';
 
 /**
  * Building data table — the single source of truth for sizes, costs and roles.
@@ -23,8 +24,11 @@ export interface BuildingSpec {
   sight: number;
   /** Hit points once complete (foundations scale with buildProgress). */
   hp: number;
-  /** Damage reduction against attacks. */
-  armor: { melee: number; pierce: number };
+  /**
+   * Damage reduction against attacks. High melee and pierce armour: swords and arrows barely
+   * scratch buildings; crush (siege, and the small crush of soldiers) is what pulls them down.
+   */
+  armor: DamageTypes;
   /** Pierce attack once complete. `arrows` fire with nobody inside; garrisoned villagers and foot archers add BALANCE.garrisonArrows. */
   attack?: { pierce: number; range: number; reload: number; arrows: number };
   /** Own land units that can shelter here once complete (one slot each); they heal inside. */
@@ -49,7 +53,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: false,
     sight: 11,
     hp: 2400,
-    armor: { melee: 3, pierce: 7 },
+    armor: { melee: 10, pierce: 15 },
     garrison: 10,
     attack: { pierce: 5, range: 6, reload: 2, arrows: 0 },
   },
@@ -64,7 +68,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: true,
     sight: 4,
     hp: 550,
-    armor: { melee: 0, pierce: 7 },
+    armor: { melee: 6, pierce: 12 },
   },
   storehouse: {
     name: 'Storehouse',
@@ -77,7 +81,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: true,
     sight: 5,
     hp: 600,
-    armor: { melee: 0, pierce: 7 },
+    armor: { melee: 6, pierce: 12 },
   },
   miningCamp: {
     name: 'Mining Camp',
@@ -90,7 +94,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: true,
     sight: 5,
     hp: 600,
-    armor: { melee: 0, pierce: 7 },
+    armor: { melee: 6, pierce: 12 },
   },
   granary: {
     name: 'Granary',
@@ -103,12 +107,12 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: true,
     sight: 5,
     hp: 600,
-    armor: { melee: 0, pierce: 7 },
+    armor: { melee: 6, pierce: 12 },
   },
   corral: {
     name: 'Corral', size: { w: 8, d: 8 }, cost: { wood: 100 }, buildTime: 25,
     popBonus: 0, drop: [], walkable: true, buildable: true, sight: 6, hp: 600,
-    armor: { melee: 0, pierce: 0 },
+    armor: { melee: 4, pierce: 10 },
   },
   farm: {
     name: 'Farm',
@@ -121,7 +125,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: true,
     sight: 2,
     hp: 480,
-    armor: { melee: 0, pierce: 0 },
+    armor: { melee: 4, pierce: 10 },
   },
   barracks: {
     name: 'Barracks',
@@ -134,7 +138,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: true,
     sight: 6,
     hp: 1200,
-    armor: { melee: 1, pierce: 7 },
+    armor: { melee: 7, pierce: 14 },
   },
   archeryRange: {
     name: 'Archery Range',
@@ -147,7 +151,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: true,
     sight: 6,
     hp: 1000,
-    armor: { melee: 1, pierce: 7 },
+    armor: { melee: 7, pierce: 14 },
   },
   stable: {
     name: 'Stable',
@@ -160,7 +164,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: true,
     sight: 6,
     hp: 1000,
-    armor: { melee: 1, pierce: 7 },
+    armor: { melee: 7, pierce: 14 },
   },
   watchTower: {
     name: 'Watch Tower',
@@ -173,7 +177,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: true,
     sight: 14,
     hp: 900,
-    armor: { melee: 1, pierce: 7 },
+    armor: { melee: 10, pierce: 15 },
     age: 1,
     garrison: 5,
     attack: { pierce: 6, range: 8, reload: 2, arrows: 1 },
@@ -189,7 +193,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: true,
     sight: 2,
     hp: 280,
-    armor: { melee: 0, pierce: 2 },
+    armor: { melee: 6, pierce: 12 },
     line: true,
   },
   stoneWall: {
@@ -203,7 +207,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: true,
     sight: 2,
     hp: 1200,
-    armor: { melee: 2, pierce: 8 },
+    armor: { melee: 12, pierce: 20 },
     age: 1,
     line: true,
   },
@@ -218,7 +222,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: true,
     sight: 3,
     hp: 650,
-    armor: { melee: 1, pierce: 5 },
+    armor: { melee: 10, pierce: 15 },
     gate: true,
   },
   forge: {
@@ -232,7 +236,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: true,
     sight: 6,
     hp: 1000,
-    armor: { melee: 1, pierce: 7 },
+    armor: { melee: 7, pierce: 14 },
     age: 1,
   },
   market: {
@@ -246,18 +250,18 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: true,
     sight: 6,
     hp: 1400,
-    armor: { melee: 1, pierce: 7 },
+    armor: { melee: 7, pierce: 14 },
     age: 1,
   },
   dock: {
     name: 'Dock', size: { w: 4, d: 4 }, cost: { wood: 150 }, buildTime: 40,
     popBonus: 0, drop: ['food'], walkable: false, buildable: true, sight: 8, hp: 1200,
-    armor: { melee: 1, pierce: 7 },
+    armor: { melee: 7, pierce: 14 },
   },
   temple: {
     name: 'Temple', size: { w: 4, d: 4 }, cost: { wood: 180, stone: 80 },
     buildTime: 50, popBonus: 0, drop: [], walkable: false, buildable: true,
-    sight: 8, hp: 1400, armor: { melee: 1, pierce: 7 }, age: 1,
+    sight: 8, hp: 1400, armor: { melee: 7, pierce: 14 }, age: 1,
     // Healing only: no attack, so occupants add no arrows (BALANCE.garrisonHealBy).
     garrison: 10,
   },
@@ -272,7 +276,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: true,
     sight: 6,
     hp: 1600,
-    armor: { melee: 2, pierce: 8 },
+    armor: { melee: 8, pierce: 15 },
     age: 2,
   },
 };

@@ -2,11 +2,11 @@ import type { CivId } from '../core/civilizations';
 import { AGE_NAMES, TECHS, techsAt, type Age, type Stat, type TechId } from '../core/techs';
 import { BUILDINGS, buildingTitle, type BuildingSpec } from '../core/buildings';
 import type { Building, BuildingKind, RejectReason, Stockpile, UnitKind } from '../core/types';
-import { UNITS, type UnitSpec } from '../core/units';
+import { crushOf, UNIT_CRUSH_ARMOR, UNITS, type UnitSpec } from '../core/units';
 import { productionOrder } from '../sim/productionQueue';
 import { AGE_BUILDINGS_NEEDED } from '../sim/systems/research';
 import { missingResources, shortfallText } from './build';
-import { combatChips, queueView, type StatChip } from './military';
+import { armorChip, combatChips, crushChip, queueView, type StatChip } from './military';
 
 /**
  * Pure helpers for the research UI (M8-14) and the age HUD (M8-6): which techs a building
@@ -192,53 +192,56 @@ export function withDelta(value: number, base: number): string {
   return d ? `${fmtStat(value)} (${d})` : fmtStat(value);
 }
 
-/** "2/3 (+1/+1)" for melee/pierce pairs. */
-function pairWithDelta(m: number, p: number, bm: number, bp: number): string {
-  const text = `${fmtStat(m)}/${fmtStat(p)}`;
-  const dm = deltaText(m, bm);
-  const dp = deltaText(p, bp);
-  return dm || dp ? `${text} (${dm || '+0'}/${dp || '+0'})` : text;
+/** "2/3/0 (+1/+1/+0)" for melee/pierce/crush armour. */
+function armorWithDelta(values: readonly number[], bases: readonly number[]): string {
+  const text = values.map(fmtStat).join('/');
+  const deltas = values.map((v, i) => deltaText(v, bases[i]));
+  return deltas.some(Boolean) ? `${text} (${deltas.map((d) => d || '+0').join('/')})` : text;
+}
+
+/** Armour chip with upgrades: melee / pierce / crush, deltas from the base table. */
+function upgradedArmorChip(base: readonly [number, number, number], stat: StatFn): StatChip {
+  const up = [stat('armor.melee', base[0]), stat('armor.pierce', base[1]), stat('armor.crush', base[2])];
+  return {
+    ...armorChip(up[0], up[1], up[2]),
+    text: armorWithDelta(up, base),
+    title: `Armour: ${fmtStat(up[0])} melee / ${fmtStat(up[1])} pierce / ${fmtStat(up[2])} crush`,
+  };
 }
 
 type StatFn = (stat: Stat, base: number) => number;
 
-/** Attack / armour / range chips for a unit kind with its owner's upgrades applied ("5 (+2)"). */
+/** Attack / crush / armour / range chips for a unit kind with its owner's upgrades applied ("5 (+2)"). */
 export function upgradedUnitChips(spec: UnitSpec, stat: StatFn): StatChip[] {
-  const up: UnitSpec = {
-    ...spec,
-    attack: { melee: stat('attack.melee', spec.attack.melee), pierce: stat('attack.pierce', spec.attack.pierce) },
-    armor: { melee: stat('armor.melee', spec.armor.melee), pierce: stat('armor.pierce', spec.armor.pierce) },
-    range: stat('range', spec.range),
-  };
   const ranged = !!spec.projectile;
-  const [atk, armor, range] = combatChips(up);
-  const atkText = ranged ? withDelta(up.attack.pierce, spec.attack.pierce) : withDelta(up.attack.melee, spec.attack.melee);
-  const out: StatChip[] = [
-    { ...atk, text: atkText, title: atk.title.replace(/ \d+(\.\d+)?/, ` ${atkText}`) },
-    {
-      ...armor,
-      text: pairWithDelta(up.armor.melee, up.armor.pierce, spec.armor.melee, spec.armor.pierce),
-      title: `Armour: ${fmtStat(up.armor.melee)} melee / ${fmtStat(up.armor.pierce)} pierce`,
-    },
-  ];
-  if (range) {
-    const text = withDelta(up.range, spec.range);
-    out.push({ ...range, text, title: `Range ${text}` });
-  }
-  return out;
+  const atkStat: Stat = ranged ? 'attack.pierce' : 'attack.melee';
+  const atkBase = ranged ? spec.attack.pierce : spec.attack.melee;
+  const atkText = withDelta(stat(atkStat, atkBase), atkBase);
+  const crush = crushOf(spec.attack);
+  const range = stat('range', spec.range);
+  return combatChips(spec).map((chip) => {
+    if (chip.icon === '#i-st-armor') {
+      return upgradedArmorChip([spec.armor.melee, spec.armor.pierce, crushOf(spec.armor, UNIT_CRUSH_ARMOR)], stat);
+    }
+    if (chip.icon === '#i-st-crush') return crushChip(withDelta(stat('attack.crush', crush), crush));
+    if (chip.icon === '#i-st-range') {
+      const text = withDelta(range, spec.range);
+      return { ...chip, text, title: `Range ${text}` };
+    }
+    return { ...chip, text: atkText, title: chip.title.replace(/ \d+(\.\d+)?/, ` ${atkText}`) };
+  });
 }
 
-/** Chips for a building that shoots (towers, Town Center): attack, range, armour. Empty otherwise. */
+/** Chips for a building: attack and range for one that shoots (towers, Town Center), then armour. */
 export function upgradedBuildingChips(spec: Pick<BuildingSpec, 'attack' | 'armor'>, stat: StatFn): StatChip[] {
-  if (!spec.attack) return [];
+  const armor = upgradedArmorChip([spec.armor.melee, spec.armor.pierce, crushOf(spec.armor)], stat);
+  if (!spec.attack) return [armor];
   const atk = withDelta(stat('attack.pierce', spec.attack.pierce), spec.attack.pierce);
   const range = withDelta(stat('range', spec.attack.range), spec.attack.range);
   const arrows = stat('arrows', spec.attack.arrows);
-  const am = stat('armor.melee', spec.armor.melee);
-  const ap = stat('armor.pierce', spec.armor.pierce);
   return [
     { icon: '#i-st-pierce', text: atk, title: `Pierce attack ${atk}, ${fmtStat(arrows)} arrow${arrows === 1 ? '' : 's'}` },
-    { icon: '#i-st-armor', text: pairWithDelta(am, ap, spec.armor.melee, spec.armor.pierce), title: `Armour: ${fmtStat(am)} melee / ${fmtStat(ap)} pierce` },
+    armor,
     { icon: '#i-st-range', text: range, title: `Range ${range}` },
   ];
 }

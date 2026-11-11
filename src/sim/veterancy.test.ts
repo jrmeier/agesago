@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { TechId } from '../core/techs';
 import { GRASS_ONLY, type Heightfield, type MapLayout, type PlayerId, type SimEvent, type Unit, type UnitKind, type Vec2 } from '../core/types';
-import { canRank, RANKS, UNITS, XP_PER_COST, xpValue } from '../core/units';
+import { canRank, RANKS, UNIT_CRUSH_ARMOR, UNITS, XP_PER_COST, xpValue } from '../core/units';
 import { BALANCE } from './balance';
 import { layFoundation } from './systems/build';
 import { applyDamage } from './systems/combat';
@@ -206,7 +206,7 @@ describe('rank stats through statOf', () => {
     const before = damageTo('archer', target, w, 1, 0);
     expect(damageTo('archer', target, w, 1, 2)).toBe(before + 2);
     gainXp(w, u, RANKS[1].xp);
-    expect(armorOf(w, u)).toEqual({ melee: UNITS.archer.armor.melee + 1, pierce: UNITS.archer.armor.pierce + 1 });
+    expect(armorOf(w, u)).toEqual({ melee: UNITS.archer.armor.melee + 1, pierce: UNITS.archer.armor.pierce + 1, crush: UNIT_CRUSH_ARMOR });
     expect(u.maxHp).toBe(unitMaxHp(w, 1, 'archer', 1));
   });
 
