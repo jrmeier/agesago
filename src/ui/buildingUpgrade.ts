@@ -31,8 +31,11 @@ const STAT_ROWS: readonly { label: string; value: (kind: BuildingKind, t: TierSt
   },
   { label: 'Attack', value: (k, t) => fmtStat((BUILDINGS[k].attack?.pierce ?? 0) + t.attack) },
   { label: 'Arrows', value: (k, t) => fmtStat((BUILDINGS[k].attack?.arrows ?? 0) + t.arrows) },
+  { label: 'Range', value: (k, t) => fmtStat((BUILDINGS[k].attack?.range ?? 0) + t.range) },
   { label: 'Pop', value: (k, t) => `+${fmtStat(BUILDINGS[k].popBonus + t.popBonus)}` },
   { label: 'Garrison', value: (k, t) => fmtStat((BUILDINGS[k].garrison ?? 0) + t.garrison) },
+  // M14-2 military level 2: units train `trainSpeed` times faster, shown as a speed percentage.
+  { label: 'Train speed', value: (_k, t) => `${Math.round(t.trainSpeed * 100)}%` },
 ];
 
 /** Base-table stats (before research) of a `kind` building at `tier` vs the next tier; only rows that change. */

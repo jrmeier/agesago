@@ -13,11 +13,11 @@ async function boot(page: Page): Promise<string[]> {
 }
 
 /** Phone: open the Upgrade sheet. Desktop: the grid is already in the panel. */
-async function openSheet(page: Page, phone: boolean): Promise<void> {
+async function openSheet(page: Page, phone: boolean, label: string | null = 'Upgrade'): Promise<void> {
   if (!phone) return;
   const tab = page.locator('#menu-tabs [data-menu="train"]');
   await expect(tab).toBeVisible();
-  await expect(tab).toHaveText('Upgrade');
+  if (label) await expect(tab).toHaveText(label);
   if ((await tab.getAttribute('aria-pressed')) !== 'true') await tab.tap();
   await expect(page.locator('body')).toHaveClass(/menu-train/);
 }
@@ -101,6 +101,61 @@ test('upgrade a house from its panel: locked reason, progress, cancel with refun
   // Fully upgraded: no upgrade tile and no progress bar.
   await expect(page.locator('#build-progress')).toBeHidden();
   await expect(page.locator('#train-grid [data-upgrade]')).toHaveCount(0);
+
+  expect(errors).toEqual([]);
+});
+
+test('upgrade a watch tower through its chain: City Age Guard Tower, then Empire Age Fortress Tower (M14-2)', async ({ page }, testInfo) => {
+  const phone = testInfo.project.name === 'phone';
+  const errors = await boot(page);
+
+  const id = await page.evaluate(() => {
+    const w = window as any;
+    w.dev.give({ food: 2000, wood: 2000, gold: 2000, stone: 2000 });
+    w.dev.setAge(1);
+    const t = w.dev.placeComplete('watchTower');
+    w.game.rig.focusOn(w.game.world.townCenter.pos);
+    w.game.selection.set([t]);
+    return t;
+  });
+  expect(id).not.toBeNull();
+  const tower = () =>
+    page.evaluate((id) => {
+      const b = (window as any).game.world.buildings.get(id);
+      return { tier: b.tier ?? 0, upgrading: b.upgrading ?? null, maxHp: b.maxHp };
+    }, id);
+
+  // Town Age: Guard Tower is listed with its stat changes but locked until the City Age.
+  await openSheet(page, phone, null);
+  const guard = page.locator('#train-grid [data-upgrade="guardTower"]');
+  await expect(guard).toBeVisible();
+  await expect(guard.locator('.build-name')).toHaveText('Guard Tower');
+  await expect(guard.locator('.upgrade-stats')).toContainText('Arrows 1 → 2');
+  await expect(guard.locator('.upgrade-stats')).toContainText('Range 8 → 9');
+  await expect(guard).toHaveAttribute('data-locked', 'true');
+  await expect(guard.locator('.build-lock')).toHaveText('Requires City Age');
+
+  // City Age: start it and let it finish.
+  await page.evaluate(() => (window as any).dev.setAge(2));
+  await expect(guard).toHaveAttribute('data-locked', 'false');
+  const hp0 = (await tower()).maxHp;
+  await press(page, phone, '#train-grid [data-upgrade="guardTower"]');
+  await expect(page.locator('#unit-status')).toHaveText(/Upgrading to Guard Tower \d+%/);
+  expect((await tower()).upgrading).not.toBeNull();
+  await page.evaluate(() => (window as any).dev.fastForward(35));
+  const t1 = await tower();
+  expect(t1).toMatchObject({ tier: 1, upgrading: null });
+  expect(t1.maxHp).toBe(Math.round(hp0 * 1.4));
+  if (phone) await page.locator('#touch-sheet-close').tap();
+  await expect(page.locator('#unit-name')).toHaveText('Guard Tower', { timeout: 15_000 });
+
+  // The next step, Fortress Tower, now shows: locked until the Empire Age.
+  await openSheet(page, phone, null);
+  const fortress = page.locator('#train-grid [data-upgrade="fortressTower"]');
+  await expect(fortress).toBeVisible();
+  await expect(fortress.locator('.build-name')).toHaveText('Fortress Tower');
+  await expect(fortress.locator('.upgrade-stats')).toContainText('Arrows 2 → 3');
+  await expect(fortress.locator('.build-lock')).toHaveText('Requires Empire Age');
 
   expect(errors).toEqual([]);
 });

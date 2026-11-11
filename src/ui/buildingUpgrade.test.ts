@@ -61,6 +61,23 @@ describe('upgrade stat rows', () => {
     expect(statRowsText(rows)).toBe(`HP ${hp} → ${Math.round(hp * 1.5)} · Pop +5 → +10`);
   });
 
+  it('shows the tower chain\'s range and arrows (M14-2)', () => {
+    const tower = BUILDINGS.watchTower;
+    const hp = Math.round(tower.hp * 1.4);
+    expect(upgradeStatRows('watchTower', 0)).toEqual([
+      { label: 'HP', before: String(tower.hp), after: String(hp) },
+      { label: 'Arrows', before: String(tower.attack!.arrows), after: String(tower.attack!.arrows + 1) },
+      { label: 'Range', before: String(tower.attack!.range), after: String(tower.attack!.range + 1) },
+    ]);
+  });
+
+  it('shows the military level 2 train speed (M14-2)', () => {
+    for (const kind of ['barracks', 'archeryRange', 'stable'] as const) {
+      expect(upgradeStatRows(kind, 0)).toContainEqual({ label: 'Train speed', before: '100%', after: '120%' });
+    }
+    expect(statRowsText(upgradeStatRows('barracks', 0))).toContain('Train speed 100% → 120%');
+  });
+
   it('is empty without a next tier', () => {
     expect(upgradeStatRows('house', 1)).toEqual([]);
     expect(upgradeStatRows('farm', 0)).toEqual([]);
