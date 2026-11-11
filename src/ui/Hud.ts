@@ -830,7 +830,10 @@ export class Hud {
       span.className = 'aura-chip';
       span.title = chip.title;
       span.dataset.aura = chip.id;
-      span.append(icon(chip.icon, 'aura-icon'), chip.name);
+      const name = document.createElement('span');
+      name.className = 'aura-name';
+      name.textContent = chip.name;
+      span.append(icon(chip.icon, 'aura-icon'), name);
       el.append(span);
     }
   }

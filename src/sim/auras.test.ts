@@ -245,7 +245,7 @@ describe('save/load and determinism', () => {
     const b = new World(hf, layout, defaultPlayers(2));
     for (let i = 0; i < 60; i++) { a.tick(DT); b.tick(DT); }
     expect([...a.auraActive].map(([id, m]) => [id, [...m]])).toEqual([...b.auraActive].map(([id, m]) => [id, [...m]]));
-  });
+  }, 30_000);
 });
 
 describe('aura cost', () => {

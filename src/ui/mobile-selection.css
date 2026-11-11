@@ -167,13 +167,16 @@ body.touch .unit-stats {
   gap: 5px;
 }
 
+/* Icons only beside the HP bar (the name stays in the tooltip) so the summary keeps its height. */
 body.touch .unit-auras {
-  grid-column: 1 / -1;
-  min-width: 0;
-  overflow: hidden;
+  grid-column: 2;
   flex-wrap: nowrap;
   margin: 0;
-  gap: 5px;
+  gap: 4px;
+}
+
+body.touch .aura-name {
+  display: none;
 }
 
 body.touch .aura-chip {
