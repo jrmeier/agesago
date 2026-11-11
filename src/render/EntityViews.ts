@@ -49,6 +49,7 @@ import {
   type VillagerPose,
 } from './models';
 import { ENEMY_RING, MOVE_MARKER, SELECTION } from './palette';
+import { auraRingRadius } from './auraRings';
 import { choosePick, ndcToCanvas, ORDER_PICK_RANK, PICK_RANK, rectContains, type PickCandidate, type PickIntent } from './picking';
 import { ProjectilePool } from './projectiles';
 import { createShadowTexture } from './shadow';
@@ -207,6 +208,10 @@ export class EntityViews {
   private readonly rings: THREE.Mesh[] = [];
   private readonly ringGeo: THREE.BufferGeometry;
   private readonly ringMat: THREE.MeshBasicMaterial;
+  /** Aura range rings around selected aura sources (M16-4); a unit-radius ring scaled per source. */
+  private readonly auraRings: THREE.Mesh[] = [];
+  private readonly auraRingGeo: THREE.BufferGeometry;
+  private readonly auraRingMat: THREE.MeshBasicMaterial;
   private readonly shadowGeo: THREE.BufferGeometry;
   private readonly shadowMat: THREE.MeshBasicMaterial;
   private readonly markerMesh: THREE.Mesh;
@@ -266,6 +271,16 @@ export class EntityViews {
       polygonOffset: true,
       polygonOffsetFactor: -2,
       polygonOffsetUnits: -2,
+    });
+
+    this.auraRingGeo = new THREE.RingGeometry(0.985, 1, 96);
+    this.auraRingGeo.rotateX(-Math.PI / 2);
+    this.auraRingMat = new THREE.MeshBasicMaterial({
+      color: SELECTION,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+      depthTest: false,
     });
 
     this.markerMat = new THREE.MeshBasicMaterial({
@@ -358,6 +373,7 @@ export class EntityViews {
     this.syncBuildings(camera);
     this.syncHealth(t, camera);
     this.syncRings(t);
+    this.syncAuraRings(t);
     this.syncMarker(time);
     this.projectiles.update(time);
     this.deaths.update(time, (owner, x, z, rubble) => this.ghostShown(owner, x, z, rubble));
@@ -805,6 +821,42 @@ export class EntityViews {
       ring.visible = true;
     }
     for (let i = n; i < this.rings.length; i++) this.rings[i].visible = false;
+  }
+
+  /** A range ring around each selected, visible aura source (complete buildings, units in the open). */
+  private syncAuraRings(alpha: number): void {
+    let n = 0;
+    for (const id of this.selected) {
+      const unit = this.world.units.get(id);
+      const building = unit ? undefined : this.world.buildings.get(id);
+      let r = 0;
+      let x = 0;
+      let z = 0;
+      if (unit) {
+        if (!this.unitShown(unit)) continue;
+        r = auraRingRadius({ unit: unit.kind });
+        x = unit.prevPos.x + (unit.pos.x - unit.prevPos.x) * alpha;
+        z = unit.prevPos.z + (unit.pos.z - unit.prevPos.z) * alpha;
+      } else if (building?.complete) {
+        r = auraRingRadius({ building: building.kind });
+        x = building.pos.x;
+        z = building.pos.z;
+      }
+      if (r <= 0) continue;
+      let ring = this.auraRings[n];
+      if (!ring) {
+        ring = new THREE.Mesh(this.auraRingGeo, this.auraRingMat);
+        ring.userData.noShadow = 1;
+        ring.renderOrder = 3;
+        this.object.add(ring);
+        this.auraRings.push(ring);
+      }
+      n += 1;
+      ring.position.set(x, this.groundY(x, z) + 0.08, z);
+      ring.scale.setScalar(r);
+      ring.visible = true;
+    }
+    for (let i = n; i < this.auraRings.length; i++) this.auraRings[i].visible = false;
   }
 
   private ringMesh(index: number): THREE.Mesh {

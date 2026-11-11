@@ -1,3 +1,4 @@
+import type { AuraId } from '../core/auras';
 import { BUILDINGS, BUILDING_UPGRADES, FARM_FOOD, buildingTitle, nextUpgrade } from '../core/buildings';
 import { AGE_NAMES, TECHS, buildingTier, techsAt, unitLine, type Age, type TechId } from '../core/techs';
 import type { Building, BuildingKind, ResourceType, Stockpile, Unit, UnitKind } from '../core/types';
@@ -8,6 +9,7 @@ import { BALANCE } from '../sim/balance';
 import { productionOrder } from '../sim/productionQueue';
 import { corralSheep, corralWorker, HERD_CAP } from '../sim/systems/livestock';
 import { carryCap } from '../sim/systems/gather';
+import { activeAuras } from '../sim/systems/auras';
 import { trainTime } from '../sim/systems/train';
 import { researchBlock, statOf } from '../sim/systems/research';
 import { upgradeBlock } from '../sim/systems/buildingUpgrade';
@@ -49,6 +51,7 @@ import {
   trainBatch,
   trainEntries,
 } from './military';
+import { auraChips } from './auras';
 import { MarketPanel } from './market';
 import {
   agedUpText,
@@ -128,6 +131,7 @@ export class Hud {
     garrisonList: byId('garrison-list'),
     hp: byId('unit-hp'),
     stats: byId('unit-stats'),
+    auras: byId('unit-auras'),
     trainGrid: byId('train-grid'),
     queue: byId('train-queue'),
     commands: byId('command-card'),
@@ -181,6 +185,7 @@ export class Hud {
   private upgradeTitle = '';
   private queueHead = '';
   private statsKey = '';
+  private aurasKey = '';
   private hpKey = '';
   private readonly menuTabs: Record<TouchMenu, HTMLElement | null>;
   /** Enemy buildings the panel may describe while they are out of sight. */
@@ -553,10 +558,13 @@ export class Hud {
       this.setHp(hp.hp, hp.maxHp);
       const single = kinds.every((k) => k === kinds[0]) ? kinds[0] : null;
       this.setStats(single && (isMilitary(single) || foreign) ? single : null, units[0].owner);
+      this.setAuras(units.length === 1 ? activeAuras(this.world, units[0].id) : []);
     } else if (building) {
       this.setHp(building.complete ? building.hp : -1, building.maxHp);
       this.setBuildingStats(building.complete ? building : null);
+      this.setAuras(activeAuras(this.world, building.id));
     } else if (remembered) {
+      this.setAuras([]);
       setText(this.el.name, BUILDINGS[remembered.kind].name);
       setText(this.el.status, this.ownerName(remembered.owner));
       this.setPortrait(`#i-b-${remembered.kind}`, '');
@@ -565,6 +573,7 @@ export class Hud {
     } else {
       this.setHp(-1, 0);
       this.setStats(null);
+      this.setAuras([]);
     }
     const showBuild = workers;
     const showTrain = !!this.el.trainGrid && !this.el.trainGrid.hidden;
@@ -805,6 +814,25 @@ export class Hud {
     this.showChips(`b:${b.kind}|${b.owner}|${n}`, () =>
       upgradedBuildingChips(spec, (stat, base) => statOf(this.world, b.owner, { building: b.kind }, stat, base))
     );
+  }
+
+  /** Auras active on the single selected unit or building (M16-4): source icon and name. */
+  private setAuras(ids: readonly AuraId[]): void {
+    const el = this.el.auras;
+    if (!el) return;
+    const key = ids.join(',');
+    setHidden(el, !key);
+    if (key === this.aurasKey) return;
+    this.aurasKey = key;
+    el.replaceChildren();
+    for (const chip of auraChips(ids)) {
+      const span = document.createElement('span');
+      span.className = 'aura-chip';
+      span.title = chip.title;
+      span.dataset.aura = chip.id;
+      span.append(icon(chip.icon, 'aura-icon'), chip.name);
+      el.append(span);
+    }
   }
 
   private showChips(key: string, chips: () => readonly { icon: string; text: string; title: string }[]): void {

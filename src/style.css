@@ -634,6 +634,28 @@ body.placing .selection-panel * {
   color: var(--ink-900);
 }
 
+.unit-auras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-1);
+}
+
+.aura-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-700);
+}
+
+.aura-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--olive);
+}
+
 .stat-icon {
   width: 14px;
   height: 14px;
