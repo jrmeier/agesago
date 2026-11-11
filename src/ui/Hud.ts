@@ -9,7 +9,7 @@ import { productionOrder } from '../sim/productionQueue';
 import { corralSheep, corralWorker, HERD_CAP } from '../sim/systems/livestock';
 import { carryCap } from '../sim/systems/gather';
 import { trainTime } from '../sim/systems/train';
-import { ageBuildings, ageBuildingsNeeded, researchBlock, statOf } from '../sim/systems/research';
+import { researchBlock, statOf } from '../sim/systems/research';
 import { upgradeBlock } from '../sim/systems/buildingUpgrade';
 import { HOTKEYS } from '../input/hotkeys';
 import {
@@ -34,7 +34,9 @@ import {
   formatCost,
   keyLabel,
   occupantSummary,
+  missingResources,
   popLabel,
+  shortfallText,
 } from './build';
 import { formatCount, groupStatus, portraitKind, selectionName, showExplore, trainLabel, trainProgress } from './format';
 import {
@@ -63,6 +65,7 @@ import {
   type TechEntry,
   type TechView,
 } from './research';
+import { canQueueResearch, readyTitle, techViewOf } from './upgradeHints';
 import { closeTouchMenus, toggleTouchMenu, touchMenuOpen, type TouchMenu } from './touchMenus';
 
 /** Length of the train ring's circle (its `pathLength`). */
@@ -174,6 +177,8 @@ export class Hud {
   private trainBuildingId: number | null = null;
   private trainAffordKey = '';
   private queueKey = '';
+  /** Title of the portrait's "upgrade available" mark ('' = none). */
+  private upgradeTitle = '';
   private queueHead = '';
   private statsKey = '';
   private hpKey = '';
@@ -456,20 +461,7 @@ export class Hud {
 
   /** What researchBlock and the tiles need to know about the local player. */
   private techView(): TechView {
-    const local = this.world.localPlayer;
-    const p = this.world.players.get(local);
-    const queued = new Set<TechId>();
-    for (const b of this.world.buildings.values()) if (b.owner === local) for (const t of b.research ?? []) queued.add(t);
-    const age = p?.age ?? 0;
-    return {
-      age,
-      researched: p?.researched ?? new Set(),
-      queued,
-      stock: this.world.stock,
-      civ:this.world.players.get(local)?.player.civ,
-      ageBuildings: ageBuildings(this.world, local, age).length,
-      ageBuildingsNeeded: ageBuildingsNeeded(age),
-    };
+    return techViewOf(this.world, this.world.localPlayer);
   }
 
   /** Rebuild the tech tiles under the Research header when anything about them changed. */
@@ -483,6 +475,8 @@ export class Hud {
     const key = entries.map((e) => `${e.tech}:${e.locked ? 'L' : ''}${e.unaffordable ? 'U' : ''}${e.reason}${this.fresh.has(e.tech) ? '*' : ''}`).join(',');
     setHidden(this.researchHead, !entries.length);
     this.menuTabs.train?.classList.toggle('has-new', entries.some((e) => this.fresh.has(e.tech)));
+    const ready = canQueueResearch(b) ? entries.filter((e) => !e.locked && !e.unaffordable).map((e) => e.tech) : [];
+    this.setUpgradeMark(readyTitle(ready));
     if (key === this.researchKey) return;
     this.researchKey = key;
     for (const btn of this.techButtons.values()) btn.remove();
@@ -492,6 +486,18 @@ export class Hud {
       grid.append(btn);
       this.techButtons.set(e.tech, btn);
     }
+  }
+
+  /** "Upgrade available" mark on the portrait and the phone's Train tab ('' clears it). */
+  private setUpgradeMark(title: string): void {
+    if (title === this.upgradeTitle) return;
+    this.upgradeTitle = title;
+    this.portrait?.classList.toggle('upgrade-ready', !!title);
+    if (this.portrait) {
+      if (title) this.portrait.title = title;
+      else this.portrait.removeAttribute('title');
+    }
+    this.menuTabs.train?.classList.toggle('has-upgrade', !!title);
   }
 
   private updateSelection(): void {
@@ -638,6 +644,7 @@ export class Hud {
     setHidden(this.el.trainGrid, !panel);
     setHidden(this.el.queue, !panel || (panel.queue <= 0 && !panel.research?.length));
     if (!panel) this.menuTabs.train?.classList.remove('has-new');
+    if (!researcher) this.setUpgradeMark('');
     if (panel) {
       setText(
         this.menuTabs.train,
@@ -979,6 +986,7 @@ function techTile(e: TechEntry, fresh: boolean): HTMLButtonElement {
   btn.classList.toggle('locked', e.locked);
   btn.classList.toggle('unaffordable', e.unaffordable);
   btn.classList.toggle('fresh', fresh);
+  btn.classList.toggle('ready', !e.locked && !e.unaffordable);
   btn.setAttribute('aria-disabled', String(e.locked || e.unaffordable));
   const tip = techTip(e.tech, formatCost(e.cost), e.reason);
   btn.title = tip;
@@ -1047,13 +1055,15 @@ function markAffordable<K>(
     const cost = costOf(k);
     const ok = canAfford(cost, stock);
     const lock = lockOf(k);
+    // Same wording as research tiles: the hard lock first, else what the stockpile is short of.
+    const reason = lock || shortfallText(missingResources(cost, stock));
     btn.classList.toggle('unaffordable', !ok);
     btn.classList.toggle('locked', !!lock);
     btn.setAttribute('aria-disabled', String(!ok || !!lock));
     btn.dataset.locked = String(!!lock);
     const note = btn.querySelector<HTMLElement>('.build-lock');
-    if (note) note.textContent = lock;
-    const title = `${btn.dataset.baseTitle ?? ''}${lock ? `. ${lock}` : ''}`;
+    if (note) note.textContent = reason;
+    const title = `${btn.dataset.baseTitle ?? ''}${reason ? `. ${reason}` : ''}`;
     btn.title = title;
     btn.dataset.tip = title;
     btn.setAttribute('aria-label', title);

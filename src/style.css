@@ -3463,3 +3463,94 @@ body.touch #touch-fps { font-size: 10px; letter-spacing: 0; line-height: 1.1; }
 body.touch #camera-cycle { display: none; }
 
 body.fps-mode #selection-panel { display: none !important; }
+
+/* ---- Upgrade hints (M13-5): age-progress chip, building badges, panel mark ---- */
+
+.age-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 52ch;
+  padding: 3px 10px 3px 6px;
+  border-radius: var(--r-1);
+  border: 1px solid rgb(0 0 0 / 0.35);
+  background: rgb(0 0 0 / 0.28);
+  color: rgb(236 226 204 / 0.92);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.age-chip[hidden] {
+  display: none;
+}
+
+.age-chip:hover,
+.age-chip:focus-visible {
+  border-color: var(--bronze-500);
+}
+
+.age-chip.ready {
+  color: #f6e7b4;
+  border-color: #6fae55;
+  box-shadow: 0 0 0 1px rgb(111 174 85 / 0.55);
+}
+
+.age-chip.advancing {
+  color: var(--bronze-300);
+}
+
+.age-chip-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.age-chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upgrade-badge {
+  display: none;
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 20px;
+  height: 20px;
+  margin: -20px 0 0 -10px;
+  pointer-events: none;
+  z-index: 8;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.6));
+}
+
+body.fps-mode .upgrade-badge {
+  display: none !important;
+}
+
+.unit-portrait.upgrade-ready::before,
+.menu-tab.has-upgrade::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background:
+    no-repeat center / 9px 9px
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M5 0 0 5h3v5h4V5h3z' fill='%23f6e7b4'/%3E%3C/svg%3E"),
+    #3d8a3a;
+  box-shadow: 0 0 0 1px #14320f;
+  pointer-events: none;
+}
+
+.tech-tile.ready {
+  border-color: #6fae55;
+}

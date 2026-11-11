@@ -515,6 +515,11 @@
         </g>
       </symbol>
 
+      <!-- "Upgrade available" badge over buildings and on the selection portrait. -->
+      <symbol id="i-upgrade" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10.4" fill="#3d8a3a" stroke="#14320f" stroke-width="1.4" />
+        <path d="M12 5.4 6.6 11.2h3.6v6.6h3.6v-6.6h3.6z" fill="#f6e7b4" stroke="#14320f" stroke-width=".9" stroke-linejoin="round" />
+      </symbol>
       <!-- Rally flag (drawn over the ground) and alert toasts. -->
       <symbol id="i-flag" viewBox="0 0 24 32">
         <path d="M5 31V2" stroke="#3b230d" stroke-width="2" stroke-linecap="round" />
@@ -688,6 +693,9 @@
               <span class="age-bar" aria-hidden="true"><span class="age-bar-fill"></span></span>
             </div>
           </div>
+          <button id="age-chip" class="age-chip" type="button" data-short="" hidden>
+            <svg class="age-chip-icon" aria-hidden="true"><use href="#i-age" /></svg><span class="age-chip-text"></span>
+          </button>
           <div class="hud-hint">
             <kbd>LMB</kbd> select / drag-box &nbsp;·&nbsp; <kbd>A</kbd> all &nbsp;·&nbsp;
             <kbd>RMB</kbd> move / gather / attack &nbsp;·&nbsp; <kbd>Q</kbd> attack-move &nbsp;·&nbsp;

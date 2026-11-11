@@ -1,4 +1,7 @@
-import type { Vec2 } from '../core/types';
+import { BUILDINGS } from '../core/buildings';
+import { AGE_NAMES, type Age } from '../core/techs';
+import type { BuildingKind, UnitKind, Vec2 } from '../core/types';
+import { UNITS } from '../core/units';
 import { directionWord } from './discover';
 
 /** Seconds before another "under attack" alert for the same place. */
@@ -73,4 +76,15 @@ export class BurstCounter {
 /** "A villager was killed" / "3 villagers were killed". */
 export function deathText(count: number): string {
   return count === 1 ? 'A villager was killed' : `${count} villagers were killed`;
+}
+
+/**
+ * The age-up toast: "Town Age unlocks: build Forge, Market · train Slinger" (buildings first, then
+ * units), or "Entered the Empire Age" when the age opens nothing new.
+ */
+export function unlockText(age: Age, unlocks: { buildings: readonly BuildingKind[]; units: readonly UnitKind[] }): string {
+  const parts: string[] = [];
+  if (unlocks.buildings.length) parts.push(`build ${unlocks.buildings.map((k) => BUILDINGS[k].name).join(', ')}`);
+  if (unlocks.units.length) parts.push(`train ${unlocks.units.map((k) => UNITS[k].name).join(', ')}`);
+  return parts.length ? `${AGE_NAMES[age]} unlocks: ${parts.join(' · ')}` : `Entered the ${AGE_NAMES[age]}`;
 }

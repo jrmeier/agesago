@@ -161,3 +161,49 @@ body.touch .tt-grid {
 body.touch .tt-tile {
   font-size: 14px;
 }
+
+/* Age-progress chip: a small two-line pill under the map button, clear of the centre strip. */
+body.touch .hud-top > .age-chip {
+  position: absolute;
+  top: calc(100% + 8px + var(--mobile-tap) + 6px);
+  right: max(10px, env(safe-area-inset-right));
+  max-width: 132px;
+  min-height: 40px;
+  padding: 2px 6px 2px 4px;
+  gap: 4px;
+  font-size: 11px;
+  line-height: 1.2;
+  background: rgb(24 26 22 / 0.86);
+  z-index: 6;
+}
+
+/* An opened map covers that corner. */
+body.touch:has(.minimap:not(.collapsed)) .hud-top > .age-chip {
+  display: none;
+}
+
+body.touch .hud-top > .age-chip .age-chip-text {
+  display: none;
+}
+
+body.touch .hud-top > .age-chip::after {
+  content: attr(data-short);
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: pre;
+  text-overflow: ellipsis;
+}
+
+body.touch .hud-top > .age-chip .age-chip-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* The age-up toast lists many names: keep it to four lines on a phone (the banner says the rest). */
+body.touch .toast-age span {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

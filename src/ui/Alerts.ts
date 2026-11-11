@@ -1,9 +1,10 @@
 import type { Vec2 } from '../core/types';
 import type { World } from '../sim/World';
-import { AlertLimiter, BurstCounter, attackText, deathText } from './alertRules';
+import { AlertLimiter, BurstCounter, attackText, deathText, unlockText } from './alertRules';
 import { pushPing } from './pings';
 import { TECHS } from '../core/techs';
 import { researchedText } from './research';
+import { ageUnlocks } from './upgradeHints';
 
 /** Seconds an alert toast stays up. */
 const ALERT_LIFE = 6;
@@ -14,7 +15,8 @@ const MAX_SHOWN = 3;
  * Combat alerts for the local player: "You are under attack! (north-east)" on 'attacked'
  * (rate-limited by AlertLimiter, with a minimap ping; clicking jumps the camera there), and a
  * small "A villager was killed" toast on 'died' (bursts batched). Toasts share the discovery
- * toast stack (`container`). A local 'researched' shows "Iron Axe researched".
+ * toast stack (`container`). A local 'researched' shows "Iron Axe researched", and a local
+ * 'agedUp' lists what the new age unlocks ("Town Age unlocks: build Forge, Market · train Slinger").
  * `update(time)` must be called every frame.
  */
 export class Alerts {
@@ -45,6 +47,12 @@ export class Alerts {
       if (n) this.show('death', '#i-skull', deathText(n), e.pos);
     });
     // "Iron Axe researched" (age-ups get the banner instead; see Hud).
+    // A new age: what it opens up (the banner says "Entered the Town Age"; see Hud).
+    world.events.on('agedUp', (e) => {
+      if (e.owner !== world.localPlayer) return;
+      const civ = world.players.get(e.owner)?.player.civ;
+      this.show('age', '#i-age', unlockText(e.age, ageUnlocks(e.age, civ)), this.home());
+    });
     world.events.on('researched', (e) => {
       if (e.owner !== world.localPlayer || TECHS[e.tech].ageUp !== undefined) return;
       this.show('research', '#i-tech', researchedText(e.tech), this.home());
@@ -61,7 +69,7 @@ export class Alerts {
     return this.world.townCenterOf(this.world.localPlayer)?.pos ?? { x: this.world.hf.width / 2, z: this.world.hf.depth / 2 };
   }
 
-  private show(kind: 'alert' | 'death' | 'research', iconHref: string, text: string, pos: Vec2): void {
+  private show(kind: 'alert' | 'death' | 'research' | 'age', iconHref: string, text: string, pos: Vec2): void {
     const toast = document.createElement('button');
     toast.type = 'button';
     toast.className = `toast toast-${kind}`;

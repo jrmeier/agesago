@@ -17,6 +17,8 @@ import { HotkeyHelp } from '../ui/hotkeyHelp';
 import { canTrainAt, isMilitary, kindForSlotKey, trainBatch } from '../ui/military';
 import { RallyFlag } from '../ui/RallyFlag';
 import { LootFloaters } from '../ui/LootFloaters';
+import { AgeChip } from '../ui/AgeChip';
+import { UpgradeBadges } from '../ui/UpgradeBadges';
 import { SideRail } from '../ui/SideRail';
 import { TechTreePanel, treeInputFor } from '../ui/TechTreePanel';
 import { closeTouchMenus, touchMenuOpen } from '../ui/touchMenus';
@@ -137,6 +139,10 @@ export class Controls {
   private readonly rail: SideRail;
   private readonly rallyFlag: RallyFlag;
   private readonly loot: LootFloaters;
+  /** "Upgrade available" icons over own buildings (M13-5). */
+  readonly badges: UpgradeBadges;
+  /** Age-progress chip in the top bar (M13-5). */
+  readonly ageChip: AgeChip;
   private readonly idle = new IdleCycler();
   /** Rally points this client set, shown until the sim reports Building.rally itself. */
   private readonly rallyEcho = new Map<EntityId, Vec2>();
@@ -173,6 +179,8 @@ export class Controls {
     this.rallyFlag = new RallyFlag((p) => this.project(p));
     this.loot = new LootFloaters(hud, world, (p) => this.project(p));
     this.techTree = new TechTreePanel(() => treeInputFor(world, world.localPlayer));
+    this.badges = new UpgradeBadges(hud, world, (b) => this.project(b.pos, views.buildingHeight(b.kind, b.id) + 1.7));
+    this.ageChip = new AgeChip(world, selection, (p) => rig.focusOn(p));
 
     world.events.on('removed', (e) => {
       selection.remove([e.id]);
@@ -268,6 +276,10 @@ export class Controls {
     this.updateRail();
     this.rallyFlag.update(rig.mode === 'rts' ? this.rallyPoint() : null);
     this.loot.update(dt, rig.mode === 'rts');
+    // Wall-clock: the badges and chip still follow stock and orders while the match is paused.
+    const wall = performance.now() / 1000;
+    this.badges.update(wall, rig.mode === 'rts');
+    this.ageChip.update(wall);
     const slash = input.keyMods('Slash');
     if (slash?.shift && !slash.ctrl && !slash.alt) this.help.toggle();
     if (this.help.open) {
@@ -567,10 +579,10 @@ export class Controls {
     return pickGround(screenRay(rig.camera, x, y, input.width, input.height), rig.rts.hf);
   }
 
-  /** Ground point → client px (for the rally flag). */
-  private project(p: Vec2): { x: number; y: number } | null {
+  /** Ground point (raised by `lift`) → client px (for the rally flag and upgrade badges). */
+  private project(p: Vec2, lift = 0): { x: number; y: number } | null {
     const { rig, input, canvas } = this.deps;
-    const y = Math.max(0, rig.rts.hf.heightAt(p.x, p.z));
+    const y = Math.max(0, rig.rts.hf.heightAt(p.x, p.z)) + lift;
     const at = projectToCanvas(rig.camera, p.x, y, p.z, input.width, input.height);
     if (!at) return null;
     const c = canvas.getBoundingClientRect();

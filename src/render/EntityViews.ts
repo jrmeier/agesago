@@ -634,7 +634,8 @@ export class EntityViews {
     if (this.fog) this.fogBuilding(view.object);
   }
 
-  private buildingHeight(kind: BuildingKind, id: EntityId): number {
+  /** Roof height above the ground of a building's model (hp bars and upgrade badges sit over it). */
+  buildingHeight(kind: BuildingKind, id: EntityId): number {
     const base = BUILDING_HEIGHT[kind];
     if (kind !== 'watchTower') return base;
     const tier = (this.buildingViews.get(id) ?? this.memoryViews.get(id))?.tier ?? 0;
