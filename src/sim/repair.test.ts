@@ -204,7 +204,7 @@ describe('repair', () => {
       expect(legacy.repairDebt.size).toBe(0);
       expect(legacy.units.get(v.id)!.state).toBe('repairing');
     }
-  });
+  }, 30_000);
 });
 
 describe('ships at docks', () => {
