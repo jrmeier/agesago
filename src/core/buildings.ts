@@ -294,7 +294,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     buildable: true,
     sight: 10,
     hp: 8000,
-    armor: { melee: 3, pierce: 10 },
+    armor: { melee: 10, pierce: 15 },
     age: 3,
   },
 };

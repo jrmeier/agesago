@@ -67,7 +67,7 @@ unit-vs-unit damage is the same as before. Targets with no research, checked in 
 ## Wonder (M16-7)
 
 The wonder is the Empire Age's end goal: 1000 food, 1000 wood, 1000 stone and 1000 gold,
-400 s for one builder, a 6 × 6 footprint and 8000 hp (armour 3/10). With Empire reached at
+400 s for one builder, a 6 × 6 footprint and 8000 hp (armour 10/15/0 like the Town Center, so per M16-1 crush is what razes it). With Empire reached at
 about 30:00–35:00, a town needs several more minutes of full income to pay for it, so a wonder
 is a late, visible commitment that rivals have time to answer. When it finishes, a countdown
 (match option, default on, 300 game seconds; 3/5/10/15 min in the menus) starts for every
