@@ -64,7 +64,7 @@ async function click(page: Page, p: { sx: number; sy: number }): Promise<void> {
   await frames(page);
 }
 
-test('desktop: the Patrol button and W hotkey order a looping patrol with Shift+click waypoints', async ({ page }, testInfo) => {
+test('desktop: the Patrol button and Shift+Q hotkey order a looping patrol with Shift+click waypoints', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop', 'mouse and keyboard');
   const errors = await boot(page);
 
@@ -84,10 +84,15 @@ test('desktop: the Patrol button and W hotkey order a looping patrol with Shift+
   await expect(patrolBtn).toBeVisible();
 
   // The hotkey arms patrol targeting; Escape disarms it without an order.
-  await page.keyboard.press('w');
+  await page.keyboard.press('Shift+KeyQ');
   await expect(patrolBtn).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('Escape');
   await expect(patrolBtn).toHaveAttribute('aria-pressed', 'false');
+  // Plain Q is still attack-move, not patrol.
+  await page.keyboard.press('q');
+  await expect(page.locator('#command-card [data-cmd="attackMove"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(patrolBtn).toHaveAttribute('aria-pressed', 'false');
+  await page.keyboard.press('Escape');
 
   const pts = await groundPoints(page, cast.soldierId, 3);
   expect(pts.length).toBe(3);

@@ -361,8 +361,10 @@ export class Controls {
       if (tc) world.dispatch({ type: 'train', buildingId: tc.id });
     }
     if (input.keyPressed(HOTKEYS.explore)) this.explore();
-    if (input.keyPressed(HOTKEYS.attackMove) && this.ownUnitIds().length) this.setTargeting(!this.targeting || !!this.patrolPoints);
-    if (plain(HOTKEYS.patrol)) this.setPatrolling(!this.patrolPoints);
+    // Q attack-moves; Shift+Q (HOTKEYS.patrol) patrols.
+    const q = input.keyMods(HOTKEYS.attackMove);
+    if (q && !q.shift && this.ownUnitIds().length) this.setTargeting(!this.targeting || !!this.patrolPoints);
+    if (q?.shift && !q.ctrl && !q.alt) this.setPatrolling(!this.patrolPoints);
     if (input.keyPressed(HOTKEYS.stop)) this.stop();
     if (input.keyPressed(HOTKEYS.idleVillager)) this.nextIdle();
     if (input.keyPressed(HOTKEYS.scout) || input.keyPressed('NumpadDecimal') || input.keyPressed(HOTKEYS.scoutAlt)) {
