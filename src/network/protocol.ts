@@ -6,8 +6,8 @@ import { FORMATION_KINDS, type Command, type FormationKind } from '../core/types
 import { UNITS } from '../core/units';
 import { WONDER_SECONDS_MAX, WONDER_SECONDS_MIN, type WonderRules } from '../core/wonder';
 
-/** 10: the 'patrol' command. 9: fortress and champions (M16-5). 8: siege engines (pop costs, pack/unpack, splash). 7: wonder buildings and the wonder victory option (MatchConfig.wonder). 6: 'repair' command and passive ship healing at docks. 5: upgrade chains replace the tower techs. 4: in-place building upgrades (upgradeBuilding/cancelUpgrade). 3: trained land units can work. */
-export const NETWORK_VERSION = 10;
+/** 11: the 'guard' order. 10: the 'patrol' command. 9: fortress and champions (M16-5). 8: siege engines (pop costs, pack/unpack, splash). 7: wonder buildings and the wonder victory option (MatchConfig.wonder). 6: 'repair' command and passive ship healing at docks. 5: upgrade chains replace the tower techs. 4: in-place building upgrades (upgradeBuilding/cancelUpgrade). 3: trained land units can work. */
+export const NETWORK_VERSION = 11;
 export const TICKS_PER_TURN = 4;
 export const HASH_EVERY = 25;
 export const MAX_COMMANDS = 64;
@@ -50,7 +50,7 @@ export function validCommand(v: unknown): v is Command {
     case 'patrol': return ids(v.unitIds) && Array.isArray(v.waypoints) && v.waypoints.length >= 1 && v.waypoints.length <= MAX_PATROL_POINTS && v.waypoints.every(point);
     case 'gather': return ids(v.unitIds) && id(v.nodeId);
     case 'heal': case 'convert':
-    case 'attack': case 'repair': return ids(v.unitIds) && id(v.targetId);
+    case 'attack': case 'repair': case 'guard': return ids(v.unitIds) && id(v.targetId);
     case 'stop': case 'explore': return ids(v.unitIds);
     case 'stance': return ids(v.unitIds) && ['aggressive', 'defensive', 'standGround', 'passive'].includes(String(v.stance));
     case 'train': return id(v.buildingId) && (v.unit === undefined || typeof v.unit === 'string' && Object.hasOwn(UNITS, v.unit));

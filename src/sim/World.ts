@@ -39,10 +39,12 @@ import {
   orderAttack,
   orderAttackMove,
   orderPatrol,
+  orderGuard,
   orderRally,
   orderStance,
   orderStop,
   releaseCombat,
+  releaseGuard,
   type CombatState,
   type FleeState,
   type PendingHit,
@@ -343,6 +345,7 @@ export class World {
       releaseCombat(this, cmd.unitIds);
     }
     if ('unitIds' in cmd && cmd.type !== 'trade' && cmd.type !== 'stance') releaseTrade(this, cmd.unitIds);
+    if ('unitIds' in cmd && cmd.type !== 'guard' && cmd.type !== 'stance') releaseGuard(this, cmd.unitIds);
     switch (cmd.type) {
       case 'navalTrade':
         orderNavalTrade(this, cmd.unitIds, cmd.dockId, by); break;
@@ -398,6 +401,9 @@ export class World {
         break;
       case 'patrol':
         orderPatrol(this, cmd.unitIds, cmd.waypoints);
+        break;
+      case 'guard':
+        if (cmd.unitIds.length) orderGuard(this, cmd.unitIds, cmd.targetId, by);
         break;
       case 'stop':
         for (const id of cmd.unitIds) {

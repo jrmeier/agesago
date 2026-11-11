@@ -20,8 +20,13 @@ import { garrisonArrows, orderGarrison } from './defence';
 
 /** Per-unit combat bookkeeping kept off the frozen Unit shape (created on first engagement). */
 export interface CombatState {
-  /** The player's order: 'attack' a chosen target, 'attackMove' to `dest`; null = acting on its own. */
-  order: 'attack' | 'attackMove' | null;
+  /**
+   * The player's order: 'attack' a chosen target, 'attackMove' to `dest`, 'guard' the unit or
+   * building `guard`; null = acting on its own.
+   */
+  order: 'attack' | 'attackMove' | 'guard' | null;
+  /** Guarded own/allied unit or building (with order 'guard'). Absent in saves before v4. */
+  guard?: EntityId;
   /** Attack-move destination (resumed after each fight). */
   dest: Vec2 | null;
   /** Where a defensive unit returns after a fight. */
@@ -243,6 +248,7 @@ function clearWork(world: World, units: Unit[]): Unit[] {
       cs.order = null;
       cs.dest = null;
       cs.post = null;
+      delete cs.guard;
     }
   }
   return cancelled;
@@ -267,7 +273,21 @@ export function releaseCombat(world: World, unitIds: EntityId[]): void {
       cs.post = null;
       cs.anchor = null;
       cs.goal = null;
+      delete cs.guard;
     }
+  }
+}
+
+/**
+ * Any new order ends a guard (World.dispatch calls this for every unit order except 'guard' and
+ * 'stance'). Orders that also release fighting clear it again; that is harmless.
+ */
+export function releaseGuard(world: World, unitIds: EntityId[]): void {
+  for (const id of unitIds) {
+    const cs = world.combatState.get(id);
+    if (cs?.order !== 'guard') continue;
+    cs.order = null;
+    delete cs.guard;
   }
 }
 
@@ -388,6 +408,99 @@ function nextPatrolPoint(world: World, u: Unit, cs: CombatState): void {
   const p = u.patrol!;
   p.index = (p.index + 1) % p.route.length;
   patrolLeg(world, u, cs);
+}
+
+/** Can `u` take a guard order? Fighting land units (and triremes) that are not animals. */
+function canGuard(u: Unit): boolean {
+  const spec = UNITS[u.kind];
+  return !isAnimal(u.kind) && (!isShip(u.kind) || u.kind === 'trireme') && spec.attack.melee + spec.attack.pierce > 0;
+}
+
+/**
+ * 'guard': follow an own or allied unit at BALANCE.guardDistance (or stay by a building) and
+ * fight whatever damages it, then come back. Ends when the target dies or a new order is given.
+ */
+export function orderGuard(world: World, unitIds: EntityId[], targetId: EntityId, by: PlayerId): void {
+  const t = targetOf(world, targetId);
+  if (!t || t.hp <= 0 || t.owner === GAIA || world.areEnemies(by, t.owner) || (isUnit(t) && isAnimal(t.kind))) {
+    world.events.emit({ type: 'rejected', reason: 'invalid-target' });
+    return;
+  }
+  const list = units(world, unitIds).filter((u) => u.id !== t.id && canGuard(u));
+  if (!list.length) return;
+  const cancelled = clearWork(world, list);
+  for (const u of list) {
+    const cs = stateOf(world, u);
+    cs.order = 'guard';
+    cs.guard = t.id;
+    cs.anchor = null;
+    cs.goal = null;
+    cs.repath = 0;
+    u.path = [];
+    world.setState(u, 'idle');
+    guardTick(world, u, cs);
+  }
+  settleCancelled(world, cancelled);
+}
+
+/** Where a guard of `t` should stand, or null if it is close enough already. */
+function guardSpot(u: Unit, t: Target): Vec2 | null {
+  const reach = BALANCE.guardDistance + BALANCE.guardSlack;
+  if (!isUnit(t)) return edgeDistance(u, t) > reach ? siteApproach(u.pos, t) : null;
+  const d = dist(u.pos, t.pos);
+  if (d <= reach) return null;
+  // On the line from the target toward the guard, so several guards spread around it.
+  const k = BALANCE.guardDistance / d;
+  return { x: t.pos.x + (u.pos.x - t.pos.x) * k, z: t.pos.z + (u.pos.z - t.pos.z) * k };
+}
+
+/** A guard not fighting: release it if the target is gone, otherwise keep (or get) close to it. */
+function guardTick(world: World, u: Unit, cs: CombatState): void {
+  const t = targetOf(world, cs.guard ?? null);
+  if (!t || t.hp <= 0 || world.areEnemies(u.owner, t.owner) || t.owner === GAIA) {
+    cs.order = null;
+    delete cs.guard;
+    if (u.state === 'moving') {
+      u.path = [];
+      world.setState(u, 'idle');
+    }
+    return;
+  }
+  if (u.state !== 'idle' && u.state !== 'moving') return;
+  if (isUnit(t) && t.state === 'garrisoned') return; // hold where we are until it comes out
+  const spot = guardSpot(u, t);
+  if (!spot) {
+    if (u.state === 'moving' && isUnit(t)) {
+      u.path = [];
+      world.setState(u, 'idle');
+    }
+    return;
+  }
+  if (cs.repath > 0) return;
+  if (u.path.length && cs.goal && dist(spot, cs.goal) < BALANCE.repathDistance) return;
+  cs.repath = BALANCE.repathInterval;
+  const path = routeForUnit(world, u, spot);
+  if (!path) return;
+  cs.goal = { ...spot };
+  u.path = path;
+  world.setState(u, 'moving');
+}
+
+/**
+ * `t` was damaged by `by`: its guards that are not already fighting turn on the attacker, if it
+ * is within BALANCE.leash of them. Map order is insertion order, so this is deterministic.
+ */
+function rallyGuards(world: World, t: Target, by: EntityId | null): void {
+  if (by === null) return;
+  const a = targetOf(world, by);
+  if (!a || a.hp <= 0 || (isUnit(a) && a.state === 'garrisoned')) return;
+  for (const [id, cs] of world.combatState) {
+    if (cs.order !== 'guard' || cs.guard !== t.id) continue;
+    const g = world.units.get(id);
+    if (!g || g.state === 'attacking' || g.state === 'garrisoned' || !canAttack(world, g.owner, a, g)) continue;
+    if (edgeDistance(g, a) > BALANCE.leash) continue;
+    engage(world, g, a, false);
+  }
 }
 
 /** 'stop': drop every order and stand still. */
@@ -740,6 +853,7 @@ export function applyDamage(world: World, t: Target, amount: number, by: EntityI
     } else destroyBuilding(world, t);
     return;
   }
+  rallyGuards(world, t, by);
   if (isUnit(t)) react(world, t, by, byOwner, from);
 }
 
@@ -982,6 +1096,7 @@ export function combatSystem(world: World, dt: number, arrived: Unit[]): void {
       attackTick(world, u, cs ?? stateOf(world, u), threats?.get(u.id));
       continue;
     }
+    if (cs?.order === 'guard') guardTick(world, u, cs);
     if (cs?.order === 'attackMove' && u.state === 'idle') {
       if (u.patrol) nextPatrolPoint(world, u, cs);
       else {

@@ -19,6 +19,7 @@ import type { ExplorationSite, PriestOrder } from './systems/explorationRewards'
 import { normalizeWonderRules, type GameResult, type WonderCountdown, type WonderRules } from './systems/victory';
 
 /**
+ * 12: M17-3 guard order (CombatState.order 'guard' with CombatState.guard); older saves have no guards.
  * 11: M17-2 patrol routes on units (Unit.patrol); older saves have none.
  * 10: M17-1 group formations (Unit.formation: id, shared speed cap, arrival facing, slot).
  * 9: M16-2 siege engines (Unit.deployed, Unit.packTimer, 'packing'/'unpacking' states). Older
@@ -33,7 +34,7 @@ import { normalizeWonderRules, type GameResult, type WonderCountdown, type Wonde
  * 3: M14-1 in-place building upgrades (Building.tier, Building.upgrading).
  * 2: M8 research (researched techs, ages, market prices, building research queues).
  */
-export const SAVE_VERSION = 11;
+export const SAVE_VERSION = 12;
 /** Oldest version that still loads; v2 buildings load at tier 0 with no upgrade running, v2–9 units out of formation. */
 export const MIN_SAVE_VERSION = 2;
 
@@ -371,7 +372,17 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   restoreMap(world.buildState, s.build);
   restoreMap(world.exploreState, s.explore);
   for (const id of s.exploreQueue) world.exploreQueue.add(id);
+  if (saved.version < 12) {
+    // Pre-guard saves: no combat entry can hold a guard order.
+    for (const [, cs] of s.combat) {
+      delete cs.guard;
+      if ((cs.order as string) === 'guard') cs.order = null;
+    }
+  }
   restoreMap(world.combatState, s.combat);
+  for (const cs of world.combatState.values()) {
+    if (cs.order === 'guard' ? !Number.isSafeInteger(cs.guard) : cs.guard !== undefined) throw new Error('Invalid save: guard order');
+  }
   restoreMap(world.fleeState, s.flee);
   restoreMap(world.farmers, s.farmers);
   if (s.repairDebt) restoreMap(world.repairDebt, s.repairDebt);

@@ -80,6 +80,10 @@ export const BALANCE = {
   lootFraction: { unit: 0.1, building: 0.05 },
   /** Chasers give up once this far from where they last had the target in range (or first acquired it). */
   leash: 20,
+  /** Guards follow a unit at about this distance (centre to centre), or stay this close to a building's edge. */
+  guardDistance: 2.5,
+  /** A guard only walks back once it has drifted this much farther than guardDistance. */
+  guardSlack: 1.5,
   /** Seconds between chase re-paths for one unit. */
   repathInterval: 0.4,
   /** Re-path a chase only if the target's approach point moved this far from the path's end. */

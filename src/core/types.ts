@@ -398,6 +398,8 @@ export type Command =
    * fighting like attack-move. One waypoint = back and forth. Any other unit order ends it.
    */
   | { type: 'patrol'; unitIds: EntityId[]; waypoints: Vec2[] }
+  /** Follow an own or allied unit (or stay by a building) and fight whatever damages it. */
+  | { type: 'guard'; unitIds: EntityId[]; targetId: EntityId }
   /** Drop current orders and stand still. */
   | { type: 'stop'; unitIds: EntityId[] }
   | { type: 'stance'; unitIds: EntityId[]; stance: Stance }
