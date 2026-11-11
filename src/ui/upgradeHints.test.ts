@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS, footprintRadius } from '../core/buildings';
-import type { TechId } from '../core/techs';
+import { TECHS, type TechId } from '../core/techs';
 import { GRASS_ONLY, type Building, type BuildingKind, type Heightfield, type MapLayout, type Stockpile } from '../core/types';
 import { upgradeBlock } from '../sim/systems/buildingUpgrade';
 import { researchBlock } from '../sim/systems/research';
@@ -143,7 +143,8 @@ describe('age-progress chip', () => {
   });
 
   it('shows the building count and the shortfall', () => {
-    const p = ageProgress(view({ stock: stock({ food: 280 }), ageBuildings: 1 }))!;
+    // Costs come from the table (M13-3 retuned them): 120 food short of the Town Age.
+    const p = ageProgress(view({ stock: stock({ food: TECHS.townAge.cost.food! - 120 }), ageBuildings: 1 }))!;
     expect(p).toMatchObject({ tech: 'townAge', next: 1, built: 1, needed: 2, ready: false, advancing: false });
     expect(p.short).toEqual([{ type: 'food', amount: 120 }]);
     const t = ageChipText(p);
@@ -164,12 +165,13 @@ describe('age-progress chip', () => {
   });
 
   it('lists every missing resource for later ages', () => {
-    const p = ageProgress(view({ age: 1, stock: stock({ food: 3000 }), ageBuildings: 2 }))!;
+    const city = TECHS.cityAge.cost;
+    const p = ageProgress(view({ age: 1, stock: stock({ food: city.food! - 800 }), ageBuildings: 2 }))!;
     expect(p.short).toEqual([
       { type: 'food', amount: 800 },
-      { type: 'gold', amount: 800 },
+      { type: 'gold', amount: city.gold },
     ]);
-    expect(ageChipText(p).text).toBe('City Age · 2/2 buildings · need 800 food, 800 gold');
+    expect(ageChipText(p).text).toBe(`City Age · 2/2 buildings · need 800 food, ${city.gold} gold`);
   });
 
   it('reads the live world through techViewOf', () => {

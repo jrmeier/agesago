@@ -103,8 +103,12 @@ function installOrderDom(): HTMLElement {
     style: {}, dataset: {}, classList: { toggle() {}, contains: () => false },
     append() {}, appendChild() {}, addEventListener() {}, setAttribute() {},
     querySelector: () => null, getContext: () => ctx,
+    // UpgradeBadges (M13-5) project onto the canvas once a building can afford an upgrade.
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 800 }),
   });
-  vi.stubGlobal('document', { createElement: element, getElementById: () => null, querySelector: () => null, body: element() });
+  vi.stubGlobal('document', {
+    createElement: element, createElementNS: element, getElementById: () => null, querySelector: () => null, body: element(),
+  });
   return element() as unknown as HTMLElement;
 }
 
