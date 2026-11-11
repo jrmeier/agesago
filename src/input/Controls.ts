@@ -369,7 +369,7 @@ export class Controls {
     const q = input.keyMods(HOTKEYS.attackMove);
     if (q && !q.shift && this.ownUnitIds().length) this.setTargeting(!this.targeting || !!this.patrolPoints || this.guardArmed);
     if (q?.shift && !q.ctrl && !q.alt) this.setPatrolling(!this.patrolPoints);
-    // Shift+G guards when the selection can; otherwise it falls through to the Shift+G build key (wonder).
+    // Shift+G guards when the selection can (the wonder builds on Shift+H, so there is no Shift+G build key).
     const guardKey = parseHotkey(HOTKEYS.guard);
     const g = input.keyMods(guardKey.code);
     const guarding = !!g && g.shift && !g.ctrl && !g.alt && this.guardUnits().length > 0;

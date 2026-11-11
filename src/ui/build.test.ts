@@ -87,7 +87,10 @@ describe('build hotkeys', () => {
     expect(kindForKey('KeyM', true)).toBe('market');
     expect(kindForKey('KeyM')).toBe('miningCamp');
     // Shift with a key that has no chord still builds the plain kind.
-    expect(kindForKey('KeyH', true)).toBe('house');
+    expect(kindForKey('KeyS', true)).toBe('storehouse');
+    // Shift+H is the wonder (Shift+G is the guard order, M17-3); plain H is still the house.
+    expect(kindForKey('KeyH', true)).toBe('wonder');
+    expect(kindForKey('KeyH')).toBe('house');
     expect(keyLabel('Shift+KeyM')).toBe('⇧M');
     expect(parseHotkey('Shift+KeyJ')).toEqual({ code: 'KeyJ', shift: true });
     expect(buildHotkeyCodes()).toContain('KeyJ');

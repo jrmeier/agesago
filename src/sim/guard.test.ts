@@ -204,21 +204,27 @@ describe('guard order', () => {
     expect(dist(loaded.units.get(g.id)!.pos, loaded.units.get(v.id)!.pos)).toBeLessThanOrEqual(BALANCE.guardDistance + BALANCE.guardSlack + 0.5);
   });
 
-  it('loads v3 saves (no guard field) and rejects a malformed guard', () => {
+  it('loads pre-guard saves (v2-v11) and rejects a malformed guard', () => {
     const world = arena();
     world.seed = 7;
     const v = spawn(world, 'villager', 1, { x: 40, z: 40 });
     const g = spawn(world, 'hoplite', 1, { x: 38, z: 40 });
     world.dispatch({ type: 'attack', unitIds: [g.id], targetId: spawn(world, 'villager', 2, { x: 50, z: 40 }).id });
-    const old = JSON.parse(JSON.stringify(serializeWorld(world)));
-    old.version = 3;
-    expect(deserializeWorld(old, flat()).combatState.get(g.id)?.order).toBe('attack');
+    for (const version of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) {
+      const old = JSON.parse(JSON.stringify(serializeWorld(world)));
+      old.version = version;
+      expect(deserializeWorld(old, flat()).combatState.get(g.id)?.order).toBe('attack');
+    }
 
     world.dispatch({ type: 'guard', unitIds: [g.id], targetId: v.id });
+    // A guard in a pre-guard (v11) save can't be real: it loads as no order.
+    const stray = JSON.parse(JSON.stringify(serializeWorld(world)));
+    stray.version = 11;
+    expect(deserializeWorld(stray, flat()).combatState.get(g.id)?.order ?? null).toBeNull();
     const bad = JSON.parse(JSON.stringify(serializeWorld(world)));
     for (const [id, cs] of bad.systems.combat) if (id === g.id) delete cs.guard;
     expect(() => deserializeWorld(bad, flat())).toThrow('Invalid save: guard order');
-  });
+  }, 30_000);
 
   it('is a valid network command', () => {
     expect(validCommand({ type: 'guard', unitIds: [1, 2], targetId: 3 })).toBe(true);

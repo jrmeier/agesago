@@ -31,7 +31,7 @@ export const BUILD_HOTKEYS: Partial<Record<BuildingKind, string>> = {
   siegeWorkshop: 'Shift+KeyB',
   temple: 'Shift+KeyO',
   dock: 'Shift+KeyK',
-  wonder: 'Shift+KeyG',
+  wonder: 'Shift+KeyH',
   fortress: 'Shift+KeyN',
 };
 
