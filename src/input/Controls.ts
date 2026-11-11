@@ -2,7 +2,7 @@ import { villagerPose } from '../camera/FollowCamera';
 import type { EntityViews, ScreenRect } from '../render/EntityViews';
 import type { PickIntent } from '../render/picking';
 import { CAMERA_LABELS, type CameraRig } from '../camera/CameraRig';
-import { canWork, defaultFormation, isShip } from '../core/units';
+import { canPatrol, canWork, defaultFormation, isShip } from '../core/units';
 import { canGarrison } from '../sim/systems/defence';
 import { BUILDINGS } from '../core/buildings';
 import { GAIA, type Building, type BuildingKind, type Command, type EntityId, type FormationKind, type PropPlacement, type Stance, type UnitKind, type Vec2 } from '../core/types';
@@ -28,7 +28,7 @@ import type { GestureEvent } from './gestures';
 import { GROUP_KEYS, HOTKEYS, TRAIN_SLOT_KEYS, groupForKey } from './hotkeys';
 import { IdleCycler, idleVillagers } from './idle';
 import { LMB, RMB, type DragState, type Input } from './Input';
-import { resolveAttackMove, resolveBuildingOrder, resolveOrder, resolveRepairOrder, resolveTargetOrder, resolveTradeOrder, type HitEntity } from './orders';
+import { resolveAttackMove, resolveBuildingOrder, resolvePatrol, resolveOrder, resolveRepairOrder, resolveTargetOrder, resolveTradeOrder, type HitEntity } from './orders';
 import { pickGround, projectToCanvas, screenRay, toNdc } from './pickGround';
 import { Placement } from './Placement';
 import { focusNextScout, onScoutFocus } from './scouts';
@@ -150,6 +150,8 @@ export class Controls {
   /** Attack-move armed: the next ground click / tap attack-moves. */
   private targeting = false;
   private unloading = false;
+  /** Patrol armed (a kind of targeting): Shift+click waypoints gathered so far; a plain click finishes. */
+  private patrolPoints: Vec2[] | null = null;
   /** Pause menu is up: orders and placement wait. Camera input is skipped by Game. */
   private suspended = false;
   /** Help, placement, or targeting already used Escape this frame, so it must not also pause. */
@@ -192,6 +194,7 @@ export class Controls {
     selection.onChange(() => {
       if (this.placement.active && !this.workerIds().length) this.placement.cancel();
       if (this.targeting && !this.ownUnitIds().length) this.setTargeting(false);
+      if (this.patrolPoints && !this.patrolIds().length) this.setTargeting(false);
     });
     rig.resolveTarget = (id, alpha) => {
       const available = (u: import('../core/types').Unit | undefined) => !!u && u.kind === 'villager' && u.owner === world.localPlayer && u.hp > 0 && u.state !== 'garrisoned';
@@ -239,7 +242,8 @@ export class Controls {
       if (!btn) return;
       btn.blur();
       if (btn.dataset.cmd === 'unloadTransport') { this.setTargeting(true); this.unloading = true; }
-      else if (btn.dataset.cmd === 'attackMove') this.setTargeting(!this.targeting);
+      else if (btn.dataset.cmd === 'attackMove') this.setTargeting(!this.targeting || !!this.patrolPoints);
+      else if (btn.dataset.cmd === 'patrol') this.setPatrolling(!this.patrolPoints);
       else if (btn.dataset.cmd === 'stop') this.stop();
       else if (btn.dataset.stance) this.setStance(btn.dataset.stance as Stance);
     });
@@ -357,7 +361,8 @@ export class Controls {
       if (tc) world.dispatch({ type: 'train', buildingId: tc.id });
     }
     if (input.keyPressed(HOTKEYS.explore)) this.explore();
-    if (input.keyPressed(HOTKEYS.attackMove) && this.ownUnitIds().length) this.setTargeting(!this.targeting);
+    if (input.keyPressed(HOTKEYS.attackMove) && this.ownUnitIds().length) this.setTargeting(!this.targeting || !!this.patrolPoints);
+    if (plain(HOTKEYS.patrol)) this.setPatrolling(!this.patrolPoints);
     if (input.keyPressed(HOTKEYS.stop)) this.stop();
     if (input.keyPressed(HOTKEYS.idleVillager)) this.nextIdle();
     if (input.keyPressed(HOTKEYS.scout) || input.keyPressed('NumpadDecimal') || input.keyPressed(HOTKEYS.scoutAlt)) {
@@ -860,6 +865,18 @@ export class Controls {
       }
       this.setTargeting(false); return;
     }
+    if (this.patrolPoints) {
+      const ground = this.groundAt(x, y);
+      if (ground) {
+        this.patrolPoints.push(ground);
+        views.flashMarker(ground);
+      }
+      if (keepArmed) return;
+      const cmd = resolvePatrol(this.patrolIds(), this.patrolPoints);
+      if (cmd) world.dispatch(cmd);
+      this.setTargeting(false);
+      return;
+    }
     const hit = this.hitEntity(this.pickAt(x, y));
     const attack = resolveTargetOrder({ unitIds, rallyBuildingId: null }, hit, null, (o) => world.areEnemies(world.localPlayer, o));
     const cmd = attack ?? resolveAttackMove(unitIds, this.groundAt(x, y), this.formationFor(unitIds));
@@ -872,10 +889,32 @@ export class Controls {
 
   private setTargeting(on: boolean): void {
     if (on && !this.ownUnitIds().length) on = false;
-    this.targeting = on; this.unloading = false;
+    this.targeting = on; this.unloading = false; this.patrolPoints = null;
     document.body.classList.toggle('targeting', on);
-    const btn = document.querySelector('#command-card [data-cmd="attackMove"]');
-    btn?.setAttribute('aria-pressed', String(on));
+    this.syncTargetButtons();
+  }
+
+  /** Arm patrol: the next click / tap is the patrol point (Shift+click adds waypoints first). */
+  private setPatrolling(on: boolean): void {
+    if (on && !this.patrolIds().length) on = false;
+    this.setTargeting(on);
+    if (on) this.patrolPoints = [];
+    this.syncTargetButtons();
+  }
+
+  private syncTargetButtons(): void {
+    const patrol = !!this.patrolPoints;
+    document.querySelector('#command-card [data-cmd="attackMove"]')?.setAttribute('aria-pressed', String(this.targeting && !patrol && !this.unloading));
+    document.querySelector('#command-card [data-cmd="patrol"]')?.setAttribute('aria-pressed', String(patrol));
+  }
+
+  /** Selected own units that can patrol (soldiers, scouts, warships). */
+  private patrolIds(): EntityId[] {
+    const { world } = this.deps;
+    return this.ownUnitIds().filter((id) => {
+      const u = world.units.get(id);
+      return !!u && canPatrol(u.kind);
+    });
   }
 
   private stop(): void {

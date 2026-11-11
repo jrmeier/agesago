@@ -341,6 +341,15 @@ export function isAnimal(kind: UnitKind): kind is 'deer' | 'boar' | 'sheep' {
 export const DEFAULT_CHAMPION_CIV: CivId = 'hellenes';
 
 /**
+ * Can take a patrol order: armed units other than villagers and wildlife (scouts, soldiers,
+ * champions, warships, and siege, whose attack may be crush only).
+ */
+export function canPatrol(kind: UnitKind): boolean {
+  const a = UNITS[kind].attack;
+  return kind !== 'villager' && !isAnimal(kind) && a.melee + a.pierce + crushOf(a) > 0;
+}
+
+/**
  * Units a building can train, in menu order. Unique units need their civ; champions fall back to
  * DEFAULT_CHAMPION_CIV's when `civ` is absent.
  */

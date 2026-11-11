@@ -7,7 +7,8 @@ import { BUILD_HOTKEYS } from '../ui/build';
  *
  * Attack-move is Q: A is already select-all, and Q sits right
  * next to it under the left hand, free of every build key. Ctrl+right-click attack-moves
- * directly. Stop is X (the ✕ on its button). Train slots are Z / C / V, left to right in the
+ * directly. Patrol is W, beside it (WASD only walks in the villager views, which ignore
+ * these keys). Stop is X (the ✕ on its button). Train slots are Z / C / V, left to right in the
  * training panel, so they never collide with the build keys a villager selection uses.
  */
 export const HOTKEYS = {
@@ -17,6 +18,7 @@ export const HOTKEYS = {
   firstPerson: 'KeyF',
   rotate: 'KeyR',
   attackMove: 'KeyQ',
+  patrol: 'KeyW',
   stop: 'KeyX',
   idleVillager: 'Comma',
   scout: 'Period',

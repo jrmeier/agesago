@@ -15,6 +15,7 @@ const ACTION_LABEL: Record<string, string> = {
   firstPerson: 'Cycle Overhead → Villager POV → Third-person. Follows a selected own villager (or first available); work continues.',
   rotate: 'Rotate the building you are placing',
   attackMove: 'Attack-move',
+  patrol: 'Patrol: click a point to walk back and forth, fighting on the way. Shift+click adds waypoints for a loop.',
   stop: 'Stop',
   idleVillager: 'Select the next idle villager',
   scout: 'Centre on the next scout',

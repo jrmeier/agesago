@@ -531,6 +531,10 @@
         <path d="M11 19.4h9.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
         <path d="M22.2 19.4 18.4 16.4v6z" fill="currentColor" />
       </symbol>
+      <symbol id="i-patrol" viewBox="0 0 24 24">
+        <path d="M5 9.5h11.5M5 14.5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        <path d="M20.6 9.5 16.4 6.2v6.6zM3.4 14.5l4.2-3.3v6.6z" fill="currentColor" />
+      </symbol>
       <symbol id="i-stop" viewBox="0 0 24 24">
         <path d="M8.2 2.6h7.6l5.6 5.6v7.6l-5.6 5.6H8.2l-5.6-5.6V8.2z" fill="currentColor" />
         <path d="M8.4 8.4l7.2 7.2M15.6 8.4l-7.2 7.2" stroke="#f3e2b8" stroke-width="2.2" stroke-linecap="round" />
@@ -819,6 +823,9 @@
             <div id="command-card" class="command-card" role="group" aria-label="Orders" hidden>
               <button type="button" class="cmd-btn" data-cmd="attackMove" title="Attack-move (Q, or Ctrl+right-click): walk there, fighting on the way" aria-label="Attack-move">
                 <svg aria-hidden="true"><use href="#i-attack-move" /></svg><span class="cmd-label">Attack move</span><kbd>Q</kbd>
+              </button>
+              <button type="button" class="cmd-btn patrol-btn" data-cmd="patrol" aria-pressed="false" title="Patrol (W): click a point to walk back and forth, fighting on the way. Shift+click adds waypoints" aria-label="Patrol">
+                <svg aria-hidden="true"><use href="#i-patrol" /></svg><span class="cmd-label">Patrol</span><kbd>W</kbd>
               </button>
               <button type="button" class="cmd-btn" data-cmd="unloadTransport" title="Unload: then choose a reachable coast" aria-label="Unload passengers" hidden><span aria-hidden="true">⇩</span><span>Unload</span></button>
               <button type="button" class="cmd-btn" data-cmd="stop" title="Stop (X)" aria-label="Stop">

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Unit, Vec2 } from '../core/types';
-import { resolveAttackMove, resolveBuildingOrder, resolveOrder, resolveRepairOrder, resolveTargetOrder } from './orders';
+import { resolveAttackMove, resolveBuildingOrder, resolvePatrol, resolveOrder, resolveRepairOrder, resolveTargetOrder } from './orders';
 import { focusNextScout, nextScout, onScoutFocus } from './scouts';
 
 describe('order resolution under fog', () => {
@@ -156,6 +156,15 @@ describe('orders that depend on ownership', () => {
     expect(resolveAttackMove([4, 5], ground)).toEqual({ type: 'attackMove', unitIds: [4, 5], target: ground });
     expect(resolveAttackMove([], ground)).toBeNull();
     expect(resolveAttackMove([4], null)).toBeNull();
+  });
+
+  it('patrols the selection through copied waypoints', () => {
+    const pts = [{ x: 1, z: 2 }, { x: 3, z: 4 }];
+    const cmd = resolvePatrol([4, 5], pts);
+    expect(cmd).toEqual({ type: 'patrol', unitIds: [4, 5], waypoints: pts });
+    expect(cmd!.waypoints[0]).not.toBe(pts[0]);
+    expect(resolvePatrol([], pts)).toBeNull();
+    expect(resolvePatrol([4], [])).toBeNull();
   });
 });
 

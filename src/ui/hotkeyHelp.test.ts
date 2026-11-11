@@ -25,5 +25,6 @@ describe('hotkey reference', () => {
     }
     expect(rows.some((row) => row.label.startsWith('Build a House'))).toBe(true);
     expect(rows.some((row) => row.keys === 'U' && row.label.includes('Town bell'))).toBe(true);
+    expect(rows.some((row) => row.keys === 'W' && row.label.startsWith('Patrol'))).toBe(true);
   });
 });

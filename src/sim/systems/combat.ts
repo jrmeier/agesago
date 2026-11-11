@@ -1,7 +1,7 @@
 import { orderTend } from './livestock';
 import { BUILDINGS } from '../../core/buildings';
 import type { Building, EntityId, PlayerId, Rank, ResourceType, Stance, Stockpile, Unit, UnitKind, UnitState, Vec2 } from '../../core/types';
-import { canWork, crushOf, isAnimal, isShip, packs, UNITS } from '../../core/units';
+import { canPatrol, canWork, crushOf, isAnimal, isShip, packs, UNITS } from '../../core/units';
 import { GAIA } from '../../core/types';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
@@ -317,12 +317,6 @@ export function orderAttackMove(world: World, unitIds: EntityId[], target: Vec2,
   if (!planned.length) world.events.emit({ type: 'rejected', reason: 'unreachable' });
 }
 
-/** Can `u` take a patrol order? Fighting units only: not villagers, ships that can't shoot, or wildlife. */
-function canPatrol(u: Unit): boolean {
-  const a = UNITS[u.kind].attack;
-  return u.kind !== 'villager' && !isAnimal(u.kind) && a.melee + a.pierce > 0;
-}
-
 /**
  * 'patrol': each unit walks a loop from where it stands through `waypoints` (formation-offset)
  * and back, again and again, fighting like attack-move. The route lives on `Unit.patrol`; the
@@ -330,7 +324,7 @@ function canPatrol(u: Unit): boolean {
  * unchanged. Any other order clears it.
  */
 export function orderPatrol(world: World, unitIds: EntityId[], waypoints: Vec2[]): void {
-  const list = units(world, unitIds).filter(canPatrol);
+  const list = units(world, unitIds).filter((u) => canPatrol(u.kind));
   if (!list.length || !waypoints.length) return;
   const cancelled = clearWork(world, list);
   let moved = 0;

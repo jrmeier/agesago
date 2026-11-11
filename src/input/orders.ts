@@ -68,6 +68,15 @@ export function resolveAttackMove(
   return { type: 'attackMove', unitIds: [...unitIds], target: { ...ground }, ...(formation ? { formation } : {}) };
 }
 
+/** Patrol for the selection through `waypoints` (null with nobody to send or no point). */
+export function resolvePatrol(
+  unitIds: readonly EntityId[],
+  waypoints: readonly Vec2[]
+): Extract<Command, { type: 'patrol' }> | null {
+  if (!unitIds.length || !waypoints.length) return null;
+  return { type: 'patrol', unitIds: [...unitIds], waypoints: waypoints.map((p) => ({ ...p })) };
+}
+
 /** The parts of a building that decide what workers do when ordered onto it. */
 export type OrderBuilding = Pick<Building, 'id' | 'kind' | 'complete' | 'food'>;
 
