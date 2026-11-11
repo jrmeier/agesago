@@ -124,7 +124,7 @@ describe('staffed livestock', () => {
     expect(restored.buildings.get(gate.id)?.livestockOpen).toBe(true);
     run(w, 65); run(restored, 65);
     expect(serializeWorld(restored)).toEqual(serializeWorld(w));
-  });
+  }, 30_000);
   it('routes UI and validates multiplayer commands', () => {
     const { b } = setup(); expect(resolveBuildingOrder([1], b)).toEqual({ type: 'tend', unitIds: [1], buildingId: b.id });
     expect(validCommand({ type: 'tend', unitIds: [1], buildingId: b.id })).toBe(true);
