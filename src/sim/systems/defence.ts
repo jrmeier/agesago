@@ -186,7 +186,7 @@ export function orderTownBell(world: World, by: PlayerId): void {
 }
 
 /** Everyone steps out of `b` (it is too damaged to hold them). */
-function ejectAll(world: World, b: Building): void {
+export function ejectAll(world: World, b: Building): void {
   for (const id of [...(b.occupants ?? [])]) {
     const u = world.units.get(id);
     if (u) eject(world, b, u);

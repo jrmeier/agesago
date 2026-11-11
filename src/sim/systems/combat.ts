@@ -1,7 +1,7 @@
 import { orderTend } from './livestock';
-import { BUILDINGS } from '../../core/buildings';
+import { BUILDINGS, CAPTURE } from '../../core/buildings';
 import type { Building, EntityId, PlayerId, Rank, ResourceType, Stance, Stockpile, Unit, UnitKind, UnitState, Vec2 } from '../../core/types';
-import { canGuard, canPatrol, canWork, crushOf, isAnimal, isShip, packs, UNITS } from '../../core/units';
+import { canGuard, canPatrol, canWork, captureRate, crushOf, isAnimal, isShip, packs, UNITS } from '../../core/units';
 import { GAIA } from '../../core/types';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
@@ -17,6 +17,7 @@ import { awardKill, recordDamage } from './veterancy';
 import { readyToFire, startUnpack } from './siege';
 import { armorOf, buildingAttack, damageTo, edgeDistance, garrisonCap, isRanged, nearestPoint, unitRadius, unitRange, unitSight, unitSpeed } from './stats';
 import { garrisonArrows, orderGarrison } from './defence';
+import { canCapture, reduceCapturePoints } from './capture';
 
 /** Per-unit combat bookkeeping kept off the frozen Unit shape (created on first engagement). */
 export interface CombatState {
@@ -41,6 +42,8 @@ export interface CombatState {
   anchor: Vec2 | null;
   /** Sim time the target was last visible to the owner (or the fight started). */
   seen: number;
+  /** Capturing the target building rather than hitting it (M18-4; absent = attack). */
+  capture?: boolean;
 }
 
 /** A villager running from an attacker, and the work it goes back to. */
@@ -253,6 +256,7 @@ function clearWork(world: World, units: Unit[]): Unit[] {
       cs.dest = null;
       cs.post = null;
       delete cs.guard;
+      delete cs.capture;
     }
   }
   return cancelled;
@@ -278,6 +282,7 @@ export function releaseCombat(world: World, unitIds: EntityId[]): void {
       cs.anchor = null;
       cs.goal = null;
       delete cs.guard;
+      delete cs.capture;
     }
   }
 }
@@ -318,6 +323,30 @@ export function orderAttack(world: World, unitIds: EntityId[], targetId: EntityI
     if ((isAnimal(u.kind) && u.kind !== 'boar') || (UNITS[u.kind].attack.melee + UNITS[u.kind].attack.pierce + crushOf(UNITS[u.kind].attack) <= 0)) continue;
     stateOf(world, u).order = 'attack';
     engage(world, u, t, true);
+  }
+  settleCancelled(world, cancelled);
+}
+
+/**
+ * 'capture' (M18-4): units with a capture attack walk up to an enemy or neutral building and
+ * drain its capture points; the others (siege, villagers) attack it. A building that can't be
+ * captured (walls, farms, foundations, own or allied) is simply attacked.
+ */
+export function orderCapture(world: World, unitIds: EntityId[], targetId: EntityId, by: PlayerId): void {
+  const b = world.buildings.get(targetId);
+  if (!b || !canCapture(world, by, b)) {
+    orderAttack(world, unitIds, targetId, by);
+    return;
+  }
+  const all = units(world, unitIds);
+  const capturers = all.filter((u) => captureRate(u.kind) > 0);
+  const others = all.filter((u) => captureRate(u.kind) <= 0);
+  if (others.length) orderAttack(world, others.map((u) => u.id), targetId, by);
+  if (!capturers.length) return;
+  const cancelled = clearWork(world, capturers);
+  for (const u of capturers) {
+    stateOf(world, u).order = 'attack';
+    engage(world, u, b, true, true);
   }
   settleCancelled(world, cancelled);
 }
@@ -577,8 +606,10 @@ export function applyRally(world: World, b: Building, u: Unit): void {
 // ---- Engagement ----
 
 /** Start fighting `t`. Explicit (player-ordered) attacks have no leash until first contact. */
-function engage(world: World, u: Unit, t: Target, explicit: boolean): void {
+function engage(world: World, u: Unit, t: Target, explicit: boolean, capture = false): void {
   const cs = stateOf(world, u);
+  if (capture) cs.capture = true;
+  else delete cs.capture;
   if (!explicit && cs.order === null && !cs.post) cs.post = { ...u.pos };
   u.target = t.id;
   cs.goal = null;
@@ -596,6 +627,7 @@ function disengage(world: World, u: Unit, cs: CombatState): void {
   u.path = [];
   cs.goal = null;
   cs.anchor = null;
+  delete cs.capture;
   if (cs.order === 'attack') cs.order = null;
   const next = findEnemy(world, u, acquireRadius(world, u, cs));
   if (next) {
@@ -631,9 +663,10 @@ function approachOf(u: Unit, t: Target): Vec2 {
 }
 
 /** One tick of a unit in 'attacking': validate, close in (re-pathing as the target moves), strike. */
-function attackTick(world: World, u: Unit, cs: CombatState, threat: Unit | undefined): void {
+function attackTick(world: World, u: Unit, cs: CombatState, threat: Unit | undefined, dt: number): void {
   const t = targetOf(world, u.target);
   const explicit = cs.order === 'attack';
+  const capturing = cs.capture === true && !!t && !isUnit(t);
   // Unit targets must stay in sight; a short grace lets units close on an unseen shooter or round a fog edge.
   if (t && (u.kind === 'boar' || !isUnit(t) || world.visibilityOf(u.owner).isVisible(t.pos.x, t.pos.z))) cs.seen = world.time;
   if (
@@ -643,14 +676,25 @@ function attackTick(world: World, u: Unit, cs: CombatState, threat: Unit | undef
     !canAttack(world, u.owner, t, u) ||
     !canTarget(u, t) ||
     (u.stance === 'passive' && !explicit) ||
-    world.time - cs.seen > BALANCE.lostSightGrace
+    world.time - cs.seen > BALANCE.lostSightGrace ||
+    (capturing && !canCapture(world, u.owner, t))
   ) {
     disengage(world, u, cs);
     return;
   }
   const spec = UNITS[u.kind];
   const d = edgeDistance(u, t);
-  if (d <= unitRange(world, u.owner, u.kind) + 1e-6) {
+  if (capturing && d <= CAPTURE.range + 1e-6) {
+    // Capture (M18-4): stand at the building and drain its capture points every tick.
+    cs.anchor = { ...u.pos };
+    u.path = [];
+    const p = nearestPoint(u.pos, t);
+    u.facing = Math.atan2(p.x - u.pos.x, p.z - u.pos.z);
+    alertOwner(world, t);
+    reduceCapturePoints(world, t, captureRate(u.kind) * dt, u.owner);
+    return;
+  }
+  if (!capturing && d <= unitRange(world, u.owner, u.kind) + 1e-6) {
     if (!canTarget(u, t, d)) {
       // Inside the minimum range: back off to shooting distance (packing first), else give up.
       if (!(explicit || u.stance !== 'standGround') || !backOff(world, u, cs, nearestPoint(u.pos, t))) disengage(world, u, cs);
@@ -838,11 +882,7 @@ export function applyDamage(world: World, t: Target, amount: number, by: EntityI
   t.hp = Math.max(0, t.hp - amount);
   if (isUnit(t)) recordDamage(world, t.id, by, dealt);
   world.events.emit({ type: 'damaged', id: t.id, hp: t.hp, maxHp: t.maxHp, by });
-  const last = world.lastAlert.get(t.owner);
-  if (last === undefined || world.time - last >= BALANCE.alertInterval - 1e-9) {
-    world.lastAlert.set(t.owner, world.time);
-    world.events.emit({ type: 'attacked', owner: t.owner, id: t.id, pos: { x: t.pos.x, z: t.pos.z } });
-  }
+  alertOwner(world, t);
   if (t.hp <= 0) {
     grantLoot(world, t, byOwner);
     if (isUnit(t)) {
@@ -853,6 +893,15 @@ export function applyDamage(world: World, t: Target, amount: number, by: EntityI
   }
   rallyGuards(world, t, by);
   if (isUnit(t)) react(world, t, by, byOwner, from);
+}
+
+/** A rate-limited 'attacked' alert for `t`'s owner (hit or being captured). */
+function alertOwner(world: World, t: Target): void {
+  const last = world.lastAlert.get(t.owner);
+  if (last === undefined || world.time - last >= BALANCE.alertInterval - 1e-9) {
+    world.lastAlert.set(t.owner, world.time);
+    world.events.emit({ type: 'attacked', owner: t.owner, id: t.id, pos: { x: t.pos.x, z: t.pos.z } });
+  }
 }
 
 /** A unit was hit: passive villagers at work run off; idle units with a fighting stance hit back. */
@@ -1092,7 +1141,7 @@ export function combatSystem(world: World, dt: number, arrived: Unit[]): void {
       cs.repath -= dt;
     }
     if (u.state === 'attacking') {
-      attackTick(world, u, cs ?? stateOf(world, u), threats?.get(u.id));
+      attackTick(world, u, cs ?? stateOf(world, u), threats?.get(u.id), dt);
       continue;
     }
     if (cs?.order === 'guard') guardTick(world, u, cs);

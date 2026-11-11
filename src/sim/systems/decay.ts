@@ -53,6 +53,7 @@ export function abandonBuilding(world: World, b: Building): void {
   b.upgrading = undefined;
   b.rally = undefined;
   b.cooldown = 0;
+  delete b.capture;
   world.farmers.delete(b.id);
   world.events.emit({ type: 'abandoned', id: b.id, kind: b.kind, owner: prev, pos: { x: b.pos.x, z: b.pos.z } });
   world.refreshFog();

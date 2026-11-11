@@ -375,6 +375,11 @@ export interface Building {
   tier?: number;
   /** An in-place upgrade under way to tier `to`; blocks training and research. */
   upgrading?: { to: number; progress: number };
+  /**
+   * Capture points per player id (index 0 = Gaia), summing to maxCapturePoints(kind) (M18-4).
+   * Absent while the owner holds them all.
+   */
+  capture?: number[];
 }
 
 export type Entity = Unit | ResourceNode | Building;
@@ -394,6 +399,11 @@ export type Command =
   | { type: 'cancelTrain'; buildingId: EntityId; index: number }
   /** Attack a unit or building. */
   | { type: 'attack'; unitIds: EntityId[]; targetId: EntityId }
+  /**
+   * Capture an enemy (or neutral) building (M18-4): units with a capture attack drain its
+   * capture points; the rest (siege) attack it. A building that can't be captured is attacked.
+   */
+  | { type: 'capture'; unitIds: EntityId[]; targetId: EntityId }
   /** Walk to a point, fighting any enemy met on the way. */
   | { type: 'attackMove'; unitIds: EntityId[]; target: Vec2; formation?: FormationKind; facing?: number }
   /**
@@ -543,6 +553,8 @@ export type SimEvent =
   | { type: 'looted'; owner: PlayerId; pos: Vec2; loot: Partial<Stockpile> }
   | { type: 'treasure'; owner: PlayerId; site: string; pos: Vec2; reward: string }
   | { type: 'relic'; owner: PlayerId; site: string; templeId: EntityId }
+  /** A building changed hands by capture (M18-4): `owner` took it from `previousOwner` (0 = Gaia). */
+  | { type: 'captured'; id: EntityId; kind: BuildingKind; owner: PlayerId; previousOwner: PlayerId; pos: Vec2 }
   | { type: 'converted'; owner: PlayerId; id: EntityId; previousOwner: PlayerId }
   /** A soldier ranked up (and healed to full). */
   | { type: 'promoted'; id: EntityId; owner: PlayerId; rank: Rank };

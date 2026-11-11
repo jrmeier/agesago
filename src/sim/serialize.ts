@@ -20,6 +20,8 @@ import type { ExplorationSite, PriestOrder } from './systems/explorationRewards'
 import { normalizeWonderRules, type GameResult, type WonderCountdown, type WonderRules } from './systems/victory';
 
 /**
+ * 14: M18-4 building capture (Building.capture points per player, CombatState.capture). Older
+ *    saves load with every building's points all its owner's and nobody capturing.
  * 13: M15-4 batch training (Building.queueCounts); older saves load every queue entry as 1 unit.
  * 12: M17-3 guard order (CombatState.order 'guard' with CombatState.guard); older saves have no guards.
  * 11: M17-2 patrol routes on units (Unit.patrol); older saves have none.
@@ -36,7 +38,7 @@ import { normalizeWonderRules, type GameResult, type WonderCountdown, type Wonde
  * 3: M14-1 in-place building upgrades (Building.tier, Building.upgrading).
  * 2: M8 research (researched techs, ages, market prices, building research queues).
  */
-export const SAVE_VERSION = 13;
+export const SAVE_VERSION = 14;
 /** Oldest version that still loads; v2 buildings load at tier 0 with no upgrade running, v2–9 units out of formation. */
 export const MIN_SAVE_VERSION = 2;
 
@@ -317,6 +319,11 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   }
   // Pre-batch saves: every queue entry is one unit.
   if (saved.version < 13) for (const b of saved.buildings) delete b.queueCounts;
+  // Pre-capture saves: every building's points belong to its owner, nobody is capturing.
+  if (saved.version < 14) {
+    for (const b of saved.buildings) delete b.capture;
+    for (const [, cs] of saved.systems.combat) delete cs.capture;
+  }
   restoreMap(world.buildings, saved.buildings.map((b) => [b.id, b]));
   for (const b of world.buildings.values()) {
     const spec = BUILDINGS[b.kind];

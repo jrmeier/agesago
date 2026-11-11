@@ -62,6 +62,21 @@ export interface UnitSpec {
   champion?: boolean;
 }
 
+/**
+ * Capture attack (M18-4, after 0 A.D.'s Capture attack): capture points per second a unit of
+ * this class drains from an enemy building it stands at. Soldiers (infantry, archers, cavalry,
+ * scouts) capture; villagers, priests, trade carts, ships, siege and wildlife do not (unlike
+ * 0 A.D.'s citizens, villagers here stay workers). Champions capture CHAMPION_CAPTURE_MUL× faster.
+ */
+export const CAPTURE_RATE: Partial<Record<UnitClass, number>> = { infantry: 2.5, archer: 2.5, cavalry: 2.5 };
+export const CHAMPION_CAPTURE_MUL = 2;
+
+/** Capture points per second a `kind` unit drains (0: cannot capture). */
+export function captureRate(kind: UnitKind): number {
+  const spec = UNITS[kind];
+  return (CAPTURE_RATE[spec.unitClass] ?? 0) * (spec.champion ? CHAMPION_CAPTURE_MUL : 1);
+}
+
 /** Hack (melee), pierce and crush (siege) amounts; crush is optional (see crushOf). */
 export interface DamageTypes {
   melee: number;

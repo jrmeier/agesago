@@ -62,6 +62,11 @@ export interface BuildingSpec {
    * otherwise it turns neutral (Gaia). Roots never decay.
    */
   decayTo?: 'collapse' | 'neutral';
+  /**
+   * Capture points (M18-4, after 0 A.D.'s Capturable): the total split between players. Absent:
+   * CAPTURE.cpPerHp × hp. 0: not capturable (walls, gates, farms), only destroyed.
+   */
+  capturePoints?: number;
 }
 
 export interface TerritoryInfluence {
@@ -85,6 +90,26 @@ export const TERRITORY = {
   /** A new Town Center needs this much space (world units, centre to centre) from every other one. */
   townCenterSpacing: 30,
 } as const;
+
+/** Building capture tuning (M18-4, 0 A.D. Capturable). Argued in docs/BALANCE.md ("Capture"). */
+export const CAPTURE = {
+  /** Default max capture points per hit point of the base (tier 0) building. */
+  cpPerHp: 0.5,
+  /** Edge distance at which a unit captures (it walks up, archers too). */
+  range: 1,
+  /** Capture points per second the owner regains while the building stands in its own territory. */
+  territoryRegen: 1,
+  /** Capture points per second the territory owner gains on a rival's (or Gaia's) building on its land. */
+  enemyTerritoryRegen: 1,
+  /** Capture points per second the owner regains for each unit garrisoned inside. */
+  garrisonRegen: 3,
+} as const;
+
+/** Max capture points of a `kind` building (0: not capturable). */
+export function maxCapturePoints(kind: BuildingKind): number {
+  const spec = BUILDINGS[kind];
+  return spec.capturePoints ?? Math.round(spec.hp * CAPTURE.cpPerHp);
+}
 
 /** Small non-root influence shared by most buildings. */
 const MINOR: TerritoryInfluence = { radius: 6, weight: 2 };
@@ -174,6 +199,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     armor: { melee: 4, pierce: 10 },
   },
   farm: {
+    capturePoints: 0,
     decayTo: 'collapse',
     name: 'Farm',
     size: { w: 4, d: 4 },
@@ -248,6 +274,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     attack: { pierce: 6, range: 8, reload: 2, arrows: 1 },
   },
   palisade: {
+    capturePoints: 0,
     decayTo: 'collapse',
     name: 'Palisade',
     size: { w: 2, d: 2 },
@@ -263,6 +290,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     line: true,
   },
   stoneWall: {
+    capturePoints: 0,
     decayTo: 'collapse',
     name: 'Stone Wall',
     size: { w: 2, d: 2 },
@@ -279,6 +307,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     line: true,
   },
   gate: {
+    capturePoints: 0,
     decayTo: 'collapse',
     name: 'Gate',
     size: { w: 2, d: 2 },

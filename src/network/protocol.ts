@@ -51,7 +51,7 @@ export function validCommand(v: unknown): v is Command {
     case 'patrol': return ids(v.unitIds) && Array.isArray(v.waypoints) && v.waypoints.length >= 1 && v.waypoints.length <= MAX_PATROL_POINTS && v.waypoints.every(point);
     case 'gather': return ids(v.unitIds) && id(v.nodeId);
     case 'heal': case 'convert':
-    case 'attack': case 'repair': case 'guard': return ids(v.unitIds) && id(v.targetId);
+    case 'attack': case 'capture': case 'repair': case 'guard': return ids(v.unitIds) && id(v.targetId);
     case 'stop': case 'explore': return ids(v.unitIds);
     case 'stance': return ids(v.unitIds) && ['aggressive', 'defensive', 'standGround', 'passive'].includes(String(v.stance));
     case 'train': return id(v.buildingId) && (v.unit === undefined || typeof v.unit === 'string' && Object.hasOwn(UNITS, v.unit))
