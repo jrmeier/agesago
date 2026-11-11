@@ -232,7 +232,7 @@ The AI now plays both.
   off our land goes at the edge of our territory on the way there (`ownGround`), or is skipped if
   that edge is too far from the work to help.
 - **Town Centers are buildable** (sim change, needed for expansion): Town Age, 275 wood + 100 stone,
-  Shift+S, last tile of the villager build menu (desktop grid now 8 × 3). The M18-3 neutral-land
+  Shift+Y (Shift+S became the loose formation in M17-4), last tile of the villager build menu (desktop grid now 8 × 3). The M18-3 neutral-land
   and spacing rules apply.
 - **Expansion.** `Profile.expandAt` (villagers; moderate 24, hard and hardest 22, easy never) and
   `Profile.towns` (Town Centers to own; 2, hardest 3). On medium or larger maps (width ≥ 144) in the

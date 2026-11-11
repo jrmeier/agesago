@@ -365,7 +365,7 @@ Placement and decay follow 0 A.D.'s BuildRestrictions and TerritoryDecay (`canPl
   outward. Nothing may go on another player's land, allied or not. A Town Center also needs
   30 units (`townCenterSpacing`) from every other Town Center or Town Center foundation. A rejected
   order reports `territory`, and the ghost says why.
-- **New Town Centers (M18-5).** Villagers build Town Centers from the Town Age (`age: 1`, Shift+S,
+- **New Town Centers (M18-5).** Villagers build Town Centers from the Town Age (`age: 1`, Shift+Y,
   last tile of the build menu) at the existing 275 wood + 100 stone and 150 s build time. Each new
   one is a territory root, trains villagers and adds 5 pop. The price is a first guess and much
   cheaper than 0 A.D.'s Civic Center; the M13-7 / M16-9 balance passes should look at it (the

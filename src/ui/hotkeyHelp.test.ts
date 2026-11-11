@@ -32,5 +32,8 @@ describe('hotkey reference', () => {
       expect(rows.some((row) => row.keys === keys && row.label.startsWith(name))).toBe(true);
     }
     expect(rows.some((row) => row.keys === 'RMB drag' && row.label.includes('front line'))).toBe(true);
+    // M18-5's Town Center moved off Shift+S, which is the loose formation.
+    expect(rows.some((row) => row.keys === 'Shift+Y' && row.label === 'Build a Town Center')).toBe(true);
+    expect(rows.filter((row) => row.keys === 'Shift+S')).toHaveLength(1);
   });
 });

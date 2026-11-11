@@ -33,8 +33,11 @@ export const BUILD_HOTKEYS: Partial<Record<BuildingKind, string>> = {
   dock: 'Shift+KeyK',
   wonder: 'Shift+KeyH',
   fortress: 'Shift+KeyN',
-  /** S for settlement: plain S stays the storehouse (M18-5). */
-  townCenter: 'Shift+KeyS',
+  /**
+   * Shift+Y (M18-5): every plain letter is taken, and Shift+S is the loose formation (M17-4).
+   * Y's only other meaning is the archery range, so its Shift chord was free.
+   */
+  townCenter: 'Shift+KeyY',
 };
 
 const SHIFT = 'Shift+';

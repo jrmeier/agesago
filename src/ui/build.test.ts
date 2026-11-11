@@ -110,9 +110,11 @@ describe('build hotkeys', () => {
     expect(buildableKinds({ ...BUILDINGS, townCenter: { ...BUILDINGS.townCenter, buildable: false } })).not.toContain('townCenter');
   });
 
-  it('builds a new Town Center with Shift+S, last in the menu (M18-5)', () => {
-    expect(kindForKey('KeyS', true)).toBe('townCenter');
-    expect(kindForKey('KeyS')).toBe('storehouse');
+  it('builds a new Town Center with Shift+Y, last in the menu (M18-5)', () => {
+    expect(kindForKey('KeyY', true)).toBe('townCenter');
+    expect(kindForKey('KeyY')).toBe('archeryRange');
+    // Shift+S is the loose formation (M17-4); for villagers it falls back to the storehouse.
+    expect(kindForKey('KeyS', true)).toBe('storehouse');
     expect(buildableKinds().at(-1)).toBe('townCenter');
   });
 });
