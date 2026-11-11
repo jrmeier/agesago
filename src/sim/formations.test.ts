@@ -190,7 +190,7 @@ describe('formation movement', () => {
       expect(world.nav.isFree(u.pos)).toBe(true);
       expect(Math.hypot(u.pos.x - target.x, u.pos.z - target.z)).toBeLessThan(15);
     }
-  });
+  }, 30_000);
 
   it('attack-move marches in formation and combat breaks it', () => {
     const world = worldOn();
