@@ -749,7 +749,8 @@ body.placing .selection-panel * {
 
 /* Build grid: compact ivory tiles, at most 124px wide, seven across on a desktop. */
 .build-grid {
-  /* 7 × 3 holds every building (19 with the wonder) without a fourth row covering the map centre. */
+  /* 7 × 3 holds all 21 buildings (with the wonder, siege workshop and fortress) without a fourth row
+     covering the map centre; a 22nd buildable kind needs another layout change. */
   --cols: 7;
   order: 2;
   flex: 1 0 100%;

@@ -15,7 +15,7 @@ async function boot(page: Page): Promise<string[]> {
 
 const CHAMPIONS = ['spartanHoplite', 'agema', 'praetorian', 'equites', 'appleBearer', 'savaran', 'gaesatae', 'nobleRider'];
 
-test('fortress limit shows in the build menu and the fortress trains champions', async ({ page }) => {
+test('fortress limit shows in the build menu and the fortress trains champions', async ({ page }, testInfo) => {
   const errors = await boot(page);
   const fortress = page.locator('#build-grid [data-build="fortress"]');
 
@@ -30,6 +30,18 @@ test('fortress limit shows in the build menu and the fortress trains champions',
     g.selection.set(villagers);
   });
   await expect(fortress.locator('.build-limit')).toHaveText('0/2');
+  if (testInfo.project.name === 'desktop') {
+    // The extra tile must not grow the menu over the middle of the map or past the screen.
+    const layout = await page.evaluate(() => {
+      const grid = document.getElementById('build-grid')!.getBoundingClientRect();
+      const canvas = document.querySelector('#game-container canvas')!;
+      return {
+        centre: document.elementFromPoint(innerWidth / 2, innerHeight / 2) === canvas,
+        inside: grid.left >= 0 && grid.right <= innerWidth && grid.bottom <= innerHeight,
+      };
+    });
+    expect(layout).toEqual({ centre: true, inside: true });
+  }
   await expect(fortress).toHaveAttribute('data-locked', 'false');
 
   const ids = await page.evaluate(() => {
