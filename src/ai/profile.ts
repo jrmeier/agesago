@@ -65,6 +65,11 @@ export interface Profile {
   maxProduction: number;
   /** Villagers before the first barracks. */
   barracksAt: number;
+  /**
+   * The second military building, laid soon after the barracks and before the Town Age
+   * (archery range: slingers; stable: scouts). The third is the other one.
+   */
+  secondProduction: 'archeryRange' | 'stable';
   /** Seconds after the first barracks before each extra production building may start. */
   productionSpacing: number;
   /** Earliest first attack. */
@@ -103,6 +108,7 @@ const BASE: Record<Difficulty, Profile> = {
     militaryQueue: 1,
     maxProduction: 2,
     barracksAt: 14,
+    secondProduction: 'archeryRange',
     productionSpacing: 300,
     firstAttack: 15 * 60,
     firstWave: 5,
@@ -117,8 +123,8 @@ const BASE: Record<Difficulty, Profile> = {
     research: {
       townAgeAt: 18,
       cityAgeAt: 22,
-      townAgeTime: 14 * 60,
-      cityAgeTime: 28 * 60,
+      townAgeTime: 8 * 60,
+      cityAgeTime: 18 * 60,
       ecoWorkers: 8,
       lineUnits: 8,
       weights: { eco: 0.7, tc: 0.5, forge: 0.4, line: 0.3, defence: 0 },
@@ -138,6 +144,7 @@ const BASE: Record<Difficulty, Profile> = {
     militaryQueue: 2,
     maxProduction: 4,
     barracksAt: 14,
+    secondProduction: 'archeryRange',
     productionSpacing: 150,
     firstAttack: 10 * 60,
     firstWave: 9,
@@ -151,7 +158,7 @@ const BASE: Record<Difficulty, Profile> = {
     cheat: null,
     research: {
       townAgeAt: 20,
-      cityAgeAt: 30,
+      cityAgeAt: 28,
       townAgeTime: 0,
       cityAgeTime: 0,
       ecoWorkers: 6,
@@ -173,6 +180,7 @@ const BASE: Record<Difficulty, Profile> = {
     militaryQueue: 3,
     maxProduction: 6,
     barracksAt: 13,
+    secondProduction: 'archeryRange',
     productionSpacing: 100,
     firstAttack: 8.5 * 60,
     firstWave: 12,
@@ -186,7 +194,7 @@ const BASE: Record<Difficulty, Profile> = {
     cheat: null,
     research: {
       townAgeAt: 19,
-      cityAgeAt: 28,
+      cityAgeAt: 27,
       townAgeTime: 0,
       cityAgeTime: 0,
       ecoWorkers: 5,
@@ -208,6 +216,7 @@ const BASE: Record<Difficulty, Profile> = {
     militaryQueue: 3,
     maxProduction: 8,
     barracksAt: 13,
+    secondProduction: 'archeryRange',
     productionSpacing: 80,
     firstAttack: 8 * 60,
     firstWave: 14,
@@ -221,7 +230,7 @@ const BASE: Record<Difficulty, Profile> = {
     cheat: { trickle: { food: 0.35, wood: 0.35, gold: 0.25, stone: 0.1 }, fullMap: true },
     research: {
       townAgeAt: 18,
-      cityAgeAt: 27,
+      cityAgeAt: 26,
       townAgeTime: 0,
       cityAgeTime: 0,
       ecoWorkers: 5,
@@ -243,6 +252,7 @@ export function makeProfile(difficulty: Difficulty, personality?: Personality, t
     case 'rusher':
       // Early barracks, a small early wave, then steady pressure; a leaner economy.
       p.barracksAt = Math.max(8, p.barracksAt - 5);
+      p.secondProduction = 'stable';
       p.firstAttack *= 0.5;
       p.firstWave = Math.max(4, Math.round(p.firstWave * 0.5));
       p.waveGap *= 0.75;

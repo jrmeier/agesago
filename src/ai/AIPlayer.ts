@@ -61,6 +61,7 @@ export class AIPlayer {
       rng: rngFrom((opts.seed ?? 1) * 7919 + player),
       issue: (cmd: Command) => self.issue(cmd),
       sheltered: new Set<EntityId>(),
+      explorers: new Set([...world.units.values()].filter((u) => u.owner === player && u.kind === 'scout').map((u) => u.id)),
       home,
       region: world.nav.regionAt(tc ? { x: tc.pos.x, z: tc.pos.z + tc.radius + 1 } : home),
       reserve: {},
@@ -137,7 +138,7 @@ export class AIPlayer {
   }
 
   private snap() {
-    return snapshot(this.world, this.player);
+    return snapshot(this.world, this.player, this.ctx.explorers);
   }
 
   private issue(cmd: Command): void {

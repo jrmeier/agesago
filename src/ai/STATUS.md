@@ -1,4 +1,4 @@
-# AI status (M7-2 economy, M8-16 research and ages)
+# AI status (M7-2 economy, M8-16 research and ages, M13-6 new age gates)
 
 The computer player (`AIPlayer`) acts only through `world.dispatch(cmd, player)`. It reads its
 own units, buildings and stock, enemy units it can see right now, enemy buildings it has seen,
@@ -11,7 +11,9 @@ resource trickle).
 - Splits gatherers across food, wood, gold and stone by target ratios that change over the game.
 - Builds houses before the pop cap stalls villager production.
 - Builds drop sites (storehouse, granary, mining camp) next to gatherers working far from one.
-- Builds permanent farms after the berries near the base are gone and keeps them staffed.
+- Builds permanent farms after the berries near the base are gone and keeps them staffed. When the
+  berries within 40 of the Town Center are nearly picked (200 food or less), it waits for them instead of laying
+  a field for a short gap.
 - Sends the scout to unexplored ground, then patrols.
 - Herdables are not population and not soldiers. A sheep in sight does not stall training or call the army home.
 - Military (barracks, waves, defence, retreat) is in `military.ts`. It is not part of this ticket's acceptance.
@@ -113,9 +115,50 @@ Caveats:
 - Against an idle human, the researcher's army power (`armyPower`) is far below the control's
   until about minute 25, because it banks 3,800 food. It is ahead by minute 30 in 4 of 5 seeds.
 
+## M13-6: the new age gates and unit-line tiers
+
+With M13-1 the archery range and stable open in the Village Age, M13-2 added three-tier unit lines
+(tier 1 Town, 2 City, 3 Empire) and M13-3 sped the ages up (Town about 5 min, City about 12).
+
+- **Second military building before the Town Age.** `Profile.secondProduction` picks it: an archery
+  range (slingers) for every personality except the rusher, who takes a stable (scouts). The economy
+  builds military buildings in the order barracks, second choice, the other one (`productionOrder`,
+  fewest-of-a-kind first). The second comes 2 villagers and 30 s after the barracks; later ones keep
+  the old spacing. Before saving for the Town Age the research planner lays it itself if it is still
+  missing (`production(s, true)`), so it stands when the age arrives. Barracks plus range also cover
+  the two Village Age buildings the age-up needs.
+- **Mixed army.** Scouts are no longer excluded from training. The starting scouts are explorers
+  (`Ctx.explorers`); scouts trained later are soldiers in `Snapshot.army` and fight with the army. Unit
+  choice is per building, so a Village Age army is hoplites from the barracks and slingers from the
+  range (scouts from a stable), then archers, swordsmen and horsemen join in the Town Age. Enemy scouts
+  beyond the first (the explorer) count as cavalry in `Intel.enemyMix`/`enemyArmy`, as raiders for
+  villager shelter, and as a raid for research.
+- **A unit-line tier per age.** As each age opens, the line rules get a bonus for the age's own tier
+  of a unit it fields (2 or more of that kind; most fielded first), and an earlier tier it skipped as
+  the way there. The age's tier is `urgent`: while it can't be afforded, cheaper techs wait and the
+  army leaves its cost (`techReserve`), and the market tops it up. `Facts.lines` counts line techs
+  researched or queued per tier. Other line tiers still need `lineUnits` of the kind.
+- **New pacing.** City Age villager counts are lower (moderate 28, hard 27, hardest 26); easy waits
+  until 8 min for Town and 18 min for City (was 14 / 28). The Town Age reserve still pauses villagers
+  briefly for its 300 food; the City Age (1,200 food + 500 gold) keeps them training.
+
+`src/ai/research.test.ts` (seeds 1–5, moderate, idle human) now also asserts at least two completed
+military buildings when the Town Age arrives and a unit line of tier N started in each age N reached:
+
+| seed | Town Age | City Age | military at Town | line techs (in order) |
+|---|---|---|---|---|
+| 1 | 5.6 min | 14.5 min | 2 | compositeArcher, cretanArcher, … |
+| 2 | 5.7 | 11.5 | 2 | compositeArcher, cretanArcher, … |
+| 3 | 5.4 | 14.1 | 2 | compositeArcher, cretanArcher, … |
+| 4 | 5.6 | 13.9 | 2 | compositeArcher, cretanArcher, … |
+| 5 | 5.4 | 14.7 | 2 | compositeArcher, cretanArcher, … |
+
+Bounds are now Town ≤ 7 min and City ≤ 17 min (were 14 and 25 for the old costs).
+
 ## Open
 
-- No Empire Age step, and no Empire-only techs.
+- No Empire Age step (6,500 food + 1,000 gold + 600 stone), so no tier-3 lines; tier 3 also needs
+  a level-2 building, which is M14-6 (AI building upgrades).
 - No market techs (coinage, caravans) and no trade carts.
 - No walls, fortified walls or machicolations.
 - Wonders and relics are out of scope.

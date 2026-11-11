@@ -16,6 +16,8 @@ export interface Ctx {
   issue(cmd: Command): void;
   /** Villagers held at the Town Center during a raid (the economy leaves them alone). */
   readonly sheltered: Set<EntityId>;
+  /** Scouts that explore (the starting ones); scouts trained later are soldiers. */
+  readonly explorers: Set<EntityId>;
   /** Where the base is: the Town Center, else the first building, else where it was. */
   home: Vec2;
   /** Nav region of the base (for reachability checks). */
@@ -40,6 +42,7 @@ export interface Ctx {
 /** One sweep over the world: this player's units and buildings, sorted by role. */
 export interface Snapshot {
   villagers: Unit[];
+  /** Exploring scouts (see Ctx.explorers); trained scouts are in `army`. */
   scouts: Unit[];
   army: Unit[];
   buildings: Building[];
@@ -52,13 +55,13 @@ export interface Snapshot {
   building: Partial<Record<BuildingKind, number>>;
 }
 
-export function snapshot(world: World, player: PlayerId): Snapshot {
+export function snapshot(world: World, player: PlayerId, explorers?: ReadonlySet<EntityId>): Snapshot {
   const s: Snapshot = { villagers: [], scouts: [], army: [], buildings: [], tc: undefined, popUsed: 0, popCap: world.popCapOf(player), count: {}, building: {} };
   for (const u of world.units.values()) {
     if (u.owner !== player || isAnimal(u.kind)) continue;
     s.popUsed += popCost(u.kind);
     if (u.kind === 'villager') s.villagers.push(u);
-    else if (u.kind === 'scout') s.scouts.push(u);
+    else if (u.kind === 'scout' && (!explorers || explorers.has(u.id))) s.scouts.push(u);
     else s.army.push(u);
   }
   for (const b of world.buildings.values()) {

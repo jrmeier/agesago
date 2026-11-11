@@ -5,7 +5,7 @@ import { isAnimal, UNITS, type UnitClass } from '../core/units';
 import { buyCost, LOT, sellGain } from '../sim/systems/market';
 import { ageBuildingsNeeded, ageBuildings, ageOf, isQueued, researchBlock } from '../sim/systems/research';
 import { canAfford, dist, type Ctx, type Snapshot } from './context';
-import { norm, type Economy } from './economy';
+import { norm, PRODUCTION, type Economy } from './economy';
 import type { ResearchProfile, TechGroup } from './profile';
 
 const TYPES: ResourceType[] = ['food', 'wood', 'gold', 'stone'];
@@ -40,6 +40,8 @@ export interface Facts {
   built: Partial<Record<BuildingKind, number>>;
   /** Hit in the last two minutes. */
   raided: boolean;
+  /** Unit-line techs researched or under way, by tier (index 1–3). */
+  lines: number[];
   p: ResearchProfile;
 }
 
@@ -50,7 +52,18 @@ export interface Rule {
   base: number;
   /** Worth researching now (age, requirements and cost are checked separately). */
   when: (f: Facts) => boolean;
+  /** Extra priority right now (added to `base` before the weight). */
+  bonus?: (f: Facts) => number;
+  /** Must-have now: while it can't be afforded, cheaper techs wait instead of jumping ahead. */
+  urgent?: (f: Facts) => boolean;
 }
+
+/**
+ * The age's unit-line tier is still missing and `unit` is fielded: research a line as each age
+ * opens (tier 1 in the Town Age, tier 2 in the City Age; an earlier tier it skipped counts too,
+ * as the way to the current one).
+ */
+const ageLine = (f: Facts, unit: UnitKind, tier: number) => tier <= f.age && !f.lines[f.age] && (f.units[unit] ?? 0) >= 2;
 
 const share = (f: Facts, ...cs: UnitClass[]) => {
   const n = cs.reduce((a, c) => a + f.classes[c], 0);
@@ -92,10 +105,19 @@ export const RULES: Rule[] = [
   ...chain(CHAINS.archerAttack, 'forge', [42, 34, 28], (f) => fits(f, 'archer')),
   ...chain(CHAINS.archerArmor, 'forge', [34, 28, 24], (f) => fits(f, 'archer')),
   ...chain(CHAINS.cavalryArmor, 'forge', [36, 30, 25], (f) => fits(f, 'cavalry')),
-  // Unit lines it has plenty of.
-  ...TECH_IDS.filter((t) => TECHS[t].line).map(
-    (tech): Rule => ({ tech, group: 'line', base: 40 - 8 * (TECHS[tech].line!.tier - 1), when: (f) => (f.units[TECHS[tech].line!.unit] ?? 0) >= f.p.lineUnits })
-  ),
+  // Unit lines it has plenty of, and one per age for the units it fields (most fielded first).
+  ...TECH_IDS.filter((t) => TECHS[t].line).map((tech): Rule => {
+    const { unit, tier } = TECHS[tech].line!;
+    return {
+      tech,
+      group: 'line',
+      base: 40 - 8 * (tier - 1),
+      when: (f) => (f.units[unit] ?? 0) >= f.p.lineUnits || ageLine(f, unit, tier),
+      // The age's own tier first; an earlier tier it skipped only as the way there.
+      bonus: (f) => (!ageLine(f, unit, tier) ? 0 : tier === f.age ? 8 * tier + Math.min(12, f.units[unit] ?? 0) : 4),
+      urgent: (f) => tier === f.age && ageLine(f, unit, tier),
+    };
+  }),
   // Defences.
   { tech: 'ballistics', group: 'defence', base: 32, when: (f) => f.classes.archer >= f.p.lineUnits },
   { tech: 'masonry', group: 'defence', base: 26, when: (f) => f.classes.archer >= f.p.lineUnits || (f.raided && !!f.built.watchTower) },
@@ -129,12 +151,14 @@ export class Research {
     private readonly econ: Economy
   ) {}
 
-  /** One of ours was hit at `pos`: a raid if an enemy soldier is in sight there (not a wolf, a boar or a scout). */
+  /** One of ours was hit at `pos`: a raid if an enemy soldier is in sight there (not a wolf, a boar or a lone scout). */
   onAttacked(pos: Vec2): void {
     const { world, player, intel } = this.c;
     if (world.time - this.lastHit < 5) return;
+    let scouts = 0;
     for (const u of world.units.values()) {
-      if (isAnimal(u.kind) || u.kind === 'scout' || u.kind === 'villager' || !world.areEnemies(player, u.owner) || dist(u.pos, pos) > 12 || !intel.sees(u.pos.x, u.pos.z)) continue;
+      if (isAnimal(u.kind) || u.kind === 'villager' || !world.areEnemies(player, u.owner) || dist(u.pos, pos) > 12 || !intel.sees(u.pos.x, u.pos.z)) continue;
+      if (u.kind === 'scout' && ++scouts < 2) continue;
       this.lastHit = world.time;
       return;
     }
@@ -172,6 +196,14 @@ export class Research {
     }
     const built: Partial<Record<BuildingKind, number>> = {};
     for (const b of s.buildings) if (b.complete) built[b.kind] = (built[b.kind] ?? 0) + 1;
+    const lines = [0, 0, 0, 0];
+    const researched = world.players.get(player)?.researched;
+    const line = (t: TechId) => {
+      const l = TECHS[t].line;
+      if (l) lines[l.tier]++;
+    };
+    if (researched) for (const t of researched) line(t);
+    for (const b of s.buildings) for (const t of b.research ?? []) line(t);
     return {
       age: ageOf(world, player),
       villagers: s.villagers.length,
@@ -182,6 +214,7 @@ export class Research {
       army: s.army.length,
       built,
       raided: world.time - this.lastHit < 120,
+      lines,
       p,
     };
   }
@@ -210,6 +243,14 @@ export class Research {
     const earliest = f.age === 0 ? p.townAgeTime : p.cityAgeTime;
     if (f.villagers < need - 3 || world.time < earliest - 90) return;
 
+    // Village Age: a second military building (by profile) before the Town Age (M13-6).
+    if (f.age === 0 && this.c.profile.maxProduction >= 2) {
+      const military = PRODUCTION.reduce((n, k) => n + (s.count[k] ?? 0), 0);
+      if (military < 2) {
+        this.econ.production(s, true);
+        return;
+      }
+    }
     // The two current-age buildings: add one if it lacks them (counting ones going up).
     const have = new Set(ageBuildings(world, player, f.age));
     for (const b of s.buildings) if (!b.complete && !NOT_AGE_BUILDINGS.has(b.kind) && (BUILDINGS[b.kind].age ?? 0) === f.age) have.add(b.kind);
@@ -305,23 +346,25 @@ export class Research {
     const idle = new Map<BuildingKind, Building>();
     for (const b of s.buildings) if (b.complete && !b.research?.length && !idle.has(b.kind)) idle.set(b.kind, b);
     let best: { tech: TechId; at: Building; score: number } | null = null;
-    let want: { tech: TechId; score: number; group: TechGroup } | null = null;
+    let want: { tech: TechId; score: number; group: TechGroup; urgent: boolean } | null = null;
     for (const r of RULES) {
       const w = p.weights[r.group];
       if (w <= 0) continue;
       const spec = TECHS[r.tech];
       const at = idle.get(spec.at);
       if (!at || (spec.at === 'townCenter' && tcBusy)) continue;
-      const score = r.base * w;
+      const score = (r.base + (r.bonus?.(f) ?? 0)) * w;
       if ((best && score <= best.score) || !r.when(f)) continue;
       if (researchBlock(world, player, r.tech, true) !== null) continue;
       // The tech villagers are paused for doesn't also keep the villager reserve.
       if (!canAfford(stock, spec.cost, this.hold?.tech === r.tech ? this.c.reserve : reserve)) {
-        if (!want || score > want.score) want = { tech: r.tech, score, group: r.group };
+        if (!want || score > want.score) want = { tech: r.tech, score, group: r.group, urgent: !!r.urgent?.(f) };
         continue;
       }
       best = { tech: r.tech, at, score };
     }
+    // Saving for the age's unit line: cheaper techs don't spend what it needs.
+    if (best && want?.urgent && want.score > best.score) best = null;
     this.wanted = want && (!best || want.score > best.score) ? { ...TECHS[want.tech].cost } : {};
     // Hold the army back for it (not villagers), unless under attack.
     this.c.techReserve = !best && !this.c.armyFirst ? this.wanted : {};

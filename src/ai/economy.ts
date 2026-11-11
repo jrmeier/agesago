@@ -17,6 +17,10 @@ const DROP_AFTER: Record<ResourceType, number> = { wood: 3, food: 3, gold: 2, st
 const FAR_FROM_DROP = 8;
 /** Berry bushes further than this from a food drop site aren't worth walking to. */
 const BERRY_RANGE = 30;
+/** Berries this close to the Town Center are the home berries. */
+const HOME_BERRIES = 40;
+/** Home berry food left below which the AI waits for the bushes instead of laying a field. */
+const BERRIES_NEARLY_GONE = 200;
 export const PRODUCTION: BuildingKind[] = ['barracks', 'archeryRange', 'stable'];
 
 type Source = { id: EntityId; pos: Vec2 };
@@ -292,23 +296,46 @@ export class Economy {
 
   private farm(s: Snapshot): boolean | null {
     if (this.foodShort <= 0) return null;
+    // The last berries near the base are nearly picked: their gatherers move to the first fields
+    // in a moment, so don't lay one for a short gap.
+    let berries = 0;
+    for (const n of this.c.intel.nodes.food) {
+      if (n.kind === 'berry' && n.amount > 0 && dist(n.pos, this.c.home) < HOME_BERRIES && this.c.world.nodes.has(n.id)) berries += n.amount;
+    }
+    if (berries > 0 && berries <= BERRIES_NEARLY_GONE) return null;
     const wood = this.c.world.stockOf(this.c.player).wood;
     if ((s.building.farm ?? 0) >= Math.min(6, Math.max(1, Math.ceil(this.foodGap)), 2 + Math.floor(wood / 150))) return null;
     const center = s.tc?.pos ?? this.c.home;
     return this.place(s, { kind: 'farm', center, minR: 4, maxR: 16, clearOfNodes: 1, gap: 0.8 }, 1);
   }
 
-  private production(s: Snapshot): boolean | null {
+  /** Military buildings in build order: the barracks, the profile's second choice, then the other. */
+  productionOrder(): BuildingKind[] {
+    const second = this.c.profile.secondProduction;
+    return ['barracks', second, second === 'stable' ? 'archeryRange' : 'stable'];
+  }
+
+  /**
+   * Lay the next military building. The second follows the barracks quickly so it stands before
+   * the Town Age (M13-6); later ones wait for more villagers and `productionSpacing`. `force`
+   * skips those waits (the research planner uses it to get the second one up before aging).
+   */
+  production(s: Snapshot, force = false): boolean | null {
     const { world, profile } = this.c;
     const have = PRODUCTION.reduce((n, k) => n + (s.count[k] ?? 0), 0);
     if (have >= profile.maxProduction) return null;
-    if (s.villagers.length < profile.barracksAt + Math.min(have, 3) * 3) return null;
-    const spacing = have === 0 ? 0 : have < 3 ? profile.productionSpacing * 0.5 : profile.productionSpacing;
-    if (world.time - this.lastProduction < spacing) return null;
-    // Only kinds our age allows (the range and stable wait for the Town Age).
-    const open = PRODUCTION.filter((k) => !ageLocked(world, k, this.c.player));
-    if (!open.length) return null;
-    const kind = open[have % open.length];
+    if (!force) {
+      if (s.villagers.length < profile.barracksAt + (have === 1 ? 2 : Math.min(have, 3) * 3)) return null;
+      const spacing = have === 0 ? 0 : have === 1 ? 30 : have < 3 ? profile.productionSpacing * 0.5 : profile.productionSpacing;
+      if (world.time - this.lastProduction < spacing) return null;
+    }
+    // The kind it has fewest of, in build order, among those our age allows.
+    let kind: BuildingKind | null = null;
+    for (const k of this.productionOrder()) {
+      if (ageLocked(world, k, this.c.player)) continue;
+      if (kind === null || (s.count[k] ?? 0) < (s.count[kind] ?? 0)) kind = k;
+    }
+    if (!kind) return null;
     const enemy = this.c.intel.enemyStart;
     const toward = enemy ? norm({ x: enemy.x - this.c.home.x, z: enemy.z - this.c.home.z }) : undefined;
     const r = this.place(s, { kind, center: this.c.home, minR: 9, maxR: 28, clearOfNodes: 3, gap: 1.5, toward, bias: 8 }, profile.builders);

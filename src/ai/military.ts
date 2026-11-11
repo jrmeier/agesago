@@ -124,7 +124,7 @@ export class Military {
   chooseUnit(building: BuildingKind, s: Snapshot, stock: Stockpile, reserve: Partial<Stockpile>): UnitKind | null {
     const age = ageOf(this.c.world, this.c.player);
     const opts = trainable(building, this.c.world.players.get(this.c.player)?.player.civ).filter(
-      (k) => k !== 'scout' && k !== 'villager' && (UNITS[k].age ?? 0) <= age && canAfford(stock, UNITS[k].cost, reserve)
+      (k) => k !== 'villager' && (UNITS[k].age ?? 0) <= age && canAfford(stock, UNITS[k].cost, reserve)
     );
     if (!opts.length) return null;
     if (!this.c.profile.counters) return opts[Math.floor(this.c.rng() * opts.length)];
@@ -188,7 +188,10 @@ export class Military {
       c.x += t.pos.x / threats.length;
       c.z += t.pos.z / threats.length;
     }
-    const soldiers = threats.filter((t) => t.kind !== 'scout').length;
+    // Scouts are soldiers when there's more than one (a lone scout is just looking).
+    const scouts = threats.filter((t) => t.kind === 'scout').length;
+    const raider = (t: Unit) => t.kind !== 'scout' || scouts > 1;
+    const soldiers = threats.filter(raider).length;
     let defenders = home;
     // Outnumbered at home: call the attack back.
     if (this.mode === 'attack' && soldiers > home.length) {
@@ -202,7 +205,7 @@ export class Military {
 
     // Garrison-lite: villagers near raiding soldiers run to the Town Center.
     if (profile.shelter && soldiers > 0 && s.tc) {
-      const run = s.villagers.filter((v) => !this.c.sheltered.has(v.id) && threats.some((t) => t.kind !== 'scout' && dist(t.pos, v.pos) < 12));
+      const run = s.villagers.filter((v) => !this.c.sheltered.has(v.id) && threats.some((t) => raider(t) && dist(t.pos, v.pos) < 12));
       if (run.length && world.time > this.shelterUntil + 15) {
         this.shelterUntil = world.time + 20;
         for (const v of run) this.c.sheltered.add(v.id);

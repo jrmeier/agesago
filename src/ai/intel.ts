@@ -76,18 +76,30 @@ export class Intel {
     return this.sees(p.x, p.z) || this.sees(p.x - h, p.z) || this.sees(p.x + h, p.z) || this.sees(p.x, p.z - h) || this.sees(p.x, p.z + h);
   }
 
-  /** Recently seen enemy units by class (scouts and villagers excluded). */
+  /**
+   * Recently seen enemy units by class (villagers excluded). Scouts count as cavalry except one,
+   * the explorer every player starts with; more than that is a scout army (M13-6).
+   */
   enemyMix(): Record<UnitClass, number> {
     const mix: Record<UnitClass, number> = { villager: 0, infantry: 0, archer: 0, cavalry: 0, wildlife: 0, ship: 0, siege: 0 };
-    for (const s of this.seen.values()) if (s.kind !== 'scout') mix[UNITS[s.kind].unitClass]++;
+    let scouts = 0;
+    for (const s of this.seen.values()) {
+      if (s.kind === 'scout') scouts++;
+      else mix[UNITS[s.kind].unitClass]++;
+    }
+    mix.cavalry += Math.max(0, scouts - 1);
     return mix;
   }
 
   /** Enemy soldiers seen recently (an estimate of the army we'd meet). */
   enemyArmy(): number {
     let n = 0;
-    for (const s of this.seen.values()) if (s.kind !== 'scout' && s.kind !== 'villager') n++;
-    return n;
+    let scouts = 0;
+    for (const s of this.seen.values()) {
+      if (s.kind === 'scout') scouts++;
+      else if (s.kind !== 'villager') n++;
+    }
+    return n + Math.max(0, scouts - 1);
   }
 
   /** Re-list explored resource nodes and rebuild the near-resource mask. */
