@@ -1206,7 +1206,8 @@ export class Controls {
   private syncRouteBar(): void {
     const bar = document.getElementById('route-bar');
     if (!bar) return;
-    const show = !!this.patrolPoints && document.body.classList.contains('touch');
+    // Hidden while a sheet is open, so it never covers the sheet's tabs; it comes back once the map is clear.
+    const show = !!this.patrolPoints && document.body.classList.contains('touch') && !touchMenuOpen();
     const n = this.patrolPoints?.length ?? 0;
     const key = show ? String(n) : '';
     if (key === this.routeBarKey) return;

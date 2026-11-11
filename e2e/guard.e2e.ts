@@ -119,13 +119,19 @@ test('desktop: guard through the button, Shift+G and Alt+right-click', async ({ 
     g.world.dispatch({ type: 'move', unitIds: [id], target: dest });
     return dest;
   }, villager);
+  // Each poll steps the sim itself (until settled), so a frame-starved page under parallel load
+  // still gets there: the wait is on sim state, not on wall-clock frames.
   await expect.poll(() => page.evaluate(({ soldiers, villager }) => {
     const g = (window as any).game;
-    const v = g.world.units.get(villager);
-    return v.state === 'idle' && soldiers.every((id: number) => {
-      const s = g.world.units.get(id);
-      return Math.hypot(s.pos.x - v.pos.x, s.pos.z - v.pos.z) < 5;
-    });
+    const settled = () => {
+      const v = g.world.units.get(villager);
+      return v.state === 'idle' && soldiers.every((id: number) => {
+        const s = g.world.units.get(id);
+        return Math.hypot(s.pos.x - v.pos.x, s.pos.z - v.pos.z) < 5;
+      });
+    };
+    for (let i = 0; i < 40 && !settled(); i++) g.world.tick(0.05);
+    return settled();
   }, { soldiers, villager }), { timeout: 30_000 }).toBe(true);
   expect(await page.evaluate((id) => (window as any).game.world.units.get(id).pos, villager)).toMatchObject({
     x: expect.closeTo(dest.x, 0), z: expect.closeTo(dest.z, 0),

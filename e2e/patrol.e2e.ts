@@ -121,7 +121,12 @@ test('desktop: the Patrol button and Shift+Q hotkey order a looping patrol with 
   }, { id: cast.soldierId, pts });
   expect(ordered).toEqual({ moving: true, order: 'attackMove', near: [true, true, true] });
 
-  // It walks the loop: the target index advances past the first waypoint.
-  await expect.poll(() => page.evaluate((id) => (window as any).game.world.units.get(id).patrol?.index ?? -1, cast.soldierId), { timeout: 30_000 }).not.toBe(1);
+  // It walks the loop: the target index advances past the first waypoint. Each poll steps the sim
+  // itself, so a frame-starved page under parallel load still gets there (no wall-clock wait).
+  await expect.poll(() => page.evaluate((id) => {
+    const w = (window as any).game.world;
+    for (let i = 0; i < 40 && w.units.get(id).patrol?.index === 1; i++) w.tick(0.05);
+    return w.units.get(id).patrol?.index ?? -1;
+  }, cast.soldierId), { timeout: 30_000 }).not.toBe(1);
   expect(errors).toEqual([]);
 });
