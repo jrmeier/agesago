@@ -1,4 +1,4 @@
-import type { Building, EntityId, PlayerId, Vec2, VictoryReason } from '../../core/types';
+import { GAIA, type Building, type EntityId, type PlayerId, type Vec2, type VictoryReason } from '../../core/types';
 import { isAnimal } from '../../core/units';
 import type { World } from '../World';
 import { destroyBuilding, killUnit } from './combat';
@@ -28,7 +28,7 @@ function standing(world: World, c: WonderCountdown): Building | undefined {
 function earliestWonder(world: World): Building | undefined {
   let best: Building | undefined;
   for (const b of world.buildings.values()) {
-    if (b.kind !== 'wonder' || !b.complete || world.isDefeated(b.owner)) continue;
+    if (b.kind !== 'wonder' || !b.complete || b.owner === GAIA || world.isDefeated(b.owner)) continue;
     const t = b.completedAt ?? Infinity, bt = best?.completedAt ?? Infinity;
     if (!best || t < bt || (t === bt && b.id < best.id)) best = b;
   }
@@ -93,7 +93,7 @@ export function victorySystem(world: World, dt: number, reason: 'conquest' | 're
   world.victoryClock = 1;
   const present = new Set<PlayerId>();
   for (const u of world.units.values()) if (!isAnimal(u.kind)) present.add(u.owner);
-  for (const b of world.buildings.values()) present.add(b.owner);
+  for (const b of world.buildings.values()) if (b.owner !== GAIA) present.add(b.owner);
   for (const id of world.players.keys()) if (!present.has(id)) defeat(world, id, 'conquest');
 
   const winners = [...world.players.keys()].filter((id) => !world.isDefeated(id));

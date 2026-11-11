@@ -106,6 +106,9 @@ const REASON_TEXT: Record<NonNullable<PlacementCheck['reason']>, string> = {
   occupied: 'Blocked',
   'out-of-bounds': 'Off the map',
   'insufficient-resources': 'Not enough resources',
+  territory: 'Must be in your territory',
+  'enemy-territory': 'Can’t build in another player’s territory',
+  'town-spacing': 'Too close to another Town Center',
 };
 
 /**

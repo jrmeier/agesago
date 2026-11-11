@@ -196,7 +196,7 @@ describe('military age gates', () => {
     const w = world();
     w.visibility.state.fill(EXPLORED);
     Object.assign(w.stock, { food: 1000, wood: 1000, stone: 1000 });
-    const pos = { x: 40, z: 40 };
+    const pos = { x: 32, z: 32 }; // inside the Town Center's territory
     expect(w.canPlace(kind, pos, 0, 1)).toEqual({ ok: true });
     w.dispatch({ type: 'build', unitIds: [...w.units.keys()], kind, pos, rot: 0 });
     const b = [...w.buildings.values()].find(b => b.kind === kind)!;
@@ -235,7 +235,7 @@ describe('military age gates', () => {
       const w = world();
       w.visibility.state.fill(EXPLORED);
       Object.assign(w.stock, { wood: 1000, stone: 1000 });
-      const pos = { x: 40, z: 40 };
+      const pos = { x: 32, z: 32 }; // inside the Town Center's territory
       const rejected: SimEvent[] = [];
       w.events.on('rejected', e => rejected.push(e));
       w.dispatch({ type: 'build', unitIds: [], kind, pos, rot: 0 });

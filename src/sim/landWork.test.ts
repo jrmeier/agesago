@@ -67,26 +67,26 @@ describe('explicit land-unit economy work', () => {
   });
   it('builds a permanent farm, works it, then replaces farming with construction and tending', () => {
     const { w, u } = setup(); w.stock.wood = 1000;
-    w.dispatch({ type: 'build', unitIds: [u.id], kind: 'farm', pos: { x: 25, z: 30 }, rot: 0 });
+    w.dispatch({ type: 'build', unitIds: [u.id], kind: 'farm', pos: { x: 16, z: 26 }, rot: 0 });
     const farm = [...w.buildings.values()].find(b => b.kind === 'farm')!; expect(farm).toBeDefined();
     until(w, () => farm.complete && u.carry?.type === 'food');
     expect(w.farmers.get(farm.id)).toBe(u.id); const cargo = { ...u.carry! };
-    w.dispatch({ type: 'build', unitIds: [u.id], kind: 'house', pos: { x: 35, z: 30 }, rot: 0 });
+    w.dispatch({ type: 'build', unitIds: [u.id], kind: 'house', pos: { x: 26, z: 14 }, rot: 0 });
     const house = [...w.buildings.values()].find(b => b.kind === 'house')!;
     expect(w.farmers.has(farm.id)).toBe(false); expect(u.carry).toEqual(cargo);
     until(w, () => house.complete);
-    const corral = building(w, 'corral', 40, 40);
+    const corral = building(w, 'corral', 30, 24);
     w.dispatch({ type: 'tend', unitIds: [u.id], buildingId: corral.id });
     until(w, () => u.state === 'tending'); expect(corralWorker(w, corral)).toBe(u);
     const food = w.stock.food;
-    w.spawnUnit('sheep', { x: 39, z: 40 }, 1); w.spawnUnit('sheep', { x: 41, z: 40 }, 1);
+    w.spawnUnit('sheep', { x: 29, z: 24 }, 1); w.spawnUnit('sheep', { x: 31, z: 24 }, 1);
     until(w, () => w.stock.food > food, 130);
     w.dispatch({ type: 'construct', unitIds: [u.id], buildingId: farm.id });
     expect(u.tendingCorral).toBeUndefined(); expect(u.gatherNode).toBe(farm.id);
   });
   it('allows cavalry to finish wall segments consecutively', () => {
     const { w, u } = setup('horseman'); w.stock.wood = 1000;
-    w.dispatch({ type: 'buildWall', unitIds: [u.id], kind: 'palisade', from: { x: 30, z: 30 }, to: { x: 36, z: 30 } });
+    w.dispatch({ type: 'buildWall', unitIds: [u.id], kind: 'palisade', from: { x: 12, z: 28 }, to: { x: 18, z: 28 } });
     const walls = [...w.buildings.values()].filter(b => b.kind === 'palisade'); expect(walls.length).toBeGreaterThan(1);
     until(w, () => walls.every(b => b.complete), 160);
   });

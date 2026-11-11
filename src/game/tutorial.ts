@@ -49,8 +49,8 @@ const HINTS: Record<Exclude<TutorialStep, 'done'>, { id: string; desktop: string
   },
   house: {
     id: 'house',
-    desktop: 'A house costs 30 wood. Select villagers, press H, then click open ground.',
-    touch: 'A house costs 30 wood. Select villagers, open Build, tap House, then tap open ground.',
+    desktop: 'A house costs 30 wood. Select villagers, press H, then click open ground inside your borders.',
+    touch: 'A house costs 30 wood. Select villagers, open Build, tap House, then tap open ground inside your borders.',
   },
   scout: {
     id: 'scout',
@@ -59,8 +59,8 @@ const HINTS: Record<Exclude<TutorialStep, 'done'>, { id: string; desktop: string
   },
   barracks: {
     id: 'barracks',
-    desktop: 'The town has set aside timber. Select villagers, choose Barracks, then click open ground.',
-    touch: 'The town has set aside timber. Select villagers, open Build, tap Barracks, then tap open ground.',
+    desktop: 'The town has set aside timber. Select villagers, choose Barracks, then click open ground inside your borders.',
+    touch: 'The town has set aside timber. Select villagers, open Build, tap Barracks, then tap open ground inside your borders.',
   },
   raid: {
     id: 'raid',

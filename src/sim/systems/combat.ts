@@ -79,9 +79,13 @@ const RESOURCE_ORDER: readonly ResourceType[] = ['food', 'wood', 'gold', 'stone'
 const isUnit = (e: Target): e is Unit => 'stance' in e;
 const dist = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.z - b.z);
 
-/** Explicit hunting and a boar's retaliation do not make Gaia a hostile player. */
+/**
+ * Explicit hunting and a boar's retaliation do not make Gaia a hostile player. Abandoned (Gaia)
+ * buildings (M18-3) can be torn down by any player's explicit attack.
+ */
 function canAttack(world: World, owner: PlayerId, t: Target, attacker?: Unit): boolean {
   return world.areEnemies(owner, t.owner)
+    || (owner !== GAIA && !isUnit(t) && t.owner === GAIA)
     || (owner !== GAIA && isUnit(t) && isAnimal(t.kind))
     || (attacker?.kind === 'boar' && isUnit(t) && t.owner !== GAIA);
 }
@@ -1110,7 +1114,7 @@ export function combatSystem(world: World, dt: number, arrived: Unit[]): void {
 /** Watch towers, and shelters with villagers or foot archers inside, fire a volley at the nearest enemies in range. */
 function defenceFire(world: World, dt: number): void {
   for (const b of world.buildings.values()) {
-    if (!BUILDINGS[b.kind].attack || !b.complete || b.hp <= 0) continue;
+    if (!BUILDINGS[b.kind].attack || !b.complete || b.hp <= 0 || b.owner === GAIA) continue;
     const attack = buildingAttack(world, b)!;
     const arrows = attack.arrows + garrisonArrows(world, b);
     if (arrows <= 0) continue;

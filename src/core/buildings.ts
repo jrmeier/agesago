@@ -51,6 +51,17 @@ export interface BuildingSpec {
    * Absent: no influence (walls, gates, farms).
    */
   territory?: TerritoryInfluence;
+  /**
+   * Where it may be placed (M18-3): 'own' (default) needs the footprint centre on its builder's
+   * territory; 'ownOrNeutral' also allows unclaimed land (outposts, docks, new Town Centers).
+   * Enemy (or allied) territory never allows anything.
+   */
+  placeIn?: 'own' | 'ownOrNeutral';
+  /**
+   * What territory decay does at 0 hp (M18-3): 'collapse' destroys it (small, cheap buildings),
+   * otherwise it turns neutral (Gaia). Roots never decay.
+   */
+  decayTo?: 'collapse' | 'neutral';
 }
 
 export interface TerritoryInfluence {
@@ -67,6 +78,12 @@ export const TERRITORY = {
   ageRadiusBonus: 0.25,
   /** Territory reaches this many cells out over water from the shore, no further. */
   waterReach: 6,
+  /** Fraction of max hp lost per second by a building off its owner's connected territory (1% / 5 s). */
+  decayRate: 0.002,
+  /** A building that decays to 0 hp and turns neutral comes back with this fraction of max hp. */
+  neutralHp: 0.25,
+  /** A new Town Center needs this much space (world units, centre to centre) from every other one. */
+  townCenterSpacing: 30,
 } as const;
 
 /** Small non-root influence shared by most buildings. */
@@ -75,6 +92,7 @@ const MEDIUM: TerritoryInfluence = { radius: 8, weight: 3 };
 
 export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   townCenter: {
+    placeIn: 'ownOrNeutral',
     name: 'Town Center',
     territory: { radius: 22, weight: 10, root: true },
     size: { w: 3.2, d: 3.2 },
@@ -92,6 +110,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     auras: ['townCenterWork'],
   },
   house: {
+    decayTo: 'collapse',
     name: 'House',
     territory: MINOR,
     size: { w: 2.6, d: 2.6 },
@@ -148,12 +167,14 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     armor: { melee: 6, pierce: 12 },
   },
   corral: {
+    decayTo: 'collapse',
     name: 'Corral',
     territory: MINOR, size: { w: 8, d: 8 }, cost: { wood: 100 }, buildTime: 25,
     popBonus: 0, drop: [], walkable: true, buildable: true, sight: 6, hp: 600,
     armor: { melee: 4, pierce: 10 },
   },
   farm: {
+    decayTo: 'collapse',
     name: 'Farm',
     size: { w: 4, d: 4 },
     cost: { wood: 60 },
@@ -209,6 +230,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     armor: { melee: 7, pierce: 14 },
   },
   watchTower: {
+    placeIn: 'ownOrNeutral',
     name: 'Watch Tower',
     territory: MEDIUM,
     size: { w: 2.2, d: 2.2 },
@@ -226,6 +248,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     attack: { pierce: 6, range: 8, reload: 2, arrows: 1 },
   },
   palisade: {
+    decayTo: 'collapse',
     name: 'Palisade',
     size: { w: 2, d: 2 },
     cost: { wood: 6 },
@@ -240,6 +263,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     line: true,
   },
   stoneWall: {
+    decayTo: 'collapse',
     name: 'Stone Wall',
     size: { w: 2, d: 2 },
     cost: { stone: 6 },
@@ -255,6 +279,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     line: true,
   },
   gate: {
+    decayTo: 'collapse',
     name: 'Gate',
     size: { w: 2, d: 2 },
     cost: { wood: 30 },
@@ -299,6 +324,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     age: 1,
   },
   dock: {
+    placeIn: 'ownOrNeutral',
     name: 'Dock',
     territory: MEDIUM, size: { w: 4, d: 4 }, cost: { wood: 150 }, buildTime: 40,
     popBonus: 0, drop: ['food'], walkable: false, buildable: true, sight: 8, hp: 1200,

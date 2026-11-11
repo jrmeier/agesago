@@ -13,6 +13,7 @@ import {
 import { BALANCE } from './balance';
 import { generateMap } from './mapgen';
 import { NavGrid } from './nav';
+import { layFoundation } from './systems/build';
 import { nearestDrop } from './systems/sites';
 import { EXPLORED } from './visibility';
 import { World } from './World';
@@ -46,6 +47,11 @@ function world(l: MapLayout, hf = field()): World {
   w.visibility.state.fill(EXPLORED);
   Object.assign(w.stock, { wood: 1000, food: 1000, gold: 1000, stone: 1000 });
   return w;
+}
+
+/** Lay a foundation directly, skipping placement rules (drop-site tests use spots outside the start territory). */
+function lay(w: World, kind: Building['kind'], pos: Vec2): Building {
+  return layFoundation(w, kind, pos, 0, 1);
 }
 
 function record(w: World): SimEvent[] {
@@ -88,12 +94,12 @@ describe('canPlace', () => {
 
   it('rejects any water or steep sample inside the footprint', () => {
     const pond = (x: number, z: number) => Math.hypot(x - 10, z - 10) < 0.4;
-    const cliff = (x: number) => x > 50 && x < 50.3;
+    const cliff = (x: number) => x > 50 && x < 50.3; // near the edge of the start territory
     const w = world(layout([]), field(pond, cliff));
     // The pond is smaller than the footprint, so only interior sampling finds it.
     expect(w.canPlace('farm', { x: 11, z: 11 }, 0)).toEqual({ ok: false, reason: 'water' });
     expect(w.canPlace('house', { x: 51, z: 20 }, 0)).toEqual({ ok: false, reason: 'slope' });
-    expect(w.canPlace('house', { x: 54, z: 20 }, 0)).toEqual({ ok: true });
+    expect(w.canPlace('house', { x: 53, z: 24 }, 0)).toEqual({ ok: true });
   });
 
   it('rejects unexplored ground (before revealing water there)', () => {
@@ -112,7 +118,7 @@ describe('canPlace', () => {
         [{ kind: 'tree', pos: { x: 10, z: 30 }, amount: 100 }],
         [
           { kind: 'boulder', pos: { x: 50, z: 30 }, rot: 0, scale: 1, blockRadius: 1 },
-          { kind: 'reeds', pos: { x: 50, z: 40 }, rot: 0, scale: 1, blockRadius: 0 },
+          { kind: 'reeds', pos: { x: 46, z: 34 }, rot: 0, scale: 1, blockRadius: 0 },
         ]
       )
     );
@@ -120,7 +126,7 @@ describe('canPlace', () => {
     expect(w.canPlace('house', { x: 32, z: 24 + 1.6 + 1.3 }, 0).ok).toBe(true); // flush against the TC
     expect(w.canPlace('house', { x: 11.5, z: 30 }, 0)).toEqual({ ok: false, reason: 'occupied' });
     expect(w.canPlace('house', { x: 51.5, z: 30.5 }, 0)).toEqual({ ok: false, reason: 'occupied' });
-    expect(w.canPlace('house', { x: 50, z: 40 }, 0).ok).toBe(true); // walk-through reeds
+    expect(w.canPlace('house', { x: 46, z: 34 }, 0).ok).toBe(true); // walk-through reeds
     expect(w.canPlace('house', { x: 20, z: 40 }, 0).ok).toBe(true); // a villager stands there
     w.dispatch({ type: 'build', unitIds: [], kind: 'house', pos: { x: 20, z: 20 }, rot: 0 });
     expect(w.canPlace('farm', { x: 22, z: 21 }, 0)).toEqual({ ok: false, reason: 'occupied' });
@@ -438,10 +444,8 @@ describe('drop sites', () => {
   it('deposits at the nearest complete drop site accepting the carried type', () => {
     const w = world(layout([{ x: 10, z: 30 }], [{ kind: 'tree', pos: { x: 8, z: 36 }, amount: 200 }]));
     const [u] = units(w);
-    w.dispatch({ type: 'build', unitIds: [], kind: 'storehouse', pos: { x: 8, z: 40 }, rot: 0 });
-    const store = newest(w);
-    w.dispatch({ type: 'build', unitIds: [], kind: 'granary', pos: { x: 12, z: 36 }, rot: 0 });
-    const granary = newest(w);
+    const store = lay(w, 'storehouse', { x: 8, z: 40 });
+    const granary = lay(w, 'granary', { x: 12, z: 36 });
     w.dispatch({ type: 'gather', unitIds: [u.id], nodeId: [...w.nodes.keys()][0] });
     // Foundation storehouse: still walks to the TC.
     runUntil(w, () => u.state === 'toDrop');
@@ -462,8 +466,7 @@ describe('drop sites', () => {
     const river = (x: number, z: number) => x > 20 && x < 24 && z < 44;
     const l = { ...layout([]), townCenter: { x: 8, z: 30 } };
     const w = world(l, field(river));
-    w.dispatch({ type: 'build', unitIds: [], kind: 'storehouse', pos: { x: 28, z: 10 }, rot: 0 });
-    const store = newest(w);
+    const store = lay(w, 'storehouse', { x: 28, z: 10 });
     store.complete = true;
     store.buildProgress = 1;
     const from = { x: 16, z: 10 };
@@ -480,8 +483,7 @@ describe('drop sites', () => {
       const w = world(layout([{ x: 10, z: 36 }, { x: 11, z: 36 }], forest));
       w.stock.wood = 1000;
       if (withStore) {
-        w.dispatch({ type: 'build', unitIds: [], kind: 'storehouse', pos: { x: 14, z: 41 }, rot: 0 });
-        const s = newest(w);
+        const s = lay(w, 'storehouse', { x: 14, z: 41 });
         s.complete = true;
         s.buildProgress = 1;
       }
@@ -496,13 +498,13 @@ describe('drop sites', () => {
   });
 
   it('a finished storehouse sends its builder to the nearest tree', () => {
-    const w = world(layout([{ x: 14, z: 36 }], [
-      { kind: 'tree', pos: { x: 8, z: 42 }, amount: 100 },
-      { kind: 'gold', pos: { x: 20, z: 40 }, amount: 100 },
+    const w = world(layout([{ x: 20, z: 36 }], [
+      { kind: 'tree', pos: { x: 14, z: 42 }, amount: 100 },
+      { kind: 'gold', pos: { x: 26, z: 40 }, amount: 100 },
     ]));
     const [u] = units(w);
     const tree = [...w.nodes.keys()][0];
-    w.dispatch({ type: 'build', unitIds: [u.id], kind: 'storehouse', pos: { x: 14, z: 40 }, rot: 0 });
+    w.dispatch({ type: 'build', unitIds: [u.id], kind: 'storehouse', pos: { x: 20, z: 40 }, rot: 0 });
     runUntil(w, () => newest(w).complete);
     expect(u.state).toBe('toNode');
     expect(u.gatherNode).toBe(tree);
@@ -511,8 +513,7 @@ describe('drop sites', () => {
   it('a removed drop site sends carriers to the next one', () => {
     const w = world(layout([{ x: 10, z: 30 }], [{ kind: 'tree', pos: { x: 8, z: 36 }, amount: 200 }]));
     const [u] = units(w);
-    w.dispatch({ type: 'build', unitIds: [], kind: 'storehouse', pos: { x: 8, z: 40 }, rot: 0 });
-    const store = newest(w);
+    const store = lay(w, 'storehouse', { x: 8, z: 40 });
     store.complete = true;
     w.dispatch({ type: 'gather', unitIds: [u.id], nodeId: [...w.nodes.keys()][0] });
     runUntil(w, () => u.state === 'toDrop');
@@ -624,10 +625,8 @@ describe('farms', () => {
   it('the farmer drops food at a granary when it is nearer than the TC', () => {
     const w = world(layout([{ x: 10, z: 40 }]));
     const [u] = units(w);
-    w.dispatch({ type: 'build', unitIds: [], kind: 'farm', pos: { x: 10, z: 36 }, rot: 0 });
-    const farm = newest(w);
-    w.dispatch({ type: 'build', unitIds: [], kind: 'granary', pos: { x: 15, z: 36 }, rot: 0 });
-    const granary = newest(w);
+    const farm = lay(w, 'farm', { x: 10, z: 36 });
+    const granary = lay(w, 'granary', { x: 15, z: 36 });
     farm.complete = granary.complete = true;
     farm.food = FARM_FOOD;
     w.dispatch({ type: 'gather', unitIds: [u.id], nodeId: farm.id });
@@ -643,8 +642,7 @@ describe('stone', () => {
     const [u] = units(w);
     const quarry = [...w.nodes.values()][0];
     expect(quarry).toMatchObject({ type: 'stone', radius: 0.7 });
-    w.dispatch({ type: 'build', unitIds: [], kind: 'miningCamp', pos: { x: 12, z: 44 }, rot: 0 });
-    const camp = newest(w);
+    const camp = lay(w, 'miningCamp', { x: 12, z: 44 });
     camp.complete = true;
     w.dispatch({ type: 'gather', unitIds: [u.id], nodeId: quarry.id });
     runUntil(w, () => u.state === 'gathering');

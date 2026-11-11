@@ -407,10 +407,11 @@ describe('buildings', () => {
   it('take damage, are destroyed, free their footprint and drop the pop cap', () => {
     const world = arena();
     const log = record(world);
-    const b = house(world, 1, { x: 60, z: 60 });
+    // Inside player 1's territory, so territory decay (M18-3) leaves its hp alone.
+    const b = house(world, 1, { x: 14, z: 12 });
     const cap = world.popCapOf(1);
     expect(world.nav.isFree(b.pos)).toBe(false);
-    const sw = squad(world, 'swordsman', 2, 66, 60);
+    const sw = squad(world, 'swordsman', 2, 20, 12);
     world.dispatch({ type: 'attack', unitIds: sw.map((u) => u.id), targetId: b.id }, 2);
     run(world, 5);
     expect(b.hp).toBeLessThan(b.maxHp);
@@ -442,9 +443,9 @@ describe('buildings', () => {
 
   it('foundations gain hp as they are built and can be attacked', () => {
     const world = arena();
-    const b = layFoundation(world, 'house', { x: 60, z: 60 }, 0, 1);
+    const b = layFoundation(world, 'house', { x: 14, z: 12 }, 0, 1);
     expect(b.hp).toBeCloseTo(b.maxHp * BALANCE.foundationHp, 0);
-    const v = spawn(world, 'villager', 1, { x: 60, z: 62.3 });
+    const v = spawn(world, 'villager', 1, { x: 14, z: 14.3 });
     world.dispatch({ type: 'construct', unitIds: [v.id], buildingId: b.id });
     run(world, BUILDINGS.house.buildTime / 2);
     expect(b.hp).toBeGreaterThan(b.maxHp * 0.4);

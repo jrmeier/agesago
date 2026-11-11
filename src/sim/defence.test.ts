@@ -33,10 +33,10 @@ function flat(w: number, d: number): Heightfield {
   };
 }
 
-/** Two players, Town Centers in opposite corners, the whole map explored, a fat stockpile. */
-function field(w = 64, d = 48): World {
+/** Two players, Town Centers in opposite corners (or `tc`), the whole map explored, a fat stockpile. */
+function field(w = 64, d = 48, tc: Vec2 = { x: 4, z: 4 }): World {
   const layout: MapLayout = {
-    townCenter: { x: 4, z: 4 },
+    townCenter: tc,
     villagers: [],
     scouts: [],
     extraStarts: [{ townCenter: { x: w - 4, z: d - 4 }, villagers: [], scouts: [] }],
@@ -118,7 +118,7 @@ describe('wall lines', () => {
   });
 
   it('blocks the nav grid as soon as the foundations are laid', () => {
-    const w = field();
+    const w = field(64, 48, { x: 24, z: 24 }); // the whole line inside player 1's territory
     const builder = w.spawnUnit('villager', { x: 24, z: 4 }, 1);
     w.dispatch({ type: 'buildWall', unitIds: [builder.id], kind: 'palisade', from: { x: 8, z: 12 }, to: { x: 40, z: 12 } });
     const walls = [...w.buildings.values()].filter((b) => b.kind === 'palisade');

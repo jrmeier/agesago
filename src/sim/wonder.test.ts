@@ -32,6 +32,9 @@ function wonderEvents(world: World): SimEvent[] {
 function finishedWonder(world: World, owner: number, x = 40, z = 50): Building {
   const b = layFoundation(world, 'wonder', { x, z }, 0, owner);
   completeBuilding(world, b);
+  // Full hp: these spots are outside the owner's territory, and territory decay (M18-3) would
+  // otherwise wear a fresh foundation's hp down within the countdown.
+  b.hp = b.maxHp;
   return b;
 }
 

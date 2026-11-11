@@ -356,6 +356,13 @@ export class EntityViews {
       if (this.promotions.length >= 32) this.promotions.shift();
       this.promotions.push({ id: e.id, rank: e.rank });
     });
+    // A decayed building turned neutral (M18-3): rebuild it in Gaia colours.
+    this.world.events.on('abandoned', (e) => {
+      const building = this.world.buildings.get(e.id);
+      if (!building || !this.buildingViews.has(e.id)) return;
+      this.dropBuildingView(e.id);
+      this.mountBuilding(building);
+    });
     this.world.events.on('researched', (e) => this.onResearched(e.owner));
     this.world.events.on('buildingUpgraded', (e) => { if (this.buildingViews.has(e.id)) this.tierDirty.add(e.id); });
     this.world.events.on('constructed', (e) => {

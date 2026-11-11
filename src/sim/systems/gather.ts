@@ -322,8 +322,8 @@ export function sendToDrop(world: World, u: Unit): void {
 function deposit(world: World, u: Unit): void {
   const gs = world.gatherState.get(u.id);
   const site = gs?.drop !== undefined ? world.buildings.get(gs.drop) : undefined;
-  if (!site || !site.complete) {
-    // The drop site was removed on the way: head for the next one.
+  if (!site || !site.complete || site.owner !== u.owner) {
+    // The drop site was removed (or abandoned, M18-3) on the way: head for the next one.
     if (u.carry && u.carry.amount > 0) sendToDrop(world, u);
     else retarget(world, u);
     return;

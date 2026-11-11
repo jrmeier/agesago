@@ -62,6 +62,7 @@ export function hotkeyHelpRows(): HotkeyRow[] {
     { keys: 'Gate', label: 'Select a gate and use its livestock passage button. Your people always retain passage.' },
     { keys: 'Ctrl+RMB', label: 'Attack-move along the way.' },
     { keys: 'Alt+RMB', label: 'Guard the own or allied unit or building under the cursor.' },
+    { keys: 'Territory', label: 'Build inside your borders. Watch towers, docks and Town Centers may also go on neutral land; nothing goes on another player’s land. Buildings cut off from your Town Centers slowly lose health unless someone is garrisoned inside, then collapse (houses, farms, walls) or turn neutral.' },
   ];
   return [
     ...mouse,

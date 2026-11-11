@@ -353,6 +353,28 @@ Borders follow 0 A.D.'s TerritoryInfluence/TerritoryManager (`src/sim/territory.
   takes about 0.7 ms. The per-tick fingerprint check takes under 0.01 ms. Recompute runs only when
   the fingerprint changes, so the cost is not spread across ticks.
 
+## Territory rules (M18-3)
+
+Placement and decay follow 0 A.D.'s BuildRestrictions and TerritoryDecay (`canPlace` in
+`src/sim/systems/build.ts`, `src/sim/systems/decay.ts`; data in `BuildingSpec.placeIn`,
+`BuildingSpec.decayTo` and `TERRITORY`).
+
+- **Placement.** The footprint centre must be on the builder's own territory. Watch towers, docks and
+  Town Centers (`placeIn: 'ownOrNeutral'`) may also go on neutral land, which lets you push borders
+  outward. Nothing may go on another player's land, allied or not. A Town Center also needs
+  30 units (`townCenterSpacing`) from every other Town Center or Town Center foundation. A rejected
+  order reports `territory`, and the ghost says why.
+- **Decay.** A complete building loses `decayRate` = 0.2% of its max hp per second (1% per 5 s) while
+  its centre is off its owner's connected territory. That covers enemy or neutral land, and own land
+  cut off from every Town Center. Any garrisoned occupant stops decay, and repair works as usual.
+  Roots (Town Centers) never decay. A building goes from full hp to 0 in about 8 min 20 s.
+- **At 0 hp.** Houses, farms, corrals, palisades, stone walls and gates (`decayTo: 'collapse'`) are
+  destroyed: they are cheap, and a Gaia field or wall line would only clutter the map. Everything
+  else turns neutral (Gaia) with 25% of max hp (`neutralHp`). Its training and research queues are
+  dropped without refund. It projects no territory, fires no arrows, never decays further and never
+  counts as a wonder. Any player can tear it down with an explicit attack order; idle units ignore it.
+  Recapturing neutral buildings is not implemented yet.
+
 ## Rerunning
 
 ```sh

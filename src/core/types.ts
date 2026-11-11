@@ -471,13 +471,21 @@ export type RejectReason =
   /** The building has no further upgrade. */
   | 'max-tier'
   /** The player already has the most of this building allowed (BuildingSpec.limit). */
-  | 'limit';
+  | 'limit'
+  /** Outside the builder's territory, in enemy territory, or too close to another Town Center (M18-3). */
+  | 'territory';
 
 /** Result of checking whether a building fits at a spot (World.canPlace). */
 export interface PlacementCheck {
   ok: boolean;
   /** Why not, when !ok. */
-  reason?: 'water' | 'slope' | 'unexplored' | 'occupied' | 'out-of-bounds' | 'insufficient-resources';
+  reason?: 'water' | 'slope' | 'unexplored' | 'occupied' | 'out-of-bounds' | 'insufficient-resources'
+    /** Needs the builder's own territory (M18-3). */
+    | 'territory'
+    /** Inside another player's territory. */
+    | 'enemy-territory'
+    /** A Town Center too close to another one (TERRITORY.townCenterSpacing). */
+    | 'town-spacing';
 }
 
 /** How a match was decided. */
@@ -513,6 +521,8 @@ export type SimEvent =
   | { type: 'unitState'; id: EntityId; state: UnitState }
   | { type: 'trainProgress'; buildingId: EntityId; queue: number; progress: number; total: number }
   | { type: 'rejected'; reason: RejectReason }
+  /** A building decayed away from its owner's territory and turned neutral (Gaia), M18-3. */
+  | { type: 'abandoned'; id: EntityId; kind: BuildingKind; owner: PlayerId; pos: Vec2 }
   /** Research progress at a building (local player only, like trainProgress). */
   | { type: 'researchProgress'; buildingId: EntityId; tech: TechId; queue: number; progress: number; total: number }
   /** In-place building upgrade progress (local player only, like trainProgress). */

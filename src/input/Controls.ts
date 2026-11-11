@@ -192,6 +192,7 @@ export class Controls {
       this.groups.remove(e.id);
       this.rallyEcho.delete(e.id);
     });
+    world.events.on('abandoned', (e) => selection.remove([e.id]));
     onScoutFocus(world, (id) => selection.set([id]));
     selection.onChange(() => {
       if (this.placement.active && !this.workerIds().length) this.placement.cancel();

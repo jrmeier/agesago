@@ -1,5 +1,5 @@
 import { canWork, isShip, RANKS } from '../../core/units';
-import { BUILDINGS, FARM_FOOD, footprintRadius } from '../../core/buildings';
+import { BUILDINGS, FARM_FOOD, footprintRadius, TERRITORY } from '../../core/buildings';
 import type {
   Building,
   BuildingKind,
@@ -82,6 +82,7 @@ function discHits(p: Vec2, r: number, rect: Rect): boolean {
  * resource node or blocking scenery; and the stockpile must cover the cost. Units never block
  * placement: on a non-walkable footprint they are nudged to its edge when the foundation is laid.
  * Unexplored ground is reported before water/slope so the check leaks nothing about hidden terrain.
+ * Territory (M18-3, see territoryCheck) is checked after the site itself and before the cost.
  */
 export function canPlace(world: World, kind: BuildingKind, pos: Vec2, rot: number, by: PlayerId): PlacementCheck {
   const r = footprintRect(kind, pos, snapRot(rot));
@@ -117,8 +118,38 @@ export function canPlace(world: World, kind: BuildingKind, pos: Vec2, rot: numbe
   for (const n of world.nodes.values()) if (discHits(n.pos, n.radius, r)) return { ok: false, reason: 'occupied' };
   for (const o of world.nav.obstacles) if (discHits(o.pos, o.radius, r)) return { ok: false, reason: 'occupied' };
 
+  const territory = territoryCheck(world, kind, pos, by);
+  if (territory) return { ok: false, reason: territory };
   if (!affordable(world, BUILDINGS[kind].cost, by)) return { ok: false, reason: 'insufficient-resources' };
   return { ok: true };
+}
+
+/**
+ * Territory rule (M18-3): the footprint centre must be on the builder's own territory, or on
+ * neutral land for kinds with placeIn 'ownOrNeutral' (watch tower, dock, Town Center). Nothing
+ * goes in another player's territory, allied or not. A Town Center also keeps
+ * TERRITORY.townCenterSpacing from every other Town Center or Town Center foundation.
+ */
+function territoryCheck(world: World, kind: BuildingKind, pos: Vec2, by: PlayerId): PlacementCheck['reason'] | null {
+  const owner = world.territoryOwner(pos);
+  if (owner !== by) {
+    if (owner) return 'enemy-territory';
+    if (BUILDINGS[kind].placeIn !== 'ownOrNeutral') return 'territory';
+  }
+  if (kind === 'townCenter') {
+    const min = TERRITORY.townCenterSpacing;
+    for (const b of world.buildings.values()) {
+      if (b.kind === 'townCenter' && Math.hypot(b.pos.x - pos.x, b.pos.z - pos.z) < min) return 'town-spacing';
+    }
+  }
+  return null;
+}
+
+/** Map a failed placement check to the rejection players see. */
+function placeReject(reason: PlacementCheck['reason']): RejectReason {
+  if (reason === 'insufficient-resources') return 'insufficient-resources';
+  if (reason === 'territory' || reason === 'enemy-territory' || reason === 'town-spacing') return 'territory';
+  return 'blocked-site';
 }
 
 /** 'build' command: validate, pay, lay the foundation and send the selected workers to build it. */
@@ -140,7 +171,7 @@ export function orderBuild(world: World, unitIds: EntityId[], kind: BuildingKind
   }
   const check = canPlace(world, kind, pos, rot, by);
   if (!check.ok) {
-    reject(world, check.reason === 'insufficient-resources' ? 'insufficient-resources' : 'blocked-site');
+    reject(world, placeReject(check.reason));
     return;
   }
   pay(world, BUILDINGS[kind].cost, 1, by);
@@ -333,7 +364,7 @@ export function orderBuildWall(world: World, unitIds: EntityId[], kind: Building
   for (const s of wallSegments(kind, from, to)) {
     const check = canPlace(world, kind, s.pos, s.rot, by);
     if (!check.ok) {
-      denied = check.reason === 'insufficient-resources' ? 'insufficient-resources' : 'blocked-site';
+      denied = placeReject(check.reason);
       if (check.reason === 'insufficient-resources') break;
       continue;
     }

@@ -31,13 +31,14 @@ interface Box {
 
 /**
  * Find a legal spot for a building near `center`, ring by ring. Cheap filters (bounds,
- * explored, distance to resources, spacing from other buildings) run first; World.canPlace has
+ * explored, territory, distance to resources, spacing from other buildings) run first; World.canPlace has
  * the final say, so the AI only ever issues placements a human could. Footprints are square,
  * so rotation is always 0. Null if nothing fits.
  */
 export function findSpot(world: World, intel: Intel, player: PlayerId, q: SpotQuery): Vec2 | null {
   const { hw, hd } = footprint(q.kind, 0);
   const walkable = BUILDINGS[q.kind].walkable;
+  const neutralOk = BUILDINGS[q.kind].placeIn === 'ownOrNeutral';
   const boxes: Box[] = [];
   for (const b of world.buildings.values()) {
     const f = footprint(b.kind, b.rot);
@@ -70,6 +71,9 @@ export function findSpot(world: World, intel: Intel, player: PlayerId, q: SpotQu
     if (x0 < 0.5 || z0 < 0.5 || x1 > W - 0.5 || z1 > D - 0.5) continue;
     if (!intel.knows(p.x, p.z) || !intel.knows(x0, z0) || !intel.knows(x1, z1) || !intel.knows(x0, z1) || !intel.knows(x1, z0)) continue;
     if (!world.hf.isWalkable(p.x, p.z)) continue;
+    // Territory (M18-3): own land, or neutral for outposts, docks and Town Centers.
+    const owner = world.territoryOwner(p);
+    if (owner !== player && (owner || !neutralOk)) continue;
     // No resource node in (or within clearOfNodes cells of) any cell the footprint covers.
     const c = Math.max(1, q.clearOfNodes);
     let nodes = false;

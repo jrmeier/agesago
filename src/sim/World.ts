@@ -32,6 +32,7 @@ import { BALANCE } from './balance';
 import { NavGrid } from './nav';
 import { Visibility, type Viewer } from './visibility';
 import { Territory } from './territory';
+import { decaySystem } from './systems/decay';
 import { buildSystem, canPlace, orderBuild, orderBuildWall, orderCancelBuild, orderConstruct } from './systems/build';
 import { orderRepair, repairSystem } from './systems/repair';
 import { garrisonSystem, garrisonUpkeep, orderGarrison, orderTownBell, orderUngarrison } from './systems/defence';
@@ -517,6 +518,7 @@ export class World {
     auraSystem(this, dt);
     // Borders move only when a building completes, dies or changes hands, or someone ages up.
     this.territory.sync(this);
+    decaySystem(this, dt);
     this.time += dt;
     this.fogClock -= dt;
     if (this.fogClock <= 0) {

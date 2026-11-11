@@ -241,7 +241,7 @@ describe('age gating', () => {
     world.events.on('rejected', (e) => log.push(e));
     const v = world.spawnUnit('villager', { x: 40, z: 40 }, 1);
     const wood = world.stock.wood;
-    world.dispatch({ type: 'build', unitIds: [v.id], kind: 'forge', pos: { x: 50, z: 50 }, rot: 0 });
+    world.dispatch({ type: 'build', unitIds: [v.id], kind: 'forge', pos: { x: 44, z: 44 }, rot: 0 });
     expect(log.at(-1)).toEqual({ type: 'rejected', reason: 'age' });
     expect(world.stock.wood).toBe(wood);
     world.dispatch({ type: 'buildWall', unitIds: [v.id], kind: 'stoneWall', from: { x: 50, z: 60 }, to: { x: 60, z: 60 } });
@@ -257,7 +257,7 @@ describe('age gating', () => {
     world.dispatch({ type: 'train', buildingId: barracks.id, unit: 'swordsman' });
     expect(barracks.queue).toBe(2);
     const n = world.buildings.size;
-    world.dispatch({ type: 'build', unitIds: [v.id], kind: 'forge', pos: { x: 50, z: 50 }, rot: 0 });
+    world.dispatch({ type: 'build', unitIds: [v.id], kind: 'forge', pos: { x: 44, z: 44 }, rot: 0 });
     expect(world.buildings.size).toBe(n + 1);
   });
 });
@@ -532,8 +532,8 @@ describe('academy', () => {
       const world = arena({ tc: { x: 100, z: 100 } });
       world.players.get(1)!.age = 2;
       research(world, 1, ...techs);
-      const v = world.spawnUnit('villager', { x: 40, z: 44 }, 1);
-      world.dispatch({ type: 'build', unitIds: [v.id], kind: 'house', pos: { x: 40, z: 40 }, rot: 0 });
+      const v = world.spawnUnit('villager', { x: 100, z: 96 }, 1);
+      world.dispatch({ type: 'build', unitIds: [v.id], kind: 'house', pos: { x: 100, z: 92 }, rot: 0 });
       const b = [...world.buildings.values()].find((x) => x.kind === 'house')!;
       let t = 0;
       run(world, 60, () => {
