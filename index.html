@@ -655,6 +655,7 @@
           <div class="match-actions">
             <button id="camera-cycle" class="match-btn" type="button" data-hud-interactive aria-label="Cycle camera view (F)"><span>Overhead</span> <kbd>F</kbd></button>
             <button id="pause-match" class="match-btn" type="button" title="Pause (Esc)" aria-pressed="false" aria-expanded="false" aria-controls="pause-menu">Pause</button>
+            <button id="tech-tree-btn" class="match-btn" type="button" title="Tech tree (W)" aria-expanded="false" aria-controls="tech-tree">Tech tree</button>
             <button id="save-copy" class="match-btn" type="button" title="Save a copy">Save copy</button>
             <button id="open-file" class="match-btn" type="button" title="Open a save file">Open file</button>
             <button id="new-match" class="match-btn" type="button" title="New match">New match</button>
@@ -864,6 +865,14 @@
           <h2 id="hotkey-help-title" class="hotkey-title">Hotkeys</h2>
           <ul id="hotkey-list" class="hotkey-list"></ul>
           <button id="hotkey-close" class="hotkey-close" type="button">Close</button>
+        </div>
+      </div>
+      <div id="tech-tree" class="hotkey-help tech-tree" hidden role="dialog" aria-modal="true" aria-labelledby="tech-tree-title">
+        <div class="hotkey-sheet tech-tree-sheet">
+          <h2 id="tech-tree-title" class="hotkey-title">Tech tree</h2>
+          <p id="tech-tree-civ" class="tech-tree-civ"></p>
+          <div id="tech-tree-body" class="tech-tree-body"></div>
+          <button id="tech-tree-close" class="hotkey-close" type="button">Close</button>
         </div>
       </div>
       <!-- Conquest or resign. Wonder and relic victories are not part of this screen. -->

@@ -16,6 +16,7 @@ import { HotkeyHelp } from '../ui/hotkeyHelp';
 import { canTrainAt, isMilitary, kindForSlotKey, trainBatch } from '../ui/military';
 import { RallyFlag } from '../ui/RallyFlag';
 import { SideRail } from '../ui/SideRail';
+import { TechTreePanel, treeInputFor } from '../ui/TechTreePanel';
 import { closeTouchMenus, touchMenuOpen } from '../ui/touchMenus';
 import { ControlGroups, groupCentre } from './controlGroups';
 import type { GestureEvent } from './gestures';
@@ -128,6 +129,8 @@ export class Controls {
   private readonly alerts: Alerts;
   readonly groups = new ControlGroups();
   private readonly help = new HotkeyHelp();
+  /** Full-screen tech tree. Game holds the single-player clock while it is open. */
+  readonly techTree: TechTreePanel;
   private readonly rail: SideRail;
   private readonly rallyFlag: RallyFlag;
   private readonly idle = new IdleCycler();
@@ -164,6 +167,7 @@ export class Controls {
       assign: (n) => this.assignGroup(n, false),
     });
     this.rallyFlag = new RallyFlag((p) => this.project(p));
+    this.techTree = new TechTreePanel(() => treeInputFor(world, world.localPlayer));
 
     world.events.on('removed', (e) => {
       selection.remove([e.id]);
@@ -267,6 +271,14 @@ export class Controls {
       this.syncBoxArm();
       return;
     }
+    if (this.techTree.open) {
+      if (input.keyPressed('Escape') || input.keyPressed(HOTKEYS.techTree)) {
+        this.techTree.close();
+        this.escapeUsed = true;
+      }
+      this.syncBoxArm();
+      return;
+    }
     if (this.suspended) {
       this.syncBoxArm();
       return;
@@ -332,6 +344,7 @@ export class Controls {
       focusNextScout(world, rig);
     }
     if (plain(HOTKEYS.townBell)) world.dispatch({ type: 'townBell' });
+    if (plain(HOTKEYS.techTree)) this.techTree.show();
     for (const code of buildHotkeyCodes()) {
       const kind = plain(code) ? kindForKey(code, !!input.keyMods(code)?.shift) : null;
       if (kind) this.beginPlacement(kind);

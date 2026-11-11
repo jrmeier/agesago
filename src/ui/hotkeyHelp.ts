@@ -21,6 +21,7 @@ const ACTION_LABEL: Record<string, string> = {
   scoutAlt: 'Centre on the next scout',
   cancel: 'Cancel',
   townBell: 'Town bell: villagers run to the nearest shelter',
+  techTree: 'Open the tech tree (pauses single player)',
   trainSlot1: 'Train the first unit in the training panel',
   trainSlot2: 'Train the second unit in the training panel',
   trainSlot3: 'Train the third unit in the training panel',

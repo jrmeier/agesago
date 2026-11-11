@@ -23,6 +23,8 @@ export const HOTKEYS = {
   scoutAlt: 'Home',
   cancel: 'Escape',
   townBell: 'KeyU',
+  /** W: free of every build and train key; the tech-tree button and Menu sheet open it too. */
+  techTree: 'KeyW',
 } as const;
 
 /** Training-panel slot keys, left to right. */

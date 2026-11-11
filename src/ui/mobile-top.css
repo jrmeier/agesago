@@ -147,3 +147,17 @@ body.touch .pause-menu .endgame-btn {
     font-size: 12px;
   }
 }
+
+/* Tech tree on phones: one tile per row, the sheet fills the screen and the ages scroll. */
+body.touch .tech-tree-sheet {
+  height: 100%;
+  padding: 16px var(--s-3) var(--s-3);
+}
+
+body.touch .tt-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.touch .tt-tile {
+  font-size: 14px;
+}

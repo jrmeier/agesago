@@ -359,14 +359,15 @@ export class Game {
     this.last = now;
     this.elapsed += dt;
 
-    this.controls.update(this.matchOver || this.paused ? 0 : dt);
+    this.controls.update(this.matchOver || this.held ? 0 : dt);
     this.maybePauseKey();
+    const held = this.held;
 
     if (this.online && !this.matchOver) {
       this.online.advance();
       if (!this.matchOver && this.endgameLog.shouldSample(this.world.time)) this.endgame.sample();
-    } else if (!this.matchOver && !this.paused) {
-      this.accumulator += dt * simScale(this.speed, this.paused, this.matchOver);
+    } else if (!this.matchOver && !held) {
+      this.accumulator += dt * simScale(this.speed, held, this.matchOver);
       let steps = 0;
       while (this.accumulator >= STEP && steps < MAX_STEPS_PER_FRAME && !this.matchOver) {
         for (const ai of this.ais) ai.update(STEP);
@@ -380,9 +381,9 @@ export class Game {
       if (!this.matchOver && this.endgameLog.shouldSample(this.world.time)) this.endgame.sample();
     }
     // Use the same post-tick interpolation as EntityViews, without camera input in pause menus.
-    if (!this.matchOver && !this.paused) this.rig.update(dt, this.accumulator / STEP);
+    if (!this.matchOver && !held) this.rig.update(dt, this.accumulator / STEP);
     this.matchAudio.setEar(this.earPose());
-    this.matchAudio.pulse(this.earSamples(), !this.matchOver && !this.paused, dt);
+    this.matchAudio.pulse(this.earSamples(), !this.matchOver && !held, dt);
     this.matchMusic.advance(this.world.time);
 
     this.fog.update(dt);
@@ -562,6 +563,11 @@ export class Game {
     this.setPaused(!this.paused);
   }
 
+  /** Pause menu, or the tech tree in a single-player match (online clocks never stop). */
+  private get held(): boolean {
+    return this.paused || (!this.online && this.controls.techTree.open);
+  }
+
   private setPaused(on: boolean): void {
     if (on && this.matchOver) return;
     this.paused = on;
@@ -610,7 +616,7 @@ export class Game {
   private bindMobileMatchActions(): void {
     const actions = document.getElementById('pause-match-actions');
     if (!actions) return;
-    const controls = ['save-copy', 'open-file', 'new-match', 'help-btn', 'resign-btn', 'save-note']
+    const controls = ['save-copy', 'open-file', 'new-match', 'help-btn', 'tech-tree-btn', 'resign-btn', 'save-note']
       .map((id) => {
         const el = document.getElementById(id);
         if (!el) return null;
