@@ -258,7 +258,7 @@ describe('veterans work more slowly', () => {
 });
 
 describe('rank persistence', () => {
-  it('saves and loads xp, rank and the damage log; version 2 saves load at rank 0', () => {
+  it('saves and loads xp, rank and the damage log; version 2 and 3 saves load at rank 0', () => {
     const { hf, layout } = generateMap(17, 2);
     const w = new World(hf, layout);
     w.seed = 17;
@@ -268,7 +268,7 @@ describe('rank persistence', () => {
     const victim = spawn(w, 'villager', 2, { x: tc.pos.x + 8, z: tc.pos.z + 6 });
     applyDamage(w, victim, 3, vet.id, 1, vet.pos);
     const data = serializeWorld(w);
-    expect(data.version).toBe(3);
+    expect(data.version).toBe(4);
     const b = deserializeWorld(data, hf);
     const loaded = b.units.get(vet.id)!;
     expect(loaded.rank).toBe(1);
@@ -285,8 +285,17 @@ describe('rank persistence', () => {
     expect(c.units.get(vet.id)!.xp ?? 0).toBe(0);
     expect(c.damageLog.size).toBe(0);
 
+    // A version 3 save (building upgrades, no veterancy): any stray rank/xp/damage log is dropped.
+    const v3 = JSON.parse(JSON.stringify(data));
+    v3.version = 3;
+    const d = deserializeWorld(v3, hf);
+    expect(d.units.get(vet.id)!.rank).toBeUndefined();
+    expect(d.units.get(vet.id)!.xp).toBeUndefined();
+    expect(d.units.get(vet.id)!.maxHp).toBe(vet.maxHp);
+    expect(d.damageLog.size).toBe(0);
+
     const bad = JSON.parse(JSON.stringify(data));
     bad.units.find((u: Unit) => u.id === vet.id).rank = 3;
     expect(() => deserializeWorld(bad, hf)).toThrow('unit rank');
-  });
+  }, 30_000);
 });

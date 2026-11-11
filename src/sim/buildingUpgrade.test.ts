@@ -227,6 +227,18 @@ describe('upgrade saves', () => {
     expect(restored.popCapOf(1)).toBe(w.popCapOf(1));
   });
 
+  it('loads version 3 saves (before veterancy) keeping building tiers and upgrades', () => {
+    const { w, house } = ready();
+    w.dispatch({ type: 'upgradeBuilding', buildingId: house.id });
+    run(w, 7);
+    const data = JSON.parse(JSON.stringify(serializeWorld(w)));
+    data.version = 3;
+    delete data.systems.damageLog;
+    const restored = deserializeWorld(data, flat());
+    expect(restored.buildings.get(house.id)!.upgrading).toEqual(house.upgrading);
+    expect(restored.popCapOf(1)).toBe(w.popCapOf(1));
+  });
+
   it('rejects corrupt tiers and upgrades', () => {
     const { w, house } = ready();
     house.tier = 2;
