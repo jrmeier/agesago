@@ -1,4 +1,5 @@
 import type { CivId } from './civilizations';
+import type { AuraId } from './auras';
 import type { Age, BuildingKind, Stockpile, UnitKind } from './types';
 
 /**
@@ -40,6 +41,8 @@ export interface UnitSpec {
   age?: Age;
   /** Experience its killer earns (default: total cost × XP_PER_COST; see xpValue). */
   xp?: number;
+  /** Auras it emits while alive (M16-4; heroes use these). */
+  auras?: AuraId[];
 }
 
 /** Hack (melee), pierce and crush (siege) amounts; crush is optional (see crushOf). */

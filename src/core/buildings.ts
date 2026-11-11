@@ -1,3 +1,4 @@
+import type { AuraId } from './auras';
 import type { Age, BuildingKind, ResourceType, Stockpile, TechId } from './types';
 import type { DamageTypes } from './units';
 
@@ -39,6 +40,8 @@ export interface BuildingSpec {
   gate?: boolean;
   /** Earliest age it can be placed in (default 0, Village). */
   age?: Age;
+  /** Auras it emits once complete (M16-4). */
+  auras?: AuraId[];
 }
 
 export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
@@ -56,6 +59,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     armor: { melee: 10, pierce: 15 },
     garrison: 10,
     attack: { pierce: 5, range: 6, reload: 2, arrows: 0 },
+    auras: ['townCenterWork'],
   },
   house: {
     name: 'House',
@@ -261,7 +265,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   temple: {
     name: 'Temple', size: { w: 4, d: 4 }, cost: { wood: 180, stone: 80 },
     buildTime: 50, popBonus: 0, drop: [], walkable: false, buildable: true,
-    sight: 8, hp: 1400, armor: { melee: 7, pierce: 14 }, age: 1,
+    sight: 8, hp: 1400, armor: { melee: 7, pierce: 14 }, age: 1, auras: ['templeHealing'],
     // Healing only: no attack, so occupants add no arrows (BALANCE.garrisonHealBy).
     garrison: 10,
   },

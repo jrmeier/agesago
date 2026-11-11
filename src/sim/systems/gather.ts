@@ -5,6 +5,7 @@ import { BALANCE } from '../balance';
 import { rectDistance } from '../nav';
 import type { World } from '../World';
 import { unitStat } from './research';
+import { auraStat } from './auras';
 import { route } from './passage';
 import { cancelExplore, settleCancelled } from './explore';
 import { buildingRect, inReach, nearestDrop, nodeInReach, nodePath } from './sites';
@@ -27,13 +28,14 @@ const GATHER_STAT: Record<ResourceType, Stat> = { wood: 'gather.wood', food: 'ga
 
 /** How much of `type` villager `u` can carry (BALANCE.carryCap plus its owner's research). */
 export function carryCap(world: World, u: Unit, type: ResourceType): number {
-  return Math.round(unitStat(world, u.owner, u.kind, CARRY_STAT[type], BALANCE.carryCap));
+  return Math.round(auraStat(world, u, CARRY_STAT[type], unitStat(world, u.owner, u.kind, CARRY_STAT[type], BALANCE.carryCap)));
 }
 
 /** Seconds per resource unit for `u` on a node of `type` (farm: a farm field). */
 export function gatherInterval(world: World, u: Unit, type: ResourceType, farm: boolean): number {
-  if (farm) return BALANCE.farmInterval / unitStat(world, u.owner, u.kind, 'gather.farm', 1, u.rank);
-  return BALANCE.gatherIntervals[type] / unitStat(world, u.owner, u.kind, GATHER_STAT[type], 1, u.rank);
+  const stat = farm ? 'gather.farm' : GATHER_STAT[type];
+  const rate = auraStat(world, u, stat, unitStat(world, u.owner, u.kind, stat, 1, u.rank));
+  return (farm ? BALANCE.farmInterval : BALANCE.gatherIntervals[type]) / rate;
 }
 
 /** States in which a farmer keeps its claim on a farm. */

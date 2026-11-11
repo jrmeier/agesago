@@ -5,6 +5,7 @@ import { BALANCE } from '../balance';
 import { rectDistance } from '../nav';
 import type { World } from '../World';
 import { buildingStat, unitStat } from './research';
+import { auraStat } from './auras';
 import { buildingRect } from './sites';
 
 /**
@@ -19,7 +20,7 @@ const LOADED_FACTOR = BALANCE.villagerSpeedLoaded / BALANCE.villagerSpeed;
 /** Walking speed of `u` right now: its (researched) speed, slower for a villager carrying resources. */
 export function unitSpeed(u: Unit, world?: World): number {
   const spec = UNITS[u.kind].speed;
-  const base = world ? unitStat(world, u.owner, u.kind, 'speed', spec) : spec;
+  const base = world ? auraStat(world, u, 'speed', unitStat(world, u.owner, u.kind, 'speed', spec)) : spec;
   return u.kind === 'villager' && u.carry && u.carry.amount > 0 ? base * LOADED_FACTOR : base;
 }
 
@@ -80,9 +81,9 @@ export function armorOf(world: World | undefined, t: Unit | Building): Required<
     const a = unitArmor(t.kind);
     if (!world) return a;
     return {
-      melee: unitStat(world, t.owner, t.kind, 'armor.melee', a.melee, t.rank),
-      pierce: unitStat(world, t.owner, t.kind, 'armor.pierce', a.pierce, t.rank),
-      crush: unitStat(world, t.owner, t.kind, 'armor.crush', a.crush, t.rank),
+      melee: auraStat(world, t, 'armor.melee', unitStat(world, t.owner, t.kind, 'armor.melee', a.melee, t.rank)),
+      pierce: auraStat(world, t, 'armor.pierce', unitStat(world, t.owner, t.kind, 'armor.pierce', a.pierce, t.rank)),
+      crush: auraStat(world, t, 'armor.crush', unitStat(world, t.owner, t.kind, 'armor.crush', a.crush, t.rank)),
     };
   }
   const a = BUILDINGS[t.kind].armor;
@@ -92,9 +93,9 @@ export function armorOf(world: World | undefined, t: Unit | Building): Required<
   const crush = crushOf(a);
   if (!world) return { melee, pierce, crush };
   return {
-    melee: buildingStat(world, t.owner, t.kind, 'armor.melee', melee),
-    pierce: buildingStat(world, t.owner, t.kind, 'armor.pierce', pierce),
-    crush: buildingStat(world, t.owner, t.kind, 'armor.crush', crush),
+    melee: auraStat(world, t, 'armor.melee', buildingStat(world, t.owner, t.kind, 'armor.melee', melee)),
+    pierce: auraStat(world, t, 'armor.pierce', buildingStat(world, t.owner, t.kind, 'armor.pierce', pierce)),
+    crush: auraStat(world, t, 'armor.crush', buildingStat(world, t.owner, t.kind, 'armor.crush', crush)),
   };
 }
 

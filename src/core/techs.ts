@@ -488,7 +488,8 @@ export function techsAt(kind: BuildingKind): TechId[] {
 /** What a modifier lookup is about. A unit's veterancy `rank` (default 0) stacks on top of research. */
 export type Subject = { unit: UnitKind; rank?: Rank } | { building: BuildingKind } | 'player';
 
-function matches(target: ModTarget, subject: Subject): boolean {
+/** Does a modifier target cover this subject? */
+export function matches(target: ModTarget, subject: Subject): boolean {
   if (subject === 'player') return target === 'player';
   if ('unit' in subject) {
     if (target === subject.unit || target === 'allUnits') return true;

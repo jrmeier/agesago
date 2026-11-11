@@ -62,6 +62,8 @@ import { resign, victorySystem, type GameResult } from './systems/victory';
 import { waterHeightfield, navalSystem, orderFish, orderNavalTrade, orderLoadTransport, orderUnloadTransport, type NavalJob, type Landing } from './systems/naval';
 import { explorationSites, explorationRewardSystem, orderPriest, type ExplorationSite, type PriestOrder } from './systems/explorationRewards';
 import { wildlifeSystem } from './systems/wildlife';
+import { auraSystem, type AuraSourceState } from './systems/auras';
+import type { AuraId } from '../core/auras';
 
 /**
  * The simulation. Plain data; mutate only through dispatch(); advance with tick(dt).
@@ -155,6 +157,12 @@ export class World {
   combatTicks = 0;
   readonly exploration = new Map<string, ExplorationSite>();
   readonly priestOrders = new Map<EntityId, PriestOrder>();
+  /** Aura source → entities each of its auras reaches (M16-4; recomputed after load, not saved). */
+  readonly auraSources = new Map<EntityId, AuraSourceState>();
+  /** Affected entity → aura id → number of sources granting it (an aura counts once). */
+  readonly auraActive = new Map<EntityId, Map<AuraId, number>>();
+  /** Ticks run by the aura system (staggers source re-scans). */
+  auraTicks = 0;
   private nextId = 1;
 
   constructor(
@@ -472,6 +480,7 @@ export class World {
     productionSystem(this, dt);
     buildingUpgradeSystem(this, dt);
     explorationRewardSystem(this, dt);
+    auraSystem(this, dt);
     this.time += dt;
     this.fogClock -= dt;
     if (this.fogClock <= 0) {

@@ -10,6 +10,7 @@ import type { DamageShare } from './systems/veterancy';
 import type { ExploreState } from './systems/explore';
 import type { GatherState } from './systems/gather';
 import { clearStatCache } from './systems/research';
+import { recomputeAllAuras } from './systems/auras';
 import { buildingRect } from './systems/sites';
 import { removeProduction } from './productionQueue';
 import type { NavalJob, Landing } from './systems/naval';
@@ -336,5 +337,7 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   world.victoryClock = s.victoryClock;
   for (const id of s.defeated) world.defeatedPlayers.add(id);
   world.gameOver = s.gameOver;
+  // Auras aren't saved: re-derive who stands in which aura from the restored entities.
+  recomputeAllAuras(world);
   return world;
 }
