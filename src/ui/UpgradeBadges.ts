@@ -1,6 +1,7 @@
 import type { Building, EntityId } from '../core/types';
 import { researchBlock } from '../sim/systems/research';
 import type { World } from '../sim/World';
+import { upgradeBlock } from '../sim/systems/buildingUpgrade';
 import { badgedBuildings, techViewOf } from './upgradeHints';
 
 /** Seconds between working out which buildings get a badge (researchBlock per tech is not per-frame work). */
@@ -12,7 +13,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /**
  * "Upgrade available" badges: a small #i-upgrade icon over each own building that could start a
- * tech right now (see badgedBuildings). Which buildings is recomputed a few times a second; the
+ * tech or its own next building upgrade right now (see badgedBuildings). Which buildings is recomputed a few times a second; the
  * badges themselves are moved each frame like the rally flag (`project` returns client px for a
  * building's roof, or null when off-screen). Pooled DOM, pointer-events: none.
  */
@@ -40,7 +41,10 @@ export class UpgradeBadges {
       this.next = time + REFRESH;
       const local = this.world.localPlayer;
       const view = techViewOf(this.world, local);
-      this.ids = badgedBuildings(this.world.buildings.values(), local, view, (t) => researchBlock(this.world, local, t));
+      this.ids = badgedBuildings(
+        this.world.buildings.values(), local, view, (t) => researchBlock(this.world, local, t),
+        (b) => upgradeBlock(this.world, b, local) === null
+      );
     }
     let used = 0;
     if (visible) {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BUILDINGS, footprintRadius } from '../core/buildings';
 import type { TechId } from '../core/techs';
 import { GRASS_ONLY, type Building, type BuildingKind, type Heightfield, type MapLayout, type Stockpile } from '../core/types';
+import { upgradeBlock } from '../sim/systems/buildingUpgrade';
 import { researchBlock } from '../sim/systems/research';
 import { World } from '../sim/World';
 import { unlockText } from './alertRules';
@@ -88,6 +89,35 @@ describe('ready techs and badges', () => {
     expect(ids).not.toContain(house.id);
     expect(ids).not.toContain(site.id);
     expect(ids).not.toContain(enemy.id);
+  });
+
+  it('also badges a building that can start its own next upgrade now (M14-3 tiers)', () => {
+    const w = world();
+    const local = w.localPlayer;
+    const house = addBuilding(w, 'house', 34, 30, local);
+    const other = addBuilding(w, 'house', 38, 30, local);
+    const site = addBuilding(w, 'house', 42, 30, local, false);
+    const blockOf = (t: TechId) => researchBlock(w, local, t);
+    const canUpgrade = (b: Building) => upgradeBlock(w, b, local) === null;
+    const badged = () => badgedBuildings(w.buildings.values(), local, techViewOf(w, local), blockOf, canUpgrade);
+    Object.assign(w.stockOf(local), rich);
+
+    // Village Age: Large House needs the Town Age, and a house has no techs.
+    expect(badged()).not.toContain(house.id);
+    w.players.get(local)!.age = 1;
+    expect(badged()).toEqual(expect.arrayContaining([house.id, other.id]));
+    expect(badged()).not.toContain(site.id);
+    // Without the upgrade check only techs count, as before.
+    expect(badgedBuildings(w.buildings.values(), local, techViewOf(w, local), blockOf)).not.toContain(house.id);
+
+    // Already upgrading, or at the top of its chain: no badge. Too poor: no badge.
+    house.upgrading = { to: 1, progress: 0 };
+    other.tier = 1;
+    expect(badged()).not.toContain(house.id);
+    expect(badged()).not.toContain(other.id);
+    house.upgrading = undefined;
+    Object.assign(w.stockOf(local), stock());
+    expect(badged()).not.toContain(house.id);
   });
 
   it('counts each kind once and names the ready techs for the panel', () => {

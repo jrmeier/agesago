@@ -48,22 +48,29 @@ export function canQueueResearch(b: Pick<Building, 'complete' | 'research'>): bo
 }
 
 /**
- * Ids of `owner`'s buildings that get the "upgrade available" badge: complete, able to queue, and
- * of a kind with at least one ready tech. Each kind's techs are checked once, however many stand.
+ * Ids of `owner`'s buildings that get the "upgrade available" badge: complete, and either able to
+ * queue a ready tech of their kind or able to start their own next building upgrade (M14-3 tiers)
+ * right now. `canUpgrade` is the sim's upgradeBlock === null (affordability included); without it
+ * only techs count. Each kind's techs are checked once, however many stand.
  */
-export function badgedBuildings(
-  buildings: Iterable<Pick<Building, 'id' | 'owner' | 'kind' | 'complete' | 'research'>>,
+export function badgedBuildings<B extends Pick<Building, 'id' | 'owner' | 'kind' | 'complete' | 'research'>>(
+  buildings: Iterable<B>,
   owner: PlayerId,
   view: TechView,
-  blockOf: (tech: TechId) => RejectReason | null
+  blockOf: (tech: TechId) => RejectReason | null,
+  canUpgrade?: (b: B) => boolean
 ): EntityId[] {
   const ready = new Map<BuildingKind, boolean>();
   const out: EntityId[] = [];
   for (const b of buildings) {
-    if (b.owner !== owner || !canQueueResearch(b)) continue;
-    let ok = ready.get(b.kind);
-    if (ok === undefined) ready.set(b.kind, (ok = readyTechs(b.kind, view, blockOf).length > 0));
-    if (ok) out.push(b.id);
+    if (b.owner !== owner || !b.complete) continue;
+    let ok = false;
+    if (canQueueResearch(b)) {
+      const known = ready.get(b.kind);
+      ok = known ?? readyTechs(b.kind, view, blockOf).length > 0;
+      if (known === undefined) ready.set(b.kind, ok);
+    }
+    if (ok || canUpgrade?.(b)) out.push(b.id);
   }
   return out;
 }
