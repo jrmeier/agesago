@@ -31,6 +31,7 @@ import {
 import { BALANCE } from './balance';
 import { NavGrid } from './nav';
 import { Visibility, type Viewer } from './visibility';
+import { Territory } from './territory';
 import { buildSystem, canPlace, orderBuild, orderBuildWall, orderCancelBuild, orderConstruct } from './systems/build';
 import { orderRepair, repairSystem } from './systems/repair';
 import { garrisonSystem, garrisonUpkeep, orderGarrison, orderTownBell, orderUngarrison } from './systems/defence';
@@ -135,6 +136,8 @@ export class World {
   /** Navigation grid over the terrain with building footprints blocked. */
   readonly nav: NavGrid;
   readonly waterNav: NavGrid;
+  /** Territory owner per cell, derived from buildings and ages (M18-1; not saved, recomputed on change). */
+  readonly territory: Territory;
   readonly navalJobs = new Map<EntityId, NavalJob>();
   readonly boarding = new Map<EntityId, EntityId>();
   readonly landings = new Map<EntityId, Landing>();
@@ -196,6 +199,7 @@ export class World {
     // Circles are static scenery; buildings (Town Centers included) are rectangular footprints.
     this.nav = new NavGrid(hf, scenery);
     this.waterNav = new NavGrid(waterHeightfield(hf));
+    this.territory = new Territory(hf);
     // Town Centers first (player 1's is id 1), then villagers, matching the historical id order.
     const tcs = starts.map((start, i) => this.addTownCenter(start.townCenter, i + 1));
     for (const tc of tcs) this.nav.addRect(tc.id, buildingRect(tc));
@@ -223,6 +227,7 @@ export class World {
       site.pos = this.nav.nearestFree(site.pos) ?? site.pos;
       this.exploration.set(site.id, site);
     }
+    this.territory.recompute(this);
     this.updateFog();
   }
 
@@ -282,6 +287,16 @@ export class World {
    */
   canPlace(kind: BuildingKind, pos: Vec2, rot: number, by: PlayerId = this.localPlayer): PlacementCheck {
     return canPlace(this, kind, pos, rot, by);
+  }
+
+  /** Who owns the territory at `pos` (0 = neutral). */
+  territoryOwner(pos: Vec2): PlayerId {
+    return this.territory.ownerAt(this, pos);
+  }
+
+  /** Is `pos` owned territory linked to one of its owner's roots (Town Centers)? */
+  isConnected(pos: Vec2): boolean {
+    return this.territory.connectedAt(this, pos);
   }
 
   /** The local player's population. */
@@ -500,6 +515,8 @@ export class World {
     buildingUpgradeSystem(this, dt);
     explorationRewardSystem(this, dt);
     auraSystem(this, dt);
+    // Borders move only when a building completes, dies or changes hands, or someone ages up.
+    this.territory.sync(this);
     this.time += dt;
     this.fogClock -= dt;
     if (this.fogClock <= 0) {

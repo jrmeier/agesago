@@ -416,5 +416,7 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   }
   // Auras aren't saved: re-derive who stands in which aura from the restored entities.
   recomputeAllAuras(world);
+  // Territory isn't saved either: it is derived from the restored buildings and ages.
+  world.territory.recompute(world);
   return world;
 }

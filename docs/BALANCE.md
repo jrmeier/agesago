@@ -327,6 +327,32 @@ line, which rewards picking the towers that matter. Saves from before M14-2 that
 them load with every watch tower at the matching tier (`src/sim/serialize.ts`, save v4).
 Fortified Town Center (academy-free TC tech, City Age) still exists and stacks with the TC tiers.
 
+## Territory (M18-1)
+
+Borders follow 0 A.D.'s TerritoryInfluence/TerritoryManager (`src/sim/territory.ts`, data in
+`BuildingSpec.territory` and `TERRITORY` in `src/core/buildings.ts`). The grid has 1-unit cells
+(2× the nav cell): 192 × 192 on a giant map.
+
+| Building | Radius | Weight | Root |
+| --- | --- | --- | --- |
+| Town Center | 22 (+25% of base per age: 27.5, 33, 38.5) | 10 | yes |
+| Wonder | 12 | 6 | no |
+| Storehouse, granary, mining camp, dock, military, forge, market, temple, academy, watch tower | 8 | 3 | no |
+| House, corral | 6 | 2 | no |
+| Walls, gates, farms | none | | |
+
+- Pull falls off linearly from `weight` at the centre to 0 at `radius`. It sums per player, and the
+  strongest player takes the cell. A tie leaves it neutral.
+- A Town Center's weight dwarfs minor buildings. Only a dense cluster of enemy buildings (or
+  another Town Center) can take the ground under it. A root on enemy-owned ground anchors nothing.
+- Owned cells 4-connected to a cell holding their owner's root are connected. The rest keep their
+  owner but are flagged unconnected, which M18-3 decay uses.
+- Territory reaches 6 cells over water from the shore, so wide channels between islands stay neutral.
+- There is no fortress building yet. When one is added it should be a root with radius 16.
+- Cost: a full recompute on a giant map with 4 players and 61 buildings each, all in the Empire Age,
+  takes about 0.7 ms. The per-tick fingerprint check takes under 0.01 ms. Recompute runs only when
+  the fingerprint changes, so the cost is not spread across ticks.
+
 ## Rerunning
 
 ```sh

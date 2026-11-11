@@ -44,11 +44,39 @@ export interface BuildingSpec {
   auras?: AuraId[];
   /** Most a player may own at once, foundations included (like 0 A.D. EntityLimits). */
   limit?: number;
+  /**
+   * Territory influence once complete (M18-1, after 0 A.D.'s TerritoryInfluence). `radius` is in
+   * world units and the pull falls off linearly to 0 there; `weight` is the pull at the centre.
+   * Roots (Town Centers) anchor territory: land not linked to one of its owner's roots is unconnected.
+   * Absent: no influence (walls, gates, farms).
+   */
+  territory?: TerritoryInfluence;
 }
+
+export interface TerritoryInfluence {
+  radius: number;
+  weight: number;
+  root?: boolean;
+}
+
+/** Territory grid tuning (M18-1). Argued in docs/BALANCE.md ("Territory"). */
+export const TERRITORY = {
+  /** Grid cell size in world units (2× the nav cell). */
+  cell: 1,
+  /** Town Center radius grows by this fraction of its base per age reached (0 A.D. phases). */
+  ageRadiusBonus: 0.25,
+  /** Territory reaches this many cells out over water from the shore, no further. */
+  waterReach: 6,
+} as const;
+
+/** Small non-root influence shared by most buildings. */
+const MINOR: TerritoryInfluence = { radius: 6, weight: 2 };
+const MEDIUM: TerritoryInfluence = { radius: 8, weight: 3 };
 
 export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   townCenter: {
     name: 'Town Center',
+    territory: { radius: 22, weight: 10, root: true },
     size: { w: 3.2, d: 3.2 },
     cost: { wood: 275, stone: 100 },
     buildTime: 150,
@@ -65,6 +93,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   },
   house: {
     name: 'House',
+    territory: MINOR,
     size: { w: 2.6, d: 2.6 },
     cost: { wood: 30 },
     buildTime: 15,
@@ -78,6 +107,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   },
   storehouse: {
     name: 'Storehouse',
+    territory: MEDIUM,
     size: { w: 3, d: 3 },
     cost: { wood: 100 },
     buildTime: 25,
@@ -91,6 +121,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   },
   miningCamp: {
     name: 'Mining Camp',
+    territory: MEDIUM,
     size: { w: 3, d: 3 },
     cost: { wood: 100 },
     buildTime: 25,
@@ -104,6 +135,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   },
   granary: {
     name: 'Granary',
+    territory: MEDIUM,
     size: { w: 3, d: 3 },
     cost: { wood: 100 },
     buildTime: 25,
@@ -116,7 +148,8 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     armor: { melee: 6, pierce: 12 },
   },
   corral: {
-    name: 'Corral', size: { w: 8, d: 8 }, cost: { wood: 100 }, buildTime: 25,
+    name: 'Corral',
+    territory: MINOR, size: { w: 8, d: 8 }, cost: { wood: 100 }, buildTime: 25,
     popBonus: 0, drop: [], walkable: true, buildable: true, sight: 6, hp: 600,
     armor: { melee: 4, pierce: 10 },
   },
@@ -135,6 +168,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   },
   barracks: {
     name: 'Barracks',
+    territory: MEDIUM,
     size: { w: 4, d: 4 },
     cost: { wood: 175 },
     buildTime: 40,
@@ -148,6 +182,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   },
   archeryRange: {
     name: 'Archery Range',
+    territory: MEDIUM,
     size: { w: 4, d: 4 },
     cost: { wood: 175 },
     buildTime: 40,
@@ -161,6 +196,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   },
   stable: {
     name: 'Stable',
+    territory: MEDIUM,
     size: { w: 4, d: 4 },
     cost: { wood: 175 },
     buildTime: 40,
@@ -174,6 +210,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   },
   watchTower: {
     name: 'Watch Tower',
+    territory: MEDIUM,
     size: { w: 2.2, d: 2.2 },
     cost: { wood: 80, stone: 50 },
     buildTime: 45,
@@ -233,6 +270,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   },
   forge: {
     name: 'Forge',
+    territory: MEDIUM,
     size: { w: 3.4, d: 3.4 },
     cost: { wood: 150 },
     buildTime: 40,
@@ -247,6 +285,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   },
   market: {
     name: 'Market',
+    territory: MEDIUM,
     size: { w: 4.4, d: 4.4 },
     cost: { wood: 175 },
     buildTime: 50,
@@ -260,24 +299,27 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     age: 1,
   },
   dock: {
-    name: 'Dock', size: { w: 4, d: 4 }, cost: { wood: 150 }, buildTime: 40,
+    name: 'Dock',
+    territory: MEDIUM, size: { w: 4, d: 4 }, cost: { wood: 150 }, buildTime: 40,
     popBonus: 0, drop: ['food'], walkable: false, buildable: true, sight: 8, hp: 1200,
     armor: { melee: 7, pierce: 14 },
   },
   temple: {
-    name: 'Temple', size: { w: 4, d: 4 }, cost: { wood: 180, stone: 80 },
+    name: 'Temple',
+    territory: MEDIUM, size: { w: 4, d: 4 }, cost: { wood: 180, stone: 80 },
     buildTime: 50, popBonus: 0, drop: [], walkable: false, buildable: true,
     sight: 8, hp: 1400, armor: { melee: 7, pierce: 14 }, age: 1, auras: ['templeHealing'],
     // Healing only: no attack, so occupants add no arrows (BALANCE.garrisonHealBy).
     garrison: 10,
   },
   siegeWorkshop: {
-    name: 'Siege Workshop', size: { w: 5, d: 5 }, cost: { wood: 300, stone: 150 }, buildTime: 60,
+    name: 'Siege Workshop', territory: MEDIUM, size: { w: 5, d: 5 }, cost: { wood: 300, stone: 150 }, buildTime: 60,
     popBonus: 0, drop: [], walkable: false, buildable: true, sight: 6, hp: 1500,
     armor: { melee: 7, pierce: 14 }, age: 2,
   },
   academy: {
     name: 'Academy',
+    territory: MEDIUM,
     size: { w: 4.4, d: 4.4 },
     cost: { wood: 200, stone: 100 },
     buildTime: 60,
@@ -292,6 +334,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   },
   wonder: {
     name: 'Wonder',
+    territory: { radius: 12, weight: 6 },
     size: { w: 6, d: 6 },
     cost: { food: 1000, wood: 1000, stone: 1000, gold: 1000 },
     buildTime: 400,
