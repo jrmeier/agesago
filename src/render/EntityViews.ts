@@ -470,7 +470,9 @@ export class EntityViews {
         const own = building.owner === this.world.localPlayer;
         const work = own && (!building.complete || building.kind === 'farm' || building.kind === 'corral' || !!BUILDINGS[building.kind].garrison);
         const market = building.kind === 'market' && building.complete && !this.world.areEnemies(this.world.localPlayer, building.owner);
-        rank = this.world.areEnemies(this.world.localPlayer, building.owner) ? ORDER_PICK_RANK.attack
+        // Neutral (Gaia) buildings are capture / raze targets too (M18-4).
+        const target = this.world.areEnemies(this.world.localPlayer, building.owner) || (building.owner === GAIA && building.complete);
+        rank = target ? ORDER_PICK_RANK.attack
           : own && !building.complete ? ORDER_PICK_RANK.foundation
           : work || market ? ORDER_PICK_RANK.workBuilding : ORDER_PICK_RANK.building;
       }
