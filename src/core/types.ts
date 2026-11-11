@@ -389,8 +389,11 @@ export type Entity = Unit | ResourceNode | Building;
 export type Command =
   | { type: 'tend'; unitIds: EntityId[]; buildingId: EntityId }
   | { type: 'gateLivestock'; buildingId: EntityId; open: boolean }
-  /** `formation` defaults to defaultFormation(units); `facing` (radians) overrides the travel direction. */
-  | { type: 'move'; unitIds: EntityId[]; target: Vec2; formation?: FormationKind; facing?: number }
+  /**
+   * `formation` defaults to defaultFormation(units); `facing` (radians) overrides the travel direction;
+   * `width` (metres, from a right-drag) sets how wide a line or column stands.
+   */
+  | { type: 'move'; unitIds: EntityId[]; target: Vec2; formation?: FormationKind; facing?: number; width?: number }
   | { type: 'gather'; unitIds: EntityId[]; nodeId: EntityId }
   /** Train one unit (default: the building's first trainable kind, e.g. a villager at the TC). */
   /** Queue `count` (1..MAX_TRAIN_BATCH, default 1) units as one batch; see orderTrain. */
@@ -405,7 +408,7 @@ export type Command =
    */
   | { type: 'capture'; unitIds: EntityId[]; targetId: EntityId }
   /** Walk to a point, fighting any enemy met on the way. */
-  | { type: 'attackMove'; unitIds: EntityId[]; target: Vec2; formation?: FormationKind; facing?: number }
+  | { type: 'attackMove'; unitIds: EntityId[]; target: Vec2; formation?: FormationKind; facing?: number; width?: number }
   /**
    * Patrol: walk from the current position through `waypoints` and back, again and again,
    * fighting like attack-move. One waypoint = back and forth. Any other unit order ends it.

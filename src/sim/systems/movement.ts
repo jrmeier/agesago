@@ -59,16 +59,24 @@ function rank(out: LayoutSlot[], count: number, ahead: number, role: Role): void
   for (let k = 0; k < count; k++) out.push({ lateral: k - (count - 1) / 2, ahead: -ahead, role });
 }
 
-/** Line: melee front ranks, ranged behind, cavalry split onto both flanks; at most three ranks per block. */
-function lineLayout(melee: number, ranged: number, cavalry: number): LayoutSlot[] {
+/**
+ * Line: melee front ranks, ranged behind, cavalry split onto both flanks; at most three ranks per block.
+ * `across` (a right-drag's width, in slots) overrides how many stand side by side, wings included.
+ */
+function lineLayout(melee: number, ranged: number, cavalry: number, across?: number): LayoutSlot[] {
   const out: LayoutSlot[] = [];
   const centre = melee + ranged;
-  const cols = centre <= 4 ? centre : Math.max(4, Math.ceil(centre / 3));
+  const wings = Math.min(cavalry, 2);
+  const cols = across !== undefined && centre
+    ? Math.max(1, Math.min(centre, across - wings))
+    : centre <= 4 ? centre : Math.max(4, Math.ceil(centre / 3));
   const meleeRows = cols ? Math.ceil(melee / cols) : 0;
   for (let r = 0; r < meleeRows; r++) rank(out, Math.min(cols, melee - r * cols), r, 'melee');
   for (let r = 0; r * cols < ranged; r++) rank(out, Math.min(cols, ranged - r * cols), meleeRows + r, 'ranged');
   // Wings stand beside the melee ranks (or the ranged ranks when there is no melee), never further back.
-  const wingRows = Math.max(1, Math.min(3, meleeRows || Math.ceil(ranged / Math.max(1, cols))));
+  const wingRows = across !== undefined && !centre
+    ? Math.max(1, Math.ceil(cavalry / Math.max(1, across)))
+    : Math.max(1, Math.min(3, meleeRows || Math.ceil(ranged / Math.max(1, cols))));
   const left = Math.ceil(cavalry / 2);
   for (const [count, side] of [[left, -1], [cavalry - left, 1]]) {
     const width = Math.ceil(count / wingRows);
@@ -79,10 +87,10 @@ function lineLayout(melee: number, ranged: number, cavalry: number): LayoutSlot[
   return out;
 }
 
-/** Column: two or three abreast; melee lead, ranged in the middle, cavalry as rear guard. */
-function columnLayout(melee: number, ranged: number, cavalry: number): LayoutSlot[] {
+/** Column: two or three abreast (`across` overrides, up to four); melee lead, ranged in the middle, cavalry as rear guard. */
+function columnLayout(melee: number, ranged: number, cavalry: number, across?: number): LayoutSlot[] {
   const n = melee + ranged + cavalry;
-  const width = n <= 2 ? 1 : n <= 12 ? 2 : 3;
+  const width = across !== undefined ? Math.max(1, Math.min(4, n, across)) : n <= 2 ? 1 : n <= 12 ? 2 : 3;
   const roles: Role[] = [...Array<Role>(melee).fill('melee'), ...Array<Role>(ranged).fill('ranged'), ...Array<Role>(cavalry).fill('cavalry')];
   const out: LayoutSlot[] = [];
   for (let r = 0; r * width < n; r++) {
@@ -115,8 +123,11 @@ function ringLayout(n: number): LayoutSlot[] {
   });
 }
 
-/** Slot layout for `units` in spacing units, independent of the map (exported for tests). */
-export function formationLayout(units: readonly Unit[], formation: FormationKind): LayoutSlot[] {
+/**
+ * Slot layout for `units` in spacing units, independent of the map (exported for tests). `across`
+ * (slots side by side, from a right-drag's width) shapes line and column; box and none ignore it.
+ */
+export function formationLayout(units: readonly Unit[], formation: FormationKind, across?: number): LayoutSlot[] {
   if (formation === 'none') return ringLayout(units.length);
   let melee = 0, ranged = 0, cavalry = 0;
   for (const u of units) {
@@ -126,8 +137,8 @@ export function formationLayout(units: readonly Unit[], formation: FormationKind
     else melee++;
   }
   if (!melee && !ranged) { melee = cavalry; cavalry = 0; } // an all-cavalry group forms its own centre
-  const layout = formation === 'column' ? columnLayout(melee, ranged, cavalry)
-    : formation === 'box' ? boxLayout(melee, ranged, cavalry) : lineLayout(melee, ranged, cavalry);
+  const layout = formation === 'column' ? columnLayout(melee, ranged, cavalry, across)
+    : formation === 'box' ? boxLayout(melee, ranged, cavalry) : lineLayout(melee, ranged, cavalry, across);
   if (!units.some((u) => roleOf(u) !== 'cavalry')) for (const s of layout) s.role = 'cavalry';
   return layout;
 }
@@ -136,13 +147,19 @@ function headingOf(units: readonly Unit[], target: Vec2, facing: number | undefi
   return facing !== undefined && Number.isFinite(facing) ? { x: Math.sin(facing), z: Math.cos(facing) } : direction(units, target);
 }
 
+/** Slots side by side for a front `width` metres wide at `spacing` (undefined: the formation's own shape). */
+export function slotsAcross(width: number | undefined, spacing: number): number | undefined {
+  return width !== undefined && Number.isFinite(width) && width > 0 ? Math.max(1, Math.round(width / spacing) + 1) : undefined;
+}
+
 /**
  * Formation slots around `target`, oriented along the travel direction (or `facing`). Results match
  * input order. Each role fills its own slots greedily: slots front-first pick the unassigned unit whose
  * position relative to the group centre is nearest, ties by id, so the plan is deterministic and O(n²).
+ * `width` (metres) sets the front of a line or column, as a right-drag does.
  */
 export function formationSlots(nav: NavGrid, units: readonly Unit[], target: Vec2,
-  formation: FormationKind = 'line', facing?: number): (Vec2 | null)[] {
+  formation: FormationKind = 'line', facing?: number, width?: number): (Vec2 | null)[] {
   if (!units.length) return [];
   if (units.length === 1) return [nav.nearestFree(target)];
   const forward = headingOf(units, target, facing);
@@ -150,7 +167,7 @@ export function formationSlots(nav: NavGrid, units: readonly Unit[], target: Vec
   const ring = formation === 'none';
   const spacing = ring ? 1 : Math.ceil((Math.max(...units.map(radiusOf)) * 2 + 0.2) / NAV_CELL) * NAV_CELL;
   const minGap = (ring ? Math.ceil((Math.max(...units.map(radiusOf)) * 2 + 0.2) / NAV_CELL) * NAV_CELL : spacing) * 0.8;
-  const layout = formationLayout(units, formation);
+  const layout = formationLayout(units, formation, ring ? undefined : slotsAcross(width, spacing));
   // Centre the block on the target so the formation, not its front rank, stands there.
   let mid = 0;
   if (!ring) {
@@ -207,6 +224,8 @@ export interface GroupOrder {
   formation?: FormationKind;
   /** Facing override in radians (default: the group's travel direction). */
   facing?: number;
+  /** Front width in metres for line / column (default: the formation's own shape). */
+  width?: number;
 }
 export interface PlannedMove { unit: Unit; path: Vec2[]; formation?: UnitFormation }
 
@@ -221,7 +240,7 @@ export function planGroupMove(world: World, units: Unit[], target: Vec2, order: 
   if (!units.length) return [];
   const formation = order.formation ?? defaultFormation(units.map((u) => u.kind));
   const nav = navFor(world, units[0]);
-  const slots = formationSlots(nav, units, target, formation, order.facing);
+  const slots = formationSlots(nav, units, target, formation, order.facing, order.width);
   const forward = headingOf(units, target, order.facing);
   const grouped = units.length > 1;
   const speed = grouped && formation !== 'none' ? Math.min(...units.map((u) => speedOf(u, world))) : undefined;

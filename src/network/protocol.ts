@@ -7,8 +7,8 @@ import { UNITS } from '../core/units';
 import { WONDER_SECONDS_MAX, WONDER_SECONDS_MIN, type WonderRules } from '../core/wonder';
 import { BALANCE } from '../sim/balance';
 
-/** 12: batch training ('train' count, M15-4). 11: the 'guard' order. 10: the 'patrol' command. 9: fortress and champions (M16-5). 8: siege engines (pop costs, pack/unpack, splash). 7: wonder buildings and the wonder victory option (MatchConfig.wonder). 6: 'repair' command and passive ship healing at docks. 5: upgrade chains replace the tower techs. 4: in-place building upgrades (upgradeBuilding/cancelUpgrade). 3: trained land units can work. */
-export const NETWORK_VERSION = 12;
+/** 13: formation width on move / attackMove (M17-4 right-drag). 12: batch training ('train' count, M15-4). 11: the 'guard' order. 10: the 'patrol' command. 9: fortress and champions (M16-5). 8: siege engines (pop costs, pack/unpack, splash). 7: wonder buildings and the wonder victory option (MatchConfig.wonder). 6: 'repair' command and passive ship healing at docks. 5: upgrade chains replace the tower techs. 4: in-place building upgrades (upgradeBuilding/cancelUpgrade). 3: trained land units can work. */
+export const NETWORK_VERSION = 13;
 export const TICKS_PER_TURN = 4;
 export const HASH_EVERY = 25;
 export const MAX_COMMANDS = 64;
@@ -37,6 +37,9 @@ const point = (v: unknown): boolean => object(v) && ['x', 'z'].every(k => typeof
 const ids = (v: unknown): boolean => Array.isArray(v) && v.length <= 512 && v.every(id);
 const resource = (v: unknown): boolean => ['wood', 'food', 'gold', 'stone'].includes(String(v));
 
+/** Widest formation front (metres) a right-drag may ask for. */
+export const MAX_FORMATION_WIDTH = 200;
+
 /** Most waypoints one patrol order may carry. */
 export const MAX_PATROL_POINTS = 16;
 
@@ -47,7 +50,8 @@ export function validCommand(v: unknown): v is Command {
   switch (v.type) {
     case 'move': case 'attackMove': return ids(v.unitIds) && point(v.target)
       && (v.formation === undefined || FORMATION_KINDS.includes(v.formation as FormationKind))
-      && (v.facing === undefined || typeof v.facing === 'number' && Number.isFinite(v.facing));
+      && (v.facing === undefined || typeof v.facing === 'number' && Number.isFinite(v.facing))
+      && (v.width === undefined || typeof v.width === 'number' && Number.isFinite(v.width) && v.width >= 0 && v.width <= MAX_FORMATION_WIDTH);
     case 'patrol': return ids(v.unitIds) && Array.isArray(v.waypoints) && v.waypoints.length >= 1 && v.waypoints.length <= MAX_PATROL_POINTS && v.waypoints.every(point);
     case 'gather': return ids(v.unitIds) && id(v.nodeId);
     case 'heal': case 'convert':

@@ -3,7 +3,7 @@ import { GRASS_ONLY, type FormationKind, type Heightfield, type Unit, type UnitK
 import { defaultFormation, UNITS } from '../core/units';
 import { validCommand } from '../network/protocol';
 import { defaultPlayers, World } from './World';
-import { formationLayout, formationSlots, movementSystem, orderMove } from './systems/movement';
+import { formationLayout, formationSlots, movementSystem, orderMove, slotsAcross } from './systems/movement';
 import { orderAttackMove } from './systems/combat';
 
 const DT = 0.05;
@@ -108,6 +108,46 @@ describe('formation slots', () => {
     expect(validCommand({ ...base, formation: 'wedge' })).toBe(false);
     expect(validCommand({ ...base, facing: Number.NaN })).toBe(false);
     expect(validCommand({ ...base, facing: '1' })).toBe(false);
+    expect(validCommand({ ...base, formation: 'line', facing: 0, width: 24 })).toBe(true);
+    expect(validCommand({ ...base, width: -1 })).toBe(false);
+    expect(validCommand({ ...base, width: Number.POSITIVE_INFINITY })).toBe(false);
+    expect(validCommand({ ...base, width: 5000 })).toBe(false);
+  });
+
+  it('a right-drag width sets how many stand side by side in a line or column', () => {
+    const world = worldOn();
+    const units = squad(world, Array<UnitKind>(12).fill('hoplite'), { x: 20, z: 80 });
+    const across = (layout: { lateral: number }[]) => new Set(layout.map((s) => s.lateral)).size;
+    expect(across(formationLayout(units, 'line'))).toBe(4);
+    expect(across(formationLayout(units, 'line', 12))).toBe(12);
+    expect(across(formationLayout(units, 'line', 2))).toBe(2);
+    expect(across(formationLayout(units, 'line', 40))).toBe(12);
+    expect(across(formationLayout(units, 'column', 3))).toBe(3);
+    expect(across(formationLayout(units, 'column', 9))).toBe(4);
+    expect(formationLayout(units, 'box', 12)).toEqual(formationLayout(units, 'box'));
+    expect(slotsAcross(undefined, 1.5)).toBeUndefined();
+    expect(slotsAcross(0, 1.5)).toBeUndefined();
+    expect(slotsAcross(15, 1.5)).toBe(11);
+    // On the map, a wide drag spreads the line along the facing's right-hand axis.
+    const target = { x: 100, z: 84 };
+    const facing = Math.PI / 2; // +x
+    const spread = (width?: number) => {
+      const slots = formationSlots(world.nav, units, target, 'line', facing, width) as Vec2[];
+      const lat = slots.map((p) => frame(p, target).lateral);
+      return Math.max(...lat) - Math.min(...lat);
+    };
+    expect(spread(30)).toBeGreaterThan(spread() * 2);
+    expect(spread(2)).toBeLessThan(spread());
+  });
+
+  it('move and attack-move carry the width through to the slots', () => {
+    const world = worldOn();
+    const units = squad(world, Array<UnitKind>(8).fill('hoplite'), { x: 20, z: 80 });
+    world.dispatch({ type: 'move', unitIds: units.map((u) => u.id), target: { x: 60, z: 80 }, formation: 'line', facing: Math.PI / 2, width: 20 });
+    const ends = units.map((u) => u.path.at(-1)!);
+    const lat = ends.map((p) => p.z);
+    expect(Math.max(...lat) - Math.min(...lat)).toBeGreaterThan(5); // all eight abreast (default: four)
+    expect(new Set(ends.map((p) => Math.round(p.x))).size).toBeLessThanOrEqual(2);
   });
 });
 
