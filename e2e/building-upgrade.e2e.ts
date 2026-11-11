@@ -83,16 +83,21 @@ test('upgrade a house from its panel: locked reason, progress, cancel with refun
     await openSheet(page, phone);
     await press(page, phone, '#train-grid [data-upgrade="largeHouse"]');
   } else {
-    await page.keyboard.press('Shift+KeyU');
+    // Under load a frame can miss a press; pressing again is harmless (busy buildings are skipped).
+    await expect(async () => {
+      await page.keyboard.press('Shift+KeyU');
+      await expect(page.locator('#unit-status')).toHaveText(/Upgrading to Large House/, { timeout: 1500 });
+    }).toPass({ timeout: 15_000 });
   }
   await expect(page.locator('#unit-status')).toHaveText(/Upgrading to Large House/);
   expect((await house(page, ids.a)).upgrading).not.toBeNull();
   expect((await house(page, ids.b)).upgrading).not.toBeNull();
 
   await page.evaluate(() => (window as any).dev.fastForward(25));
-  await expect(page.locator('#unit-name')).toHaveText('Large House');
-  expect((await house(page, ids.a)).tier).toBe(1);
-  expect((await house(page, ids.b)).tier).toBe(1);
+  expect(await house(page, ids.a)).toMatchObject({ tier: 1, upgrading: null });
+  expect(await house(page, ids.b)).toMatchObject({ tier: 1, upgrading: null });
+  // The sim state is checked above; the panel just needs a frame (slow under a loaded machine).
+  await expect(page.locator('#unit-name')).toHaveText('Large House', { timeout: 15_000 });
   // Fully upgraded: no upgrade tile and no progress bar.
   await expect(page.locator('#build-progress')).toBeHidden();
   await expect(page.locator('#train-grid [data-upgrade]')).toHaveCount(0);
