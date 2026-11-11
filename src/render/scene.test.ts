@@ -5,6 +5,7 @@ import { generateMap } from '../sim/mapgen';
 import { World } from '../sim/World';
 import { EntityViews } from './EntityViews';
 import { TerrainView } from './TerrainView';
+import { auraRingRadius } from './auraRings';
 
 function installCanvasMock(): void {
   const data = new Uint8ClampedArray(512 * 512 * 4);
@@ -184,5 +185,19 @@ describe('EntityViews', () => {
     world.events.emit({ type: 'removed', id: tree.id });
     expect(instanceCount()).toBe(before - 1);
     expect(stumpCount()).toBe(1);
+  });
+  it('draws an aura range ring around a selected Town Center only', () => {
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 400);
+    const tc = world.townCenterOf(1)!;
+    const rings = () => views.object.children.filter((o) => o.visible && (o as THREE.Mesh).geometry?.type === 'RingGeometry'
+      && Math.abs(o.scale.x - auraRingRadius({ building: 'townCenter' })) < 1e-6);
+    views.setSelected(new Set([tc.id]));
+    views.sync(1, 0, camera);
+    expect(rings()).toHaveLength(1);
+    expect(rings()[0].position.x).toBe(tc.pos.x);
+    views.setSelected(new Set([unit.id]));
+    views.sync(1, 0, camera);
+    expect(rings()).toHaveLength(0);
+    views.setSelected(new Set());
   });
 });
