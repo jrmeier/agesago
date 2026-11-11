@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GRASS_ONLY, type Heightfield, type MapLayout, type PlayerId, type Unit, type UnitKind, type Vec2 } from '../core/types';
+import { canPatrol } from '../core/units';
 import { validCommand } from '../network/protocol';
 import { BALANCE } from './balance';
 import { defaultPlayers, World } from './World';
@@ -128,6 +129,13 @@ describe('patrol', () => {
       expect(h.state).not.toBe('attacking');
     }
     expect(e.hp).toBe(e.maxHp);
+  });
+
+  it('lets every armed non-villager patrol, crush-only siege included (M16-2)', () => {
+    for (const k of ['hoplite', 'archer', 'scout', 'trireme', 'ram', 'catapult', 'boltShooter', 'spartanHoplite'] as UnitKind[]) {
+      expect(canPatrol(k), k).toBe(true);
+    }
+    for (const k of ['villager', 'priest', 'tradeCart', 'deer', 'boar'] as UnitKind[]) expect(canPatrol(k), k).toBe(false);
   });
 
   it('ignores villagers and empty orders; clamps off-map points', () => {
