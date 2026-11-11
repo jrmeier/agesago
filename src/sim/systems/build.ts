@@ -23,6 +23,7 @@ import { buildingRect, footprintRect, inReach, snapRot } from './sites';
 import { wallSegments } from './walls';
 import { ageOf, buildingStat } from './research';
 import { buildingMaxHp } from './stats';
+import { wonderCompleted } from './victory';
 
 const reject = (world: World, reason: RejectReason) => world.events.emit({ type: 'rejected', reason });
 
@@ -427,6 +428,7 @@ export function completeBuilding(world: World, b: Building): void {
   if (BUILDINGS[b.kind].gate) world.nav.removeRect(b.id);
   if (b.kind === 'farm') b.food = farmFood(world, b.owner);
   world.events.emit({ type: 'constructed', id: b.id });
+  wonderCompleted(world, b);
   world.emitStock();
   world.refreshFog();
   const spec = BUILDINGS[b.kind];

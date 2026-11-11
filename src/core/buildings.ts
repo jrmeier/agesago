@@ -283,6 +283,20 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     armor: { melee: 8, pierce: 15 },
     age: 2,
   },
+  wonder: {
+    name: 'Wonder',
+    size: { w: 6, d: 6 },
+    cost: { food: 1000, wood: 1000, stone: 1000, gold: 1000 },
+    buildTime: 400,
+    popBonus: 0,
+    drop: [],
+    walkable: false,
+    buildable: true,
+    sight: 10,
+    hp: 8000,
+    armor: { melee: 3, pierce: 10 },
+    age: 3,
+  },
 };
 
 /**

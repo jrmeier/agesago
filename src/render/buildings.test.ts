@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../core/buildings';
+import { CIV_IDS } from '../core/civilizations';
 import type { BuildingKind } from '../core/types';
 import { buildingModel, foundationModel } from './buildings';
 
@@ -70,6 +71,20 @@ describe('economy building models', () => {
       expect(materials.size).toBe(1);
       expect(meshes(object).length).toBeLessThanOrEqual(4);
     }
+  });
+
+  it('raises a distinct monument per civilization for the wonder, each on the footprint and tallest of all', () => {
+    const shapes = new Set<number>();
+    for (const civ of CIV_IDS) {
+      const object = buildingModel('wonder', { civ, color: 0x2255aa });
+      const size = new THREE.Box3().setFromObject(object).getSize(new THREE.Vector3());
+      expect(size.x).toBeCloseTo(BUILDINGS.wonder.size.w, 5);
+      expect(size.z).toBeCloseTo(BUILDINGS.wonder.size.d, 5);
+      expect(size.y).toBeGreaterThan(5);
+      expect(triangleCount(object)).toBeLessThanOrEqual(2500);
+      shapes.add(triangleCount(object));
+    }
+    expect(shapes.size).toBe(CIV_IDS.length);
   });
 
   it('has distinct silhouettes and seeded tile/thatch houses without crops baked into farms', () => {

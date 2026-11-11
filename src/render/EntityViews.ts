@@ -138,6 +138,7 @@ const BUILDING_HEIGHT: Record<BuildingKind, number> = {
   academy: 3.7,
   temple: 3.6,
   dock: 2.2,
+  wonder: 6.2,
 };
 /** Extra height of upgraded watch towers (Guard 1, Fortress 2) over BUILDING_HEIGHT. */
 const TOWER_TIER_EXTRA = [0, 1.1, 1.6];

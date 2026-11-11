@@ -95,7 +95,9 @@ export type BuildingKind =
   /** M8: City Age techs (masonry, ballistics, tower upgrades). */
   | 'academy'
   | 'temple'
-  | 'dock';
+  | 'dock'
+  /** M16-7: Empire Age monument; standing through its countdown wins the match. */
+  | 'wonder';
 export type EntityKind = UnitKind | NodeKind | BuildingKind;
 
 export const NODE_RESOURCE: Record<NodeKind, ResourceType> = {
@@ -287,6 +289,8 @@ export interface Building {
   radius: number;
   /** False while still a foundation under construction. */
   complete: boolean;
+  /** Sim time construction finished (wonders only, M16-7: the earliest finished wonder counts). */
+  completedAt?: number;
   /** Construction progress 0..1 (1 when complete). */
   buildProgress: number;
   /** Units queued for training, in order (head is in progress). */
@@ -413,6 +417,9 @@ export interface PlacementCheck {
   reason?: 'water' | 'slope' | 'unexplored' | 'occupied' | 'out-of-bounds' | 'insufficient-resources';
 }
 
+/** How a match was decided. */
+export type VictoryReason = 'conquest' | 'resign' | 'wonder';
+
 export type SimEvent =
   | { type: 'spawned'; id: EntityId; kind: EntityKind }
   | { type: 'removed'; id: EntityId }
@@ -427,8 +434,12 @@ export type SimEvent =
   | { type: 'projectile'; kind: 'arrow' | 'stone' | 'javelin'; from: Vec2; to: Vec2; flight: number; targetId: EntityId }
   /** A player lost everything (or resigned). */
   | { type: 'defeated'; player: PlayerId; reason: 'conquest' | 'resign' }
-  /** The game is decided: every surviving player is on the winning team. */
-  | { type: 'gameOver'; winners: PlayerId[]; reason: 'conquest' | 'resign' }
+  /** The game is decided: every surviving player is on the winning team (or the wonder owner's team). */
+  | { type: 'gameOver'; winners: PlayerId[]; reason: VictoryReason }
+  /** A finished wonder started the victory countdown (all players). */
+  | { type: 'wonderStarted'; id: EntityId; owner: PlayerId; pos: Vec2; remaining: number }
+  /** The counting wonder fell (or changed hands) before its countdown ran out. */
+  | { type: 'wonderCancelled'; id: EntityId; owner: PlayerId; pos: Vec2 }
   /** One of `owner`'s units or buildings was hit by an enemy (for "under attack" alerts). */
   | { type: 'attacked'; owner: PlayerId; id: EntityId; pos: Vec2 }
   /** Legacy farm food metadata changed; completed farms no longer deplete. */

@@ -58,7 +58,7 @@ import { orderCancelResearch, orderResearch } from './systems/research';
 import { buildingUpgradeSystem, orderCancelUpgrade, orderUpgradeBuilding } from './systems/buildingUpgrade';
 import { buildingMaxHp, buildingSight, unitMaxHp, unitSight } from './systems/stats';
 import { marketSystem, orderMarketTrade, orderTrade, orderTribute, releaseTrade } from './systems/market';
-import { resign, victorySystem, type GameResult } from './systems/victory';
+import { defaultWonderRules, resign, victorySystem, type GameResult, type WonderCountdown, type WonderRules } from './systems/victory';
 import { waterHeightfield, navalSystem, orderFish, orderNavalTrade, orderLoadTransport, orderUnloadTransport, type NavalJob, type Landing } from './systems/naval';
 import { explorationSites, explorationRewardSystem, orderPriest, type ExplorationSite, type PriestOrder } from './systems/explorationRewards';
 import { wildlifeSystem } from './systems/wildlife';
@@ -124,6 +124,10 @@ export class World {
   /** Map identity for saves. Set to the seed passed to generateMap before saving. */
   seed: number | null = null;
   mapOptions: MapOptions = {};
+  /** Match option: whether a standing wonder wins, and after how long (M16-7). */
+  wonderRules: WonderRules = defaultWonderRules();
+  /** The earliest finished wonder's countdown, while one stands. */
+  wonder: WonderCountdown | null = null;
   /** Navigation grid over the terrain with building footprints blocked. */
   readonly nav: NavGrid;
   readonly waterNav: NavGrid;

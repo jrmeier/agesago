@@ -64,7 +64,15 @@ unit-vs-unit damage is the same as before. Targets with no research, checked in 
   the only thing missing, it sells spare wood or food at the market.
 - It knows the map (its fog is explored at the start), so building placement never waits on scouting.
 
-## Formulas
+## Wonder (M16-7)
+
+The wonder is the Empire Age's end goal: 1000 food, 1000 wood, 1000 stone and 1000 gold,
+400 s for one builder, a 6 × 6 footprint and 8000 hp (armour 3/10). With Empire reached at
+about 30:00–35:00, a town needs several more minutes of full income to pay for it, so a wonder
+is a late, visible commitment that rivals have time to answer. When it finishes, a countdown
+(match option, default on, 300 game seconds; 3/5/10/15 min in the menus) starts for every
+player. Destroying the wonder cancels it; with several standing, the earliest finished counts.
+
 
 **Payback.** `crewRate` sets a crew to work on the same map, with the drop site next to the
 resource, and measures net income over 300 s after a 30 s warm-up. It runs once without the tech

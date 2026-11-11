@@ -41,7 +41,9 @@ import {
 import { audioBus } from './audioBus';
 import { MatchMusic } from './musicDirector';
 import { MatchAudio } from './sfxDirector';
-import { matchPlayers, matchSeed } from './matchSetup';
+import { matchPlayers, matchSeed, matchWonderRules } from './matchSetup';
+import type { WonderRules } from '../core/wonder';
+import { WonderTimer } from '../ui/WonderTimer';
 import { isGameSpeed, simScale, type GameSpeed } from './pace';
 import { Selection } from './Selection';
 import { TutorialCoach } from './tutorialCoach';
@@ -67,6 +69,8 @@ export interface MatchStart {
   civs?: CivId[];
   mapSize?: MapSize;
   mapType?: MapType;
+  /** Wonder victory option (defaults: on, 300 s). A resumed match keeps its saved rules. */
+  wonder?: Partial<WonderRules>;
   /** Practice match. It does not read or write the resume slot. */
   tutorial?: boolean;
   online?: { session: NetworkSession; data: Extract<ServerMessage, { type: 'start' }> };
@@ -134,6 +138,7 @@ export class Game {
   private readonly controls: Controls;
   private readonly hud: Hud;
   private readonly minimap: Minimap;
+  private readonly wonderTimer: WonderTimer;
   private readonly endgameLog = new EndgameLog();
   private readonly endgame: Endgame;
   /** Set when gameOver fires; the loop stops so the summary matches the last sample. */
@@ -219,6 +224,7 @@ export class Game {
       world.seed = mapSeed;
     }
     world.mapOptions = mapOptions;
+    if (!resume) world.wonderRules = matchWonderRules(start.online?.data.config.wonder ?? start.wonder);
     if (start.online) {
       world.localPlayer = start.online.session.player;
       for (const state of world.players.values()) {
@@ -325,6 +331,7 @@ export class Game {
     });
     this.hud = new Hud(this.world, this.selection, () => this.train());
     this.minimap = new Minimap(document.getElementById('hud') ?? container, this.world, this.rig);
+    this.wonderTimer = new WonderTimer(this.world);
     this.endgame = new Endgame(this.world, this.endgameLog, () => {
       this.matchOver = true;
       this.setPaused(false);
@@ -396,6 +403,7 @@ export class Game {
     if (this.grass.object.visible) this.grass.update(focus, decor);
     this.views.sync(this.accumulator / STEP, this.elapsed, this.rig.camera);
     this.hud.update();
+    this.wonderTimer.update();
     this.minimap.update(this.elapsed);
     this.renderer.render(this.rig.camera);
     this.perf.update(now, this);
@@ -723,6 +731,7 @@ export class Game {
     document.removeEventListener('visibilitychange', this.onHide);
     this.input.dispose();
     this.minimap.dispose();
+    this.wonderTimer.dispose();
     this.props.dispose();
     this.renderer.domElement.remove();
   }

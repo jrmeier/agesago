@@ -15,9 +15,11 @@ import { buildingRect } from './systems/sites';
 import { removeProduction } from './productionQueue';
 import type { NavalJob, Landing } from './systems/naval';
 import type { ExplorationSite, PriestOrder } from './systems/explorationRewards';
-import type { GameResult } from './systems/victory';
+import { normalizeWonderRules, type GameResult, type WonderCountdown, type WonderRules } from './systems/victory';
 
 /**
+ * 8: M16-7 wonder victory (match wonderRules, systems.wonder countdown, Building.completedAt).
+ *    Older saves load with the default rules (on, 300 s) and no countdown.
  * 7: M15-5 loot totals per player (PlayerState.looted; older saves load with zero).
  * 6: M14-5 repair (toRepair/repairing unit states, per-player fractional repair debt).
  * 5: M14-2 upgrade chains. The academy's Guard/Fortress Tower techs became per-building tiers:
@@ -26,7 +28,7 @@ import type { GameResult } from './systems/victory';
  * 3: M14-1 in-place building upgrades (Building.tier, Building.upgrading).
  * 2: M8 research (researched techs, ages, market prices, building research queues).
  */
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 /** Oldest version that still loads; v2 buildings load at tier 0 with no upgrade running. */
 export const MIN_SAVE_VERSION = 2;
 
@@ -36,6 +38,8 @@ export interface SaveData {
   seed: number;
   playerCount: number;
   mapOptions?: MapOptions;
+  /** Wonder victory match option; absent before v8 (loads with the defaults). */
+  wonderRules?: WonderRules;
   width: number;
   depth: number;
   players: {
@@ -81,6 +85,8 @@ export interface SaveData {
     victoryClock: number;
     defeated: PlayerId[];
     gameOver: GameResult | null;
+    /** Running wonder countdown (absent before v8). */
+    wonder?: WonderCountdown | null;
   };
 }
 
@@ -130,6 +136,7 @@ export function serializeWorld(world: World): SaveData {
     seed: world.seed,
     playerCount: world.players.size,
     mapOptions: world.mapOptions,
+    wonderRules: world.wonderRules,
     width: world.hf.width,
     depth: world.hf.depth,
     players: [...world.players.values()].map(({ player, stock, visibility, researched, age, prices, looted }) => ({
@@ -163,6 +170,7 @@ export function serializeWorld(world: World): SaveData {
       victoryClock: world.victoryClock,
       defeated: [...world.defeatedPlayers],
       gameOver: world.gameOver,
+      wonder: world.wonder,
     },
   });
 }
@@ -242,6 +250,13 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   const world = new World(terrain, generated.layout, saved.players.map((p) => p.player));
   world.seed = saved.seed;
   world.mapOptions = saved.mapOptions ?? {};
+  // Pre-wonder saves: default wonder rules, no countdown, no completion stamps.
+  if (saved.version < 8) {
+    delete saved.wonderRules;
+    delete saved.systems.wonder;
+    for (const b of saved.buildings) delete b.completedAt;
+  }
+  world.wonderRules = normalizeWonderRules(saved.wonderRules);
   // Initial entities emit no events; drop their footprints before replacing the maps.
   for (const id of world.buildings.keys()) world.nav.removeRect(id);
   if (saved.version < 4) {
@@ -337,6 +352,14 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   world.victoryClock = s.victoryClock;
   for (const id of s.defeated) world.defeatedPlayers.add(id);
   world.gameOver = s.gameOver;
+  const w = s.wonder;
+  if (w != null) {
+    const b = world.buildings.get(w.building);
+    if (!b || b.kind !== 'wonder' || b.owner !== w.owner || typeof w.remaining !== 'number' || !Number.isFinite(w.remaining) || w.remaining < 0) {
+      throw new Error('Invalid save: wonder countdown');
+    }
+    world.wonder = { building: w.building, owner: w.owner, pos: { ...b.pos }, remaining: w.remaining };
+  }
   // Auras aren't saved: re-derive who stands in which aura from the restored entities.
   recomputeAllAuras(world);
   return world;

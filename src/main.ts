@@ -28,6 +28,7 @@ function reveal(game: Game): void {
   document.documentElement.dataset.players = String(game.world.players.size);
   document.documentElement.dataset.mapSize = game.world.mapOptions.size ?? 'large';
   document.documentElement.dataset.mapType = game.world.mapOptions.type ?? 'mediterranean';
+  document.documentElement.dataset.wonder = game.world.wonderRules.enabled ? String(game.world.wonderRules.seconds) : 'off';
   document.documentElement.dataset.civ = game.world.players.get(game.world.localPlayer)?.player.civ ?? '';
   if (loading) {
     loading.classList.add('is-done');

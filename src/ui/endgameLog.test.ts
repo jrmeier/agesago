@@ -146,6 +146,15 @@ describe('summary text', () => {
     expect(summaryText({ winners: [], reason: 'conquest' }, 1, nameOf).title).toBe('Draw');
     expect(summaryText({ winners: [], reason: 'conquest' }, 1, nameOf).winners).toBe('No winner');
   });
+
+  it('reports a wonder victory for winners and losers alike', () => {
+    expect(summaryText({ winners: [2, 3], reason: 'wonder' }, 1, nameOf)).toEqual({
+      title: 'Defeat',
+      winners: 'Winners: Rival 1, Rival 2',
+      reason: 'wonder',
+    });
+    expect(summaryText({ winners: [1], reason: 'wonder' }, 1, nameOf).title).toBe('Victory');
+  });
 });
 
 describe('loot text (M15-5)', () => {

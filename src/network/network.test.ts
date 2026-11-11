@@ -82,6 +82,16 @@ describe('online command relay', () => {
     expect(validClientMessage(input(Array.from({ length: 65 }, () => ({ type: 'resign' }))))).toBe(false);
     expect(validClientMessage(input([{ type: 'research', buildingId: 1, tech: '__proto__' }]))).toBe(false);
   });
+  it('accepts the wonder victory option in a room config and rejects malformed ones', () => {
+    const create = (wonder: unknown) => ({ type: 'create', version: NETWORK_VERSION, config: { seed: 1, players: 2, wonder }, name: 'Host' });
+    expect(validClientMessage(create({ enabled: false, seconds: 600 }))).toBe(true);
+    expect(validClientMessage(create({ enabled: true, seconds: 300 }))).toBe(true);
+    expect(validClientMessage(create({ enabled: 'yes', seconds: 300 }))).toBe(false);
+    expect(validClientMessage(create({ enabled: true, seconds: 5 }))).toBe(false);
+    expect(validClientMessage(create({ enabled: true, seconds: 300.5 }))).toBe(false);
+    expect(validClientMessage(create([]))).toBe(false);
+    expect(validClientMessage({ type: 'input', turn: 0, commands: [{ type: 'build', unitIds: [1], kind: 'wonder', pos: { x: 1, z: 1 }, rot: 0 }] })).toBe(true);
+  });
 });
 
 describe('deterministic command turns', () => {

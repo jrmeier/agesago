@@ -1,4 +1,4 @@
-import type { SimEvent } from '../core/types';
+import type { SimEvent, VictoryReason } from '../core/types';
 import type { World } from '../sim/World';
 import {
   chartPoints,
@@ -29,8 +29,7 @@ const SERIES: readonly { key: ChartKey; stroke: string }[] = [
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /**
- * Resign control and the end-of-match sheet.
- * Wonder and relic victories are not shown: those tickets are not built. Only conquest and resign.
+ * Resign control and the end-of-match sheet (conquest, resign and wonder victories).
  */
 export class Endgame {
   private done = false;
@@ -99,7 +98,7 @@ export class Endgame {
     this.show(e.winners, e.reason);
   }
 
-  private show(winners: readonly number[], reason: 'conquest' | 'resign'): void {
+  private show(winners: readonly number[], reason: VictoryReason): void {
     const root = this.root;
     if (!root) return;
     const text = summaryText({ winners, reason }, this.world.localPlayer, (id) => this.nameOf(id));

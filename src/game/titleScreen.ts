@@ -1,14 +1,15 @@
 import { CIVS, CIV_IDS, type CivId } from '../core/civilizations';
 import { MAP_SIZES, MAP_TYPES, type MapSize, type MapType } from '../core/maps';
 import { DEFAULT_SEED } from '../core/types';
-import { parseSeed } from './matchSetup';
+import { parseSeed, WONDER_TIMER_CHOICES, wonderTimerLabel } from './matchSetup';
+import { DEFAULT_WONDER_SECONDS, type WonderRules } from '../core/wonder';
 import { idbResumeStore, readResume } from './resume';
 import { AUDIO_CREDIT } from './music';
 import { closeSettings, settingsOpen } from './settingsPanel';
 
 export interface TitleHooks {
   onContinue(): void;
-  onStart(seed: number, players: number, options: {civ:CivId;mapSize:MapSize;mapType:MapType}): void;
+  onStart(seed: number, players: number, options: {civ:CivId;mapSize:MapSize;mapType:MapType;wonder:WonderRules}): void;
   onTutorial(): void;
 }
 
@@ -49,6 +50,11 @@ export function mountTitle(root: HTMLElement, hooks: TitleHooks): () => void {
   const sizeSelect=select('title-map-size','Map size',Object.entries(MAP_SIZES).map(([id,size])=>[id,`${id[0].toUpperCase()+id.slice(1)} (${size} × ${size})`]),'large');
   const names={mediterranean:'Mediterranean',highlands:'Highlands',riverValley:'River Valley',forest:'Forest',islands:'Islands'};
   const typeSelect=select('title-map-type','Landscape',MAP_TYPES.map(id=>[id,names[id]]),'mediterranean');
+  const wonderField=document.createElement('label');wonderField.className='title-field title-check';wonderField.htmlFor='title-wonder';wonderField.textContent='Wonder victory';
+  const wonderToggle=document.createElement('input');wonderToggle.type='checkbox';wonderToggle.id='title-wonder';wonderToggle.checked=true;wonderField.append(wonderToggle);
+  setup.querySelector('.title-actions')?.before(wonderField);
+  const wonderTimer=select('title-wonder-timer','Wonder timer',WONDER_TIMER_CHOICES.map(s=>[String(s),wonderTimerLabel(s)]),String(DEFAULT_WONDER_SECONDS));
+  wonderToggle.addEventListener('change',()=>{wonderTimer.disabled=!wonderToggle.checked;});
   const bonus=document.createElement('p');bonus.className='title-copy';bonus.id='title-civ-bonus';typeSelect.parentElement!.after(bonus);
   const describeCiv=()=>{bonus.textContent=CIVS[civSelect.value as CivId].description;};civSelect.addEventListener('change',describeCiv);describeCiv();
   const shared = seedFromLocation();
@@ -103,7 +109,7 @@ export function mountTitle(root: HTMLElement, hooks: TitleHooks): () => void {
       seedInput.focus();
       return;
     }
-    hooks.onStart(seed, players, {civ:civSelect.value as CivId,mapSize:sizeSelect.value as MapSize,mapType:typeSelect.value as MapType});
+    hooks.onStart(seed, players, {civ:civSelect.value as CivId,mapSize:sizeSelect.value as MapSize,mapType:typeSelect.value as MapType,wonder:{enabled:wonderToggle.checked,seconds:Number(wonderTimer.value)}});
   });
 
   const onKey = (event: KeyboardEvent) => {
@@ -132,7 +138,7 @@ export function mountTitle(root: HTMLElement, hooks: TitleHooks): () => void {
   return () => {
     window.removeEventListener('keydown', onKey);
     credit.remove();
-    civSelect.parentElement?.remove();sizeSelect.parentElement?.remove();typeSelect.parentElement?.remove();bonus.remove();
+    civSelect.parentElement?.remove();sizeSelect.parentElement?.remove();typeSelect.parentElement?.remove();wonderField.remove();wonderTimer.parentElement?.remove();bonus.remove();
   };
 }
 

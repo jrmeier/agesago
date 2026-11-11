@@ -1,7 +1,8 @@
+import type { VictoryReason } from '../core/types';
+
 /**
- * Match log for the conquest / resign summary.
- * Wonder and relic victories are not in this change: they depend on tickets that are not built.
- * Samples are economy and exploration only; the sim does not emit those other results.
+ * Match log for the conquest / resign / wonder summary.
+ * Samples are economy and exploration only.
  */
 
 /** Sim seconds between stored samples. The game loop records about this often, plus once at the end. */
@@ -40,7 +41,7 @@ export interface SummaryText {
   title: 'Victory' | 'Defeat' | 'Draw';
   /** Who won, or "No winner" when the sim ends with nobody left. */
   winners: string;
-  reason: 'conquest' | 'resign';
+  reason: VictoryReason;
 }
 
 /**
@@ -135,9 +136,9 @@ export function formatChartValue(key: ChartKey, value: number): string {
   return String(Math.round(value));
 }
 
-/** Headline for the local player. `reason` is the sim value, conquest or resign. */
+/** Headline for the local player. `reason` is the sim value: conquest, resign or wonder. */
 export function summaryText(
-  result: { winners: readonly number[]; reason: 'conquest' | 'resign' },
+  result: { winners: readonly number[]; reason: VictoryReason },
   localPlayer: number,
   nameOf: (id: number) => string,
 ): SummaryText {

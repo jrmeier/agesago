@@ -2,6 +2,8 @@ import { NetworkSession } from './session';
 import { CIVS, CIV_IDS } from '../core/civilizations';
 import { MAP_SIZES, MAP_TYPES, type MapSize, type MapType } from '../core/maps';
 import { NETWORK_VERSION, type ServerMessage } from './protocol';
+import { WONDER_TIMER_CHOICES, wonderTimerLabel } from '../game/matchSetup';
+import { DEFAULT_WONDER_SECONDS } from '../core/wonder';
 
 /** Test relays are restricted to loopback pages and loopback endpoints. */
 export function relayOverride(search: string, hostname: string): string | undefined {
@@ -31,6 +33,8 @@ export function mountOnline(root: HTMLElement, onStart: (session: NetworkSession
     <label class="title-field">Players <select id="online-players"><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
     <label class="title-field">Map size <select id="online-size">${Object.keys(MAP_SIZES).map(size => `<option value="${size}"${size === 'large' ? ' selected' : ''}>${size[0].toUpperCase() + size.slice(1)}</option>`).join('')}</select></label>
     <label class="title-field">Map type <select id="online-map">${MAP_TYPES.map(type => `<option value="${type}">${type === 'riverValley' ? 'River Valley' : type[0].toUpperCase() + type.slice(1)}</option>`).join('')}</select></label>
+    <label class="title-field title-check">Wonder victory <input id="online-wonder" type="checkbox" checked></label>
+    <label class="title-field">Wonder timer <select id="online-wonder-timer">${WONDER_TIMER_CHOICES.map(s => `<option value="${s}"${s === DEFAULT_WONDER_SECONDS ? ' selected' : ''}>${wonderTimerLabel(s)}</option>`).join('')}</select></label>
     <p class="title-copy">Civilizations by seat: ${CIV_IDS.map(id => CIVS[id].name).join(', ')}.</p>
     <p class="title-copy">All players join before the host starts. A disconnected player has 30 seconds to rejoin.</p>
     <p id="online-note" class="title-note" role="status"></p><ul id="online-roster"></ul>
@@ -55,7 +59,7 @@ export function mountOnline(root: HTMLElement, onStart: (session: NetworkSession
     const override = relayOverride(location.search, location.hostname);
     session = new NetworkSession(join
       ? { type: 'join', version: NETWORK_VERSION, code, name, ...(token ? { token } : {}) }
-      : { type: 'create', version: NETWORK_VERSION, config: { seed, players: Number(field('online-players').value), mapSize: field('online-size').value as MapSize, mapType: field('online-map').value as MapType, civs: CIV_IDS.slice(0, Number(field('online-players').value)) }, name }, override);
+      : { type: 'create', version: NETWORK_VERSION, config: { seed, players: Number(field('online-players').value), mapSize: field('online-size').value as MapSize, mapType: field('online-map').value as MapType, civs: CIV_IDS.slice(0, Number(field('online-players').value)), wonder: { enabled: field('online-wonder').checked, seconds: Number(field('online-wonder-timer').value) } }, name }, override);
     const current = session;
     unsubscribe = session.subscribe(() => {
       note.textContent = current.code ? `Room ${current.code} · ${current.status}` : current.status;
@@ -71,6 +75,7 @@ export function mountOnline(root: HTMLElement, onStart: (session: NetworkSession
   button.addEventListener('click', () => { home.hidden = true; panel.hidden = false; field('online-name').focus(); });
   panel.querySelector('#online-create')!.addEventListener('click', () => connect(false));
   panel.querySelector('#online-join')!.addEventListener('click', () => connect(true));
+  panel.querySelector('#online-wonder')!.addEventListener('change', () => { field('online-wonder-timer').disabled = !field('online-wonder').checked; });
   panel.querySelector('#online-start')!.addEventListener('click', () => session?.start());
   panel.querySelector('#online-back')!.addEventListener('click', () => { close(); panel.hidden = true; home.hidden = false; button.focus(); });
   return () => { unsubscribe(); offStart(); button.remove(); panel.remove(); };

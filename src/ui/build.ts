@@ -30,6 +30,7 @@ export const BUILD_HOTKEYS: Partial<Record<BuildingKind, string>> = {
   academy: 'Shift+KeyJ',
   temple: 'Shift+KeyO',
   dock: 'Shift+KeyK',
+  wonder: 'Shift+KeyG',
 };
 
 const SHIFT = 'Shift+';

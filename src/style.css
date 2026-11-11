@@ -399,6 +399,28 @@ kbd {
   position: relative;
 }
 
+/* Wonder victory countdown, edged in the owner's colour. */
+.res-wonder {
+  border: 2px solid var(--wonder-owner, #c8a453);
+  font-variant-numeric: tabular-nums;
+}
+
+.res-wonder[hidden] {
+  display: none;
+}
+
+.wonder-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--wonder-owner, #c8a453);
+  flex: none;
+}
+
+body.touch .res-wonder .res-label {
+  display: none;
+}
+
 .res-pop.capped #res-pop {
   color: #f2a38c;
 }
@@ -1495,6 +1517,13 @@ body.fps-mode .minimap {
   border-color: #f0d9a0;
   box-shadow: none;
   animation-iteration-count: 1;
+}
+
+/* A wonder started its victory countdown: a slow gold ring for every player. */
+.minimap-ping.ping-wonder {
+  border-color: #f2c94c;
+  box-shadow: 0 0 8px rgb(242 201 76 / 0.85);
+  animation-iteration-count: 5;
 }
 
 @keyframes minimap-ping {
@@ -2598,7 +2627,8 @@ body.touch .resign-btn {
   }
 
   .minimap-ping,
-  .minimap-ping.ping-death {
+  .minimap-ping.ping-death,
+  .minimap-ping.ping-wonder {
     animation: minimap-fade 2s linear 1;
   }
 }
@@ -3173,7 +3203,8 @@ html.reduce-motion .age-banner.show {
 }
 
 html.reduce-motion .minimap-ping,
-html.reduce-motion .minimap-ping.ping-death {
+html.reduce-motion .minimap-ping.ping-death,
+html.reduce-motion .minimap-ping.ping-wonder {
   animation: none;
   opacity: 0.9;
 }
@@ -3465,6 +3496,9 @@ body.touch.menu-train #market-panel {
   }
 }
 
+.title-field.title-check { flex-direction: row; align-items: center; justify-content: space-between; min-height: 44px; }
+.title-field.title-check input { width: 24px; height: 24px; margin: 0; accent-color: #c8a453; }
+.title-field select:disabled { opacity: .55; }
 .title-field select { color: #eee3cc; background: #252e31; border: 1px solid #77715d; padding: .6rem; border-radius: .3rem; width:100%; min-height:44px; font:inherit; }
 #title-setup { max-height:85dvh; overflow:auto; }
 

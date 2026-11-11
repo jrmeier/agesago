@@ -64,11 +64,11 @@ export function createBuildingVisual(kind: BuildingKind, color?: number, tier = 
   const root = new THREE.Group();
   root.name = kind === 'townCenter' ? 'town-center' : `building:${kind}`;
   let currentTier = modelTier(kind, tier);
-  let stages = foundationModel(kind, { tier: currentTier });
+  let stages = foundationModel(kind, { tier: currentTier, civ });
   let foundation = stages.object;
   foundation.name = 'foundation';
   ownMaterials(foundation);
-  let finished = finishedFor(kind, color, currentTier);
+  let finished = finishedFor(kind, color, currentTier, civ);
   paintArchitecture(foundation,civ,kind);
   paintArchitecture(finished,civ,kind);
   const bar = progressBar();
@@ -96,11 +96,11 @@ export function createBuildingVisual(kind: BuildingKind, color?: number, tier = 
       root.remove(foundation, finished);
       disposeTree(foundation);
       disposeTree(finished);
-      stages = foundationModel(kind, { tier: t });
+      stages = foundationModel(kind, { tier: t, civ });
       foundation = stages.object;
       foundation.name = 'foundation';
       ownMaterials(foundation);
-      finished = finishedFor(kind, color, t);
+      finished = finishedFor(kind, color, t, civ);
       paintArchitecture(foundation,civ,kind);
       paintArchitecture(finished,civ,kind);
       root.add(foundation, finished);
@@ -190,11 +190,11 @@ export function tintGhost(ghost: THREE.Group, valid: boolean): void {
   });
 }
 
-function finishedFor(kind: BuildingKind, color?: number, tier = 0): THREE.Object3D {
+function finishedFor(kind: BuildingKind, color?: number, tier = 0, civ?: CivId): THREE.Object3D {
   const group = new THREE.Group();
   group.name = 'finished';
   // Farms keep the animated tilled field (crops track food); other kinds use the ancient-world models.
-  const model = kind === 'farm' ? farmField() : buildingModel(kind, { seed: 1, color, tier });
+  const model = kind === 'farm' ? farmField() : buildingModel(kind, { seed: 1, color, tier, civ });
   if (kind !== 'farm') ownMaterials(model);
   group.add(model);
   if (kind === 'forge') addForgeEffects(group, model.userData.anchors as Record<string, [number, number, number]> | undefined);

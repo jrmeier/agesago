@@ -1,6 +1,6 @@
 import type { Vec2 } from '../core/types';
 
-export type PingKind = 'attack' | 'death';
+export type PingKind = 'attack' | 'death' | 'wonder';
 
 export interface Ping {
   pos: Vec2;

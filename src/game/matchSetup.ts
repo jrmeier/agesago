@@ -1,4 +1,5 @@
 import { DEFAULT_SEED } from '../core/types';
+import { DEFAULT_WONDER_SECONDS, normalizeWonderRules, type WonderRules } from '../core/wonder';
 
 /** Largest seed the new-game field accepts. */
 export const SEED_MAX = 1_000_000_000;
@@ -28,4 +29,17 @@ export function matchSeed(value: number | null | undefined, fallback = DEFAULT_S
 export function matchPlayers(value: number | null | undefined): number {
   if (value === 1 || value === 2 || value === 3 || value === 4) return value;
   return 2;
+}
+
+/** Wonder countdown lengths the new-game and lobby menus offer (game seconds). */
+export const WONDER_TIMER_CHOICES = [180, DEFAULT_WONDER_SECONDS, 600, 900] as const;
+
+/** Menu label for a countdown length, e.g. "5 min". */
+export function wonderTimerLabel(seconds: number): string {
+  return `${Math.round(seconds / 60)} min`;
+}
+
+/** Wonder victory rules from setup fields. Missing or invalid values use the defaults (on, 5 min). */
+export function matchWonderRules(value: Partial<WonderRules> | null | undefined): WonderRules {
+  return normalizeWonderRules(value);
 }

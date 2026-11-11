@@ -4,13 +4,14 @@ import { BUILDINGS } from '../core/buildings';
 import { TECHS } from '../core/techs';
 import type { Command } from '../core/types';
 import { UNITS } from '../core/units';
+import { WONDER_SECONDS_MAX, WONDER_SECONDS_MIN, type WonderRules } from '../core/wonder';
 
-/** 6: 'repair' command and passive ship healing at docks. 5: upgrade chains replace the tower techs. 4: in-place building upgrades (upgradeBuilding/cancelUpgrade). 3: trained land units can work. */
-export const NETWORK_VERSION = 6;
+/** 7: wonder buildings and the wonder victory option (MatchConfig.wonder). 6: 'repair' command and passive ship healing at docks. 5: upgrade chains replace the tower techs. 4: in-place building upgrades (upgradeBuilding/cancelUpgrade). 3: trained land units can work. */
+export const NETWORK_VERSION = 7;
 export const TICKS_PER_TURN = 4;
 export const HASH_EVERY = 25;
 export const MAX_COMMANDS = 64;
-export interface MatchConfig { seed: number; players: number; mapSize?: MapSize; mapType?: MapType; civs?: CivId[] }
+export interface MatchConfig { seed: number; players: number; mapSize?: MapSize; mapType?: MapType; civs?: CivId[]; wonder?: WonderRules }
 export interface IssuedCommand { player: number; command: Command }
 export interface Turn { turn: number; commands: IssuedCommand[] }
 export interface RosterEntry { player: number; connected: boolean; name: string }
@@ -71,7 +72,9 @@ export function validConfig(v: unknown): v is MatchConfig {
     && Number.isInteger(v.players) && Number(v.players) >= 2 && Number(v.players) <= 4
     && (v.mapSize === undefined || typeof v.mapSize === 'string' && Object.hasOwn(MAP_SIZES, v.mapSize))
     && (v.mapType === undefined || MAP_TYPES.includes(v.mapType as MapType))
-    && (v.civs === undefined || Array.isArray(v.civs) && v.civs.length === v.players && v.civs.every(c => CIV_IDS.includes(c as CivId)));
+    && (v.civs === undefined || Array.isArray(v.civs) && v.civs.length === v.players && v.civs.every(c => CIV_IDS.includes(c as CivId)))
+    && (v.wonder === undefined || object(v.wonder) && typeof v.wonder.enabled === 'boolean' && Number.isInteger(v.wonder.seconds)
+      && Number(v.wonder.seconds) >= WONDER_SECONDS_MIN && Number(v.wonder.seconds) <= WONDER_SECONDS_MAX);
 }
 
 export function validClientMessage(v: unknown): v is ClientMessage {

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BUILDINGS } from '../core/buildings';
+import type { CivId } from '../core/civilizations';
 import type { BuildingKind } from '../core/types';
 import { TREE_TRUNK, SELECTION } from './palette';
 import { bowParts, merge, modelMaterial, part, type Triple } from './models';
@@ -13,6 +14,8 @@ export interface BuildingModelOptions {
   seed?: number;
   /** Upgrade tier from buildingTier(): watch tower 0..2, town centre 0..1. Other kinds ignore it. */
   tier?: number;
+  /** Owner's civilization; picks the wonder's monument style (Hellenic temple when absent). */
+  civ?: CivId;
 }
 
 /**
@@ -313,6 +316,87 @@ function academyParts(): THREE.BufferGeometry[] {
   return parts;
 }
 
+/** Colonnade ring of `count` columns per side around a w × d rectangle at `y` (column base). */
+function colonnade(parts: THREE.BufferGeometry[], w: number, d: number, y: number, h: number, count: number, color: number): void {
+  for (let i = 0; i < count; i++) {
+    const t = -0.5 + i / (count - 1);
+    for (const [x, z] of [[t * w, d / 2], [t * w, -d / 2], [w / 2, t * d], [-w / 2, t * d]] as const) {
+      parts.push(part(new THREE.CylinderGeometry(0.15, 0.18, h, 6), color, [x, y + h / 2, z]));
+    }
+  }
+}
+
+/**
+ * Wonder (M16-7): a monument per civilization, about twice a Town Center's height. Hellenes raise
+ * a peripteral temple with a colossus, Romans a domed rotunda, Persians a terraced palace with a
+ * fire altar and Celts a great stone circle around a barrow.
+ */
+function wonderParts(civ: CivId | undefined, color: number): THREE.BufferGeometry[] {
+  const parts: THREE.BufferGeometry[] = [];
+  const marble = 0xeee8d6, gold = 0xd7b251;
+  if (civ === 'romans') {
+    for (let i = 0; i < 3; i++) parts.push(block([5.8 - i * 0.4, 0.22, 5.8 - i * 0.4], [0xb8b09a, 0xc9c2a9, 0xd4ccb4][i], [0, 0.11 + i * 0.22, 0]));
+    parts.push(part(new THREE.CylinderGeometry(1.95, 2.05, 2.6, 16), marble, [0, 1.96, -0.3]));
+    parts.push(part(new THREE.SphereGeometry(2.0, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0xb9b4a4, [0, 3.26, -0.3]));
+    parts.push(part(new THREE.CylinderGeometry(0.45, 0.5, 0.3, 10), gold, [0, 5.3, -0.3]));
+    // Pedimented portico on the +z face.
+    for (let i = 0; i < 6; i++) parts.push(part(new THREE.CylinderGeometry(0.14, 0.17, 2.4, 6), marble, [-1.25 + i * 0.5, 1.86, 2.2]));
+    parts.push(block([3.2, 0.3, 1.4], 0xd8d0b8, [0, 3.2, 1.75]));
+    parts.push(...gableParts(3.2, 1.4, 3.35, 0.7, marble).map(piece => piece.translate(0, 0, 1.75)));
+    parts.push(block([0.9, 1.7, 0.06], TREE_TRUNK, [0, 1.5, 1.6]));
+    for (const x of [-2.5, 2.5]) parts.push(part(new THREE.CylinderGeometry(0.22, 0.26, 4.2, 8), marble, [x, 2.76, 2.5]), part(new THREE.SphereGeometry(0.3, 8, 6), gold, [x, 5.0, 2.5]));
+  } else if (civ === 'persians') {
+    for (let i = 0; i < 4; i++) parts.push(block([5.9 - i * 0.9, 0.7, 5.9 - i * 0.9], [0xc9a978, 0xd5b98a, 0xdcc394, 0xe4cfa3][i], [0, 0.35 + i * 0.7, 0]));
+    // Stair ramps up the +z face of each terrace.
+    for (let i = 0; i < 4; i++) parts.push(block([1.1, 0.7, 0.9], 0xe9dcbc, [0, 0.35 + i * 0.7, 2.75 - i * 0.45], [0.55, 0, 0]));
+    // Apadana columns with bull capitals on the top terrace.
+    for (const x of [-1.0, -0.33, 0.33, 1.0]) for (const z of [-1.0, -0.33, 0.33, 1.0]) {
+      parts.push(part(new THREE.CylinderGeometry(0.1, 0.12, 2.0, 6), marble, [x, 3.8, z]));
+      parts.push(block([0.34, 0.16, 0.18], 0x7b5a3a, [x, 4.85, z]));
+    }
+    parts.push(block([2.6, 0.18, 2.6], 0x8a5f3d, [0, 5.02, 0]));
+    // Fire altar on the roof.
+    parts.push(block([0.7, 0.6, 0.7], marble, [0, 5.41, 0]));
+    parts.push(part(new THREE.ConeGeometry(0.32, 0.8, 6), 0xf08a2a, [0, 6.11, 0]));
+    for (const x of [-2.6, 2.6]) parts.push(block([0.25, 1.6, 0.06], color, [x, 1.6, 2.97]));
+  } else if (civ === 'celts') {
+    // Grassy barrow with a timber shrine, ringed by trilithons.
+    parts.push(block([5.9, 0.12, 5.9], 0x7c8b4a, [0, 0.06, 0]));
+    parts.push(part(new THREE.SphereGeometry(1.7, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0x6f8a3e, [0, 0.12, 0], [1, 0.8, 1]));
+    parts.push(block([1.3, 1.4, 1.3], WOOD, [0, 1.95, 0]));
+    parts.push(part(new THREE.ConeGeometry(1.15, 1.6, 4), 0xb5995a, [0, 3.45, 0], [1, 1, 1], [0, Math.PI / 4, 0]));
+    parts.push(block([0.06, 2.2, 0.06], TREE_TRUNK, [0, 5.3, 0]));
+    parts.push(block([0.6, 0.4, 0.03], color, [0.3, 6.15, 0]));
+    const n = 10;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2, r = 2.55;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      parts.push(block([0.42, 2.4, 0.3], 0x9b9a8e, [x, 1.32, z], [0, -a, 0]));
+      if (i % 2 === 0) {
+        const b = a + Math.PI / n;
+        parts.push(block([1.7, 0.3, 0.32], 0x8d8c80, [Math.cos(b) * r, 2.65, Math.sin(b) * r], [0, -b + Math.PI / 2, 0]));
+      }
+    }
+  } else {
+    // Hellenic: three-step crepidoma, peripteral colonnade, pediments and a gilded colossus.
+    for (let i = 0; i < 3; i++) parts.push(block([5.9 - i * 0.3, 0.25, 5.9 - i * 0.3], [0xb8b09a, 0xc9c2a9, 0xd4ccb4][i], [0, 0.125 + i * 0.25, 0]));
+    parts.push(part(bevelBox(3.0, 2.6, 3.4), 0xe6dfca, [0, 2.05, 0]));
+    colonnade(parts, 4.6, 4.6, 0.75, 2.7, 6, 0xf0eadb);
+    parts.push(block([5.0, 0.3, 5.0], 0xd8d0b8, [0, 3.6, 0]));
+    parts.push(block([5.04, 0.14, 0.05], color, [0, 3.6, 2.52]));
+    parts.push(...gableParts(5.0, 5.0, 3.75, 0.9, 0xe6dfca));
+    parts.push(...roofParts(5.3, 5.3, 3.75, 0.95, false, 4));
+    parts.push(part(new THREE.ConeGeometry(0.16, 0.35, 4), gold, [0, 4.85, 2.5]));
+    // Gilded colossus on the ridge: the tallest point of the wonder.
+    parts.push(block([0.5, 0.3, 0.5], 0xd4ccb4, [0, 4.75, 0]));
+    parts.push(part(new THREE.CylinderGeometry(0.16, 0.24, 1.1, 6), gold, [0, 5.45, 0]));
+    parts.push(part(new THREE.SphereGeometry(0.16, 8, 6), gold, [0, 6.12, 0]));
+    parts.push(part(new THREE.CylinderGeometry(0.035, 0.035, 1.6, 4), gold, [0.3, 5.9, 0], [1, 1, 1], [0, 0, -0.25]));
+    parts.push(part(new THREE.ConeGeometry(0.12, 0.3, 6), 0xf08a2a, [0.5, 6.75, 0]));
+  }
+  return parts;
+}
+
 /** Grounded, centred ancient economy buildings; the renderer supplies world position and yaw. */
 export function buildingModel(kind: BuildingKind, opts?: BuildingModelOptions): THREE.Group {
   if (kind === 'townCenter') return buildTownCenter(0, opts);
@@ -469,6 +553,8 @@ export function buildingModel(kind: BuildingKind, opts?: BuildingModelOptions): 
     for (const x of [-1.3, 1.3]) parts.push(part(new THREE.CylinderGeometry(0.18, 0.25, 0.5, 8), 0xd7b251, [x, 0.9, 1.2]));
   } else if (kind === 'academy') {
     parts.push(...academyParts());
+  } else if (kind === 'wonder') {
+    parts.push(...wonderParts(opts?.civ, opts?.color ?? 0x9e3b26));
   } else if (kind === 'watchTower') {
     // Square stone shaft, a timber fighting floor and a crenellated head. Faces +z.
     parts.push(block([1.9, 0.28, 1.9], STONE, [0, 0.14, 0]));

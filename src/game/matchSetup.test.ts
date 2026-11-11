@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchPlayers, matchSeed, parseSeed, seedFromSearch } from './matchSetup';
+import { matchPlayers, matchSeed, matchWonderRules, parseSeed, seedFromSearch, WONDER_TIMER_CHOICES, wonderTimerLabel } from './matchSetup';
 
 describe('match setup', () => {
   it('parses a shareable seed and rejects blanks and junk', () => {
@@ -23,5 +23,14 @@ describe('match setup', () => {
     expect(matchPlayers(1)).toBe(1);
     expect(matchPlayers(4)).toBe(4);
     expect(matchPlayers(5)).toBe(2);
+  });
+
+  it('defaults wonder victory on with a 5 minute timer and keeps legal choices', () => {
+    expect(matchWonderRules(undefined)).toEqual({ enabled: true, seconds: 300 });
+    expect(matchWonderRules({ enabled: false })).toEqual({ enabled: false, seconds: 300 });
+    expect(matchWonderRules({ enabled: true, seconds: 600 })).toEqual({ enabled: true, seconds: 600 });
+    expect(matchWonderRules({ seconds: 1e9 }).seconds).toBe(1800);
+    expect(WONDER_TIMER_CHOICES).toContain(300);
+    expect(WONDER_TIMER_CHOICES.map(wonderTimerLabel)).toEqual(['3 min', '5 min', '10 min', '15 min']);
   });
 });
