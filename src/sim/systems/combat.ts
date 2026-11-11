@@ -1,7 +1,7 @@
 import { orderTend } from './livestock';
 import { BUILDINGS } from '../../core/buildings';
 import type { Building, EntityId, PlayerId, Rank, ResourceType, Stance, Stockpile, Unit, UnitKind, UnitState, Vec2 } from '../../core/types';
-import { canPatrol, canWork, crushOf, isAnimal, isShip, packs, UNITS } from '../../core/units';
+import { canGuard, canPatrol, canWork, crushOf, isAnimal, isShip, packs, UNITS } from '../../core/units';
 import { GAIA } from '../../core/types';
 import { BALANCE } from '../balance';
 import type { World } from '../World';
@@ -410,12 +410,6 @@ function nextPatrolPoint(world: World, u: Unit, cs: CombatState): void {
   patrolLeg(world, u, cs);
 }
 
-/** Can `u` take a guard order? Fighting land units (and triremes) that are not animals. */
-function canGuard(u: Unit): boolean {
-  const spec = UNITS[u.kind];
-  return !isAnimal(u.kind) && (!isShip(u.kind) || u.kind === 'trireme') && spec.attack.melee + spec.attack.pierce > 0;
-}
-
 /**
  * 'guard': follow an own or allied unit at BALANCE.guardDistance (or stay by a building) and
  * fight whatever damages it, then come back. Ends when the target dies or a new order is given.
@@ -426,7 +420,7 @@ export function orderGuard(world: World, unitIds: EntityId[], targetId: EntityId
     world.events.emit({ type: 'rejected', reason: 'invalid-target' });
     return;
   }
-  const list = units(world, unitIds).filter((u) => u.id !== t.id && canGuard(u));
+  const list = units(world, unitIds).filter((u) => u.id !== t.id && canGuard(u.kind));
   if (!list.length) return;
   const cancelled = clearWork(world, list);
   for (const u of list) {

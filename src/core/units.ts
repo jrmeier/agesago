@@ -349,6 +349,11 @@ export function canPatrol(kind: UnitKind): boolean {
   return kind !== 'villager' && !isAnimal(kind) && a.melee + a.pierce + crushOf(a) > 0;
 }
 
+/** Can take a guard order: the same armed units as patrol (M17-2 and M17-3 share the rule). */
+export function canGuard(kind: UnitKind): boolean {
+  return canPatrol(kind);
+}
+
 /**
  * Units a building can train, in menu order. Unique units need their civ; champions fall back to
  * DEFAULT_CHAMPION_CIV's when `civ` is absent.

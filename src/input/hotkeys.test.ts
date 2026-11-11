@@ -18,6 +18,7 @@ describe('hotkeys', () => {
     expect(HOTKEYS.attackMove).toBe('KeyQ');
     expect(HOTKEYS.stop).toBe('KeyX');
     expect(HOTKEYS.patrol).toBe('Shift+KeyQ');
+    expect(HOTKEYS.guard).toBe('Shift+KeyG');
   });
 
   it('upgrades buildings on Shift+U, leaving plain U to the town bell', () => {

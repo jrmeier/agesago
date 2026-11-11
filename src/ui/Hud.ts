@@ -2,7 +2,7 @@ import type { AuraId } from '../core/auras';
 import { BUILDINGS, BUILDING_UPGRADES, FARM_FOOD, buildingTitle, nextUpgrade } from '../core/buildings';
 import { AGE_NAMES, TECHS, buildingTier, techsAt, unitLine, type Age, type TechId } from '../core/techs';
 import type { Building, BuildingKind, ResourceType, Stockpile, Unit, UnitKind } from '../core/types';
-import { canPatrol, canWork, UNITS, trainable } from '../core/units';
+import { canGuard, canPatrol, canWork, UNITS, trainable } from '../core/units';
 import type { Selection } from '../game/Selection';
 import { shownSelection, sightFromState, stepLastSeen, type LastSeenBuilding } from '../render/lastSeen';
 import { BALANCE } from '../sim/balance';
@@ -623,6 +623,7 @@ export class Hud {
     const unload = card.querySelector<HTMLButtonElement>('[data-cmd="unloadTransport"]');
     setHidden(unload, !own.some(u => u.kind === 'transport' && (u.passengers?.length ?? 0) > 0));
     setHidden(card.querySelector<HTMLButtonElement>('[data-cmd="patrol"]'), !own.some((u) => canPatrol(u.kind)));
+    setHidden(card.querySelector<HTMLButtonElement>('[data-cmd="guard"]'), !own.some((u) => canGuard(u.kind)));
     const fighters = own.filter((u) => isMilitary(u.kind) || u.kind === 'scout');
     card.classList.toggle('no-stances', !fighters.length);
     const stance = sharedStance(fighters);

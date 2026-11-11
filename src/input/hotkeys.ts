@@ -18,6 +18,8 @@ export const HOTKEYS = {
   rotate: 'KeyR',
   attackMove: 'KeyQ',
   patrol: 'Shift+KeyQ',
+  /** Every plain letter is taken; G for Guard, ahead of the granary's Shift fallback when guards are selected. */
+  guard: 'Shift+KeyG',
   stop: 'KeyX',
   idleVillager: 'Comma',
   scout: 'Period',

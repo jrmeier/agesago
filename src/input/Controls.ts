@@ -2,7 +2,7 @@ import { villagerPose } from '../camera/FollowCamera';
 import type { EntityViews, ScreenRect } from '../render/EntityViews';
 import type { PickIntent } from '../render/picking';
 import { CAMERA_LABELS, type CameraRig } from '../camera/CameraRig';
-import { canPatrol, canWork, defaultFormation, isShip } from '../core/units';
+import { canGuard, canPatrol, canWork, defaultFormation, isShip } from '../core/units';
 import { canGarrison } from '../sim/systems/defence';
 import { BUILDINGS } from '../core/buildings';
 import { GAIA, type Building, type BuildingKind, type Command, type EntityId, type FormationKind, type PropPlacement, type Stance, type UnitKind, type Vec2 } from '../core/types';
@@ -28,7 +28,7 @@ import type { GestureEvent } from './gestures';
 import { GROUP_KEYS, HOTKEYS, TRAIN_SLOT_KEYS, groupForKey } from './hotkeys';
 import { IdleCycler, idleVillagers } from './idle';
 import { LMB, RMB, type DragState, type Input } from './Input';
-import { resolveAttackMove, resolveBuildingOrder, resolvePatrol, resolveOrder, resolveRepairOrder, resolveTargetOrder, resolveTradeOrder, type HitEntity } from './orders';
+import { resolveAttackMove, resolveBuildingOrder, resolveGuard, resolvePatrol, resolveOrder, resolveRepairOrder, resolveTargetOrder, resolveTradeOrder, type HitEntity } from './orders';
 import { pickGround, projectToCanvas, screenRay, toNdc } from './pickGround';
 import { Placement } from './Placement';
 import { focusNextScout, onScoutFocus } from './scouts';
@@ -152,6 +152,8 @@ export class Controls {
   private unloading = false;
   /** Patrol armed (a kind of targeting): Shift+click waypoints gathered so far; a plain click finishes. */
   private patrolPoints: Vec2[] | null = null;
+  /** Guard armed (a kind of targeting): the next click / tap on an own or allied unit or building guards it. */
+  private guardArmed = false;
   /** Pause menu is up: orders and placement wait. Camera input is skipped by Game. */
   private suspended = false;
   /** Help, placement, or targeting already used Escape this frame, so it must not also pause. */
@@ -195,6 +197,7 @@ export class Controls {
       if (this.placement.active && !this.workerIds().length) this.placement.cancel();
       if (this.targeting && !this.ownUnitIds().length) this.setTargeting(false);
       if (this.patrolPoints && !this.patrolIds().length) this.setTargeting(false);
+      if (this.guardArmed && !this.guardUnits().length) this.setTargeting(false);
     });
     rig.resolveTarget = (id, alpha) => {
       const available = (u: import('../core/types').Unit | undefined) => !!u && u.kind === 'villager' && u.owner === world.localPlayer && u.hp > 0 && u.state !== 'garrisoned';
@@ -242,8 +245,9 @@ export class Controls {
       if (!btn) return;
       btn.blur();
       if (btn.dataset.cmd === 'unloadTransport') { this.setTargeting(true); this.unloading = true; }
-      else if (btn.dataset.cmd === 'attackMove') this.setTargeting(!this.targeting || !!this.patrolPoints);
+      else if (btn.dataset.cmd === 'attackMove') this.setTargeting(!this.targeting || !!this.patrolPoints || this.guardArmed);
       else if (btn.dataset.cmd === 'patrol') this.setPatrolling(!this.patrolPoints);
+      else if (btn.dataset.cmd === 'guard') this.setGuarding(!this.guardArmed);
       else if (btn.dataset.cmd === 'stop') this.stop();
       else if (btn.dataset.stance) this.setStance(btn.dataset.stance as Stance);
     });
@@ -339,7 +343,7 @@ export class Controls {
     const right = input.drag(RMB);
     if (input.released(RMB) && right && classifyRelease(right) === 'click') {
       if (this.targeting) this.setTargeting(false);
-      else this.order(right.x, right.y, input.ctrl);
+      else if (!(input.alt && this.guardAt(right.x, right.y))) this.order(right.x, right.y, input.ctrl);
     }
     this.syncBoxArm();
   }
@@ -363,8 +367,13 @@ export class Controls {
     if (input.keyPressed(HOTKEYS.explore)) this.explore();
     // Q attack-moves; Shift+Q (HOTKEYS.patrol) patrols.
     const q = input.keyMods(HOTKEYS.attackMove);
-    if (q && !q.shift && this.ownUnitIds().length) this.setTargeting(!this.targeting || !!this.patrolPoints);
+    if (q && !q.shift && this.ownUnitIds().length) this.setTargeting(!this.targeting || !!this.patrolPoints || this.guardArmed);
     if (q?.shift && !q.ctrl && !q.alt) this.setPatrolling(!this.patrolPoints);
+    // Shift+G guards when the selection can; otherwise it falls through to the Shift+G build key (wonder).
+    const guardKey = parseHotkey(HOTKEYS.guard);
+    const g = input.keyMods(guardKey.code);
+    const guarding = !!g && g.shift && !g.ctrl && !g.alt && this.guardUnits().length > 0;
+    if (guarding) this.setGuarding(!this.guardArmed);
     if (input.keyPressed(HOTKEYS.stop)) this.stop();
     if (input.keyPressed(HOTKEYS.idleVillager)) this.nextIdle();
     if (input.keyPressed(HOTKEYS.scout) || input.keyPressed('NumpadDecimal') || input.keyPressed(HOTKEYS.scoutAlt)) {
@@ -376,6 +385,7 @@ export class Controls {
     } else if (plain(HOTKEYS.townBell)) world.dispatch({ type: 'townBell' });
     if (plain(HOTKEYS.techTree)) this.techTree.show();
     for (const code of buildHotkeyCodes()) {
+      if (guarding && code === guardKey.code) continue;
       const kind = plain(code) ? kindForKey(code, !!input.keyMods(code)?.shift) : null;
       if (kind) this.beginPlacement(kind);
     }
@@ -879,6 +889,12 @@ export class Controls {
       this.setTargeting(false);
       return;
     }
+    if (this.guardArmed) {
+      // A miss (enemy, ground) just disarms, like Esc.
+      this.guardAt(x, y);
+      this.setTargeting(false);
+      return;
+    }
     const hit = this.hitEntity(this.pickAt(x, y));
     const attack = resolveTargetOrder({ unitIds, rallyBuildingId: null }, hit, null, (o) => world.areEnemies(world.localPlayer, o));
     const cmd = attack ?? resolveAttackMove(unitIds, this.groundAt(x, y), this.formationFor(unitIds));
@@ -891,7 +907,7 @@ export class Controls {
 
   private setTargeting(on: boolean): void {
     if (on && !this.ownUnitIds().length) on = false;
-    this.targeting = on; this.unloading = false; this.patrolPoints = null;
+    this.targeting = on; this.unloading = false; this.patrolPoints = null; this.guardArmed = false;
     document.body.classList.toggle('targeting', on);
     this.syncTargetButtons();
   }
@@ -904,10 +920,20 @@ export class Controls {
     this.syncTargetButtons();
   }
 
+  /** Arm guard: the next click / tap picks the own or allied unit or building to guard. */
+  private setGuarding(on: boolean): void {
+    if (on && !this.guardUnits().length) on = false;
+    this.setTargeting(on);
+    this.guardArmed = on;
+    this.syncTargetButtons();
+  }
+
   private syncTargetButtons(): void {
     const patrol = !!this.patrolPoints;
-    document.querySelector('#command-card [data-cmd="attackMove"]')?.setAttribute('aria-pressed', String(this.targeting && !patrol && !this.unloading));
-    document.querySelector('#command-card [data-cmd="patrol"]')?.setAttribute('aria-pressed', String(patrol));
+    const card = document.getElementById('command-card');
+    card?.querySelector('[data-cmd="attackMove"]')?.setAttribute('aria-pressed', String(this.targeting && !patrol && !this.guardArmed && !this.unloading));
+    card?.querySelector('[data-cmd="patrol"]')?.setAttribute('aria-pressed', String(patrol));
+    card?.querySelector('[data-cmd="guard"]')?.setAttribute('aria-pressed', String(this.guardArmed));
   }
 
   /** Selected own units that can patrol (soldiers, scouts, warships). */
@@ -917,6 +943,27 @@ export class Controls {
       const u = world.units.get(id);
       return !!u && canPatrol(u.kind);
     });
+
+  }
+
+  /** Selected own units that can guard (soldiers, scouts, warships). */
+  private guardUnits(): { id: EntityId; kind: UnitKind }[] {
+    const { world } = this.deps;
+    return this.ownUnitIds().flatMap((id) => {
+      const u = world.units.get(id);
+      return u && canGuard(u.kind) ? [{ id, kind: u.kind }] : [];
+    });
+  }
+
+  /** Guard the own or allied unit / building at a screen point. False if there is nothing to guard there. */
+  private guardAt(x: number, y: number): boolean {
+    const { world, views } = this.deps;
+    const cmd = resolveGuard(this.guardUnits(), this.hitEntity(this.pickAt(x, y)), (o) => world.areEnemies(world.localPlayer, o));
+    if (!cmd) return false;
+    world.dispatch(cmd);
+    const t = world.units.get(cmd.targetId) ?? world.buildings.get(cmd.targetId);
+    if (t) views.flashMarker(t.pos);
+    return true;
   }
 
   private stop(): void {

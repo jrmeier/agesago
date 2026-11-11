@@ -1,6 +1,6 @@
 import { BUILDINGS } from '../core/buildings';
 import { GAIA, type Building, type Command, type EntityId, type FormationKind, type PlayerId, type UnitKind, type Vec2 } from '../core/types';
-import { isAnimal } from '../core/units';
+import { canGuard, isAnimal } from '../core/units';
 
 /** What lies under a right-click / tap, already resolved against the scene and the fog. */
 export interface OrderTarget {
@@ -75,6 +75,20 @@ export function resolvePatrol(
 ): Extract<Command, { type: 'patrol' }> | null {
   if (!unitIds.length || !waypoints.length) return null;
   return { type: 'patrol', unitIds: [...unitIds], waypoints: waypoints.map((p) => ({ ...p })) };
+}
+
+/**
+ * Guard the own or allied unit / building under the pointer with the selected units that can
+ * guard (soldiers, scouts, warships). Null on enemies, Gaia, nodes, nothing, or nobody to send.
+ */
+export function resolveGuard(
+  units: readonly { id: EntityId; kind: UnitKind }[],
+  hit: HitEntity | null,
+  isEnemy: (owner: PlayerId) => boolean
+): Extract<Command, { type: 'guard' }> | null {
+  if (!hit || hit.owner === GAIA || isEnemy(hit.owner) || (hit.kind && isAnimal(hit.kind))) return null;
+  const unitIds = units.filter((u) => u.id !== hit.id && canGuard(u.kind)).map((u) => u.id);
+  return unitIds.length ? { type: 'guard', unitIds, targetId: hit.id } : null;
 }
 
 /** The parts of a building that decide what workers do when ordered onto it. */

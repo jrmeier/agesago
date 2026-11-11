@@ -16,6 +16,7 @@ const ACTION_LABEL: Record<string, string> = {
   rotate: 'Rotate the building you are placing',
   attackMove: 'Attack-move',
   patrol: 'Patrol: click a point to walk back and forth, fighting on the way. Shift+click adds waypoints for a loop.',
+  guard: 'Guard: then click an own or allied unit or building',
   stop: 'Stop',
   idleVillager: 'Select the next idle villager',
   scout: 'Centre on the next scout',
@@ -60,6 +61,7 @@ export function hotkeyHelpRows(): HotkeyRow[] {
     { keys: 'Corral', label: 'Move two owned sheep into the pasture; order a land unit onto it to breed and harvest surplus. Enclose with palisades and gates.' },
     { keys: 'Gate', label: 'Select a gate and use its livestock passage button. Your people always retain passage.' },
     { keys: 'Ctrl+RMB', label: 'Attack-move along the way.' },
+    { keys: 'Alt+RMB', label: 'Guard the own or allied unit or building under the cursor.' },
   ];
   return [
     ...mouse,

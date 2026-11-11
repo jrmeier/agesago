@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Unit, Vec2 } from '../core/types';
-import { resolveAttackMove, resolveBuildingOrder, resolvePatrol, resolveOrder, resolveRepairOrder, resolveTargetOrder } from './orders';
+import { resolveAttackMove, resolveBuildingOrder, resolveGuard, resolvePatrol, resolveOrder, resolveRepairOrder, resolveTargetOrder } from './orders';
 import { focusNextScout, nextScout, onScoutFocus } from './scouts';
 
 describe('order resolution under fog', () => {
@@ -185,5 +185,25 @@ describe('repair orders', () => {
     expect(resolveRepairOrder([1], { ...house, owner: 0 }, enemy)).toBeNull();
     expect(resolveRepairOrder([], house, enemy)).toBeNull();
     expect(resolveRepairOrder([1], undefined, enemy)).toBeNull();
+  });
+});
+
+describe('guard targeting', () => {
+  const enemy = (o: number) => o === 2;
+  const soldiers = [{ id: 1, kind: 'hoplite' as const }, { id: 2, kind: 'villager' as const }, { id: 3, kind: 'archer' as const }];
+
+  it('guards an own or allied unit or building with the units that can guard', () => {
+    expect(resolveGuard(soldiers, { id: 9, owner: 1, pos: { x: 0, z: 0 }, visible: true, kind: 'villager' }, enemy))
+      .toEqual({ type: 'guard', unitIds: [1, 3], targetId: 9 });
+    expect(resolveGuard(soldiers, { id: 10, owner: 3, pos: { x: 0, z: 0 }, visible: true }, enemy))
+      .toEqual({ type: 'guard', unitIds: [1, 3], targetId: 10 });
+  });
+
+  it('never guards an enemy, Gaia, nothing, itself alone, or with only villagers', () => {
+    expect(resolveGuard(soldiers, { id: 9, owner: 2, pos: { x: 0, z: 0 }, visible: true }, enemy)).toBeNull();
+    expect(resolveGuard(soldiers, { id: 9, owner: 0, pos: { x: 0, z: 0 }, visible: true }, enemy)).toBeNull();
+    expect(resolveGuard(soldiers, null, enemy)).toBeNull();
+    expect(resolveGuard([soldiers[0]], { id: 1, owner: 1, pos: { x: 0, z: 0 }, visible: true, kind: 'hoplite' }, enemy)).toBeNull();
+    expect(resolveGuard([soldiers[1]], { id: 9, owner: 1, pos: { x: 0, z: 0 }, visible: true }, enemy)).toBeNull();
   });
 });

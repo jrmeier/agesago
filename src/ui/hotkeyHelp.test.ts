@@ -26,5 +26,7 @@ describe('hotkey reference', () => {
     expect(rows.some((row) => row.label.startsWith('Build a House'))).toBe(true);
     expect(rows.some((row) => row.keys === 'U' && row.label.includes('Town bell'))).toBe(true);
     expect(rows.some((row) => row.keys === 'Shift+Q' && row.label.startsWith('Patrol'))).toBe(true);
+    expect(rows.some((row) => row.keys === 'Shift+G' && row.label.startsWith('Guard'))).toBe(true);
+    expect(rows.some((row) => row.keys === 'Alt+RMB' && row.label.startsWith('Guard'))).toBe(true);
   });
 });
