@@ -15,6 +15,7 @@ import { explorerIds } from '../ui/format';
 import { HotkeyHelp } from '../ui/hotkeyHelp';
 import { canTrainAt, isMilitary, kindForSlotKey, trainBatch } from '../ui/military';
 import { RallyFlag } from '../ui/RallyFlag';
+import { LootFloaters } from '../ui/LootFloaters';
 import { SideRail } from '../ui/SideRail';
 import { TechTreePanel, treeInputFor } from '../ui/TechTreePanel';
 import { closeTouchMenus, touchMenuOpen } from '../ui/touchMenus';
@@ -134,6 +135,7 @@ export class Controls {
   readonly techTree: TechTreePanel;
   private readonly rail: SideRail;
   private readonly rallyFlag: RallyFlag;
+  private readonly loot: LootFloaters;
   private readonly idle = new IdleCycler();
   /** Rally points this client set, shown until the sim reports Building.rally itself. */
   private readonly rallyEcho = new Map<EntityId, Vec2>();
@@ -168,6 +170,7 @@ export class Controls {
       assign: (n) => this.assignGroup(n, false),
     });
     this.rallyFlag = new RallyFlag((p) => this.project(p));
+    this.loot = new LootFloaters(hud, world, (p) => this.project(p));
     this.techTree = new TechTreePanel(() => treeInputFor(world, world.localPlayer));
 
     world.events.on('removed', (e) => {
@@ -262,6 +265,7 @@ export class Controls {
     this.alerts.update(this.time);
     this.updateRail();
     this.rallyFlag.update(rig.mode === 'rts' ? this.rallyPoint() : null);
+    this.loot.update(dt, rig.mode === 'rts');
     const slash = input.keyMods('Slash');
     if (slash?.shift && !slash.ctrl && !slash.alt) this.help.toggle();
     if (this.help.open) {

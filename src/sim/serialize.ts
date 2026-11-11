@@ -17,6 +17,7 @@ import type { ExplorationSite, PriestOrder } from './systems/explorationRewards'
 import type { GameResult } from './systems/victory';
 
 /**
+ * 7: M15-5 loot totals per player (PlayerState.looted; older saves load with zero).
  * 6: M14-5 repair (toRepair/repairing unit states, per-player fractional repair debt).
  * 5: M14-2 upgrade chains. The academy's Guard/Fortress Tower techs became per-building tiers:
  *    older saves that researched them load with every watch tower at the matching tier.
@@ -24,7 +25,7 @@ import type { GameResult } from './systems/victory';
  * 3: M14-1 in-place building upgrades (Building.tier, Building.upgrading).
  * 2: M8 research (researched techs, ages, market prices, building research queues).
  */
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 /** Oldest version that still loads; v2 buildings load at tier 0 with no upgrade running. */
 export const MIN_SAVE_VERSION = 2;
 
@@ -44,6 +45,8 @@ export interface SaveData {
     researched: TechId[];
     age: Age;
     prices: Record<MarketResource, number>;
+    /** Loot taken so far (absent before v7). */
+    looted?: Stockpile;
   }[];
   units: Unit[];
   nodes: ResourceNode[];
@@ -128,9 +131,9 @@ export function serializeWorld(world: World): SaveData {
     mapOptions: world.mapOptions,
     width: world.hf.width,
     depth: world.hf.depth,
-    players: [...world.players.values()].map(({ player, stock, visibility, researched, age, prices }) => ({
+    players: [...world.players.values()].map(({ player, stock, visibility, researched, age, prices, looted }) => ({
       player, stock, visibility: { version: visibility.version, runs: encode(visibility.state) },
-      researched: [...researched], age, prices,
+      researched: [...researched], age, prices, looted: { ...looted },
     })),
     units: [...world.units.values()],
     nodes: [...world.nodes.values()],
@@ -259,6 +262,8 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   if (saved.version < 5) migrateTowerTechs(saved);
   // Pre-repair saves carry no repair debt (and no toRepair/repairing units).
   if (saved.version < 6) delete saved.systems.repairDebt;
+  // Pre-loot saves: every player starts with nothing looted.
+  if (saved.version < 7) for (const p of saved.players) delete p.looted;
   restoreMap(world.buildings, saved.buildings.map((b) => [b.id, b]));
   for (const b of world.buildings.values()) {
     const spec = BUILDINGS[b.kind];
@@ -280,6 +285,11 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
       const v = p.prices?.[r];
       if (typeof v !== 'number' || !Number.isFinite(v) || v < MARKET.minPrice || v > MARKET.maxPrice) throw new Error('Invalid save: prices');
       state.prices[r] = v;
+    }
+    for (const r of ['food', 'wood', 'gold', 'stone'] as const) {
+      const v = p.looted?.[r] ?? 0;
+      if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) throw new Error('Invalid save: looted');
+      state.looted[r] = v;
     }
   }
   for (const b of world.buildings.values()) {

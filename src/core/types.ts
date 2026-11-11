@@ -452,6 +452,8 @@ export type SimEvent =
   | { type: 'tribute'; from: PlayerId; to: PlayerId; resource: ResourceType; amount: number }
   /** A trade cart delivered gold at a market. */
   | { type: 'traded'; owner: PlayerId; id: EntityId; gold: number }
+  /** `owner` killed or razed an enemy entity at `pos` and took `loot` (only resources > 0). */
+  | { type: 'looted'; owner: PlayerId; pos: Vec2; loot: Partial<Stockpile> }
   | { type: 'treasure'; owner: PlayerId; site: string; pos: Vec2; reward: string }
   | { type: 'relic'; owner: PlayerId; site: string; templeId: EntityId }
   | { type: 'converted'; owner: PlayerId; id: EntityId; previousOwner: PlayerId }

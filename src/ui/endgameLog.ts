@@ -148,3 +148,22 @@ export function summaryText(
       : `${result.winners.length === 1 ? 'Winner' : 'Winners'}: ${result.winners.map((id) => nameOf(id)).join(', ')}`;
   return { title, winners, reason: result.reason };
 }
+
+/** Resource amounts in HUD order (food, wood, gold, stone). */
+type Amounts = Partial<Record<'food' | 'wood' | 'gold' | 'stone', number>>;
+const LOOT_ORDER = ['food', 'wood', 'gold', 'stone'] as const;
+
+/** Floating loot text: "+5 food +3 wood" (only resources above zero). */
+export function formatLoot(loot: Amounts): string {
+  return LOOT_ORDER.filter((r) => (loot[r] ?? 0) > 0).map((r) => `+${loot[r]} ${r}`).join(' ');
+}
+
+/** One endgame line per player: "You looted 120 (80 food, 40 wood)" or "Rival 1 looted nothing". */
+export function lootLines(players: readonly { name: string; looted: Amounts }[]): string[] {
+  return players.map(({ name, looted }) => {
+    const parts = LOOT_ORDER.filter((r) => (looted[r] ?? 0) > 0);
+    if (!parts.length) return `${name} looted nothing`;
+    const total = parts.reduce((sum, r) => sum + (looted[r] ?? 0), 0);
+    return `${name} looted ${total} (${parts.map((r) => `${looted[r]} ${r}`).join(', ')})`;
+  });
+}

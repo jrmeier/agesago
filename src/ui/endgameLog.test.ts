@@ -5,6 +5,8 @@ import {
   EndgameLog,
   chartPoints,
   formatChartValue,
+  formatLoot,
+  lootLines,
   plotPoints,
   pointsAttr,
   summaryText,
@@ -143,5 +145,19 @@ describe('summary text', () => {
     expect(summaryText({ winners: [1, 3], reason: 'resign' }, 1, nameOf).winners).toBe('Winners: You, Rival 2');
     expect(summaryText({ winners: [], reason: 'conquest' }, 1, nameOf).title).toBe('Draw');
     expect(summaryText({ winners: [], reason: 'conquest' }, 1, nameOf).winners).toBe('No winner');
+  });
+});
+
+describe('loot text (M15-5)', () => {
+  it('formats floating loot in HUD order, skipping zeros', () => {
+    expect(formatLoot({ wood: 3, food: 5, gold: 0 })).toBe('+5 food +3 wood');
+    expect(formatLoot({})).toBe('');
+  });
+
+  it('writes one endgame line per player with totals', () => {
+    expect(lootLines([
+      { name: 'You', looted: { food: 80, wood: 40, gold: 0, stone: 0 } },
+      { name: 'Rival 1', looted: { food: 0, wood: 0, gold: 0, stone: 0 } },
+    ])).toEqual(['You looted 120 (80 food, 40 wood)', 'Rival 1 looted nothing']);
   });
 });

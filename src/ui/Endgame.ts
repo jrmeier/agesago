@@ -3,6 +3,7 @@ import type { World } from '../sim/World';
 import {
   chartPoints,
   formatChartValue,
+  lootLines,
   plotPoints,
   pointsAttr,
   summaryText,
@@ -108,6 +109,7 @@ export class Endgame {
     if (title) title.textContent = text.title;
     if (winnerLine) winnerLine.textContent = text.winners;
     if (reasonLine) reasonLine.textContent = `Reason: ${text.reason}`;
+    this.drawLoot();
     this.drawCharts();
     if (this.resignBtn) this.resignBtn.hidden = true;
     root.hidden = false;
@@ -116,6 +118,18 @@ export class Endgame {
 
   private nameOf(id: number): string {
     return this.world.players.get(id)?.player.name ?? `Player ${id}`;
+  }
+
+  /** One "X looted N (…)" line per player (M15-5). */
+  private drawLoot(): void {
+    const list = document.getElementById('endgame-loot');
+    if (!list) return;
+    const players = [...this.world.players.values()].map((p) => ({ name: p.player.name, looted: p.looted }));
+    list.replaceChildren(...lootLines(players).map((text) => {
+      const li = document.createElement('li');
+      li.textContent = text;
+      return li;
+    }));
   }
 
   private drawCharts(): void {

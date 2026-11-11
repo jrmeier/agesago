@@ -1,6 +1,6 @@
 import { orderTend } from './livestock';
 import { BUILDINGS } from '../../core/buildings';
-import type { Building, EntityId, PlayerId, Rank, ResourceType, Stance, Unit, UnitKind, UnitState, Vec2 } from '../../core/types';
+import type { Building, EntityId, PlayerId, Rank, ResourceType, Stance, Stockpile, Unit, UnitKind, UnitState, Vec2 } from '../../core/types';
 import { canWork, isAnimal, isShip, UNITS } from '../../core/units';
 import { GAIA } from '../../core/types';
 import { BALANCE } from '../balance';
@@ -66,6 +66,9 @@ export interface PendingHit {
 }
 
 type Target = Unit | Building;
+
+/** Fixed resource order for loot (deterministic, matches the HUD). */
+const RESOURCE_ORDER: readonly ResourceType[] = ['food', 'wood', 'gold', 'stone'];
 
 const isUnit = (e: Target): e is Unit => 'stance' in e;
 const dist = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -556,6 +559,7 @@ export function applyDamage(world: World, t: Target, amount: number, by: EntityI
     world.events.emit({ type: 'attacked', owner: t.owner, id: t.id, pos: { x: t.pos.x, z: t.pos.z } });
   }
   if (t.hp <= 0) {
+    grantLoot(world, t, byOwner);
     if (isUnit(t)) {
       awardKill(world, t);
       killUnit(world, t);
@@ -652,6 +656,46 @@ function resume(world: World, u: Unit): void {
 }
 
 // ---- Death ----
+
+/**
+ * The loot `killer` takes for destroying `t` (M15-5): BALANCE.lootFraction of its cost per
+ * resource, floored; only resources worth at least 1 are listed. Empty for gaia/own/allied
+ * targets and wall segments.
+ */
+export function lootFor(world: World, t: Target, killer: PlayerId): Partial<Stockpile> {
+  if (killer === GAIA || t.owner === GAIA || !world.areEnemies(killer, t.owner)) return {};
+  let cost: Partial<Stockpile>;
+  let fraction: number;
+  if (isUnit(t)) {
+    if (isAnimal(t.kind)) return {};
+    cost = UNITS[t.kind].cost;
+    fraction = BALANCE.lootFraction.unit;
+  } else {
+    if (BUILDINGS[t.kind].line) return {};
+    cost = BUILDINGS[t.kind].cost;
+    fraction = BALANCE.lootFraction.building;
+  }
+  const loot: Partial<Stockpile> = {};
+  for (const r of RESOURCE_ORDER) {
+    const n = Math.floor((cost[r] ?? 0) * fraction + 1e-9);
+    if (n > 0) loot[r] = n;
+  }
+  return loot;
+}
+
+/** Pay `killer` the loot for `t`, count it for the endgame, and announce it ('looted'). */
+function grantLoot(world: World, t: Target, killer: PlayerId): void {
+  const loot = lootFor(world, t, killer);
+  const state = world.players.get(killer);
+  if (!state || !Object.keys(loot).length) return;
+  for (const r of RESOURCE_ORDER) {
+    const n = loot[r] ?? 0;
+    state.stock[r] += n;
+    state.looted[r] += n;
+  }
+  world.events.emit({ type: 'looted', owner: killer, pos: { x: t.pos.x, z: t.pos.z }, loot });
+  if (killer === world.localPlayer) world.emitStock();
+}
 
 /** Remove a dead unit: 'died' then 'removed', and every system's bookkeeping about it. */
 export function killUnit(world: World, u: Unit): void {

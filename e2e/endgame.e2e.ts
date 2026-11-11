@@ -27,6 +27,8 @@ test('resign opens the summary and draws every chart', async ({ page }, testInfo
   await expect(sheet).toBeVisible();
   await expect(page.locator('#endgame-title')).toHaveText(/defeat/i);
   await expect(page.locator('#endgame-reason')).toHaveText(/resign/i);
+  // Resigning destroys your own entities: nobody loots them (M15-5).
+  await expect(page.locator('#endgame-loot li').first()).toHaveText('You looted nothing');
   await expect(resign).toBeHidden();
 
   const drawn = await page.locator('.endgame-chart').evaluateAll((figs) =>

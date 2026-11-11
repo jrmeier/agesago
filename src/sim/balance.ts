@@ -72,6 +72,12 @@ export const BALANCE = {
   garrisonEjectHp: 0.2,
 
   // ---- Combat ----
+  /**
+   * Loot (M15-5): killing an enemy unit / razing an enemy building pays the killer's owner this
+   * share of its cost, per resource, floored. Gaia wildlife, own/allied entities and wall
+   * segments (palisade, stone wall) pay nothing.
+   */
+  lootFraction: { unit: 0.1, building: 0.05 },
   /** Chasers give up once this far from where they last had the target in range (or first acquired it). */
   leash: 20,
   /** Seconds between chase re-paths for one unit. */

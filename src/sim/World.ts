@@ -99,6 +99,8 @@ export interface PlayerState {
   age: Age;
   /** Market prices, gold per 100 (M8-12). */
   readonly prices: Record<MarketResource, number>;
+  /** Total resources taken as loot from kills and razed buildings (M15-5; endgame statistics). */
+  readonly looted: Stockpile;
 }
 
 export class World {
@@ -168,6 +170,7 @@ export class World {
         researched: new Set(),
         age: 0,
         prices: { wood: MARKET.basePrice, food: MARKET.basePrice, stone: MARKET.basePrice },
+        looted: { food: 0, wood: 0, gold: 0, stone: 0 },
       });
     }
     const starts: StartLayout[] = [layout, ...(layout.extraStarts ?? [])];

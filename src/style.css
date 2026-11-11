@@ -1320,6 +1320,23 @@ body.fps-mode .rally-flag {
   display: none !important;
 }
 
+/* ---- Loot floaters (M15-5): "+5 food" rising from a kill ---- */
+
+.loot-floater {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 9;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  color: #f6dc8a;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.85);
+  will-change: transform, opacity;
+}
+
 /* ---- Minimap: an umber case with a bronze hairline; the chart is unfiltered ---- */
 
 .minimap {
@@ -1764,6 +1781,16 @@ body.fps-mode .toasts {
 .endgame-line {
   font-size: 16px;
   font-weight: 700;
+  text-align: center;
+  overflow-wrap: anywhere;
+  color: var(--ink-700);
+}
+
+.endgame-loot {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
   text-align: center;
   overflow-wrap: anywhere;
   color: var(--ink-700);
