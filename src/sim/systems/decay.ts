@@ -45,6 +45,7 @@ export function abandonBuilding(world: World, b: Building): void {
   b.hp = Math.max(1, b.maxHp * TERRITORY.neutralHp);
   b.queue = 0;
   b.queueKinds = [];
+  b.queueCounts = [];
   b.productionQueue = [];
   b.progress = 0;
   b.research = [];

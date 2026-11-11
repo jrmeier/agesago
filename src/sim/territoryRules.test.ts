@@ -206,8 +206,10 @@ describe('territory decay (M18-3)', () => {
     const w = arena();
     const log = record(w);
     const b = finished(w, 'barracks', NEUTRAL);
-    w.dispatch({ type: 'train', buildingId: b.id, unit: 'hoplite' });
-    expect(b.queue).toBe(1);
+    // A batch (M15-4) in the queue: queueCounts must go with the rest, or the save is invalid.
+    w.dispatch({ type: 'train', buildingId: b.id, unit: 'hoplite', count: 3 });
+    expect(b.queue).toBe(3);
+    expect(b.queueCounts).toEqual([3]);
     b.hp = 0.5;
     run(w, 1);
     expect(w.buildings.get(b.id)).toBe(b);
@@ -215,6 +217,8 @@ describe('territory decay (M18-3)', () => {
     expect(b.hp).toBeCloseTo(b.maxHp * TERRITORY.neutralHp);
     expect(b.queue).toBe(0);
     expect(b.queueKinds).toEqual([]);
+    expect(b.queueCounts).toEqual([]);
+    expect(() => deserializeWorld(JSON.parse(JSON.stringify(serializeWorld(w))), w.hf)).not.toThrow();
     expect(log).toContainEqual({ type: 'abandoned', id: b.id, kind: 'barracks', owner: 1, pos: NEUTRAL });
     expect(log.some((e) => e.type === 'died')).toBe(false);
     expect(w.territoryOwner(NEUTRAL)).toBe(GAIA);
