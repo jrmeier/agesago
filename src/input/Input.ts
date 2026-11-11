@@ -34,6 +34,8 @@ export interface DragState {
   held: boolean;
   /** Space was held when the button went down (Space+LMB = pan). */
   readonly withSpace: boolean;
+  /** Alt was held when the button went down (Alt+RMB = guard). Read from the event, so a quick chord still counts. */
+  readonly withAlt?: boolean;
 }
 
 export class Input {
@@ -208,6 +210,7 @@ export class Input {
       dragging: false,
       held: true,
       withSpace: this.space,
+      withAlt: e.altKey,
     });
     if (document.activeElement instanceof HTMLElement && document.activeElement !== this.dom) {
       document.activeElement.blur();

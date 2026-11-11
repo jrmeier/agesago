@@ -343,7 +343,7 @@ export class Controls {
     const right = input.drag(RMB);
     if (input.released(RMB) && right && classifyRelease(right) === 'click') {
       if (this.targeting) this.setTargeting(false);
-      else if (!(input.alt && this.guardAt(right.x, right.y))) this.order(right.x, right.y, input.ctrl);
+      else if (!((right.withAlt || input.alt) && this.guardAt(right.x, right.y))) this.order(right.x, right.y, input.ctrl);
     }
     this.syncBoxArm();
   }

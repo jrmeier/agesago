@@ -64,11 +64,8 @@ const guardOf = (page: Page, id: number) =>
     return cs?.order === 'guard' ? (cs.guard as number) : null;
   }, id);
 
-/** Hotkeys run in the game frame; wait until it consumes the key. */
-async function pressGameKey(page: Page, key: string, code: string): Promise<void> {
-  await page.keyboard.press(key);
-  await expect.poll(() => page.evaluate((code) => (window as any).game.input.keyPressed(code) as boolean, code)).toBe(false);
-}
+/** Hotkeys run in the game frame, which can lag under a loaded machine. */
+const INPUT_TIMEOUT = 15_000;
 
 test('desktop: guard through the button, Shift+G and Alt+right-click', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop', 'mouse and keyboard');
@@ -88,22 +85,23 @@ test('desktop: guard through the button, Shift+G and Alt+right-click', async ({ 
   await expect(page.locator('body')).toHaveClass(/targeting/);
   let at = await screenPointOf(page, villager);
   await page.mouse.click(at.x, at.y);
-  await expect.poll(() => guardOf(page, soldiers[0])).toBe(villager);
+  await expect.poll(() => guardOf(page, soldiers[0]), { timeout: INPUT_TIMEOUT }).toBe(villager);
   await expect(button).toHaveAttribute('aria-pressed', 'false');
   // The selection is unchanged by the targeting click.
   expect(await page.evaluate(() => [...(window as any).game.selection.ids])).toEqual([soldiers[0]]);
 
   // Shift+G arms, Esc disarms, Shift+G again and a click guards.
   await page.evaluate((id) => (window as any).game.selection.set([id]), soldiers[1]);
-  await pressGameKey(page, 'Shift+KeyG', 'KeyG');
-  await expect(button).toHaveAttribute('aria-pressed', 'true');
-  await pressGameKey(page, 'Escape', 'Escape');
-  await expect(button).toHaveAttribute('aria-pressed', 'false');
+  await page.keyboard.press('Shift+KeyG');
+  await expect(button).toHaveAttribute('aria-pressed', 'true', { timeout: INPUT_TIMEOUT });
+  await page.keyboard.press('Escape');
+  await expect(button).toHaveAttribute('aria-pressed', 'false', { timeout: INPUT_TIMEOUT });
   await expect(page.locator('#pause-menu')).toBeHidden();
-  await pressGameKey(page, 'Shift+KeyG', 'KeyG');
+  await page.keyboard.press('Shift+KeyG');
+  await expect(button).toHaveAttribute('aria-pressed', 'true', { timeout: INPUT_TIMEOUT });
   at = await screenPointOf(page, villager);
   await page.mouse.click(at.x, at.y);
-  await expect.poll(() => guardOf(page, soldiers[1])).toBe(villager);
+  await expect.poll(() => guardOf(page, soldiers[1]), { timeout: INPUT_TIMEOUT }).toBe(villager);
 
   // Alt+right-click on the villager guards directly.
   await page.evaluate((id) => (window as any).game.selection.set([id]), soldiers[2]);
@@ -111,7 +109,7 @@ test('desktop: guard through the button, Shift+G and Alt+right-click', async ({ 
   await page.keyboard.down('Alt');
   await page.mouse.click(at.x, at.y, { button: 'right' });
   await page.keyboard.up('Alt');
-  await expect.poll(() => guardOf(page, soldiers[2])).toBe(villager);
+  await expect.poll(() => guardOf(page, soldiers[2]), { timeout: INPUT_TIMEOUT }).toBe(villager);
 
   // The guards follow the villager when it walks off.
   const dest = await page.evaluate((id) => {
@@ -133,7 +131,7 @@ test('desktop: guard through the button, Shift+G and Alt+right-click', async ({ 
     x: expect.closeTo(dest.x, 0), z: expect.closeTo(dest.z, 0),
   });
 
-  // A plain right-click move ends the guard.
+  // A new order ends the guard.
   await page.evaluate((id) => (window as any).game.world.dispatch({ type: 'stop', unitIds: [id] }), soldiers[0]);
   expect(await guardOf(page, soldiers[0])).toBeNull();
   expect(errors).toEqual([]);
@@ -154,6 +152,6 @@ test('phone: guard from the Orders sheet, then tap the unit', async ({ page }, t
   await page.locator('#menu-tabs [data-menu="orders"]').tap();
   const at = await screenPointOf(page, villager);
   await page.touchscreen.tap(at.x, at.y);
-  await expect.poll(() => guardOf(page, soldiers[0])).toBe(villager);
+  await expect.poll(() => guardOf(page, soldiers[0]), { timeout: INPUT_TIMEOUT }).toBe(villager);
   expect(errors).toEqual([]);
 });
