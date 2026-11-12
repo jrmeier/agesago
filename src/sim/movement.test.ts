@@ -27,7 +27,9 @@ describe('formation orders', () => {
     const world = worldOn(field((x, z) => x < 120 && z >= 100));
     let land = 0, water = 0;
     for (const kind of Object.keys(UNITS) as UnitKind[]) {
-      const z = isShip(kind) ? 110 + water++ * 8 : 10 + land++ * 3;
+      // Land units stand 2.5 apart in the dry band (z < 100); ships on the water above it.
+      const z = isShip(kind) ? 110 + water++ * 8 : 10 + land++ * 2.5;
+      expect(isShip(kind) || z < 98, `${kind} must spawn on dry land; widen the layout`).toBe(true);
       const u = world.spawnUnit(kind, { x: 10, z });
       expect(speedOf(u)).toBe(UNITS[kind].speed);
       orderMove(world, [u.id], { x: 100, z: u.pos.z });
