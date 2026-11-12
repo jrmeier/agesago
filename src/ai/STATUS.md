@@ -1,4 +1,4 @@
-# AI status (M7-2 economy, M8-16 research and ages, M13-6 new age gates, M14-6 upgrades and repairs, M18-5 territory and capture)
+# AI status (M7-2 economy, M8-16 research and ages, M13-6 new age gates, M14-6 upgrades and repairs, M18-5 territory and capture, M16-8 late game)
 
 The computer player (`AIPlayer`) acts only through `world.dispatch(cmd, player)`. It reads its
 own units, buildings and stock, enemy units it can see right now, enemy buildings it has seen,
@@ -49,7 +49,7 @@ costs are read from `TECHS` (nothing hard-coded, so Balance can retune them).
   can click up (food can't pay for both); for the City Age villagers keep training. Saving gives
   way to the army when it is raided by soldiers or sees an enemy army much bigger than its own, and
   in the Town Age it always keeps a first wave's worth of defenders. No new attack waves start
-  while it saves for or researches an age. It stops at the City Age (no Empire step yet).
+  while it saves for or researches an age. The Empire Age came with M16-8 (see below).
 - **Priority table.** `RULES` lists each tech with a group (eco, tc, forge, line, defence), a
   base priority and a condition. Drop-site chains start once `ecoWorkers` (6 at moderate)
   villagers work that resource. TC techs: wovenTunics at 12 villagers or when raided, donkeyPacks
@@ -277,16 +277,93 @@ rejection, and planning stayed at or under 0.015 ms per tick. The Town Center se
 resource right next to the footprint (`clearOfNodes: 1`) and up to 200 full checks: with the
 stricter house settings, dense forests had no spot at all.
 
+## M16-8: siege, fortresses, champions, heroes and wonders
+
+`Profile.late` (`LateGame`) holds the late-game choices: `siege` (engines per attack on a defended
+base; 0 = no workshop), `fortresses`, `champions`, `hero` and `wonder`. Easy: 1 engine, no fortress,
+champions or hero. Moderate: 2 engines, 1 fortress. Hard: 3 and 1. Hardest: 4 and 2, plus its own
+wonder. The turtle adds a fortress (2 at most, the sim's limit).
+
+- **Empire Age.** `ResearchProfile.empireAgeAt` (moderate 36 villagers, hard 44, hardest 50, easy
+  never). It saves 4 min after the City Age, and only once the City Age's unit line has started (or
+  4 min more have passed). Its 6,500 food is held back as `ctx.reserve`, like the other ages, but
+  waves keep going while it saves; only the 150 s of research hold them. While saving, the army may
+  still train up to a full wave (it used to be up to the first wave). It adds an Academy or a
+  workshop if it lacks one. An AI that starts in a later age (a scenario or a loaded save) counts
+  those ages as reached when it is created.
+- **Siege workshop.** It is the first City Age building (`Research.buildings`), laid 12–26 from the
+  Town Center toward the enemy. Next to the Town Center, a 5×5 shed walled villagers off their
+  nodes. While it can't pay for it, `ctx.saving` holds the cost. Army training, research,
+  upgrades and non-essential buildings leave that cost alone (houses, farms and drop sites still go
+  up), as with `townReserve`; `heldBack(ctx, kind)` sums it all. Without this, the army spent all
+  the wood and the workshop never came.
+- **Siege training.** Only against a defended base: intel has seen a wall, palisade, gate,
+  watch tower or fortress. It keeps up to `late.siege` engines, one in training at a time: rams,
+  then catapults once it has half its rams and the enemy has shown 8+ soldiers. The workshop trains
+  first. While it can't afford an engine or find pop room, the other buildings leave the engine's
+  cost and pop (3) free, so a full army doesn't crowd it out. Siege techs (torsion springs and
+  reinforced frames at 2+ engines, quick rigging at 2+ catapults or bolt shooters) are `line`
+  rules.
+- **Siege in waves.** Against a defended base, a ready wave waits at the rally point for up to
+  90 s while a workshop stands and no engine is home. Engines leave with the wave. An engine that
+  turns up at the rally point later joins a running attack at once. Engines get `attack` orders on
+  the wave's target if it is a wall, tower, fortress or Town Center that isn't being captured.
+  Otherwise they take the nearest such building within 30 of it. Each engine gets two escorts with
+  the M17-3 `guard` order: the nearest free soldiers in the group, never the hero. They walk with
+  it and fight whoever attacks it, and the wave's other orders leave them alone until the engine
+  dies.
+- **Fortress, champions and hero.** It builds `late.fortresses` fortresses in the City Age, 10–22
+  toward the enemy, once it has 80% of its villager target and 750 stone. The fortress trains the
+  hero first: Empire Age, `heroBlock` clear, affordable beyond the reserves. Champions come next, by
+  the usual counter scoring: in the Empire Age, or in the City Age with 1,200 spare gold. Heroes
+  are never picked by `chooseUnit`. Pop checks use `popCost`, so siege counts 3.
+- **Enemy wonder.** While `world.wonder` counts down for an enemy, `Military.answerWonder` runs
+  before defence. Every soldier, siege included, joins the attack on the wonder: attack-move
+  there, then capture (or razing if the capture stalls). Orders go out up to 14 a pass, and
+  units are re-sent when they go idle. There is no retreat and no recall for raids at home. The
+  countdown is public (everyone sees the timer and the ping), so knowing where the wonder is
+  breaks no fog rule. The rush ends when the wonder falls or changes hands.
+- **Own wonder.** While it holds a completed wonder, no waves launch. A running attack is called
+  home, and the rally point moves next to the wonder. The normal base defence covers it, since
+  threats within 10 of any of our buildings count.
+- **Own wonder (hardest).** In the Empire Age, with no wonder standing, it builds one if it has
+  its villager target, 20+ soldiers, twice the enemy army it has seen, and the cost beyond the
+  reserves.
+
+## Acceptance tests (M16-8)
+
+`src/ai/late.test.ts`:
+- Seeds 1–5, moderate. The AI starts in the City Age with 3,000 food and wood, 2,000 gold and
+  1,000 stone, against an idle human behind a stone wall ring with four watch towers. In every
+  seed a ram reaches the walls with the first wave at 11.0 min, with 4 escorts guarding the
+  engines. The wave launched with its siege, there were at most 1 rejected command, and planning
+  took 0.012–0.019 ms per tick.
+- Escorts: 1–2 guards per engine, and the ram's target is a wall, tower or Town Center.
+- The City Age AI builds a workshop and a fortress. In the Empire Age with a fortress, it trains
+  its hero (Leonidas) and 4 champions in 3 min.
+- Seeds 1–3: an enemy wonder completes and the countdown starts. The AI's army is hitting it
+  44 s into the 300 s countdown, with `wonderRush` set.
+- With its own wonder and 24 swordsmen it launches no wave in 3 min, and all of them stay within
+  30 of the wonder.
+
+A natural game can't serve as the walled-base test. The moderate AI's Town Age army (30–60
+soldiers by 12–15 min) takes an idle human's walled, towered, even fortified base before its
+first engine exists, by capture and by sheer numbers. In a natural game the workshop now stands
+by about 15 min, and rams join the running attack.
+
 ## Open
 
-- No Empire Age step (6,500 food + 1,000 gold + 600 stone), so no tier-3 lines; tier 3 also needs
-  a level-2 building, which is M14-6 (AI building upgrades).
 - No market techs (coinage, caravans) and no trade carts.
 - No walls, fortified walls or machicolations (so no wall upgrades either).
-- No Empire Age, so the AI never reaches tower tier 2, the Imperial Palace, or tier-3 unit lines.
+- The Empire Age is rare in a 30-minute game (6,500 food). In the Empire Age the AI has no
+  dedicated plan for tower tier 2 or the Imperial Palace.
+- Bolt shooters are never trained. Siege doesn't retreat on its own, and it isn't repaired.
+- Defending against enemy siege is still the general base defence; there is no anti-siege
+  targeting.
 - The AI does not move gatherers to stone to pay for a repair; it waits until it can afford one.
 - One expansion target at a time; no third Town Center below hardest, and no expansion on small
   maps. It doesn't defend an expansion beyond the general base-radius defence.
 - The AI doesn't recapture its own lost buildings on purpose, and it doesn't reinforce a capture
   that stalls; it razes.
-- Wonders and relics are out of scope.
+- Relics are out of scope. The wonder answer has no special timing: it sends whatever army it has,
+  however small.

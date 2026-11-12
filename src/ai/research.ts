@@ -4,7 +4,7 @@ import type { Age, Building, BuildingKind, MarketResource, ResourceType, Stockpi
 import { isAnimal, UNITS, type UnitClass } from '../core/units';
 import { buyCost, LOT, sellGain } from '../sim/systems/market';
 import { ageBuildingsNeeded, ageBuildings, ageOf, isQueued, researchBlock } from '../sim/systems/research';
-import { addStock, canAfford, dist, type Ctx, type Snapshot } from './context';
+import { canAfford, dist, heldBack, type Ctx, type Snapshot } from './context';
 import { norm, PRODUCTION, type Economy } from './economy';
 import type { ResearchProfile, TechGroup } from './profile';
 
@@ -16,8 +16,11 @@ const NOT_AGE_BUILDINGS = new Set<BuildingKind>(['townCenter', 'house', 'farm', 
 const AGE_PICKS: Record<number, BuildingKind[]> = {
   0: ['storehouse', 'granary', 'barracks', 'miningCamp'],
   1: ['forge', 'market'],
+  2: ['academy', 'siegeWorkshop'],
 };
-const AGE_UP: Partial<Record<Age, TechId>> = { 0: 'townAge', 1: 'cityAge' };
+const AGE_UP: Partial<Record<Age, TechId>> = { 0: 'townAge', 1: 'cityAge', 2: 'empireAge' };
+/** Seconds in the City Age (workshop, tier-2 lines, upgrades) before it saves for the Empire Age. */
+const EMPIRE_SETTLE = 240;
 /** Seconds the Town Center rests between villager-blocking techs while the economy still grows. */
 const TC_REST = 45;
 /** Longest villager-training pause (sim seconds) to afford one economy tech. */
@@ -120,6 +123,10 @@ export const RULES: Rule[] = [
       urgent: (f) => tier === f.age && ageLine(f, unit, tier),
     };
   }),
+  // Siege workshop (M16-8): once it fields engines.
+  { tech: 'torsionSprings', group: 'line', base: 30, when: (f) => f.classes.siege >= 2 },
+  { tech: 'reinforcedFrames', group: 'line', base: 26, when: (f) => f.classes.siege >= 2 },
+  { tech: 'quickRigging', group: 'line', base: 20, when: (f) => (f.units.catapult ?? 0) + (f.units.boltShooter ?? 0) >= 2 },
   // Defences.
   { tech: 'ballistics', group: 'defence', base: 32, when: (f) => f.classes.archer >= f.p.lineUnits },
   { tech: 'masonry', group: 'defence', base: 26, when: (f) => f.classes.archer >= f.p.lineUnits || (f.raided && !!f.built.watchTower) },
@@ -153,7 +160,10 @@ export class Research {
   constructor(
     private readonly c: Ctx,
     private readonly econ: Economy
-  ) {}
+  ) {
+    // A scenario or a loaded save may start past the Village Age: count those ages as reached now.
+    for (let a = 1; a <= ageOf(c.world, c.player); a++) this.agedAt[a] = c.world.time;
+  }
 
   /** One of ours was hit at `pos`: a raid if an enemy soldier is in sight there (not a wolf, a boar or a lone scout). */
   onAttacked(pos: Vec2): void {
@@ -178,6 +188,7 @@ export class Research {
     const f = this.facts(s, p);
     this.c.armyFirst = f.raided || this.c.intel.enemyArmy() > f.army * 1.3 + 5;
     this.ageUp(s, f, p);
+    this.c.saving = null;
     this.buildings(s, f, p);
     this.research(s, f, p);
     this.market(s, p);
@@ -227,9 +238,8 @@ export class Research {
 
   /** Is the AI close enough to its next age that the Town Center should stay free for it? */
   private nearAge(f: Facts, p: ResearchProfile): boolean {
-    if (!AGE_UP[f.age]) return false;
-    const need = f.age === 0 ? p.townAgeAt : p.cityAgeAt;
-    return f.villagers >= need - 2;
+    const need = AGE_UP[f.age] ? ageNeed(f.age, p) : null;
+    return need !== null && f.villagers >= need - 2;
   }
 
   private ageUp(s: Snapshot, f: Facts, p: ResearchProfile): void {
@@ -243,9 +253,12 @@ export class Research {
       this.c.aging = true;
       return;
     }
-    const need = f.age === 0 ? p.townAgeAt : p.cityAgeAt;
-    const earliest = f.age === 0 ? p.townAgeTime : p.cityAgeTime;
+    const need = ageNeed(f.age, p);
+    if (need === null) return;
+    const earliest = f.age === 0 ? p.townAgeTime : f.age === 1 ? p.cityAgeTime : (this.agedAt[2] ?? world.time) + EMPIRE_SETTLE;
     if (f.villagers < need - 3 || world.time < earliest - 90) return;
+    // The Empire Age waits for the City Age's unit line (its 6,500 food would starve it), for a while.
+    if (f.age === 2 && !f.lines[2] && world.time < earliest + EMPIRE_SETTLE) return;
 
     // Village Age: a second military building (by profile) before the Town Age (M13-6).
     if (f.age === 0 && this.c.profile.maxProduction >= 2) {
@@ -263,7 +276,8 @@ export class Research {
     if (f.villagers < need || world.time < earliest || have.size < ageBuildingsNeeded(f.age)) return;
     // Save for it: villagers, army, buildings and other research leave this alone.
     this.c.reserve = { ...TECHS[tech].cost };
-    this.c.aging = true;
+    // The Empire Age is a long save (6,500 food): waves go on meanwhile, and only its research holds them.
+    this.c.aging = f.age < 2;
     // Village Age: stop villagers briefly to click up (food can't fund both); later ages keep booming.
     this.c.pauseVillagers = f.age === 0 && !this.c.armyFirst;
     const tc = s.tc;
@@ -309,6 +323,15 @@ export class Research {
     const has = (k: BuildingKind) => (s.count[k] ?? 0) > 0;
     const production = (f.built.barracks ?? 0) + (f.built.archeryRange ?? 0) + (f.built.stable ?? 0);
     const stock = this.c.world.stockOf(this.c.player);
+    const home = s.tc?.pos ?? this.c.home;
+    // City Age (M16-8): a siege workshop first, for walled or towered targets.
+    if (f.age >= 2 && this.c.profile.late.siege > 0 && !has('siegeWorkshop')) {
+      // Out toward the enemy, away from the town's lanes (a 5×5 shed by the Town Center can cut them).
+      const r = this.econ.buildAt(s, 'siegeWorkshop', home, 12, 26, this.c.profile.builders, undefined, this.towardEnemy(home));
+      // Can't afford it yet: save for it (the army trains whenever it can and would spend the wood).
+      if (r === false) this.c.saving = { kind: 'siegeWorkshop', cost: { ...BUILDINGS.siegeWorkshop.cost } };
+      if (r !== null) return;
+    }
     // Town Age: an archery range early when gold piles up (archers spend it), before the forge.
     if (f.age >= 1 && !has('archeryRange') && stock.gold > 300 && production < this.c.profile.maxProduction) {
       if (this.place(s, 'archeryRange') !== null) return;
@@ -317,14 +340,21 @@ export class Research {
     // the base while it techs.
     const towers = s.count.watchTower ?? 0;
     if (f.age >= 1 && p.weights.defence > 0 && towers < p.towers && !s.building.watchTower && stock.stone >= 50 + 100 * towers) {
-      const home = s.tc?.pos ?? this.c.home;
-      const enemy = this.c.intel.enemyStart;
-      const toward = enemy ? norm({ x: enemy.x - home.x, z: enemy.z - home.z }) : undefined;
-      if (this.econ.buildAt(s, 'watchTower', home, 7, 15, 1, undefined, toward) !== null) return;
+      if (this.econ.buildAt(s, 'watchTower', home, 7, 15, 1, undefined, this.towardEnemy(home)) !== null) return;
     }
     // A forge once it has an army plan in the Town Age.
     if (f.age >= 1 && p.weights.forge > 0 && production > 0 && !has('forge')) {
       if (this.place(s, 'forge') !== null) return;
+    }
+    // Fortresses by profile, toward the enemy, once the economy is up and stone piles up.
+    const late = this.c.profile.late;
+    const forts = s.count.fortress ?? 0;
+    if (f.age >= 2 && forts < late.fortresses && !s.building.fortress && f.villagers >= this.c.profile.targetVillagers * 0.8 && stock.stone >= BUILDINGS.fortress.cost.stone! + 100) {
+      if (this.econ.buildAt(s, 'fortress', home, 10, 22, this.c.profile.builders, undefined, this.towardEnemy(home)) !== null) return;
+    }
+    // Hardest only: a wonder of its own when far ahead (a big army, a full economy, the cost to spare).
+    if (late.wonder && f.age >= 3 && !has('wonder') && !this.c.world.wonder && f.villagers >= this.c.profile.targetVillagers && f.army >= 20 && f.army >= this.c.intel.enemyArmy() * 2) {
+      if (this.econ.buildAt(s, 'wonder', home, 10, 26, this.c.profile.builders + 3) !== null) return;
     }
     // An academy in the City Age for a ranged army or towers.
     if (f.age >= 2 && p.weights.defence > 0 && !has('academy') && (f.classes.archer >= p.lineUnits || f.built.watchTower)) {
@@ -336,13 +366,19 @@ export class Research {
     }
   }
 
+  /** Unit direction from `home` toward the enemy's Town Center, once seen. */
+  private towardEnemy(home: Vec2): Vec2 | undefined {
+    const enemy = this.c.intel.enemyStart;
+    return enemy ? norm({ x: enemy.x - home.x, z: enemy.z - home.z }) : undefined;
+  }
+
   // ---- Research ----
 
   /** The table's best wanted tech that can start now, by weighted priority. */
   choose(s: Snapshot, f: Facts, p: ResearchProfile): { tech: TechId; at: Building } | null {
     const { world, player, profile } = this.c;
     const stock = world.stockOf(player);
-    const reserve: Partial<Stockpile> = addStock(this.c.reserve, this.c.townReserve);
+    const reserve: Partial<Stockpile> = heldBack(this.c);
     const booming = f.villagers < profile.targetVillagers && !!s.tc;
     if (booming) reserve.food = (reserve.food ?? 0) + 50 + p.villagerReserve;
     const tcBusy = booming && (world.time < this.tcFreeAt || this.nearAge(f, p));
@@ -459,4 +495,9 @@ export class Research {
     this.trades++;
     return true;
   }
+}
+
+/** Villagers before saving for the next age (null: it stays in this one). */
+function ageNeed(age: Age, p: ResearchProfile): number | null {
+  return age === 0 ? p.townAgeAt : age === 1 ? p.cityAgeAt : age === 2 ? p.empireAgeAt : null;
 }

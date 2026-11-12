@@ -70,6 +70,7 @@ export class AIPlayer {
       reserve: {},
       techReserve: {},
       townReserve: {},
+      saving: null,
       villagerHold: 0,
       armyFirst: false,
       aging: false,

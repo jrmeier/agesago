@@ -40,6 +40,25 @@ export interface ResearchProfile {
   marketExcess: number;
   /** Watch towers it raises toward the enemy from the Town Age (paid mostly in idle stone). */
   towers: number;
+  /** Villagers before saving for the Empire Age (M16-8); null = stays in the City Age. */
+  empireAgeAt: number | null;
+}
+
+/**
+ * The late game (M16-8): siege, fortresses, champions, heroes and wonders. Plain data like the
+ * rest of the profile.
+ */
+export interface LateGame {
+  /** Siege engines it brings to an attack on a walled or towered base (0 = never builds a workshop). */
+  siege: number;
+  /** Fortresses it raises in the City Age (the sim allows 2). */
+  fortresses: number;
+  /** Trains champions at its fortress once it is in the Empire Age, or very rich in gold. */
+  champions: boolean;
+  /** Trains its civilization's hero in the Empire Age. */
+  hero: boolean;
+  /** Builds a wonder of its own when far ahead in the Empire Age. */
+  wonder: boolean;
 }
 
 /**
@@ -101,6 +120,8 @@ export interface Profile {
   cheat: { trickle: Partial<Stockpile>; fullMap: boolean } | null;
   /** Ages and upgrades; null = never researches or ages up. */
   research: ResearchProfile | null;
+  /** Siege, fortresses, champions, heroes and wonders (M16-8). */
+  late: LateGame;
 }
 
 const ALL_GROUPS: Record<TechGroup, number> = { eco: 1, tc: 1, forge: 1, line: 1, defence: 1 };
@@ -144,7 +165,9 @@ const BASE: Record<Difficulty, Profile> = {
       villagerReserve: 100,
       marketExcess: 1500,
       towers: 1,
+      empireAgeAt: null,
     },
+    late: { siege: 1, fortresses: 0, champions: false, hero: false, wonder: false },
   },
   moderate: {
     econInterval: 2,
@@ -183,7 +206,9 @@ const BASE: Record<Difficulty, Profile> = {
       villagerReserve: 50,
       marketExcess: 1000,
       towers: 3,
+      empireAgeAt: 36,
     },
+    late: { siege: 2, fortresses: 1, champions: true, hero: true, wonder: false },
   },
   hard: {
     econInterval: 1,
@@ -222,7 +247,9 @@ const BASE: Record<Difficulty, Profile> = {
       villagerReserve: 50,
       marketExcess: 900,
       towers: 3,
+      empireAgeAt: 44,
     },
+    late: { siege: 3, fortresses: 1, champions: true, hero: true, wonder: false },
   },
   hardest: {
     econInterval: 0.6,
@@ -261,14 +288,16 @@ const BASE: Record<Difficulty, Profile> = {
       villagerReserve: 50,
       marketExcess: 800,
       towers: 4,
+      empireAgeAt: 50,
     },
+    late: { siege: 4, fortresses: 2, champions: true, hero: true, wonder: true },
   },
 };
 
 /** The tuned profile for a difficulty and personality. */
 export function makeProfile(difficulty: Difficulty, personality?: Personality, tune?: Partial<Profile>): Profile {
   const base = BASE[difficulty];
-  const p: Profile = { ...base, research: base.research && { ...base.research, weights: { ...base.research.weights } } };
+  const p: Profile = { ...base, research: base.research && { ...base.research, weights: { ...base.research.weights } }, late: { ...base.late } };
   switch (personality) {
     case 'rusher':
       // Early barracks, a small early wave, then steady pressure; a leaner economy.
@@ -298,6 +327,7 @@ export function makeProfile(difficulty: Difficulty, personality?: Personality, t
         p.research.weights.defence *= 1.5;
         p.research.towers += 2;
       }
+      p.late.fortresses = Math.min(2, p.late.fortresses + 1);
       break;
   }
   Object.assign(p, tune);
@@ -306,6 +336,7 @@ export function makeProfile(difficulty: Difficulty, personality?: Personality, t
     p.research = { ...p.research, weights: { ...p.research.weights } };
     p.research.cityAgeAt = Math.min(p.research.cityAgeAt, p.targetVillagers);
     p.research.townAgeAt = Math.min(p.research.townAgeAt, p.research.cityAgeAt - 4);
+    if (p.research.empireAgeAt !== null) p.research.empireAgeAt = Math.min(p.research.empireAgeAt, p.targetVillagers);
   }
   if (p.expandAt !== null) p.expandAt = Math.min(p.expandAt, p.targetVillagers - 4);
   return p;

@@ -1,7 +1,7 @@
 import { BUILDINGS, MAX_POP, TERRITORY } from '../core/buildings';
 import { MAP_SIZES } from '../core/maps';
 import type { Building, BuildingKind, EntityId, ResourceNode, ResourceType, Unit, UnitState, Vec2 } from '../core/types';
-import { addStock, canAfford, dist, dropsFor, nearestSiteDist, type Ctx, type Snapshot } from './context';
+import { heldBack, canAfford, dist, dropsFor, nearestSiteDist, type Ctx, type Snapshot } from './context';
 import { findSpot, type SpotQuery } from './placement';
 import { ageLocked } from '../sim/systems/build';
 
@@ -465,7 +465,7 @@ export class Economy {
   private place(s: Snapshot, q: SpotQuery, n: number, near?: Vec2): boolean | null {
     const { world, player, intel } = this.c;
     if (ageLocked(world, q.kind, player)) return null;
-    const reserve = ESSENTIAL.has(q.kind) ? this.c.reserve : addStock(this.c.reserve, this.c.townReserve);
+    const reserve = ESSENTIAL.has(q.kind) ? this.c.reserve : heldBack(this.c, q.kind);
     if (!canAfford(world.stockOf(player), BUILDINGS[q.kind].cost, reserve)) return false;
     const builders = this.builders(s, near ?? q.center, n, q.kind === 'farm');
     if (!builders.length) return null;

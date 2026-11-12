@@ -1,12 +1,13 @@
 import { maxCapturePoints } from '../core/buildings';
 import type { Building, BuildingKind, EntityId, Stockpile, Unit, UnitKind, Vec2 } from '../core/types';
-import { captureRate, isAnimal, UNITS, damage, trainable, type UnitClass } from '../core/units';
-import { addStock, canAfford, dist, type Ctx, type Snapshot } from './context';
+import { captureRate, isAnimal, isHero, popCost, UNITS, damage, trainable, type UnitClass } from '../core/units';
+import { canAfford, dist, heldBack, type Ctx, type Snapshot } from './context';
 import { PRODUCTION, norm, type Economy } from './economy';
 import type { SeenBuilding } from './intel';
 import { ageOf } from '../sim/systems/research';
 import { tooDamaged } from '../sim/systems/defence';
 import { garrisonCap } from '../sim/systems/stats';
+import { heroBlock } from '../sim/systems/heroes';
 
 /** A typical member of each class, for judging matchups. */
 const TYPICAL: Record<UnitClass, UnitKind> = { villager: 'villager', infantry: 'swordsman', archer: 'archer', cavalry: 'horseman', wildlife: 'deer', ship: 'trireme', siege: 'ram' };
@@ -21,6 +22,19 @@ const RAZE: ReadonlySet<BuildingKind> = new Set(['house', 'palisade', 'stoneWall
 const CAPTURE_STALL = 20;
 /** Villagers run this far to a shelter; soldiers this far to hold a building under capture. */
 const SHELTER_REACH = 30;
+/** Buildings it trains at besides the barracks, range and stable (M16-8). */
+const LATE_PRODUCTION: BuildingKind[] = ['siegeWorkshop', 'fortress'];
+/** Enemy buildings that make a base "defended": siege comes along to the attack (M16-8). */
+const DEFENCES: ReadonlySet<BuildingKind> = new Set(['stoneWall', 'palisade', 'gate', 'watchTower', 'fortress']);
+/** What rams and catapults go for first: walls, towers and the Town Center. */
+const SIEGE_TARGETS: ReadonlySet<BuildingKind> = new Set([...DEFENCES, 'townCenter']);
+/** Seconds a ready wave waits at the rally point for its siege against a defended base. */
+const SIEGE_WAIT = 90;
+/** Soldiers that guard each siege engine on the way (M17-3 guard order). */
+const ESCORTS = 2;
+/** City Age gold that counts as rich enough for champions before the Empire Age. */
+const CHAMPION_GOLD = 1200;
+const isSiege = (k: UnitKind) => UNITS[k].unitClass === 'siege';
 
 /**
  * How well `k` fares against class `c` per unit of resources: Lanchester-style damage dealt
@@ -71,6 +85,14 @@ export class Military {
   private captureWatch: { id: EntityId; cp: number; at: number } | null = null;
   /** Enemy buildings that held out against capture: raze them. */
   private readonly raze = new Set<EntityId>();
+  /** Escort id → the siege engine it guards. */
+  readonly escorts = new Map<EntityId, EntityId>();
+  /** Since when a ready wave has waited for siege (null: not waiting). */
+  private siegeWait: number | null = null;
+  /** Answering an enemy wonder: the whole army goes for it (M16-8). */
+  wonderRush = false;
+  /** Units already sent at the enemy wonder (re-sent once they go idle). */
+  private readonly diverted = new Set<EntityId>();
 
   constructor(
     private readonly c: Ctx,
@@ -90,7 +112,8 @@ export class Military {
   /** Where the army waits: in front of the base, toward the enemy (or the map centre). */
   rallyPoint(): Vec2 {
     const { world, intel } = this.c;
-    const home = this.c.home;
+    // Holding a wonder: the army waits beside it.
+    const home = this.ownWonder()?.pos ?? this.c.home;
     const to = intel.enemyStart ?? { x: world.hf.width / 2, z: world.hf.depth / 2 };
     const d = norm({ x: to.x - home.x, z: to.z - home.z });
     const p = { x: home.x + d.x * 9, z: home.z + d.z * 9 };
@@ -100,9 +123,14 @@ export class Military {
   pass(s: Snapshot): void {
     const rally = this.rallyPoint();
     this.train(s, rally);
-    for (const id of this.attackers) if (!this.c.world.units.has(id)) this.attackers.delete(id);
+    const { world } = this.c;
+    for (const id of this.attackers) if (!world.units.has(id)) this.attackers.delete(id);
+    for (const [id, engine] of this.escorts) if (!world.units.has(id) || !world.units.has(engine) || !this.attackers.has(id)) this.escorts.delete(id);
+    if (this.answerWonder(s)) return;
     const home = s.army.filter((u) => !this.attackers.has(u.id) && u.state !== 'garrisoned');
     if (this.defend(s, home)) return;
+    // Holding a completed wonder: the army stays home to defend it.
+    if (this.mode === 'attack' && this.ownWonder()) this.recall(rally);
     if (this.mode === 'attack') this.pressAttack(home, rally);
     else this.muster(s, home, rally);
   }
@@ -116,30 +144,82 @@ export class Military {
     // Saving for an age or a tech holds the army back, unless outgunned, raided or still
     // short of a first wave's worth of defenders.
     const free = this.c.armyFirst || (ageOf(world, player) > 0 && s.army.length < profile.firstWave);
-    const reserve: Partial<Stockpile> = free ? {} : addStock(this.c.reserve, this.c.townReserve);
+    const reserve: Partial<Stockpile> = free ? {} : heldBack(this.c);
     if (!free) for (const [r, n] of Object.entries(this.c.techReserve) as [keyof Stockpile, number][]) reserve[r] = (reserve[r] ?? 0) + n;
     if (s.villagers.length < profile.targetVillagers && s.tc) reserve.food = (reserve.food ?? 0) + 50;
-    for (const b of s.buildings) {
-      if (!b.complete || !PRODUCTION.includes(b.kind)) continue;
+    // Pop room kept for a siege engine the workshop wants but can't train yet.
+    let keepPop = 0;
+    // The workshop goes first: a wanted engine holds back its pop room and cost from the rest.
+    const order = s.buildings.filter((b) => b.kind === 'siegeWorkshop').concat(s.buildings.filter((b) => b.kind !== 'siegeWorkshop'));
+    for (const b of order) {
+      if (!b.complete || (!PRODUCTION.includes(b.kind) && !LATE_PRODUCTION.includes(b.kind))) continue;
       const r = this.rallied.get(b.id);
       if (!r || dist(r, rally) > 3) {
         this.c.issue({ type: 'rally', buildingId: b.id, pos: rally });
         this.rallied.set(b.id, rally);
       }
-      if (b.queue >= profile.militaryQueue || s.popUsed >= s.popCap || b.upgrading || b.id === this.c.upgradeHold) continue;
-      const kind = this.chooseUnit(b.kind, s, stock, reserve);
-      if (!kind) continue;
+      if (b.queue >= profile.militaryQueue || s.popUsed + keepPop >= s.popCap || b.upgrading || b.id === this.c.upgradeHold) continue;
+      let kind: UnitKind | null;
+      if (b.kind === 'siegeWorkshop') {
+        kind = this.chooseSiege(b, s);
+        if (kind && (!canAfford(stock, UNITS[kind].cost, reserve) || s.popUsed + popCost(kind) > s.popCap)) {
+          keepPop = popCost(kind);
+          for (const [r, n] of Object.entries(UNITS[kind].cost) as [keyof Stockpile, number][]) reserve[r] = (reserve[r] ?? 0) + n;
+          continue;
+        }
+      } else kind = b.kind === 'fortress' ? this.chooseFortress(s, stock, reserve) : this.chooseUnit(b.kind, s, stock, reserve);
+      if (!kind || s.popUsed + keepPop + popCost(kind) > s.popCap) continue;
       const before = b.queue;
       this.c.issue({ type: 'train', buildingId: b.id, unit: kind });
-      if (b.queue > before) s.popUsed++;
+      if (b.queue > before) s.popUsed += popCost(kind);
     }
+  }
+
+  /** A known enemy wall, tower or fortress: attacks bring siege (M16-8). */
+  defended(): boolean {
+    for (const b of this.c.intel.buildings.values()) if (DEFENCES.has(b.kind)) return true;
+    return false;
+  }
+
+  /**
+   * The siege engine wanted for a defended base, up to the profile's count, one in training at a
+   * time (the caller checks cost and pop): rams for walls, towers and the Town Center; a
+   * catapult once there are rams and the enemy fields an army worth splashing.
+   */
+  private chooseSiege(b: Building, s: Snapshot): UnitKind | null {
+    const want = this.c.profile.late.siege;
+    if (want <= 0 || b.queue > 0 || !this.defended()) return null;
+    const rams = s.army.filter((u) => u.kind === 'ram').length;
+    const engines = s.army.filter((u) => isSiege(u.kind)).length;
+    if (engines >= want) return null;
+    const kind: UnitKind = rams >= Math.ceil(want / 2) && this.c.intel.enemyArmy() >= 8 ? 'catapult' : 'ram';
+    const civ = this.c.world.players.get(this.c.player)?.player.civ;
+    if (!trainable('siegeWorkshop', civ).includes(kind) || (UNITS[kind].age ?? 0) > ageOf(this.c.world, this.c.player)) return null;
+    return kind;
+  }
+
+  /**
+   * The fortress trains its hero (Empire Age, one alive, after the sim's cooldown), and
+   * champions late: in the Empire Age, or in the City Age once gold piles up.
+   */
+  private chooseFortress(s: Snapshot, stock: Stockpile, reserve: Partial<Stockpile>): UnitKind | null {
+    const { world, player, profile } = this.c;
+    const late = profile.late;
+    const age = ageOf(world, player);
+    const civ = world.players.get(player)?.player.civ;
+    if (late.hero && age >= 3 && heroBlock(world, player) === null) {
+      const hero = trainable('fortress', civ).find((k) => isHero(k));
+      if (hero && canAfford(stock, UNITS[hero].cost, reserve)) return hero;
+    }
+    if (!late.champions || (age < 3 && stock.gold - (reserve.gold ?? 0) < CHAMPION_GOLD)) return null;
+    return this.chooseUnit('fortress', s, stock, reserve);
   }
 
   /** The unit to train at `building`: best counter to the enemy's seen mix, kept varied. */
   chooseUnit(building: BuildingKind, s: Snapshot, stock: Stockpile, reserve: Partial<Stockpile>): UnitKind | null {
     const age = ageOf(this.c.world, this.c.player);
     const opts = trainable(building, this.c.world.players.get(this.c.player)?.player.civ).filter(
-      (k) => k !== 'villager' && (UNITS[k].age ?? 0) <= age && canAfford(stock, UNITS[k].cost, reserve)
+      (k) => k !== 'villager' && !isHero(k) && (UNITS[k].age ?? 0) <= age && canAfford(stock, UNITS[k].cost, reserve)
     );
     if (!opts.length) return null;
     if (!this.c.profile.counters) return opts[Math.floor(this.c.rng() * opts.length)];
@@ -209,6 +289,7 @@ export class Military {
       const away = [...this.attackers].map((id) => world.units.get(id)).filter((u): u is Unit => !!u);
       defenders = [...home, ...away];
       this.attackers.clear();
+      this.escorts.clear();
       this.mode = 'gather';
     }
     const idle = defenders.filter((u) => u.state !== 'attacking' && dist(u.pos, c) > 4).slice(0, ORDERS_PER_PASS);
@@ -308,8 +389,14 @@ export class Military {
     // Big enough for this wave, and (unless maxed out on population) bigger than the army we've seen.
     const maxed = s.popUsed >= Math.min(s.popCap, 200) - 3;
     const enough = home.length >= this.waveSize() && (maxed || !profile.counters || home.length >= intel.enemyArmy() * 1.25);
-    const ready = enough && !this.c.aging && world.time >= profile.firstAttack && world.time - this.lastWave >= profile.waveGap;
+    let ready = enough && !this.c.aging && !this.ownWonder() && world.time >= profile.firstAttack && world.time - this.lastWave >= profile.waveGap;
+    // Against walls or towers, a ready wave waits a while for siege that is on its way (M16-8).
+    if (ready && !home.some((u) => isSiege(u.kind)) && this.siegeComing(s)) {
+      this.siegeWait ??= world.time;
+      if (world.time - this.siegeWait < SIEGE_WAIT) ready = false;
+    }
     if (ready) {
+      this.siegeWait = null;
       const from = centroid(home);
       this.target = intel.nearestBuilding(from);
       this.mode = 'attack';
@@ -318,6 +405,7 @@ export class Military {
       for (const u of home) this.attackers.add(u.id);
       this.startHp = home.reduce((n, u) => n + u.hp, 0);
       this.advance(home, true);
+      this.escort(home);
       return;
     }
     const stray = home.filter((u) => u.state === 'idle' && dist(u.pos, rally) > 10).slice(0, ORDERS_PER_PASS);
@@ -342,6 +430,7 @@ export class Military {
       if (hp < this.startHp * profile.retreatAt && foes >= group.length * 0.7) {
         this.c.issue({ type: 'move', unitIds: group.map((u) => u.id), target: rally });
         this.attackers.clear();
+        this.escorts.clear();
         this.mode = 'gather';
         this.lastWave = world.time;
         return;
@@ -351,12 +440,95 @@ export class Military {
     this.watchCapture(group);
     // Fresh troops at the rally point join the push in groups.
     const fresh = home.filter((u) => u.state === 'idle' && dist(u.pos, rally) < 14);
-    if (fresh.length >= 4) {
+    // A siege engine joins at once (with whoever waits beside it as escort).
+    if (fresh.length >= 4 || fresh.some((u) => isSiege(u.kind))) {
       for (const u of fresh) this.attackers.add(u.id);
       this.startHp += fresh.reduce((n, u) => n + u.hp, 0);
       this.advance(fresh, true);
     }
     this.advance(group, false);
+    this.escort(group);
+  }
+
+  /** Siege is coming for a defended base: a workshop stands (or engines are queued) and the profile wants siege. */
+  private siegeComing(s: Snapshot): boolean {
+    if (this.c.profile.late.siege <= 0 || !this.defended()) return false;
+    return s.buildings.some((b) => b.kind === 'siegeWorkshop' && b.complete && !b.upgrading);
+  }
+
+  /** Bring the attack home (holding a wonder). */
+  private recall(rally: Vec2): void {
+    const group = [...this.attackers].map((id) => this.c.world.units.get(id)).filter((u): u is Unit => !!u);
+    if (group.length) this.c.issue({ type: 'move', unitIds: group.slice(0, 2 * ORDERS_PER_PASS).map((u) => u.id), target: rally });
+    this.attackers.clear();
+    this.escorts.clear();
+    this.mode = 'gather';
+  }
+
+  /**
+   * Each siege engine in `group` keeps ESCORTS soldiers guarding it (M17-3 guard): they walk
+   * with it and fight whoever attacks it. Escorts are left out of the wave's other orders.
+   */
+  private escort(group: Unit[]): void {
+    const engines = group.filter((u) => isSiege(u.kind));
+    if (!engines.length) return;
+    const guards = new Map<EntityId, number>();
+    for (const e of this.escorts.values()) guards.set(e, (guards.get(e) ?? 0) + 1);
+    const free = group.filter((u) => !isSiege(u.kind) && !isHero(u.kind) && !this.escorts.has(u.id) && u.state !== 'attacking');
+    for (const e of engines) {
+      const need = ESCORTS - (guards.get(e.id) ?? 0);
+      if (need <= 0 || !free.length) continue;
+      free.sort((a, b) => dist(a.pos, e.pos) - dist(b.pos, e.pos));
+      const picked = free.splice(0, need).filter((u) => dist(u.pos, e.pos) < 25);
+      if (!picked.length) continue;
+      this.c.issue({ type: 'guard', unitIds: picked.map((u) => u.id), targetId: e.id });
+      if (this.c.lastReject) continue;
+      for (const u of picked) this.escorts.set(u.id, e.id);
+    }
+  }
+
+  /** Our completed wonder, if any. */
+  private ownWonder(): Building | null {
+    const w = this.c.world.wonder;
+    if (w && w.owner === this.c.player) return this.c.world.buildings.get(w.building) ?? null;
+    for (const b of this.c.world.buildings.values()) if (b.kind === 'wonder' && b.owner === this.c.player && b.complete) return b;
+    return null;
+  }
+
+  /**
+   * An enemy wonder's countdown is running (public knowledge: everyone sees the timer and the
+   * ping): every soldier goes for it, siege included, and nothing else matters until it falls,
+   * changes hands or the game ends. True while rushing.
+   */
+  private answerWonder(s: Snapshot): boolean {
+    const { world, player } = this.c;
+    const w = world.wonder;
+    const b = w && world.areEnemies(player, w.owner) ? world.buildings.get(w.building) : undefined;
+    if (!b) {
+      if (this.wonderRush) {
+        this.wonderRush = false;
+        this.diverted.clear();
+        this.target = null;
+      }
+      return false;
+    }
+    if (!this.wonderRush) {
+      this.wonderRush = true;
+      this.diverted.clear();
+      this.escorts.clear();
+    }
+    this.mode = 'attack';
+    this.target = { id: b.id, kind: b.kind, owner: b.owner, pos: { ...b.pos }, radius: b.radius };
+    for (const u of s.army) if (u.state !== 'garrisoned') this.attackers.add(u.id);
+    const group = [...this.attackers].map((id) => world.units.get(id)).filter((u): u is Unit => !!u);
+    if (!group.length) return true;
+    for (const id of this.diverted) if (!this.attackers.has(id)) this.diverted.delete(id);
+    this.watchCapture(group);
+    // Not yet sent (or gone idle since): send them now, a batch per pass.
+    const send = group.filter((u) => !this.diverted.has(u.id) || u.state === 'idle');
+    for (const u of this.advance(send, true)) this.diverted.add(u.id);
+    this.advance(group.filter((u) => !send.includes(u)), false);
+    return true;
   }
 
   /**
@@ -398,20 +570,27 @@ export class Military {
     }
   }
 
-  /** Order `units` (all of them, or only idle ones) toward the current target, or to search for one. */
-  private advance(units: Unit[], all: boolean): void {
+  /**
+   * Order `units` (all of them, or only idle ones) toward the current target, or to search for
+   * one. Siege engines go for walls, towers and the Town Center; escorts keep guarding. Returns
+   * the units ordered.
+   */
+  private advance(units: Unit[], all: boolean): Unit[] {
     const { world } = this.c;
     const t = this.target;
     // Soldiers that walked up and started hitting a building we mean to capture switch to capturing.
     const capture = !!t && this.captures(t.id);
     const redo = (u: Unit) => u.state === 'idle' || (capture && u.target === t!.id && captureRate(u.kind) > 0 && !world.combatState.get(u.id)?.capture);
-    const movers = (all ? units : units.filter(redo)).slice(0, ORDERS_PER_PASS);
-    if (!movers.length) return;
+    const pick = units.filter((u) => !this.escorts.has(u.id) && (all || redo(u)));
+    const engines = pick.filter((u) => isSiege(u.kind) && (all || u.state === 'idle'));
+    if (t) for (const e of engines.slice(0, 4)) this.siegeOrder(e, t, capture);
+    const movers = pick.filter((u) => !isSiege(u.kind) || !t).slice(0, ORDERS_PER_PASS);
+    if (!movers.length) return engines;
     if (!t) {
       // Nothing known: sweep unexplored ground (or look around) as a group.
       const p = this.econ.frontier(movers[0]) ?? this.c.intel.enemyStart;
       if (p) this.c.issue({ type: 'attackMove', unitIds: movers.map((u) => u.id), target: p });
-      return;
+      return movers;
     }
     const at = centroid(movers);
     const near = movers.filter((u) => dist(u.pos, t.pos) < t.radius + 9);
@@ -425,6 +604,29 @@ export class Military {
       const p = { x: t.pos.x + d.x * (t.radius + 2.5), z: t.pos.z + d.z * (t.radius + 2.5) };
       this.c.issue({ type: 'attackMove', unitIds: far.map((u) => u.id), target: world.nav.nearestFree(p) ?? p });
     }
+    return [...movers, ...engines];
+  }
+
+  /**
+   * A siege engine's target: the wave's target, unless the army is capturing it (an engine would
+   * raze it) or it isn't a wall, tower or Town Center while one stands near it; then the nearest
+   * such building to the engine within 30 of the wave's target.
+   */
+  private siegeOrder(e: Unit, t: SeenBuilding, capture: boolean): void {
+    const { world, intel, player } = this.c;
+    let best: SeenBuilding | null = this.wonderRush || (!capture && SIEGE_TARGETS.has(t.kind)) ? t : null;
+    if (!best) {
+      let bestD = Infinity;
+      for (const b of intel.buildings.values()) {
+        if (b.id === t.id || !SIEGE_TARGETS.has(b.kind) || dist(b.pos, t.pos) > 30) continue;
+        const d = dist(b.pos, e.pos);
+        if (d < bestD) [best, bestD] = [b, d];
+      }
+      if (!best && !capture) best = t;
+    }
+    const live = best && world.buildings.get(best.id);
+    if (live && world.areEnemies(player, live.owner)) this.c.issue({ type: 'attack', unitIds: [e.id], targetId: live.id });
+    else this.c.issue({ type: 'attackMove', unitIds: [e.id], target: t.pos });
   }
 }
 

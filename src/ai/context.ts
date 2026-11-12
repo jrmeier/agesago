@@ -35,6 +35,11 @@ export interface Ctx {
    * this much (houses, farms and drop sites don't).
    */
   townReserve: Partial<Stockpile>;
+  /**
+   * A key building it is saving for (the siege workshop, M16-8): held back like `townReserve`,
+   * except from that building's own foundation.
+   */
+  saving: { kind: BuildingKind; cost: Partial<Stockpile> } | null;
   /** Resources held for the next tech: army training leaves this much (villagers don't). */
   techReserve: Partial<Stockpile>;
   /** Food villager training leaves for an economy tech (a short, bounded pause). */
@@ -98,6 +103,15 @@ export function addStock(a: Partial<Stockpile>, b: Partial<Stockpile>): Partial<
   const out: Partial<Stockpile> = { ...a };
   for (const [r, n] of Object.entries(b) as [ResourceType, number][]) out[r] = (out[r] ?? 0) + n;
   return out;
+}
+
+/**
+ * What army training, research, upgrades and non-essential construction leave in the stockpile:
+ * the age-up `reserve`, the `townReserve` and the building being saved for (unless it is `kind`).
+ */
+export function heldBack(c: Ctx, kind?: BuildingKind): Partial<Stockpile> {
+  const r = addStock(c.reserve, c.townReserve);
+  return c.saving && c.saving.kind !== kind ? addStock(r, c.saving.cost) : r;
 }
 
 export function canAfford(stock: Stockpile, cost: Partial<Stockpile>, reserve: Partial<Stockpile> = {}): boolean {

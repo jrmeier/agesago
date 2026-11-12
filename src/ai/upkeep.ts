@@ -5,7 +5,7 @@ import { BALANCE } from '../sim/balance';
 import { upgradeBlock } from '../sim/systems/buildingUpgrade';
 import { canRepair } from '../sim/systems/repair';
 import { ageOf } from '../sim/systems/research';
-import { addStock, canAfford, dist, type Ctx, type Snapshot } from './context';
+import { heldBack, canAfford, dist, type Ctx, type Snapshot } from './context';
 import { PRODUCTION } from './economy';
 
 /** Enemies (soldiers or scouts) in sight this close to the base or a building mean an attack is on. */
@@ -107,7 +107,7 @@ export class Upkeep {
       const spec = nextUpgrade(b.kind, b.tier);
       if (!b.complete || !spec || spec.age > age) return false;
       // The age-up and a new Town Center being saved for (M18-5) come first.
-      const keep: Partial<Stockpile> = addStock(this.c.reserve, this.c.townReserve);
+      const keep: Partial<Stockpile> = heldBack(this.c);
       for (const [r, n] of Object.entries(extra) as [keyof Stockpile, number][]) keep[r] = (keep[r] ?? 0) + n;
       return canAfford(stock, spec.cost, keep);
     };
