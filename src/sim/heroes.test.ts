@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AURAS, HERO_AURA_RADIUS } from '../core/auras';
 import { CIV_IDS, type CivId } from '../core/civilizations';
 import { GRASS_ONLY, type BuildingKind, type Heightfield, type MapLayout, type PlayerId, type RejectReason, type UnitKind, type Vec2 } from '../core/types';
-import { canRank, canWork, HERO_COOLDOWN, heroKindFor, isHero, trainable, UNITS } from '../core/units';
+import { canGuard, canPatrol, canRank, canWork, captureRate, CHAMPION_CAPTURE_MUL, CAPTURE_RATE, defaultFormation, HERO_COOLDOWN, heroKindFor, isHero, trainable, UNITS } from '../core/units';
 import { auraRingRadius } from '../render/auraRings';
 import { BALANCE } from './balance';
 import { generateMap } from './mapgen';
@@ -117,6 +117,16 @@ describe('one hero per player', () => {
     expect(reasons).toHaveLength(3);
   });
 
+  it('queues one hero from a batch order (Shift-click or the touch ×5)', () => {
+    const world = arena();
+    const fort = building(world, 'fortress', { x: 40, z: 40 });
+    const gold = world.stockOf(1).gold;
+    world.dispatch({ type: 'train', buildingId: fort.id, unit: 'leonidas', count: 5 });
+    expect(fort.queue).toBe(1);
+    expect(fort.queueCounts).toEqual([1]);
+    expect(world.stockOf(1).gold).toBe(gold - UNITS.leonidas.cost.gold!);
+  });
+
   it('keeps players apart: the enemy may field its own hero', () => {
     const world = arena();
     world.spawnUnit('leonidas', { x: 30, z: 30 }, 1);
@@ -152,7 +162,7 @@ describe('hero retrain cooldown', () => {
     expect(heroCooldownLeft(world, 1)).toBe(0);
   });
 
-  it('saves the cooldown and loads pre-hero (v8) saves ready', () => {
+  it('saves the cooldown and loads pre-hero (v14) saves ready', () => {
     const seed = 4242;
     const { hf, layout } = generateMap(seed, 2);
     const world = new World(hf, layout, defaultPlayers(2));
@@ -167,7 +177,7 @@ describe('hero retrain cooldown', () => {
     expect(loaded.players.get(1)!.heroReadyAt).toBe(readyAt);
     expect(loaded.players.get(2)!.heroReadyAt).toBe(0);
     const old = JSON.parse(JSON.stringify(data));
-    old.version = 8;
+    old.version = 14;
     for (const p of old.players) delete p.heroReadyAt;
     expect(deserializeWorld(old, hf).players.get(1)!.heroReadyAt).toBe(0);
     const bad = JSON.parse(JSON.stringify(data));
@@ -260,5 +270,15 @@ describe('heroes and priests', () => {
     const reasons = rejections(world);
     orderPriest(world, [priest.id], 'convert', hero.id, 2);
     expect(reasons).toEqual(['invalid-target']);
+  });
+});
+
+describe('heroes with capture, formations and orders (M18-4, M17)', () => {
+  it('capture like champions, march in line with soldiers, and take patrol and guard orders', () => {
+    for (const kind of HEROES) {
+      expect(captureRate(kind)).toBe(CAPTURE_RATE[UNITS[kind].unitClass]! * CHAMPION_CAPTURE_MUL);
+      expect(canPatrol(kind) && canGuard(kind)).toBe(true);
+      expect(defaultFormation([kind, 'hoplite'])).toBe('line');
+    }
   });
 });

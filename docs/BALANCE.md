@@ -109,6 +109,9 @@ Each civilization has one named **hero**, trained at a Fortress in the Empire Ag
 **120 s** (`HERO_COOLDOWN`) before training the next; the wait is saved. Heroes never gather,
 build, rank up or get converted. Infantry heroes have 600 HP, 18 melee (+4 vs cavalry), 5/4
 armour and a 1.5 s swing; Cyrus (cavalry) has 700 HP, 4.8 speed and +6 vs archers.
+Heroes capture buildings at the champion rate (5 cp/s, `CHAMPION_CAPTURE_MUL`, M18-4), march in
+line with other soldiers, take patrol and guard orders, and a batch order of the hero tile
+(Shift-click, touch ×5) queues just one.
 
 Each hero's aura reaches your own units within 8 of its edge (the hero included when it matches):
 

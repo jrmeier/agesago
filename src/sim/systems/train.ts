@@ -87,8 +87,8 @@ function ensureCounts(b: Building): number[] {
  * not started training, and the merged batch stays within maxTrainBatch. Single orders (the AI's)
  * always add their own entry.
  *
- * A hero (M16-6) also needs no other hero alive or queued and its retrain cooldown over
- * (systems/heroes).
+ * A hero (M16-6) trains one at a time (a batch order is cut to 1), and needs no other hero alive
+ * or queued and its retrain cooldown over (systems/heroes).
  */
 export function orderTrain(world: World, buildingId: EntityId, unit?: UnitKind, count = 1): void {
   const b = world.buildings.get(buildingId);
@@ -114,6 +114,8 @@ export function orderTrain(world: World, buildingId: EntityId, unit?: UnitKind, 
     if (b.owner === world.localPlayer) world.events.emit({ type: 'rejected', reason: heroBlocked });
     return;
   }
+  // One hero per player: a Shift-click or ×5 batch of the hero tile queues just the one.
+  if (isHero(kind)) count = 1;
   if (world.popOf(b.owner) + queuedPop(world, b.owner) + count * popCost(kind) > world.popCapOf(b.owner)) {
     if (b.owner === world.localPlayer) world.events.emit({ type: 'rejected', reason: 'pop-cap' });
     return;
