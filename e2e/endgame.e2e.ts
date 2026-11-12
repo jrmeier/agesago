@@ -49,3 +49,22 @@ test('resign opens the summary and draws every chart', async ({ page }, testInfo
   if (phone) await expect(page.locator('body')).toHaveClass(/touch/);
   expect(errors).toEqual([]);
 });
+
+test('a beaten computer player resigns: a toast and the summary name it (M16-10)', async ({ page }) => {
+  const errors = await boot(page);
+  // Strip the computer player of its Town Centers, villagers and soldiers, leaving its scout:
+  // it can never rebuild, so its AI resigns on its next check (every 5 sim seconds).
+  const rival = await page.evaluate(() => {
+    const w = (window as any).game.world;
+    const dev = (window as any).dev;
+    const ai = [...w.players.values()].find((p: any) => p.player.control === 'ai').player;
+    for (const b of [...w.buildings.values()]) if (b.owner === ai.id && b.kind === 'townCenter') dev.raze(b.id);
+    for (const u of [...w.units.values()]) if (u.owner === ai.id && u.kind !== 'scout' && u.kind !== 'sheep') dev.kill(u.id);
+    return ai.name as string;
+  });
+  await expect(page.locator('.toast', { hasText: `${rival} resigned` })).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('#endgame')).toBeVisible();
+  await expect(page.locator('#endgame-title')).toHaveText(/victory/i);
+  await expect(page.locator('#endgame-reason')).toHaveText(`${rival} resigned`);
+  expect(errors).toEqual([]);
+});

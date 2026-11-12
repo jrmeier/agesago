@@ -100,6 +100,7 @@ export class AIPlayer {
       { name: 'scout', every: 3, next: t + 0.15, run: () => this.economy.scoutPass(this.snap()) },
       { name: 'military', every: p.militaryInterval, next: t + 0.45, run: () => this.military.pass(this.snap()) },
     ];
+    this.hadTown = [...world.buildings.values()].some((b) => b.owner === player && b.kind === 'townCenter');
     this.tasks.push({ name: 'resign', every: 5, next: t + 0.9, run: () => this.resignIfBeaten() });
     this.tasks.push({ name: 'upkeep', every: p.buildInterval, next: t + 0.75, run: () => this.upkeep.pass(this.snap()) });
     if (p.research) this.tasks.push({ name: 'research', every: p.buildInterval, next: t + 0.6, run: () => this.research.pass(this.snap()) });
