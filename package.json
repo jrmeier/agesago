@@ -14,7 +14,9 @@
     "build:relay": "vite build --ssr src/network/relay.ts --outDir relay-dist",
     "relay": "node server/start.mjs",
     "bench:maps": "vite-node scripts/bench-maps.ts",
-    "bench:civilizations": "vite-node scripts/bench-civilizations.ts"
+    "bench:civilizations": "vite-node scripts/bench-civilizations.ts",
+    "bench:matches": "vite-node scripts/bench-matches.ts",
+    "bench:counters": "vite-node scripts/bench-counters.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",

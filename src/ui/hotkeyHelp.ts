@@ -1,4 +1,5 @@
 import { BUILDINGS } from '../core/buildings';
+import { COUNTERS } from '../core/counters';
 import { allHotkeys } from '../input/hotkeys';
 
 /** One line in the hotkey reference. `action` is set for every entry of `allHotkeys()`. */
@@ -83,7 +84,18 @@ export function hotkeyHelpRows(): HotkeyRow[] {
   ];
 }
 
-/** Fill `list` with one row per hotkey. Safe to call again. */
+/** One line of the counter table (M16-9): who beats what cost for cost, and why. */
+export interface CounterRow {
+  unit: string;
+  label: string;
+}
+
+/** The counter table from src/core/counters.ts, as the help panel prints it. */
+export function counterHelpRows(): CounterRow[] {
+  return COUNTERS.map((c) => ({ unit: c.unit, label: `beat ${c.beats} (${c.why})` }));
+}
+
+/** Fill `list` with one row per hotkey, then the counter table. Safe to call again. */
 export function fillHotkeyList(list: HTMLElement): void {
   list.replaceChildren();
   for (const row of hotkeyHelpRows()) {
@@ -93,6 +105,21 @@ export function fillHotkeyList(list: HTMLElement): void {
     const text = document.createElement('span');
     text.textContent = row.label;
     item.append(keys, text);
+    list.append(item);
+  }
+  const head = document.createElement('li');
+  head.className = 'hotkey-section';
+  head.id = 'counter-help';
+  head.textContent = 'Counters, cost for cost';
+  list.append(head);
+  for (const row of counterHelpRows()) {
+    const item = document.createElement('li');
+    item.className = 'counter-row';
+    const unit = document.createElement('strong');
+    unit.textContent = row.unit;
+    const text = document.createElement('span');
+    text.textContent = row.label;
+    item.append(unit, text);
     list.append(item);
   }
 }

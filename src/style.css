@@ -1968,6 +1968,27 @@ body.fps-mode .toasts {
   overflow-wrap: anywhere;
 }
 
+/* The counter table after the keys (M16-9): a full-width heading, then one line per counter. */
+.hotkey-list .hotkey-section {
+  grid-column: 1 / -1;
+  margin-top: var(--s-2);
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--bronze-600);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink-900);
+}
+
+.hotkey-list .counter-row {
+  display: block;
+}
+
+.hotkey-list .counter-row strong {
+  margin-right: var(--s-2);
+  color: var(--ink-900);
+}
+
 .hotkey-close,
 .endgame-btn {
   flex: none;

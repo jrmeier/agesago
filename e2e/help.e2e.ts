@@ -41,6 +41,14 @@ test('the hotkey panel lists the bound keys', async ({ page }, testInfo) => {
   expect(text).toContain('Attack-move');
   expect(text).toContain('Select group 1');
   expect(await page.locator('#hotkey-list li').count()).toBeGreaterThanOrEqual(36);
+  // M16-9: the counter table follows the keys.
+  await page.locator('#counter-help').scrollIntoViewIfNeeded();
+  await expect(page.locator('#counter-help')).toBeVisible();
+  expect(text).toContain('Counters, cost for cost');
+  expect(text).toContain('Spearmen (Hoplites)');
+  expect(text).toContain('beat cavalry');
+  expect(text).toContain('beat buildings');
+  expect(await page.locator('#hotkey-list .counter-row').count()).toBeGreaterThanOrEqual(8);
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);

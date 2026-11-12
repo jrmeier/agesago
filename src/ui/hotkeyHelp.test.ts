@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { allHotkeys } from '../input/hotkeys';
-import { hotkeyGlyph, hotkeyHelpRows } from './hotkeyHelp';
+import { COUNTERS } from '../core/counters';
+import { counterHelpRows, hotkeyGlyph, hotkeyHelpRows } from './hotkeyHelp';
 
 describe('hotkey reference', () => {
   it('prints the keys a player sees', () => {
@@ -35,5 +36,20 @@ describe('hotkey reference', () => {
     // M18-5's Town Center moved off Shift+S, which is the loose formation.
     expect(rows.some((row) => row.keys === 'Shift+Y' && row.label === 'Build a Town Center')).toBe(true);
     expect(rows.filter((row) => row.keys === 'Shift+S')).toHaveLength(1);
+  });
+
+  it('prints the counter table, one row per counter (M16-9)', () => {
+    const rows = counterHelpRows();
+    expect(rows).toHaveLength(COUNTERS.length);
+    for (const row of rows) {
+      expect(row.unit.length).toBeGreaterThan(0);
+      expect(row.label).toMatch(/^beat .+ \(.+\)$/);
+    }
+    const text = rows.map((r) => `${r.unit} ${r.label}`).join('\n');
+    expect(text).toContain('Spearmen (Hoplites) beat cavalry');
+    expect(text).toContain('Slingers beat infantry');
+    expect(text).toMatch(/Cavalry .* beat archers, slingers and siege/);
+    expect(text).toContain('Rams, Catapults beat buildings');
+    expect(text).toContain('Champions beat their own line');
   });
 });
