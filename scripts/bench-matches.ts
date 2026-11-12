@@ -6,6 +6,7 @@
  *   npm run bench:matches                                   # seeds 1–10, both sides, 60 min cap
  *   MATCH_BENCH_SEEDS=1,2 MATCH_BENCH_MINUTES=75 npm run bench:matches
  *   MATCH_BENCH_SHARDS=6 MATCH_BENCH_SHARD=0 npm run bench:matches   # one of six parallel workers
+ *   MATCH_BENCH_DIFFICULTY=hard npm run bench:matches               # default moderate
  *
  * Civilizations rotate through the six pairings by seed, so every civ appears. Rows are appended to
  * MATCH_BENCH_OUTPUT (default /tmp/agesago-match-length.jsonl); a rerun skips ids already there and
@@ -18,6 +19,7 @@ import { UNITS, isChampion, isHero } from '../src/core/units';
 import { generateMap } from '../src/sim/mapgen';
 import { World, defaultPlayers } from '../src/sim/World';
 import { AIPlayer } from '../src/ai/AIPlayer';
+import type { Difficulty } from '../src/ai/profile';
 import { census, run } from '../src/ai/harness';
 
 interface Row {
@@ -28,6 +30,7 @@ interface Row {
 
 const output = process.env.MATCH_BENCH_OUTPUT ?? '/tmp/agesago-match-length.jsonl';
 const cap = Number(process.env.MATCH_BENCH_MINUTES ?? 60);
+const difficulty = (process.env.MATCH_BENCH_DIFFICULTY ?? 'moderate') as Difficulty;
 const seeds = (process.env.MATCH_BENCH_SEEDS ?? '1,2,3,4,5,6,7,8,9,10').split(',').map(Number);
 const shards = Number(process.env.MATCH_BENCH_SHARDS ?? 1), shard = Number(process.env.MATCH_BENCH_SHARD ?? 0);
 const read = (): Row[] => existsSync(output) ? readFileSync(output, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
@@ -47,7 +50,7 @@ for (const seed of seeds) for (const swap of [false, true]) {
   const players = defaultPlayers(2, civs).map((p) => ({ ...p, control: 'ai' as const }));
   const world = new World(hf, layout, players);
   world.seed = seed;
-  const ais = players.map((p) => new AIPlayer(world, p.id, { difficulty: 'moderate', seed: seed * 10 + p.id }));
+  const ais = players.map((p) => new AIPlayer(world, p.id, { difficulty, seed: seed * 10 + p.id }));
   const started = performance.now();
   const peakArmy = [0, 0];
   const seen = { heroes: new Set<number>(), champions: new Set<number>(), siege: new Set<number>(), wonders: new Set<number>(), fortresses: new Set<number>() };
