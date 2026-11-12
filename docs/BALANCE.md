@@ -215,26 +215,116 @@ once the bench was measured correctly. An earlier draft of the harness dropped p
 which made the first mover look stronger and bolt shooters look overpriced.
 Heroes are not in the table: there is one per player, and their value is the aura.
 
-## AI-vs-AI match length (M16-9)
+## AI-vs-AI match length (M16-9, M16-10)
 
 `npm run bench:matches` plays moderate AI against moderate AI on the default map, seeds 1–20,
 both sides. That is the large Mediterranean from `generateMap(seed, 2)`. Civilizations rotate
 through the six pairings by seed. Games run to conquest with a 60-minute cap. This is a
 different measure from the civilization bench, which stops at 30 minutes and scores.
+`MATCH_BENCH_DIFFICULTY` picks the AI level, and `MATCH_BENCH_TUNE` takes profile overrides as
+JSON. Each row records how a decided game ended (`reason`) and each side's final census (`end`).
 
-**Target: a median of 25–45 minutes. It is not met yet, and the target stays open.** The
-measured baseline at `74025a6` is
-[40 games](verification/matches-74025a6.jsonl), with
-[metadata](verification/matches-74025a6.metadata.json):
+**Target: a median of 25–45 minutes with 85% decided. It is still not met, and the target stays
+open.** Measured at `ebed720` (40 games per level; the rows are deterministic and identical to an
+earlier run of the same AI):
 
-| | Games | Conquests within 60 min | Median length |
+| Level | Decided within 60 min | of which resigned | Median length | Median of decided games | Baseline (M16-9) |
+|---|---|---|---|---|---|
+| moderate | 22 (55%) | 20 | 58.9 min | 44.8 min | 25 conquests, 50.9 min |
+| hard | 30 (75%) | 27 | 47.4 min | 43.0 min | 16 conquests, > 60 min |
+| hardest | 37 (92.5%) | 28 | 37.3 min | 37.1 min | 10 conquests, > 60 min |
+
+Evidence: [moderate](verification/matches-moderate-ebed720.jsonl),
+[hard](verification/matches-hard-ebed720.jsonl),
+[hardest](verification/matches-hardest-ebed720.jsonl) and the
+[metadata](verification/matches-ebed720.metadata.json), which also holds every intermediate
+run below. The M16-9 baseline is [here](verification/matches-74025a6.jsonl).
+
+### What M16-10 changed
+
+**Gold supply (the M16-9 diagnosis).** Every player gets two expansion clusters of two 800-gold
+mines, on its flanks about 40 from its start (further back with more than two players): 3,200
+more gold each, past the Town Age territory and nearer its own start than any rival's
+(`EXPANSION_GOLD` in `src/core/maps.ts`). The map now holds 12,800 gold for two players. On the
+variant maps a mine goes in for every player or for none, so totals stay equal; Islands get
+none. The AI's second Town Center goes to untouched gold first (a mine with 300+ seeds a site,
+and a forest's wood counts 2,000 at most), its worker split and its market count every reserve
+(age-up, Town Center, building being saved for), it never buys with gold an age-up is saving,
+and with the mines dry it sells surplus beyond the reserve for gold. `bench:pacing` keeps all 15
+age times in band; the new mines move the scripted build order's times by up to about 40 s per
+age, because the forests around them shift.
+
+With that alone, the City Age came in 64 of 80 player-games (51 before), **but decided games
+fell to 19/40**: the M16-9 conquests had come mostly from AI deadlocks that banked big armies,
+not from a working attack. Probing the stalled games found six AI military faults, each now fixed
+and covered by a test (`src/ai/stall.test.ts`, `src/ai/territory.test.ts`):
+
+1. **Attacks never ended.** Fresh troops joined a running attack four at a time for the rest of
+   the game, each group dying at the enemy's gates; the enemy, never calm at home, never mustered
+   a wave of its own. An attack below 35% of the soldiers committed to it is now called off, and
+   it is only reinforced while it holds 60%.
+2. **Any raider recalled the wave.** With the army out, home was empty, so one enemy soldier near
+   the base called every wave back within seconds; two waves that crossed both turned back. A
+   recall now needs 5+ soldiers, half the attack's size and the wave still nearer home than its
+   target. The attack keeps running while home defends.
+3. **Razers never fought back.** A soldier razing or capturing a building does not turn on the
+   soldiers hitting it, so waves stood at houses while the defence cut them down. Wave soldiers
+   on a building now attack-move onto an enemy soldier within 9.
+4. **Saving for an age held the army home for good.** No wave starts while saving for the Town or
+   City Age; when the gold never came, a 150-strong army sat home for 45 minutes. The hold now
+   lapses after 3 minutes of saving.
+5. **Army-first spent the age reserve with a big army.** Any raid made the AI spend the City Age
+   gold on soldiers, even 150 against 40. It now does so only while its army doesn't already
+   outnumber the enemy's.
+6. **Beaten AIs never died.** Conquest needs every unit dead, and a fleeing explorer scout kept a
+   player with nothing else alive to the cap. With no enemy building known, the army now hunts
+   in squads (sightings, then unexplored or unseen ground), and **a beaten computer player
+   resigns**: no Town Center, no villager and fewer than 5 soldiers, through a dispatched
+   `resign` command (computer players only; a toast and the end sheet name who resigned).
+
+| Run (moderate, 40 games) | Decided | Median | City Age (of 80) |
 |---|---|---|---|
-| main `a27dcdf`, seeds 1–10 | 20 | 12 (60%) | 50.7 min |
-| `74025a6`, seeds 1–10 | 20 | 16 (80%) | 48.5 min |
-| `74025a6`, seeds 1–20 | 40 | 25 (63%) | **50.9 min** |
+| M16-9 baseline `74025a6` | 25 | 50.9 | 51 |
+| + expansion gold, site, market | 19 | > 60 | 64 |
+| + attacks end, fight first | 11 | > 60 | 53 |
+| + hunt | 18 | > 60 | 52 |
+| + age hold 3 min, army-first | 3 | > 60 | 78 |
+| + no recall for raiders | 7 | > 60 | 72 |
+| + recall only near home, attack runs while defending | 17 | > 60 | 64 |
+| + resign (shipped) | 22 | 58.9 | 69 |
 
-The conquests take 28–55 min (median 45.8). The 15 games still running at 60 min are the stall
-described below.
+### Why the target is still open
+
+- **Even economies trading roughly 20-unit waves.** 12 of the 18 moderate games still running at
+  60 minutes are even: both sides keep 30+ villagers and 6+ soldiers. Armies in those games peak
+  at about 43 soldiers (84 in decided games). Waves of 18–30 leave every 6–10 minutes and are
+  spent within 0.5–3 minutes at the enemy base, against an army of the same size fighting next to
+  its own production. Buildings matter little: soldiers took about 70,000 damage from soldiers in
+  one probed game and 3,500 from towers and Town Centers. Villagers garrison, so economies are
+  rarely hurt.
+- **Armies are resource-starved on 36 villagers.** Even with 12,800 gold on the map it is mined
+  out by about minute 50. The Empire Age save (6,500 food) holds the food from about minute 35,
+  and several games end at 56–59 min right after it, when the banked food becomes a big army.
+- **Easy to shuffle, hard to move.** As in M16-9, single changes move which seeds stall.
+
+**Levers to try next** (measured on the shipped AI unless noted):
+
+| Change | Decided | Median |
+|---|---|---|
+| Moderate with 50 villagers | 24 | 54.0 |
+| Moderate with 60 villagers | 27 | 50.7 |
+| Waves 12 + 6 per wave, up to 45 (before the recall fixes; 39 games) | 10 | > 60 |
+| Waves 12 + 6, up to 45, and 50 villagers (before the recall fixes; 33 games) | 16 | > 60 |
+
+- A bigger moderate economy is the most promising: the hard AI (48 villagers) is already at 75%
+  decided with a 47-minute median, and the hardest (56 villagers, a full map and a trickle) meets
+  the target at 92.5% and 37 minutes. Try 50–60 villagers with a matching pop and house plan.
+- Bank for one decisive push: hold a wave until it is well ahead of the army seen (or the Empire
+  Age's food lands), rather than trading 20-unit waves.
+- Target the Town Center with the wave's siege first, so a won fight breaks the economy.
+- Raid villagers: today the army goes for the nearest building and villagers garrison.
+
+### M16-9 findings
 
 **Fixed: villagers froze at a boxed-in drop site.** A mining camp hemmed in by houses and farms
 gave its walker an empty path, so the villager never arrived and stayed in `toDrop` forever.
@@ -278,7 +368,7 @@ against 25/40 conquests and a 50.9-min median:
 
 None ships. Small changes shuffle which seeds stall rather than removing the stall: one seed
 swung between a 46-minute conquest and the cap. The fix needs more gold or a different AI
-economy, which a follow-up ticket owns.
+economy, which M16-10 took on (above).
 
 For comparison, 0 A.D. has two continuing gold sources. Its large metal mines hold 5,000, against
 400 here, and traders between two of your markets earn more the farther apart the markets are.
@@ -610,7 +700,7 @@ npm run bench:pacing -- --no-pacing --techs oxPlough,cropRotation --payback-seed
 npx vitest run src/bench/pacing.test.ts       # the regression guard (~30 s)
 npm run bench:counters -- --matrix            # counter table, unit matrix and raze times (~1 min)
 npx vitest run src/bench/counters.test.ts     # the counter-table guard (~15 s)
-npm run bench:matches                         # AI-vs-AI match length, seeds 1–10 (shard with MATCH_BENCH_SHARDS)
+npm run bench:matches                         # AI-vs-AI match length, seeds 1–10 (shard with MATCH_BENCH_SHARDS; MATCH_BENCH_DIFFICULTY, MATCH_BENCH_TUNE)
 ```
 
 The vitest guard runs seed 1 up to the City Age and asserts that Town and City land in their bands.

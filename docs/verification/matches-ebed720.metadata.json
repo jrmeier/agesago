@@ -1,0 +1,196 @@
+{
+  "ticket": "M16-10",
+  "sourceRevision": "ebed720",
+  "baseRevision": "0c42d25",
+  "note": "The bench AI is the same at bfaaae8 and ebed720 (ebed720 adds an e2e hook and records a starting Town Center earlier, which no bench game reaches); the moderate rows equal an earlier run of the same AI (v8) exactly.",
+  "command": "MATCH_BENCH_DIFFICULTY=<level> MATCH_BENCH_SEEDS=1,...,20 MATCH_BENCH_SHARDS=8 MATCH_BENCH_SHARD=0..7 npm run bench:matches",
+  "runtime": "Linux / Node 24, vite-node, 8 local shards, 2026-11-12",
+  "setup": {
+    "map": "generateMap(seed, 2): default large Mediterranean",
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+    ],
+    "swappedSides": [
+      false,
+      true
+    ],
+    "civs": "rotate through the six pairings by seed",
+    "capSimMinutes": 60,
+    "dt": 0.05
+  },
+  "result": {
+    "moderate": {
+      "games": 40,
+      "decided": 22,
+      "medianMinutes": 58.9,
+      "cityAgePlayerGames": 69,
+      "resigned": 20,
+      "decidedMedianMinutes": 44.8,
+      "file": "matches-moderate-ebed720.jsonl"
+    },
+    "hard": {
+      "games": 40,
+      "decided": 30,
+      "medianMinutes": 47.4,
+      "cityAgePlayerGames": 64,
+      "resigned": 27,
+      "decidedMedianMinutes": 43.0,
+      "file": "matches-hard-ebed720.jsonl"
+    },
+    "hardest": {
+      "games": 40,
+      "decided": 37,
+      "medianMinutes": 37.3,
+      "cityAgePlayerGames": 64,
+      "resigned": 28,
+      "decidedMedianMinutes": 37.1,
+      "file": "matches-hardest-ebed720.jsonl"
+    }
+  },
+  "target": {
+    "medianMinutes": [
+      25,
+      45
+    ],
+    "decidedShare": 0.85,
+    "met": {
+      "moderate": false,
+      "hard": false,
+      "hardest": true
+    },
+    "status": "open for moderate and hard: coordinator chose to ship the gold supply and AI fixes and keep the target open (see docs/BALANCE.md)"
+  },
+  "baseline": {
+    "revision": "74025a6",
+    "moderate": {
+      "games": 40,
+      "decided": 25,
+      "medianMinutes": 50.9,
+      "cityAgePlayerGames": 51
+    },
+    "hard": {
+      "decided": 16,
+      "medianMinutes": ">60"
+    },
+    "hardest": {
+      "decided": 10,
+      "medianMinutes": ">60"
+    },
+    "file": "matches-74025a6.jsonl"
+  },
+  "steps": {
+    "1 expansion gold + second Town Center to gold + market keeps reserve": {
+      "games": 40,
+      "decided": 19,
+      "medianMinutes": ">60",
+      "cityAgePlayerGames": 64
+    },
+    "2 + fight defenders first": {
+      "note": "stopped after 16 games",
+      "games": 16,
+      "decided": 6
+    },
+    "3 + attacks end (35% spent, 60% reinforce)": {
+      "games": 40,
+      "decided": 11,
+      "medianMinutes": ">60",
+      "cityAgePlayerGames": 53
+    },
+    "4 + hunt when no enemy building is known": {
+      "games": 40,
+      "decided": 18,
+      "medianMinutes": ">60",
+      "cityAgePlayerGames": 52
+    },
+    "5 + age save holds waves 3 min at most, army-first only when not ahead": {
+      "games": 40,
+      "decided": 3,
+      "medianMinutes": ">60",
+      "cityAgePlayerGames": 78
+    },
+    "6 + no recall for a couple of raiders": {
+      "games": 40,
+      "decided": 7,
+      "medianMinutes": ">60",
+      "cityAgePlayerGames": 72
+    },
+    "7 + recall only while nearer home, attack runs while defending": {
+      "games": 40,
+      "decided": 17,
+      "medianMinutes": ">60",
+      "cityAgePlayerGames": 64
+    },
+    "8 + beaten AI resigns (shipped)": {
+      "games": 40,
+      "decided": 22,
+      "medianMinutes": 58.9,
+      "cityAgePlayerGames": 69,
+      "resigned": 20
+    }
+  },
+  "leversTried": {
+    "targetVillagers 50 (shipped AI)": {
+      "games": 40,
+      "decided": 24,
+      "medianMinutes": 54.0,
+      "cityAgePlayerGames": 72,
+      "resigned": 22
+    },
+    "targetVillagers 60 (shipped AI)": {
+      "games": 40,
+      "decided": 27,
+      "medianMinutes": 50.65,
+      "cityAgePlayerGames": 75,
+      "resigned": 23
+    },
+    "firstWave 12, waveGrowth 6, maxWave 45 (step 5 AI)": {
+      "games": 39,
+      "decided": 10,
+      "medianMinutes": ">60",
+      "cityAgePlayerGames": 68
+    },
+    "firstWave 12, waveGrowth 6, maxWave 45, targetVillagers 50 (step 5 AI)": {
+      "games": 33,
+      "decided": 16,
+      "medianMinutes": ">60",
+      "cityAgePlayerGames": 62
+    },
+    "firstWave 12, waveGrowth 6, maxWave 45 (step 7 AI)": {
+      "games": 8,
+      "decided": 1,
+      "medianMinutes": ">60",
+      "cityAgePlayerGames": 14
+    },
+    "targetVillagers 50 (step 1 AI)": {
+      "games": 15,
+      "decided": 8,
+      "medianMinutes": 52.3,
+      "cityAgePlayerGames": 20
+    },
+    "maxWave 40, waveGrowth 5 (step 1 AI)": {
+      "games": 18,
+      "decided": 10,
+      "medianMinutes": 56.7,
+      "cityAgePlayerGames": 32
+    }
+  }
+}

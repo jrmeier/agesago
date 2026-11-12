@@ -1,4 +1,4 @@
-# AI status (M7-2 economy, M8-16 research and ages, M13-6 new age gates, M14-6 upgrades and repairs, M18-5 territory and capture, M16-8 late game)
+# AI status (M7-2 economy, M8-16 research and ages, M13-6 new age gates, M14-6 upgrades and repairs, M18-5 territory and capture, M16-8 late game, M16-10 match stall)
 
 The computer player (`AIPlayer`) acts only through `world.dispatch(cmd, player)`. It reads its
 own units, buildings and stock, enemy units it can see right now, enemy buildings it has seen,
@@ -350,6 +350,33 @@ A natural game can't serve as the walled-base test. The moderate AI's Town Age a
 soldiers by 12–15 min) takes an idle human's walled, towered, even fortified base before its
 first engine exists, by capture and by sheer numbers. In a natural game the workshop now stands
 by about 15 min, and rams join the running attack.
+
+## M16-10: the AI-vs-AI stall
+
+See `docs/BALANCE.md` ("AI-vs-AI match length") for the bench numbers and the diagnosis.
+
+- **Gold.** The second Town Center goes to untouched gold first: a mine still holding 300+ seeds a
+  site, and wood counts 2,000 at most, so a forest no longer outbids the new expansion clusters
+  (`EXPANSION_GOLD`). The worker split and the market count every reserve (`heldBack`: age-up,
+  Town Center, building being saved for). The market never buys with gold held back; gold beyond
+  half the glut mark plus the reserve buys what is short; with no gold mine known, food, wood or
+  stone beyond the reserve plus 300 is sold for the gold that is short.
+- **Saving for an age.** The Town and City Age saves hold attack waves for 3 minutes at most
+  (`AGE_WAVE_HOLD`). Raided, the AI spends the reserve on soldiers only while its army is below
+  1.25 × the enemy army seen + 10.
+- **Attack waves.** An attack below 35% of the soldiers committed to it is called off
+  (survivors go home, the next wave musters); reinforcements join only while it holds 60%. A
+  threat at home recalls it only with 5+ soldiers, at least half the attack's size, while the wave
+  is still nearer home than its target; the attack keeps running while home defends. Wave
+  soldiers on a building turn on an enemy soldier within 9 first (the sim does not make a razer
+  fight back), and near a contested target they close in with attack-move.
+- **Endgame.** With no enemy building known, the army hunts in squads of 6: last sightings of
+  enemy units, then unexplored ground, then ground out of sight. A computer player with no Town
+  Center (after having one), no villager and fewer than 5 soldiers resigns with a dispatched
+  `resign` command; never for a human-controlled player. The UI toasts "<name> resigned" and the
+  end sheet names who resigned.
+- Tests: `src/ai/stall.test.ts` (expansion site, market, waves, recall, age hold, army-first,
+  resignation), `src/ai/territory.test.ts` (fight-first, hunt), `e2e/endgame.e2e.ts`.
 
 ## Open
 
