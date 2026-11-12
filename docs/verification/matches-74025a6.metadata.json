@@ -1,0 +1,133 @@
+{
+  "ticket": "M16-9",
+  "sourceRevision": "74025a6",
+  "baseRevision": "a27dcdf",
+  "command": "MATCH_BENCH_SEEDS=1,...,20 MATCH_BENCH_SHARDS=6 MATCH_BENCH_SHARD=0..5 npm run bench:matches",
+  "runtime": "Linux / Node 24.15, vite-node, 6 local shards, 2026-11-12",
+  "setup": {
+    "difficulty": "moderate",
+    "map": "generateMap(seed, 2): default large Mediterranean",
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+    ],
+    "swappedSides": [
+      false,
+      true
+    ],
+    "civs": "rotate through the six pairings by seed",
+    "capSimMinutes": 60,
+    "dt": 0.05
+  },
+  "result": {
+    "games": 40,
+    "conquests": 25,
+    "medianMinutes": 50.9
+  },
+  "target": {
+    "medianMinutes": [
+      25,
+      45
+    ],
+    "met": false,
+    "status": "open: coordinator chose to record the measured baseline; gold-supply / Town Age stall follow-up ticket"
+  },
+  "baselineBeforeVillagerFix": {
+    "games": 20,
+    "conquests": 12,
+    "medianMinutes": 50.65,
+    "source": "a27dcdf + bench script, seeds 1-10",
+    "file": "matches-baseline-a27dcdf.jsonl"
+  },
+  "rejectedVariants": {
+    "infantry +2 vs buildings (crush 4)": {
+      "games": 40,
+      "conquests": 27,
+      "medianMinutes": 49.0
+    },
+    "infantry +4 vs buildings (crush 6)": {
+      "games": 40,
+      "conquests": 24,
+      "medianMinutes": 47.599999999999994
+    },
+    "AI keeps City Age gold when army-first": {
+      "games": 40,
+      "conquests": 22,
+      "medianMinutes": 49.55
+    },
+    "keep gold + crush 4": {
+      "games": 40,
+      "conquests": 23,
+      "medianMinutes": 57.05
+    },
+    "City Age 1400f 300g + crush 4": {
+      "games": 40,
+      "conquests": 18,
+      "medianMinutes": ">60"
+    },
+    "archer 40w 30g (23 of 40 games run)": {
+      "games": 23,
+      "conquests": 9,
+      "medianMinutes": ">60"
+    },
+    "AI sells wood/food for age gold at 40% of glut mark (seeds 1-10)": {
+      "games": 20,
+      "conquests": 8,
+      "medianMinutes": ">60"
+    },
+    "AI never buys with age gold": {
+      "games": 40,
+      "conquests": 21,
+      "medianMinutes": 58.55
+    },
+    "never buy + cheap sell": {
+      "games": 40,
+      "conquests": 20,
+      "medianMinutes": ">60"
+    },
+    "never buy + cheap sell + keep gold": {
+      "games": 40,
+      "conquests": 18,
+      "medianMinutes": ">60"
+    },
+    "hard vs hard (no change)": {
+      "games": 40,
+      "conquests": 16,
+      "medianMinutes": ">60"
+    },
+    "hardest vs hardest (no change)": {
+      "games": 40,
+      "conquests": 10,
+      "medianMinutes": ">60"
+    }
+  },
+  "rejectedVariantsNote": "Probe runs on 74025a6's sim with the change applied in memory or in an uncommitted tree; none is in the product. Rows not committed.",
+  "counters": {
+    "command": "npm run bench:counters -- --matrix",
+    "file": "counters-74025a6.md",
+    "guard": "src/bench/counters.test.ts"
+  },
+  "goldSupply": {
+    "file": "gold-supply-74025a6.jsonl",
+    "probe": "moderate vs moderate, seeds 1-10 and 14, 19, side false; map gold, gold within 60/90 of each start, minute it runs out, second Town Center position and nearby gold"
+  },
+  "deterministic": "The 40 rows equal, field for field except wallMs, the union of two earlier runs on the same sim (seeds 1-10 and 11-20)."
+}

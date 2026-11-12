@@ -125,6 +125,166 @@ Each hero's aura reaches your own units within 8 of its edge (the hero included 
 Auras now also reach attack (melee, pierce, crush) and attack speed (`reload`), in addition to
 gather, carry, speed and armour. Projectiles use the shooter's auras when they land, if it still lives.
 
+## Counters (M16-9)
+
+Every class has a counter that wins **cost for cost**. The table lives in `src/core/counters.ts`.
+The help panel (`?`) prints it after the hotkeys, and `src/bench/counters.test.ts` plays every
+row, so the text can't drift from the fights.
+
+| Counter | Beats | Why |
+|---|---|---|
+| Spearmen (Hoplites) | cavalry and cavalry champions | +12 against cavalry |
+| Swordsmen | spearmen | more attack at the same price |
+| Slingers | infantry and infantry champions | +3 against infantry, and cheap |
+| Archers | spearmen and slingers | outrange them; +3 against ranged |
+| Cavalry (Horsemen, Scouts) | archers, slingers and siege | +6 against ranged, +10 against siege |
+| Melee infantry | unescorted siege | +8 against siege |
+| Catapults, Bolt Shooters | massed archers and slingers | splash, and bolts that go through a line |
+| Rams, Catapults | buildings | crush damage, which buildings have no armour against |
+| Champions | their own line at equal cost | a champion costs 2–3 line units; slingers and spearmen still beat them |
+
+**How it is measured** (`src/bench/counters.ts`):
+- Two groups of about equal spend meet on open flat ground, 16 apart, and both attack-move.
+  Both are in the City Age with no research.
+- The counter gets floor(budget / cost) units and the victim ceil(budget / cost), so rounding
+  never helps the counter.
+- Each fight runs three jittered line-ups, each played from both sides.
+- "Value left" is the share of the spend still standing, with each survivor weighted by its hp.
+
+The test needs the counter to keep at least 75% of the value left, at both 1,200 and 3,600
+resources. Every row clears that comfortably. Results from `npm run bench:counters` are below
+(counter's value left / victim's value left).
+
+| Counter | Victim | ≈ 1,200 | ≈ 3,600 |
+|---|---|---|---|
+| Hoplite | Horseman | 15 v 8: 80% / 0% | 45 v 24: 81% / 0% |
+| Hoplite | Scout | 15 v 15: 93% / 0% | 45 v 45: 93% / 0% |
+| Hoplite | Equites | 15 v 4: 78% / 0% | 45 v 12: 79% / 0% |
+| Swordsman | Hoplite | 15 v 15: 63% / 0% | 45 v 45: 64% / 0% |
+| Slinger | Swordsman | 20 v 15: 82% / 8% | 60 v 45: 81% / 8% |
+| Slinger | Hoplite | 20 v 15: 94% / 0% | 60 v 45: 91% / 0% |
+| Slinger | Praetorian | 20 v 5: 49% / 0% | 60 v 15: 47% / 0% |
+| Archer | Hoplite | 17 v 15: 77% / 14% | 51 v 45: 72% / 9% |
+| Archer | Slinger | 17 v 20: 30% / 0% | 51 v 60: 30% / 0% |
+| Horseman | Archer | 8 v 18: 88% / 0% | 24 v 52: 85% / 0% |
+| Horseman | Slinger | 8 v 20: 83% / 0% | 24 v 60: 79% / 0% |
+| Scout | Archer | 15 v 18: 62% / 0% | 45 v 52: 65% / 0% |
+| Horseman | Catapult | 8 v 3: 100% / 0% | 24 v 8: 97% / 0% |
+| Horseman | Bolt Shooter | 8 v 3: 66% / 0% | 24 v 9: 69% / 0% |
+| Swordsman | Catapult | 15 v 3: 82% / 0% | 45 v 8: 88% / 0% |
+| Swordsman | Bolt Shooter | 15 v 3: 69% / 0% | 45 v 9: 76% / 0% |
+| Hoplite | Catapult | 15 v 3: 75% / 0% | 45 v 8: 82% / 0% |
+| Catapult | Archer | 2 v 18: 82% / 0% | 7 v 52: 81% / 0% |
+| Catapult | Slinger | 2 v 20: 80% / 0% | 7 v 60: 82% / 0% |
+| Bolt Shooter | Archer | 3 v 18: 71% / 0% | 9 v 52: 67% / 0% |
+| Bolt Shooter | Slinger | 3 v 20: 68% / 0% | 9 v 60: 61% / 3% |
+| Praetorian | Swordsman | 5 v 15: 47% / 0% | 15 v 45: 47% / 0% |
+| Equites | Horseman | 4 v 8: 55% / 0% | 12 v 24: 55% / 0% |
+
+**Razing.** About 900 resources of each attacker against a building with no garrison and no
+research. The test requires rams and catapults to be at least twice as fast as the same spend of
+swordsmen or archers.
+
+| Target | 2 Rams | 2 Catapults | 11 Swordsmen | 6 Horsemen | 13 Archers |
+|---|---|---|---|---|---|
+| Watch Tower | 24 s | 54 s | 109 s (30% lost) | 225 s (75% lost) | 144 s |
+| Stone Wall | 28 s | 67 s | 93 s | 217 s | 136 s |
+| Town Center | 54 s | 150 s | 222 s | > 400 s | 371 s |
+| Fortress | 109 s (31% lost) | 327 s | > 400 s (all lost) | > 400 s (all lost) | > 400 s |
+
+**Matrix.** At ≈ 1,200, each cell is the row unit's share of the value left against the column
+unit. 100% means the row unit won cleanly. The two rounding directions make it a little
+asymmetric. `npm run bench:counters -- --matrix` prints it.
+
+| | Hoplite | Swordsman | Slinger | Archer | Scout | Horseman | Catapult | Bolt Shooter | Praetorian | Equites |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Hoplite (80) | — | 0% | 0% | 12% | 100% | 100% | 100% | 100% | 0% | 100% |
+| Swordsman (80) | 100% | — | 7% | 100% | 100% | 100% | 100% | 100% | 0% | 100% |
+| Slinger (60) | 100% | 91% | — | 0% | 0% | 0% | 0% | 0% | 100% | 0% |
+| Archer (70) | 85% | 0% | 100% | — | 0% | 0% | 0% | 0% | 0% | 0% |
+| Scout (80) | 0% | 0% | 100% | 100% | — | 0% | 100% | 100% | 0% | 0% |
+| Horseman (150) | 0% | 0% | 100% | 100% | 100% | — | 100% | 100% | 0% | 0% |
+| Catapult (500) | 0% | 0% | 100% | 100% | 0% | 0% | — | 32% | 0% | 0% |
+| Bolt Shooter (400) | 0% | 0% | 100% | 100% | 0% | 0% | 0% | — | 0% | 0% |
+| Praetorian (240) | 100% | 100% | 0% | 100% | 100% | 100% | 100% | 100% | — | 100% |
+| Equites (300) | 0% | 0% | 100% | 100% | 100% | 100% | 100% | 100% | 0% | — |
+
+Swordsmen beat archers cost for cost (archers are the anti-ranged and anti-spear bow), so the
+answer to massed swordsmen is slingers. No unit cost changed in M16-9: every counter already held
+once the bench was measured correctly. An earlier draft of the harness dropped player 2's orders,
+which made the first mover look stronger and bolt shooters look overpriced.
+Heroes are not in the table: there is one per player, and their value is the aura.
+
+## AI-vs-AI match length (M16-9)
+
+`npm run bench:matches` plays moderate AI against moderate AI on the default map, seeds 1–20,
+both sides. That is the large Mediterranean from `generateMap(seed, 2)`. Civilizations rotate
+through the six pairings by seed. Games run to conquest with a 60-minute cap. This is a
+different measure from the civilization bench, which stops at 30 minutes and scores.
+
+**Target: a median of 25–45 minutes. It is not met yet, and the target stays open.** The
+measured baseline at `74025a6` is
+[40 games](verification/matches-74025a6.jsonl), with
+[metadata](verification/matches-74025a6.metadata.json):
+
+| | Games | Conquests within 60 min | Median length |
+|---|---|---|---|
+| main `a27dcdf`, seeds 1–10 | 20 | 12 (60%) | 50.7 min |
+| `74025a6`, seeds 1–10 | 20 | 16 (80%) | 48.5 min |
+| `74025a6`, seeds 1–20 | 40 | 25 (63%) | **50.9 min** |
+
+The conquests take 28–55 min (median 45.8). The 15 games still running at 60 min are the stall
+described below.
+
+**Fixed: villagers froze at a boxed-in drop site.** A mining camp hemmed in by houses and farms
+gave its walker an empty path, so the villager never arrived and stayed in `toDrop` forever.
+Several gold miners per side froze this way. `nearestDrop` now treats such a site as unreachable
+(`src/sim/systems/sites.ts`, with a test in `src/sim/gather.test.ts`).
+
+**The stall: gold runs out in the Town Age.** Measured by
+[a probe on 12 games](verification/gold-supply-74025a6.jsonl):
+- **The map holds 6,400 gold for two players:** sixteen 400-gold mines. Each start has 1,600
+  within 60 tiles and 2,800–3,600 within 90 (some mines are shared toward the middle).
+- **Three-quarters of the map's gold is mined by minute 18–27** (median 22). It is gone within
+  90 tiles of each Town Center by minute 29–41 (median 33), and from the whole map by minute
+  30–41 in every game that lasted that long.
+- **Most of it goes on Town Age soldiers.** In four 30-minute games, archers took 12,240 gold,
+  Swordsmen 8,000 and Immortals 3,080, while City Age research took only 2,000.
+- **After that, the City Age's 500 gold can only come from the market.** An AI saving for the
+  age sells wood for gold, then spends that gold buying the age's food. In seed 14 one side
+  traded 124 times and its gold never went above 100. The AI is "army first" (outnumbered or
+  raided) most of the time in a war of equals, and army-first training ignores the age reserve.
+- **The second Town Center (M18-5) rarely helps.** It goes down at minute 7–24, 30–82 tiles
+  from home. Only 9 of 25 sit within 25 tiles of untouched gold, a pocket of 260–1,190. The rest
+  have 0–780 gold within 40 tiles, usually a single 400-gold mine.
+- **Deaths are 94% unit against unit:** 3,041, against 175 to towers and Town Centers (four
+  stalled games, 40 min). Equal AIs wear each other down rather than breaking a base.
+
+**Levers tried without success.** Each was run on 40 games (seeds 1–20) on the fixed sim,
+against 25/40 conquests and a 50.9-min median:
+
+| Change | Conquests | Median |
+|---|---|---|
+| Infantry +2 damage against buildings | 27 | 49.0 |
+| Infantry +4 damage against buildings | 24 | 47.6 |
+| AI keeps the City Age gold while army-first | 22 | 49.6 |
+| …plus infantry +2 against buildings | 23 | 57.1 |
+| City Age 1,400 food + 300 gold, plus infantry +2 | 18 | > 60 |
+| Archer 40 wood + 30 gold (23 games) | 9 | > 60 |
+| AI never spends the age's gold buying | 21 | 58.6 |
+| …plus selling spare wood or food sooner while gold is short | 20 | > 60 |
+| Hard vs hard (no change) | 16 | > 60 |
+| Hardest vs hardest (no change) | 10 | > 60 |
+
+None ships. Small changes shuffle which seeds stall rather than removing the stall: one seed
+swung between a 46-minute conquest and the cap. The fix needs more gold or a different AI
+economy, which a follow-up ticket owns.
+
+For comparison, 0 A.D. has two continuing gold sources. Its large metal mines hold 5,000, against
+400 here, and traders between two of your markets earn more the farther apart the markets are.
+Its market barter is a stopgap, as it is here. Age of Empires II mines hold 800 per pile, and its
+relics and trade carts keep gold coming once the mines are empty.
+
 ## The scripted build order
 
 `src/bench/pacing.ts` plays player 1 on a real generated map (`generateMap(seed, 2)`, the real
@@ -448,6 +608,9 @@ npm run bench:pacing -- --seeds 2 --verbose   # minute-by-minute workers, gather
 npm run bench:pacing -- --skip ironAxe        # counterfactual: the build order never researches it
 npm run bench:pacing -- --no-pacing --techs oxPlough,cropRotation --payback-seed 3
 npx vitest run src/bench/pacing.test.ts       # the regression guard (~30 s)
+npm run bench:counters -- --matrix            # counter table, unit matrix and raze times (~1 min)
+npx vitest run src/bench/counters.test.ts     # the counter-table guard (~15 s)
+npm run bench:matches                         # AI-vs-AI match length, seeds 1–10 (shard with MATCH_BENCH_SHARDS)
 ```
 
 The vitest guard runs seed 1 up to the City Age and asserts that Town and City land in their bands.
