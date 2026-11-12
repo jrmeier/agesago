@@ -2,7 +2,7 @@ import type { UnitKind, Vec2 } from '../core/types';
 import { isHero, UNITS } from '../core/units';
 import { heroDeathText } from './heroes';
 import type { World } from '../sim/World';
-import { AlertLimiter, BurstCounter, attackText, captureText, deathText, unlockText } from './alertRules';
+import { AlertLimiter, BurstCounter, attackText, captureText, deathText, resignText, unlockText } from './alertRules';
 import { pushPing } from './pings';
 import { TECHS } from '../core/techs';
 import { researchedText } from './research';
@@ -20,6 +20,7 @@ const MAX_SHOWN = 3;
  * toast stack (`container`). A local 'researched' shows "Iron Axe researched", and a local
  * 'agedUp' lists what the new age unlocks ("Town Age unlocks: build Forge, Market · train Slinger").
  * A 'captured' building toasts for the side that lost it and the side that took it (M18-4).
+ * A rival's resignation toasts too (M16-10).
  * `update(time)` must be called every frame.
  */
 export class Alerts {
@@ -70,6 +71,11 @@ export class Alerts {
       pushPing(world, e.pos, 'attack');
       if (lost) this.show('alert', '#i-alert', captureText(e.kind, true, name), e.pos);
       else this.show('research', '#i-attack-move', captureText(e.kind, false, name), e.pos);
+    });
+    // A rival resigned (a beaten computer player does, M16-10).
+    world.events.on('defeated', (e) => {
+      if (e.reason !== 'resign' || e.player === world.localPlayer) return;
+      this.show('research', '#i-alert', resignText(world.players.get(e.player)?.player.name ?? `Player ${e.player}`), this.home());
     });
     world.events.on('researched', (e) => {
       if (e.owner !== world.localPlayer || TECHS[e.tech].ageUp !== undefined) return;

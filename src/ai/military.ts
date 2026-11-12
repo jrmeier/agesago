@@ -2,7 +2,7 @@ import { maxCapturePoints } from '../core/buildings';
 import type { Building, BuildingKind, EntityId, Stockpile, Unit, UnitKind, Vec2 } from '../core/types';
 import { captureRate, isAnimal, isHero, popCost, UNITS, damage, trainable, type UnitClass } from '../core/units';
 import { canAfford, dist, heldBack, type Ctx, type Snapshot } from './context';
-import { PRODUCTION, norm, type Economy } from './economy';
+import { PRODUCTION, norm } from './economy';
 import type { SeenBuilding } from './intel';
 import { ageOf } from '../sim/systems/research';
 import { tooDamaged } from '../sim/systems/defence';
@@ -28,6 +28,19 @@ const LATE_PRODUCTION: BuildingKind[] = ['siegeWorkshop', 'fortress'];
 const DEFENCES: ReadonlySet<BuildingKind> = new Set(['stoneWall', 'palisade', 'gate', 'watchTower', 'fortress']);
 /** What rams and catapults go for first: walls, towers and the Town Center. */
 const SIEGE_TARGETS: ReadonlySet<BuildingKind> = new Set([...DEFENCES, 'townCenter']);
+/** Soldiers per hunting squad, and the grid (world units) it searches, when no enemy building is known. */
+const HUNT_SQUAD = 6;
+const HUNT_STEP = 12;
+/** Fewest enemy soldiers at home that call a running attack back (M16-10). */
+const RECALL_MIN = 5;
+/** An attack down to this share of the soldiers committed to it is called off (M16-10). */
+const SPENT = 0.35;
+/** Reinforcements join a running attack only while it holds this share of what it committed. */
+const REINFORCE = 0.6;
+/** A wave soldier on a building turns on an enemy soldier this close (M16-10). */
+const FIGHT_RANGE = 9;
+/** Radius around the wave's centre searched for such soldiers. */
+const FIGHT_SCAN = 30;
 /** Seconds a ready wave waits at the rally point for its siege against a defended base. */
 const SIEGE_WAIT = 90;
 /** Soldiers that guard each siege engine on the way (M17-3 guard order). */
@@ -72,6 +85,8 @@ export class Military {
   wave = 0;
   readonly attackers = new Set<EntityId>();
   private startHp = 0;
+  /** Soldiers committed to the running attack (launch plus reinforcements). */
+  private committed = 0;
   private target: SeenBuilding | null = null;
   private lastWave = -Infinity;
   private threatSince: number | null = null;
@@ -94,10 +109,7 @@ export class Military {
   /** Units already sent at the enemy wonder (re-sent once they go idle). */
   private readonly diverted = new Set<EntityId>();
 
-  constructor(
-    private readonly c: Ctx,
-    private readonly econ: Economy
-  ) {}
+  constructor(private readonly c: Ctx) {}
 
   /** One of our units or buildings was hit at `pos`. */
   onAttacked(pos: Vec2): void {
@@ -128,7 +140,11 @@ export class Military {
     for (const [id, engine] of this.escorts) if (!world.units.has(id) || !world.units.has(engine) || !this.attackers.has(id)) this.escorts.delete(id);
     if (this.answerWonder(s)) return;
     const home = s.army.filter((u) => !this.attackers.has(u.id) && u.state !== 'garrisoned');
-    if (this.defend(s, home)) return;
+    if (this.defend(s, home)) {
+      // A running attack goes on meanwhile (M16-10), without reinforcements from home.
+      if (this.mode === 'attack' && !this.ownWonder()) this.pressAttack([], rally);
+      return;
+    }
     // Holding a completed wonder: the army stays home to defend it.
     if (this.mode === 'attack' && this.ownWonder()) this.recall(rally);
     if (this.mode === 'attack') this.pressAttack(home, rally);
@@ -284,9 +300,14 @@ export class Military {
     const raider = (t: Unit) => t.kind !== 'scout' || scouts > 1;
     const soldiers = threats.filter(raider).length;
     let defenders = home;
-    // Outnumbered at home: call the attack back.
-    if (this.mode === 'attack' && soldiers > home.length) {
-      const away = [...this.attackers].map((id) => world.units.get(id)).filter((u): u is Unit => !!u);
+    // Outnumbered at home by a real force: call the attack back, while it is still nearer home
+    // than its target. Not for a couple of raiders, nor once it is past halfway (M16-10): with
+    // the army out, home is nearly empty, so any soldier near the base used to recall every wave
+    // within seconds of leaving, and two waves that crossed both turned back.
+    const away = [...this.attackers].map((id) => world.units.get(id)).filter((u): u is Unit => !!u);
+    const out = away.length ? centroid(away) : null;
+    const nearHome = !!out && (!this.target || dist(out, this.c.home) < dist(out, this.target.pos));
+    if (this.mode === 'attack' && nearHome && soldiers > home.length && soldiers >= Math.max(RECALL_MIN, this.attackers.size * 0.5)) {
       defenders = [...home, ...away];
       this.attackers.clear();
       this.escorts.clear();
@@ -404,6 +425,7 @@ export class Military {
       this.lastWave = world.time;
       for (const u of home) this.attackers.add(u.id);
       this.startHp = home.reduce((n, u) => n + u.hp, 0);
+      this.committed = home.length;
       this.advance(home, true);
       this.escort(home);
       return;
@@ -436,18 +458,107 @@ export class Military {
         return;
       }
     }
+    // A spent attack is over (M16-10): before, fresh troops trickled into it four at a time for
+    // the rest of the game, each group dying at the enemy's gates, and the enemy, never calm at
+    // home, never mustered a wave of its own. Survivors come home and the next, bigger wave
+    // musters.
+    if (group.length < this.committed * SPENT) {
+      this.c.issue({ type: 'move', unitIds: group.map((u) => u.id), target: rally });
+      this.attackers.clear();
+      this.escorts.clear();
+      this.mode = 'gather';
+      this.lastWave = world.time;
+      return;
+    }
     if (!this.target || !intel.buildings.has(this.target.id)) this.target = intel.nearestBuilding(at);
     this.watchCapture(group);
-    // Fresh troops at the rally point join the push in groups.
+    this.fightFirst(group, at);
+    // Fresh troops at the rally point join the push in groups, while it still holds REINFORCE of
+    // what it committed; a failing attack is not fed.
     const fresh = home.filter((u) => u.state === 'idle' && dist(u.pos, rally) < 14);
     // A siege engine joins at once (with whoever waits beside it as escort).
-    if (fresh.length >= 4 || fresh.some((u) => isSiege(u.kind))) {
+    if ((fresh.length >= 4 || fresh.some((u) => isSiege(u.kind))) && group.length >= this.committed * REINFORCE) {
       for (const u of fresh) this.attackers.add(u.id);
+      this.committed += fresh.length;
       this.startHp += fresh.reduce((n, u) => n + u.hp, 0);
       this.advance(fresh, true);
     }
     this.advance(group, false);
     this.escort(group);
+  }
+
+  /**
+   * No enemy building known: hunt (M16-10). Conquest needs every last unit dead, and a lone
+   * scout or a few villagers hiding in a corner used to keep a beaten AI alive to the cap while
+   * the whole army stood at its old Town Center. Squads of HUNT_SQUAD each make for the nearest
+   * spot where an enemy was last seen, else unexplored ground, else ground out of sight, a
+   * different one per squad; a squad that arrives (goes idle) picks the next.
+   */
+  private hunt(movers: Unit[]): void {
+    const { world, player, intel } = this.c;
+    const vis = world.visibilityOf(player);
+    const region = world.nav.regionAt(movers[0].pos);
+    const spots: Vec2[] = intel.sightings().filter((p) => world.nav.regionOfCell(p) === region);
+    if (!spots.length) {
+      for (let z = HUNT_STEP / 2; z < world.hf.depth; z += HUNT_STEP) {
+        for (let x = HUNT_STEP / 2; x < world.hf.width; x += HUNT_STEP) {
+          const p = { x, z };
+          if (!vis.isVisible(x, z) && world.hf.isWalkable(x, z) && world.nav.regionOfCell(p) === region) spots.push(p);
+        }
+      }
+      const unexplored = spots.filter((p) => !vis.isExplored(p.x, p.z));
+      if (unexplored.length) spots.splice(0, spots.length, ...unexplored);
+    }
+    if (!spots.length) return;
+    const taken: Vec2[] = [];
+    for (let i = 0; i < movers.length; i += HUNT_SQUAD) {
+      const squad = movers.slice(i, i + HUNT_SQUAD);
+      const at = centroid(squad);
+      let best: Vec2 | null = null;
+      let bestD = Infinity;
+      for (const p of spots) {
+        const d = dist(p, at);
+        if (d < bestD && !taken.some((q) => dist(q, p) < HUNT_STEP * 1.5)) [best, bestD] = [p, d];
+      }
+      best ??= spots[(i / HUNT_SQUAD) % spots.length];
+      taken.push(best);
+      this.c.issue({ type: 'attackMove', unitIds: squad.map((u) => u.id), target: world.nav.nearestFree(best) ?? best });
+    }
+  }
+
+  /**
+   * Defenders before buildings (M16-10). A soldier razing or capturing a building never turns on
+   * the soldiers hitting it, so a wave used to stand at a house while the defence cut it down and
+   * equal AIs wore each other out at the gates. Soldiers on a building with an enemy soldier in
+   * sight within FIGHT_RANGE attack-move onto the nearest one instead (attack-move picks units
+   * before buildings). Siege and escorts keep their orders.
+   */
+  private fightFirst(group: Unit[], at: Vec2): void {
+    const { world, player, intel } = this.c;
+    const foes: Unit[] = [];
+    for (const u of world.units.values()) {
+      if (u.kind === 'villager' || isAnimal(u.kind) || u.state === 'garrisoned' || !world.areEnemies(player, u.owner)) continue;
+      if (dist(u.pos, at) < FIGHT_SCAN && intel.sees(u.pos.x, u.pos.z)) foes.push(u);
+    }
+    if (!foes.length) return;
+    const orders = new Map<Unit, Unit[]>();
+    for (const u of group) {
+      if (isSiege(u.kind) || this.escorts.has(u.id) || u.target === null || !world.buildings.has(u.target)) continue;
+      let near: Unit | null = null;
+      let best = FIGHT_RANGE;
+      for (const f of foes) {
+        const d = dist(f.pos, u.pos);
+        if (d < best) [near, best] = [f, d];
+      }
+      if (near) orders.set(near, [...(orders.get(near) ?? []), u]);
+    }
+    let left = ORDERS_PER_PASS;
+    for (const [foe, units] of orders) {
+      if (left <= 0) break;
+      const ids = units.slice(0, left).map((u) => u.id);
+      left -= ids.length;
+      this.c.issue({ type: 'attackMove', unitIds: ids, target: { ...foe.pos } });
+    }
   }
 
   /** Siege is coming for a defended base: a workshop stands (or engines are queued) and the profile wants siege. */
@@ -531,6 +642,16 @@ export class Military {
     return true;
   }
 
+  /** A visible enemy soldier stands within FIGHT_RANGE of the target building. */
+  private contested(t: { pos: Vec2; radius: number }): boolean {
+    const { world, player, intel } = this.c;
+    for (const u of world.units.values()) {
+      if (u.kind === 'villager' || isAnimal(u.kind) || u.state === 'garrisoned' || !world.areEnemies(player, u.owner)) continue;
+      if (dist(u.pos, t.pos) < t.radius + FIGHT_RANGE && intel.sees(u.pos.x, u.pos.z)) return true;
+    }
+    return false;
+  }
+
   /**
    * Capture rather than raze (M18-5): military and economic buildings, while no enemy soldier
    * stands guard and the capture hasn't stalled. Houses and walls are razed.
@@ -587,9 +708,7 @@ export class Military {
     const movers = pick.filter((u) => !isSiege(u.kind) || !t).slice(0, ORDERS_PER_PASS);
     if (!movers.length) return engines;
     if (!t) {
-      // Nothing known: sweep unexplored ground (or look around) as a group.
-      const p = this.econ.frontier(movers[0]) ?? this.c.intel.enemyStart;
-      if (p) this.c.issue({ type: 'attackMove', unitIds: movers.map((u) => u.id), target: p });
+      this.hunt(movers);
       return movers;
     }
     const at = centroid(movers);
@@ -598,7 +717,9 @@ export class Military {
     const live = world.buildings.get(t.id);
     // Just captured (intel catches up on its next scan): nothing to hit there.
     const hostile = !!live && world.areEnemies(this.c.player, live.owner);
-    if (near.length && hostile) this.c.issue({ type: capture ? 'capture' : 'attack', unitIds: near.map((u) => u.id), targetId: t.id });
+    // While defenders stand by the target, close in fighting (see fightFirst).
+    if (near.length && hostile && this.contested(t)) this.c.issue({ type: 'attackMove', unitIds: near.map((u) => u.id), target: { ...t.pos } });
+    else if (near.length && hostile) this.c.issue({ type: capture ? 'capture' : 'attack', unitIds: near.map((u) => u.id), targetId: t.id });
     if (far.length) {
       const d = norm({ x: at.x - t.pos.x, z: at.z - t.pos.z });
       const p = { x: t.pos.x + d.x * (t.radius + 2.5), z: t.pos.z + d.z * (t.radius + 2.5) };

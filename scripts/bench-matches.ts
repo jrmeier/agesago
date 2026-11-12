@@ -7,6 +7,7 @@
  *   MATCH_BENCH_SEEDS=1,2 MATCH_BENCH_MINUTES=75 npm run bench:matches
  *   MATCH_BENCH_SHARDS=6 MATCH_BENCH_SHARD=0 npm run bench:matches   # one of six parallel workers
  *   MATCH_BENCH_DIFFICULTY=hard npm run bench:matches               # default moderate
+ *   MATCH_BENCH_TUNE='{"maxWave":30}' npm run bench:matches         # profile overrides (AIOptions.tune)
  *
  * Civilizations rotate through the six pairings by seed, so every civ appears. Rows are appended to
  * MATCH_BENCH_OUTPUT (default /tmp/agesago-match-length.jsonl); a rerun skips ids already there and
@@ -19,18 +20,23 @@ import { UNITS, isChampion, isHero } from '../src/core/units';
 import { generateMap } from '../src/sim/mapgen';
 import { World, defaultPlayers } from '../src/sim/World';
 import { AIPlayer } from '../src/ai/AIPlayer';
-import type { Difficulty } from '../src/ai/profile';
+import type { Difficulty, Profile } from '../src/ai/profile';
 import { census, run } from '../src/ai/harness';
 
 interface Row {
   id: string; seed: number; swap: boolean; civs: CivId[]; winner: number; resolution: 'conquest' | 'cap';
+  /** How a decided game ended: every unit and building destroyed, or the beaten AI resigned (M16-10). */
+  reason: 'conquest' | 'resign' | 'wonder' | null;
   minutes: number; ages: (number | null)[][]; peakArmy: number[]; heroes: number; champions: number; siege: number;
   wonders: number; fortresses: number; wallMs: number;
+  /** Per player at the end: villagers, soldiers (scouts included), finished buildings, Town Centers. */
+  end: { v: number; a: number; b: number; tc: number }[];
 }
 
 const output = process.env.MATCH_BENCH_OUTPUT ?? '/tmp/agesago-match-length.jsonl';
 const cap = Number(process.env.MATCH_BENCH_MINUTES ?? 60);
 const difficulty = (process.env.MATCH_BENCH_DIFFICULTY ?? 'moderate') as Difficulty;
+const tune = process.env.MATCH_BENCH_TUNE ? (JSON.parse(process.env.MATCH_BENCH_TUNE) as Partial<Profile>) : undefined;
 const seeds = (process.env.MATCH_BENCH_SEEDS ?? '1,2,3,4,5,6,7,8,9,10').split(',').map(Number);
 const shards = Number(process.env.MATCH_BENCH_SHARDS ?? 1), shard = Number(process.env.MATCH_BENCH_SHARD ?? 0);
 const read = (): Row[] => existsSync(output) ? readFileSync(output, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
@@ -50,7 +56,7 @@ for (const seed of seeds) for (const swap of [false, true]) {
   const players = defaultPlayers(2, civs).map((p) => ({ ...p, control: 'ai' as const }));
   const world = new World(hf, layout, players);
   world.seed = seed;
-  const ais = players.map((p) => new AIPlayer(world, p.id, { difficulty, seed: seed * 10 + p.id }));
+  const ais = players.map((p) => new AIPlayer(world, p.id, { difficulty, seed: seed * 10 + p.id, tune }));
   const started = performance.now();
   const peakArmy = [0, 0];
   const seen = { heroes: new Set<number>(), champions: new Set<number>(), siege: new Set<number>(), wonders: new Set<number>(), fortresses: new Set<number>() };
@@ -74,10 +80,15 @@ for (const seed of seeds) for (const swap of [false, true]) {
   const s = [1, 2].map((p) => { const c = census(world, p); return c.villagers + c.army + Object.values(c.buildings).reduce((a, b) => a + b, 0); });
   const winner = world.gameOver?.winners[0] ?? (loser ? (loser === 1 ? 2 : 1) : s[0] === s[1] ? 0 : s[0] > s[1] ? 1 : 2);
   const row: Row = {
-    id, seed, swap, civs, winner, resolution: conquest ? 'conquest' : 'cap', minutes: Math.round(world.time / 6) / 10,
+    id, seed, swap, civs, winner, resolution: conquest ? 'conquest' : 'cap', reason: world.gameOver?.reason ?? null, minutes: Math.round(world.time / 6) / 10,
     ages: ais.map((ai) => ai.research.agedAt.slice(1).map((t) => (t == null ? null : Math.round(t / 6) / 10))),
     peakArmy, heroes: seen.heroes.size, champions: seen.champions.size, siege: seen.siege.size, wonders: seen.wonders.size,
     fortresses: seen.fortresses.size, wallMs: Math.round(performance.now() - started),
+    end: ([1, 2] as PlayerId[]).map((p) => {
+      const c = census(world, p);
+      const scouts = [...world.units.values()].filter((u) => u.owner === p && u.kind === 'scout').length;
+      return { v: c.villagers, a: c.army + scouts, b: Object.values(c.buildings).reduce((a, b) => a + b, 0), tc: c.buildings.townCenter ?? 0 };
+    }),
   };
   appendFileSync(output, JSON.stringify(row) + '\n');
   console.log(JSON.stringify(row));

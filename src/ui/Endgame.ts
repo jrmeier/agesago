@@ -6,6 +6,7 @@ import {
   lootLines,
   plotPoints,
   pointsAttr,
+  reasonText,
   summaryText,
   type ChartKey,
   type EndgameLog,
@@ -33,6 +34,8 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  */
 export class Endgame {
   private done = false;
+  /** Players who resigned this match (for the reason line). */
+  private readonly resigned: number[] = [];
   private readonly stop = new AbortController();
   private readonly unlisten: () => void;
   private readonly root: HTMLElement | null;
@@ -50,7 +53,14 @@ export class Endgame {
     const signal = this.stop.signal;
     this.resignBtn?.addEventListener('click', () => this.world.dispatch({ type: 'resign' }), { signal });
     again?.addEventListener('click', () => this.onPlayAgain(), { signal });
-    this.unlisten = this.world.events.on('gameOver', (e) => this.finish(e));
+    const offOver = this.world.events.on('gameOver', (e) => this.finish(e));
+    const offDefeat = this.world.events.on('defeated', (e) => {
+      if (e.reason === 'resign') this.resigned.push(e.player);
+    });
+    this.unlisten = () => {
+      offOver();
+      offDefeat();
+    };
   }
 
   /**
@@ -107,7 +117,9 @@ export class Endgame {
     const reasonLine = document.getElementById('endgame-reason');
     if (title) title.textContent = text.title;
     if (winnerLine) winnerLine.textContent = text.winners;
-    if (reasonLine) reasonLine.textContent = `Reason: ${text.reason}`;
+    // A reloaded match has no 'defeated' events: the losers are the ones who resigned.
+    const resigned = this.resigned.length ? this.resigned : [...this.world.players.keys()].filter((id) => !winners.includes(id));
+    if (reasonLine) reasonLine.textContent = reasonText(text.reason, resigned, this.world.localPlayer, (id) => this.nameOf(id));
     this.drawLoot();
     this.drawCharts();
     if (this.resignBtn) this.resignBtn.hidden = true;

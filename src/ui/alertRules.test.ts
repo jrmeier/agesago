@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALERT_COOLDOWN, ALERT_MIN_GAP, ALERT_RADIUS, AlertLimiter, BurstCounter, attackText, captureText, deathText } from './alertRules';
+import { ALERT_COOLDOWN, ALERT_MIN_GAP, ALERT_RADIUS, AlertLimiter, BurstCounter, attackText, captureText, deathText, resignText } from './alertRules';
 
 describe('under-attack alerts', () => {
   const here = { x: 50, z: 50 };
@@ -50,5 +50,11 @@ describe('capture toasts (M18-4)', () => {
     expect(captureText('barracks', true, 'Rival 1')).toBe('Your Barracks was captured by Rival 1');
     expect(captureText('house', false, 'Rival 2')).toBe('Captured a House from Rival 2');
     expect(captureText('house', false, null)).toBe('Captured a neutral House');
+  });
+});
+
+describe('resignation toast (M16-10)', () => {
+  it('names the rival who resigned', () => {
+    expect(resignText('Rival 1')).toBe('Rival 1 resigned');
   });
 });

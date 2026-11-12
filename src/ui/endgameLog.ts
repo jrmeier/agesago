@@ -150,6 +150,17 @@ export function summaryText(
   return { title, winners, reason: result.reason };
 }
 
+/**
+ * The end sheet's reason line. A resignation names who resigned (M16-10: a beaten computer
+ * player resigns): "You resigned", "Rival 1 resigned". `resigned` lists the players who did;
+ * the other reasons read as the sim value.
+ */
+export function reasonText(reason: VictoryReason, resigned: readonly number[], localPlayer: number, nameOf: (id: number) => string): string {
+  if (reason !== 'resign' || !resigned.length) return `Reason: ${reason}`;
+  if (resigned.includes(localPlayer)) return 'You resigned';
+  return `${resigned.map((id) => nameOf(id)).join(', ')} resigned`;
+}
+
 /** Resource amounts in HUD order (food, wood, gold, stone). */
 type Amounts = Partial<Record<'food' | 'wood' | 'gold' | 'stone', number>>;
 const LOOT_ORDER = ['food', 'wood', 'gold', 'stone'] as const;

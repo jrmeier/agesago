@@ -98,3 +98,8 @@ export function unlockText(age: Age, unlocks: { buildings: readonly BuildingKind
   if (unlocks.units.length) parts.push(`train ${unlocks.units.map((k) => UNITS[k].name).join(', ')}`);
   return parts.length ? `${AGE_NAMES[age]} unlocks: ${parts.join(' · ')}` : `Entered the ${AGE_NAMES[age]}`;
 }
+
+/** A rival gave up (M16-10: a beaten computer player resigns). */
+export function resignText(name: string): string {
+  return `${name} resigned`;
+}

@@ -9,6 +9,7 @@ import {
   lootLines,
   plotPoints,
   pointsAttr,
+  reasonText,
   summaryText,
   type EndgameSample,
 } from './endgameLog';
@@ -145,6 +146,13 @@ describe('summary text', () => {
     expect(summaryText({ winners: [1, 3], reason: 'resign' }, 1, nameOf).winners).toBe('Winners: You, Rival 2');
     expect(summaryText({ winners: [], reason: 'conquest' }, 1, nameOf).title).toBe('Draw');
     expect(summaryText({ winners: [], reason: 'conquest' }, 1, nameOf).winners).toBe('No winner');
+  });
+
+  it('names who resigned (M16-10: a beaten computer player resigns)', () => {
+    expect(reasonText('resign', [2], 1, nameOf)).toBe('Rival 1 resigned');
+    expect(reasonText('resign', [1], 1, nameOf)).toBe('You resigned');
+    expect(reasonText('resign', [], 1, nameOf)).toBe('Reason: resign');
+    expect(reasonText('conquest', [2], 1, nameOf)).toBe('Reason: conquest');
   });
 
   it('reports a wonder victory for winners and losers alike', () => {

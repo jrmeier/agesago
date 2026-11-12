@@ -7,6 +7,10 @@ import { Military } from './military';
 import { Research } from './research';
 import { Upkeep } from './upkeep';
 import { makeProfile, type AIOptions, type Profile } from './profile';
+import { isAnimal } from '../core/units';
+
+/** A beaten AI (no Town Center, no villager) with fewer soldiers than this resigns (M16-10). */
+const RESIGN_ARMY = 5;
 
 export type { AIOptions, Difficulty, Personality } from './profile';
 
@@ -42,6 +46,8 @@ export class AIPlayer {
   private readonly offs: (() => void)[] = [];
   private lastTime: number;
   private defeated = false;
+  /** It has owned a Town Center (resignIfBeaten). */
+  private hadTown = false;
   private issuing = false;
 
   constructor(
@@ -78,7 +84,7 @@ export class AIPlayer {
       upgradeHold: null,
     };
     this.economy = new Economy(this.ctx);
-    this.military = new Military(this.ctx, this.economy);
+    this.military = new Military(this.ctx);
     this.research = new Research(this.ctx, this.economy);
     this.upkeep = new Upkeep(this.ctx);
     this.lastTime = world.time;
@@ -94,6 +100,7 @@ export class AIPlayer {
       { name: 'scout', every: 3, next: t + 0.15, run: () => this.economy.scoutPass(this.snap()) },
       { name: 'military', every: p.militaryInterval, next: t + 0.45, run: () => this.military.pass(this.snap()) },
     ];
+    this.tasks.push({ name: 'resign', every: 5, next: t + 0.9, run: () => this.resignIfBeaten() });
     this.tasks.push({ name: 'upkeep', every: p.buildInterval, next: t + 0.75, run: () => this.upkeep.pass(this.snap()) });
     if (p.research) this.tasks.push({ name: 'research', every: p.buildInterval, next: t + 0.6, run: () => this.research.pass(this.snap()) });
 
@@ -141,6 +148,32 @@ export class AIPlayer {
     if (tc) this.ctx.home = { ...tc.pos };
     this.stats.tasks++;
     due.run();
+  }
+
+  /**
+   * Resign a lost game (M16-10), as 0 A.D.'s and AoE's AIs do: once it has lost every Town Center
+   * and every villager and has fewer than RESIGN_ARMY soldiers, it can never rebuild. Conquest
+   * needs every last unit dead, and a fast scout running the map kept such games going to the cap.
+   * An AI that never had a Town Center (a scenario army) never resigns.
+   */
+  private resignIfBeaten(): void {
+    const w = this.world;
+    // Computer players only: never on behalf of a human or remote player, even if an AIPlayer
+    // is attached to one (it goes out as a dispatched command, so lockstep peers agree).
+    if (w.players.get(this.player)?.player.control !== 'ai') return;
+    let towns = 0, villagers = 0, soldiers = 0;
+    for (const b of w.buildings.values()) if (b.owner === this.player && b.kind === 'townCenter') towns++;
+    if (towns) {
+      this.hadTown = true;
+      return;
+    }
+    if (!this.hadTown) return;
+    for (const u of w.units.values()) {
+      if (u.owner !== this.player || isAnimal(u.kind)) continue;
+      if (u.kind === 'villager') villagers++;
+      else soldiers++;
+    }
+    if (villagers === 0 && soldiers < RESIGN_ARMY) this.issue({ type: 'resign' });
   }
 
   /** Stop listening to world events. */

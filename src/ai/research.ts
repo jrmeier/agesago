@@ -27,6 +27,10 @@ const TC_REST = 45;
 const MAX_HOLD = 30;
 /** Longest (sim seconds, per age) cheaper techs wait while it saves for the age's unit line. */
 const LINE_HOLD = 150;
+/** Seconds of saving for the Town or City Age that hold attack waves, at most (M16-10). */
+const AGE_WAVE_HOLD = 180;
+/** With the gold mines dry, stock beyond what is held back plus this much is sold for gold (M16-10). */
+const DRY_CUSHION = 300;
 /** Most market trades per pass. */
 const TRADES_PER_PASS = 3;
 
@@ -145,6 +149,9 @@ export class Research {
   readonly agedAt: number[] = [0];
   /** Market trades made. */
   trades = 0;
+  /** The age-up being saved for, and since when (AGE_WAVE_HOLD). */
+  private savingFor: TechId | null = null;
+  private savingSince = 0;
   /** The surplus resource it is trading down, if any. */
   private selling: ResourceType | null = null;
   private lastTech = -Infinity;
@@ -186,7 +193,11 @@ export class Research {
     const p = this.c.profile.research;
     if (!p) return;
     const f = this.facts(s, p);
-    this.c.armyFirst = f.raided || this.c.intel.enemyArmy() > f.army * 1.3 + 5;
+    // Raided, it spends the reserve on soldiers, unless its army already outnumbers the enemy's
+    // (M16-10): a 150-strong army used to spend the City Age's gold on more soldiers for every
+    // raid, never aged, and so never attacked (saving for an age holds waves).
+    const enemy = this.c.intel.enemyArmy();
+    this.c.armyFirst = (f.raided && f.army < enemy * 1.25 + 10) || enemy > f.army * 1.3 + 5;
     this.ageUp(s, f, p);
     this.c.saving = null;
     this.buildings(s, f, p);
@@ -277,7 +288,10 @@ export class Research {
     // Save for it: villagers, army, buildings and other research leave this alone.
     this.c.reserve = { ...TECHS[tech].cost };
     // The Empire Age is a long save (6,500 food): waves go on meanwhile, and only its research holds them.
-    this.c.aging = f.age < 2;
+    // The Town and City Ages hold waves for AGE_WAVE_HOLD of saving at most (M16-10): an economy
+    // that can't find the gold used to keep its whole army home for the rest of the game.
+    if (this.savingFor !== tech) [this.savingFor, this.savingSince] = [tech, world.time];
+    this.c.aging = f.age < 2 && world.time - this.savingSince < AGE_WAVE_HOLD;
     // Village Age: stop villagers briefly to click up (food can't fund both); later ages keep booming.
     this.c.pauseVillagers = f.age === 0 && !this.c.armyFirst;
     const tc = s.tc;
@@ -456,19 +470,25 @@ export class Research {
     if (!prices) return;
     const stock = world.stockOf(player);
     const need: Record<ResourceType, number> = { food: 200, wood: 200, gold: 100, stone: 0 };
-    for (const t of TYPES) need[t] = Math.max(need[t], this.c.reserve[t] ?? 0, this.wanted[t] ?? 0);
+    // What the age-up, a new Town Center or a building being saved for still needs counts too.
+    const held = heldBack(this.c);
+    for (const t of TYPES) need[t] = Math.max(need[t], held[t] ?? 0, this.wanted[t] ?? 0);
+    const dry = !this.c.intel.nodes.gold.some((n) => n.amount > 0 && world.nodes.has(n.id));
     for (let i = 0; i < TRADES_PER_PASS; i++) {
       const short = TYPES.filter((t) => stock[t] < need[t]).sort((a, b) => stock[a] - need[a] - (stock[b] - need[b]))[0];
       // Trading starts once a stock passes the excess mark and goes on until it is down to half
       // of it (or nothing is short), so a glut is actually put to use.
       // Never sell into a need: a resource saved for the age-up (or a wanted tech) is not surplus,
       // or the AI sells food it is saving and buys it straight back.
-      const rich = TYPES.filter(
-        (t) =>
-          t !== short &&
-          stock[t] > (this.selling === t ? p.marketExcess / 2 : p.marketExcess) &&
-          stock[t] - need[t] >= LOT
-      ).sort((a, b) => stock[b] - stock[a])[0];
+      const mark = (t: ResourceType): number => {
+        // Gold is the market's money: half the mark beyond what is held back is spare to spend.
+        if (t === 'gold') return p.marketExcess / 2 + need.gold;
+        // The mines are dry (none known with gold left) and gold is short: the market is the only
+        // gold left, so anything beyond what is held back and a cushion is surplus (M16-10).
+        if (short === 'gold' && dry) return need[t] + DRY_CUSHION;
+        return this.selling === t ? p.marketExcess / 2 : p.marketExcess;
+      };
+      const rich = TYPES.filter((t) => t !== short && stock[t] > mark(t) && stock[t] - need[t] >= LOT).sort((a, b) => stock[b] - stock[a])[0];
       this.selling = rich ?? null;
       if (!short || !rich) return;
       if (rich !== 'gold' && short === 'gold') {
@@ -488,7 +508,10 @@ export class Research {
     const stock = world.stockOf(player);
     // Don't dump at a crashed price or buy at a gouged one.
     if (side === 'sell' && (sellGain(prices[resource]) < 30 || stock[resource] < LOT)) return false;
-    if (side === 'buy' && (buyCost(prices[resource]) > 250 || stock.gold < buyCost(prices[resource]))) return false;
+    // Never buy with the gold the age-up is saving (M16-10): before, the AI sold wood for gold and
+    // spent that gold, and the age's own, on the age's food, and the age never came.
+    const keep = heldBack(this.c).gold ?? 0;
+    if (side === 'buy' && (buyCost(prices[resource]) > 250 || stock.gold - buyCost(prices[resource]) < keep)) return false;
     const before = stock[resource];
     this.c.issue({ type: 'marketTrade', resource, side });
     if (stock[resource] === before) return false;

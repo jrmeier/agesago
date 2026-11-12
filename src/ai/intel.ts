@@ -24,7 +24,7 @@ export const NODE_MASK_CAP = 5;
 export class Intel {
   readonly buildings = new Map<EntityId, SeenBuilding>();
   /** Enemy unit id → kind and when it was last seen. */
-  private readonly seen = new Map<EntityId, { kind: UnitKind; at: number }>();
+  private readonly seen = new Map<EntityId, { kind: UnitKind; at: number; pos: Vec2 }>();
   /** Explored resource nodes by type (refreshed by refreshNodes). */
   readonly nodes: Record<ResourceType, ResourceNode[]> = { wood: [], food: [], gold: [], stone: [] };
   /** Per 1×1 cell: distance in cells to the nearest resource node, capped at NODE_MASK_CAP. */
@@ -72,7 +72,7 @@ export class Intel {
     }
     for (const u of w.units.values()) {
       if (isAnimal(u.kind) || !w.areEnemies(this.player, u.owner)) continue;
-      if (this.sees(u.pos.x, u.pos.z)) this.seen.set(u.id, { kind: u.kind, at: w.time });
+      if (this.sees(u.pos.x, u.pos.z)) this.seen.set(u.id, { kind: u.kind, at: w.time, pos: { x: u.pos.x, z: u.pos.z } });
     }
     for (const [id, s] of this.seen) if (w.time - s.at > UNIT_MEMORY || !w.units.has(id)) this.seen.delete(id);
   }
@@ -106,6 +106,11 @@ export class Intel {
       else if (s.kind !== 'villager') n++;
     }
     return n + Math.max(0, scouts - 1);
+  }
+
+  /** Where enemy units (villagers included) were last seen, for hunting down the last of them. */
+  sightings(): Vec2[] {
+    return [...this.seen.values()].map((s) => s.pos);
   }
 
   /** Re-list explored resource nodes and rebuild the near-resource mask. */

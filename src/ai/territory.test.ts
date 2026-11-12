@@ -3,6 +3,7 @@ import { BUILDINGS, MAX_POP, TERRITORY } from '../core/buildings';
 import { MAP_TYPES, type MapSize } from '../core/maps';
 import { GRASS_ONLY, type Building, type BuildingKind, type Command, type Heightfield, type MapLayout, type PlayerId, type Vec2 } from '../core/types';
 import { completeBuilding, layFoundation } from '../sim/systems/build';
+import { destroyBuilding } from '../sim/systems/combat';
 import { EXPLORED } from '../sim/visibility';
 import { defaultPlayers, World } from '../sim/World';
 import { AIPlayer } from './AIPlayer';
@@ -209,6 +210,36 @@ describe('AI and capture (M18-5)', () => {
     expect(commands).not.toContain('capture');
     expect(house.hp).toBeLessThan(hp * 0.8);
     expect(house.owner).toBe(1);
+  });
+
+  it('turns on defenders before going on razing (M16-10)', () => {
+    const w = arena();
+    const house = finished(w, 'house', { x: 85, z: 40 }, 1);
+    const wave = Array.from({ length: 6 }, (_, i) => w.spawnUnit('swordsman', { x: 92, z: 36 + i * 1.5 }, 2));
+    const ai = raider(w);
+    run(w, [ai], 60, 0.05, () => wave.filter((u) => u.target === house.id).length >= 4);
+    expect(wave.filter((u) => u.target === house.id).length).toBeGreaterThanOrEqual(4);
+    // Defenders turn up and hit the razers: before M16-10 these stood at the house and died.
+    const defenders = Array.from({ length: 4 }, (_, i) => w.spawnUnit('hoplite', { x: 81, z: 37 + i * 2 }, 1));
+    run(w, [ai], 6);
+    const onDefenders = wave.filter((u) => w.units.has(u.id) && u.target !== null && defenders.some((d) => d.id === u.target));
+    expect(onDefenders.length).toBeGreaterThanOrEqual(4);
+    run(w, [ai], 60, 0.05, () => defenders.every((d) => !w.units.has(d.id)));
+    expect(defenders.filter((d) => w.units.has(d.id))).toEqual([]);
+    expect(wave.filter((u) => w.units.has(u.id)).length).toBeGreaterThan(0);
+  });
+
+  it('hunts down the last enemy units once no enemy building is known (M16-10)', () => {
+    const w = arena();
+    destroyBuilding(w, w.townCenterOf(1)!);
+    // A beaten player's last villager, out of sight in a far corner of explored ground.
+    const last = w.spawnUnit('villager', { x: 12, z: 72 }, 1);
+    const wave = Array.from({ length: 12 }, (_, i) => w.spawnUnit('swordsman', { x: 118, z: 34 + i }, 2));
+    const ai = raider(w);
+    run(w, [ai], 300, 0.05, () => !w.units.has(last.id));
+    expect(w.units.has(last.id)).toBe(false);
+    expect(w.defeatedPlayers.has(1)).toBe(true);
+    expect(wave.filter((u) => w.units.has(u.id)).length).toBe(12);
   });
 
   it('razes a building whose garrison holds off the capture', () => {

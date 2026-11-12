@@ -23,6 +23,10 @@ const BERRY_RANGE = 30;
 const HOME_BERRIES = 40;
 /** Home berry food left below which the AI waits for the bushes instead of laying a field. */
 const BERRIES_NEARLY_GONE = 200;
+/** A gold mine still holding this much seeds an expansion site on its own (M16-10). */
+const GOLD_SITE = 300;
+/** Wood an expansion site's score counts at most: a forest is worth a lumber camp, not a town. */
+const WOOD_SITE_CAP = 2000;
 /** Buildings that go up even while saving for a new Town Center. */
 const ESSENTIAL: ReadonlySet<BuildingKind> = new Set(['house', 'farm', 'storehouse', 'granary', 'miningCamp', 'townCenter']);
 /** Seconds a spot whose build order was rejected stays off the search. */
@@ -68,7 +72,8 @@ export class Economy {
     else if (s.villagers.length < 25) r = { food: 0.45, wood: 0.32, gold: 0.18, stone: 0.05 };
     else r = { food: 0.4, wood: 0.27, gold: 0.25, stone: 0.08 };
     const stock = this.c.world.stockOf(this.c.player);
-    const reserve = this.c.reserve;
+    // Everything being saved for (the age-up, a new Town Center, a building) steers the split.
+    const reserve = heldBack(this.c);
     let sum = 0;
     for (const t of TYPES) {
       // Saving up (an age-up): lean toward what is still missing.
@@ -385,21 +390,32 @@ export class Economy {
    * resources within reach (gold and stone count most) less the walk from home.
    */
   expansionSite(s: Snapshot): Vec2 | null {
+    const { world, intel } = this.c;
+    this.failedSites = this.failedSites.filter((f) => f.until > world.time);
+    const all: ResourceNode[] = [];
+    for (const t of TYPES) for (const n of intel.nodes[t]) if (n.amount > 0 && world.nodes.has(n.id)) all.push(n);
+    // Untouched gold first (M16-10): a mine still holding GOLD_SITE seeds a site, so a forest next
+    // door never outbids fresh gold. Only when no such site qualifies do other mines and every 8th
+    // tree seed one.
+    for (const goldOnly of [true, false]) {
+      const site = this.bestSite(s, all, goldOnly ? (n) => n.type === 'gold' && n.amount >= GOLD_SITE : (n) => n.type !== 'food' && (n.type !== 'wood' || n.id % 8 === 0));
+      if (site) return site;
+    }
+    return null;
+  }
+
+  private bestSite(s: Snapshot, all: ResourceNode[], seeds: (n: ResourceNode) => boolean): Vec2 | null {
     const { world, player, intel } = this.c;
     const home = this.c.home;
     const tcs: Vec2[] = s.tcs.map((b) => b.pos);
     for (const b of intel.buildings.values()) if (b.kind === 'townCenter') tcs.push(b.pos);
     const enemy = intel.enemyStart;
     const spacing = TERRITORY.townCenterSpacing + 4;
-    this.failedSites = this.failedSites.filter((f) => f.until > world.time);
-    const all: ResourceNode[] = [];
-    for (const t of TYPES) for (const n of intel.nodes[t]) if (n.amount > 0 && world.nodes.has(n.id)) all.push(n);
     const WEIGHT: Record<ResourceType, number> = { gold: 1.5, stone: 1.2, wood: 0.4, food: 0.8 };
     let best: Vec2 | null = null;
     let bestScore = 0;
     for (const seed of all) {
-      // Clusters are seeded by mines (and every 8th tree, so forests count too).
-      if (seed.type === 'food' || (seed.type === 'wood' && seed.id % 8)) continue;
+      if (!seeds(seed)) continue;
       const p = seed.pos;
       const dHome = dist(p, home);
       if (dHome < spacing || dHome > 90) continue;
@@ -408,8 +424,13 @@ export class Economy {
       const owner = world.territoryOwner(p);
       if (owner !== 0 && owner !== player) continue;
       if (world.nav.regionOfCell(p) !== this.c.region) continue;
-      let value = 0;
-      for (const n of all) if (Math.abs(n.pos.x - p.x) < 14 && Math.abs(n.pos.z - p.z) < 14) value += Math.min(n.amount, 800) * WEIGHT[n.type];
+      let value = 0, wood = 0;
+      for (const n of all) {
+        if (Math.abs(n.pos.x - p.x) >= 14 || Math.abs(n.pos.z - p.z) >= 14) continue;
+        if (n.type === 'wood') wood += n.amount;
+        else value += Math.min(n.amount, 800) * WEIGHT[n.type];
+      }
+      value += Math.min(wood, WOOD_SITE_CAP) * WEIGHT.wood;
       const score = value - dHome * 40;
       if (score > bestScore) [best, bestScore] = [p, score];
     }
