@@ -69,7 +69,9 @@ test('train a hero, use the hero button, and see the cooldown after it falls', a
   });
   expect(killed).toBe(true);
   await expect(page.locator('.toast-alert', { hasText: 'has fallen' })).toBeVisible();
-  await expect(heroBtn).toHaveClass(/cooldown/);
-  await expect(heroBtn.locator('.hero-clock')).toHaveText(/^[12]:\d\d$/);
+  // The side rail repaints on the next rendered frame; under parallel workers SwiftShader frames on
+  // this Empire Age scene can come seconds apart, so allow more than the default 5 s.
+  await expect(heroBtn).toHaveClass(/cooldown/, { timeout: 15_000 });
+  await expect(heroBtn.locator('.hero-clock')).toHaveText(/^[12]:\d\d$/, { timeout: 15_000 });
   expect(errors).toEqual([]);
 });
