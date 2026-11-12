@@ -102,7 +102,8 @@ export function nodePath(world: World, u: Unit, node: ResourceNode): Vec2[] | nu
  * Complete building accepting `type` with the shortest walk from `from`, and that path. Candidates
  * are tried nearest-first by straight-line distance to the footprint, which is a lower bound on
  * the walk, so the search stops once no remaining site could beat the best path found (usually
- * after one A*; more only when, say, the nearest camp is across a river). Null if none is reachable.
+ * after one A*; more only when, say, the nearest camp is across a river). Null if none is reachable,
+ * counting a site whose path ends out of reach of it (hemmed in by other buildings) as unreachable.
  */
 export function nearestDrop(world: World, from: Vec2, type: ResourceType, owner: PlayerId): { b: Building; path: Vec2[] } | null {
   const cands: { b: Building; d: number }[] = [];
@@ -115,6 +116,10 @@ export function nearestDrop(world: World, from: Vec2, type: ResourceType, owner:
     if (best && d >= best.len) break;
     const path = route(world, owner, from, siteApproach(from, b));
     if (!path) continue;
+    // A site walled in by other buildings can leave the path ending short of it (often an empty
+    // path): the walker would never deposit there, and with no path it would wait forever.
+    const end = path.length ? path[path.length - 1] : from;
+    if (rectDistance(end, buildingRect(b)) > BALANCE.villagerRadius + BALANCE.reach) continue;
     const len = pathLength(from, path);
     if (!best || len < best.len) best = { b, path, len };
   }

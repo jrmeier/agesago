@@ -4,7 +4,8 @@ import { BALANCE } from './balance';
 import { World } from './World';
 import { completeBuilding, layFoundation } from './systems/build';
 import { deserializeWorld, serializeWorld } from './serialize';
-import { nodeApproach, nodeInReach } from './systems/sites';
+import { buildingRect, nearestDrop, nodeApproach, nodeInReach } from './systems/sites';
+import { sendToDrop } from './systems/gather';
 
 const DT = 1 / BALANCE.tickRate;
 
@@ -202,6 +203,30 @@ describe('resource work routes', () => {
   });
 });
 
+
+describe('drop sites hemmed in by buildings (M16-9)', () => {
+  it('skips a drop site its path cannot reach and carries the load to one it can', () => {
+    const { world, worker } = setup([]);
+    const camp = layFoundation(world, 'miningCamp', { x: 40, z: 30 }, 0, 1);
+    completeBuilding(world, camp);
+    // Wall the camp in on every side, as a ring of houses and farms does in an AI town.
+    const r = buildingRect(camp);
+    const t = 1.5;
+    world.nav.addRect(901, { x0: r.x0 - t, x1: r.x1 + t, z0: r.z0 - t, z1: r.z0 });
+    world.nav.addRect(902, { x0: r.x0 - t, x1: r.x1 + t, z0: r.z1, z1: r.z1 + t });
+    world.nav.addRect(903, { x0: r.x0 - t, x1: r.x0, z0: r.z0, z1: r.z1 });
+    world.nav.addRect(904, { x0: r.x1, x1: r.x1 + t, z0: r.z0, z1: r.z1 });
+    worker.pos = { x: 40, z: r.z1 + t + 0.6 };
+    worker.carry = { type: 'gold', amount: 10 };
+    const drop = nearestDrop(world, worker.pos, 'gold', 1);
+    expect(drop?.b.kind).toBe('townCenter');
+    sendToDrop(world, worker);
+    expect(worker.state).toBe('toDrop');
+    run(world, 30);
+    expect(world.stock.gold).toBe(10);
+    expect(worker.carry).toBeNull();
+  });
+});
 
 describe('chosen villager jobs', () => {
   it.each([0, undefined])('loads a legacy farm with food %s and produces without wood', (food) => {
