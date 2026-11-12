@@ -1,3 +1,4 @@
+import { cpus } from 'node:os';
 import { defineConfig, devices } from '@playwright/test';
 
 /** Browser smoke tests against the production build (vite preview). Run: npm run e2e */
@@ -5,8 +6,12 @@ export default defineConfig({
   testDir: 'e2e',
   testMatch: '**/*.e2e.ts',
   timeout: 60_000,
-  // A backgrounded desktop page pauses requestAnimationFrame, so one worker in CI.
-  workers: process.env.CI ? 1 : undefined,
+  // A backgrounded desktop page pauses requestAnimationFrame, so one worker in CI. Locally, a
+  // quarter of the cores: every page rasterises with multi-threaded SwiftShader (90-300 ms a
+  // frame alone), so Playwright's default of half the cores drove the load past 100 on 24 cores
+  // and starved frame-driven specs (territory, tutorial, queues...). Six workers there finish the
+  // suite in the same 4 minutes without a failure.
+  workers: process.env.CI ? 1 : Math.max(1, Math.floor(cpus().length / 4)),
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
