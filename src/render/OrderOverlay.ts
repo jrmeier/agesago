@@ -43,6 +43,9 @@ export class OrderOverlay {
     this.lines.frustumCulled = false;
     this.lines.renderOrder = 5;
     this.lines.name = 'order-routes';
+    // Hidden while empty: the renderer then neither uploads the buffers nor issues a draw call,
+    // so a scene with no orders costs nothing (the prettify benchmark's budgets).
+    this.lines.visible = false;
     this.object.add(this.lines);
 
     const ring = new THREE.RingGeometry(0.28, 0.42, 20);
@@ -54,6 +57,7 @@ export class OrderOverlay {
     this.slots.frustumCulled = false;
     this.slots.renderOrder = 5;
     this.slots.name = 'formation-slots';
+    this.slots.visible = false;
     this.object.add(this.slots);
   }
 
@@ -80,6 +84,7 @@ export class OrderOverlay {
     }
     const geo = this.lines.geometry;
     geo.setDrawRange(0, v);
+    this.lines.visible = v > 0;
     geo.attributes.position.needsUpdate = true;
     geo.attributes.color.needsUpdate = true;
   }
@@ -94,6 +99,7 @@ export class OrderOverlay {
       this.slots.setMatrixAt(i, this.dummy.matrix);
     }
     this.slots.count = n;
+    this.slots.visible = n > 0;
     this.slots.instanceMatrix.needsUpdate = true;
   }
 
