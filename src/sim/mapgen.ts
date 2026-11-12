@@ -1,4 +1,4 @@
-import { normalizeMapOptions, type MapOptions } from '../core/maps';
+import { EXPANSION_GOLD, expansionGoldSpots, normalizeMapOptions, type MapOptions } from '../core/maps';
 import { generateVariantMap } from './mapVariants';
 import { MAP_D, MAP_W, type Heightfield, type MapLayout, type NodeKind, type PropKind, type StartLayout, type Vec2 } from '../core/types';
 import { createSeededRandom, generateTerrain, terrainFeatures } from './terrain';
@@ -244,19 +244,19 @@ export function generateMap(seed: number, players = 2, options: MapOptions = {})
     }
     return true;
   };
-  const addNode = (kind: NodeKind, pos: Vec2): boolean => {
+  const addNode = (kind: NodeKind, pos: Vec2, amount = kind === 'berry' ? 125 : kind === 'gold' ? 400 : 100): boolean => {
     if (!canPlaceNode(pos, kind)) return false;
-    layout.nodes.push({ kind, pos, amount: kind === 'berry' ? 125 : kind === 'gold' ? 400 : 100 });
+    layout.nodes.push({ kind, pos, amount });
     occupied.add(pos, kind === 'gold' ? 0.8 : 0.5);
     return true;
   };
-  const nodeNear = (kind: NodeKind, desired: Vec2): void => {
+  const nodeNear = (kind: NodeKind, desired: Vec2, amount?: number): void => {
     for (let ring = 0; ring <= 40; ring++) {
       const count = ring === 0 ? 1 : ring * 8;
       for (let i = 0; i < count; i++) {
         const angle = i / count * Math.PI * 2;
         const pos = { x: desired.x + Math.cos(angle) * ring * 0.65, z: desired.z + Math.sin(angle) * ring * 0.65 };
-        if (addNode(kind, pos)) return;
+        if (addNode(kind, pos, amount)) return;
       }
     }
     throw new Error(`No reachable ${kind} placement for seed ${seed}`);
@@ -277,6 +277,10 @@ export function generateMap(seed: number, players = 2, options: MapOptions = {})
     nodeNear('gold', { x: hf.width * x, z: hf.depth * z });
   }
   nodeNear('gold', { x: features.river.fords[1].x + 10, z: features.river.fords[1].z + 8 });
+  // Every player's two expansion clusters, the same amounts on the same flanks (M16-10).
+  for (const center of centers) {
+    for (const spot of expansionGoldSpots(center, { x: MAP_W / 2, z: MAP_D / 2 }, players)) nodeNear('gold', spot, EXPANSION_GOLD.amount);
+  }
 
   const candidates: Vec2[] = [];
   for (let z = 1.5; z < hf.depth - 1.5; z += 1.3) {

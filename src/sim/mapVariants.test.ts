@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MAP_SIZES, MAP_TYPES, type MapSize } from '../core/maps';
+import { EXPANSION_GOLD, MAP_SIZES, MAP_TYPES, type MapSize } from '../core/maps';
 import { generateMap } from './mapgen';
 import { World } from './World';
 import { serializeWorld, deserializeWorld } from './serialize';
@@ -17,6 +17,13 @@ describe('map setup variants',()=> {
       return Object.fromEntries(['tree','berry','gold','stone'].map(kind=>[kind,nodes.filter(n=>n.kind===kind).reduce((s,n)=>s+n.amount,0)]));
     });
     expect(totals.every(t=>JSON.stringify(t)===JSON.stringify(totals[0]))).toBe(true);
+    // Expansion gold (M16-10) is all or nothing per mine, so every start's share is the same.
+    const expansion=starts.map(()=>0);
+    for(const n of layout.nodes.filter(n=>n.kind==='gold'&&n.amount===EXPANSION_GOLD.amount)) {
+      const d=starts.map(({townCenter:c})=>Math.hypot(n.pos.x-c.x,n.pos.z-c.z)); expansion[d.indexOf(Math.min(...d))]+=n.amount;
+    }
+    expect(new Set(expansion).size).toBe(1);
+    if(options.type!=='islands'&&options.size!=='small') expect(expansion[0]).toBeGreaterThan(0);
     const world=new World(hf,layout);
     for(const start of starts) {
       expect(hf.isWalkable(start.townCenter.x,start.townCenter.z)).toBe(true);

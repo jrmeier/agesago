@@ -1,5 +1,5 @@
 import { GRASS_ONLY, type Heightfield, type MapLayout, type NodeKind, type Vec2 } from '../core/types';
-import { MAP_SIZES, type MapOptions, normalizeMapOptions } from '../core/maps';
+import { EXPANSION_GOLD, MAP_SIZES, type MapOptions, expansionGoldSpots, normalizeMapOptions } from '../core/maps';
 import { createSeededRandom } from './terrain';
 import { NavGrid } from './nav';
 
@@ -107,6 +107,24 @@ export function generateVariantMap(seed: number, players: number, options: MapOp
     layout.props=layout.props.filter(p=>Math.hypot(p.pos.x-pos.x,p.pos.z-pos.z)>=5);
     // These low remnants do not block the narrow shoreline approaches on Islands.
     for(const [j,o] of offsets.entries()) layout.props.push({kind:i<2?(j===2?'ruinWall':'ruinColumn'):'standingStone',pos:{x:pos.x+o.x,z:pos.z+o.z},rot:angle,scale:.8,blockRadius:0});
+  }
+  // Expansion gold (M16-10): each cluster mine goes in for every player or for none, so a lake,
+  // the sea or a discovery that takes one player's spot takes everyone's, and totals stay equal.
+  const spots=centers.map(c=>expansionGoldSpots(c,{x:width/2,z:width/2},players));
+  for(let k=0;k<(spots[0]?.length??0);k++) {
+    const fits=spots.every((list,i)=> {
+      const p=list[k], own=Math.hypot(p.x-centers[i].x,p.z-centers[i].z);
+      return own>=28 && centers.every((c,j)=>j===i||Math.hypot(p.x-c.x,p.z-c.z)>=own+10)
+        && [[0,0],[1.3,0],[-1.3,0],[0,1.3],[0,-1.3]].every(([dx,dz])=>hf.isWalkable(p.x+dx,p.z+dz)&&heightAt(p.x+dx,p.z+dz)>=.5)
+        && terrainNav.connected(centers[0],{x:p.x+1.3,z:p.z}) && discoveries.every(d=>Math.hypot(p.x-d.x,p.z-d.z)>=6);
+    });
+    if(!fits) continue;
+    for(const list of spots) {
+      const p=list[k];
+      layout.nodes=layout.nodes.filter(n=>Math.hypot(n.pos.x-p.x,n.pos.z-p.z)>=2.6);
+      layout.props=layout.props.filter(q=>Math.hypot(q.pos.x-p.x,q.pos.z-p.z)>=2.6);
+      add('gold',{...p},EXPANSION_GOLD.amount);
+    }
   }
   return { hf,layout };
 }

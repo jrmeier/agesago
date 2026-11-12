@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { EXPANSION_GOLD } from '../core/maps';
 import { type Heightfield, type MapLayout, type PropPlacement, type Vec2 } from '../core/types';
 import { BUILD_RING_RADIUS, generateMap, START_RADIUS } from './mapgen';
 import { terrainFeatures } from './terrain';
@@ -237,6 +238,23 @@ describe('generateMap', () => {
     }
   });
 
+  it.each(cases)('gives every start the same expansion gold past its territory for %i players, seed %i', (players, seed) => {
+    const { layout } = maps.get(`${players}/${seed}`)!;
+    const centers = [layout, ...layout.extraStarts!].map((start) => start.townCenter);
+    const rich = layout.nodes.filter((node) => node.kind === 'gold' && node.amount === EXPANSION_GOLD.amount);
+    const owned = centers.map(() => 0);
+    for (const node of rich) {
+      const d = centers.map((c) => distance(node.pos, c));
+      const mine = d.indexOf(Math.min(...d));
+      owned[mine] += node.amount;
+      // Past the Town Age territory (22 × 1.25 = 27.5) and clearly nearer its own start than any rival's.
+      expect(d[mine]).toBeGreaterThan(28);
+      expect(d[mine]).toBeLessThan(EXPANSION_GOLD.distance + 8);
+      for (let i = 0; i < d.length; i++) if (i !== mine) expect(d[i]).toBeGreaterThan(d[mine] + 10);
+    }
+    for (const total of owned) expect(total).toBe(2 * EXPANSION_GOLD.mines * EXPANSION_GOLD.amount);
+  });
+
   it.each(cases)('keeps every start, resource and gathering approach reachable with scenery blocked for %i players, seed %i', (players, seed) => {
     const { hf, layout } = maps.get(`${players}/${seed}`)!;
     const reachable = floodFill(hf, layout);
@@ -294,7 +312,8 @@ describe('generateMap', () => {
     expect(layout.nodes.filter((node) => node.kind === 'tree').length).toBeGreaterThanOrEqual(3000);
     expect(layout.nodes.filter((node) => node.kind === 'tree').length).toBeLessThanOrEqual(4500);
     expect(neutral.filter((node) => node.kind === 'berry')).toHaveLength(42);
-    expect(neutral.filter((node) => node.kind === 'gold')).toHaveLength(12);
+    expect(neutral.filter((node) => node.kind === 'gold' && node.amount === 400)).toHaveLength(12);
+    expect(neutral.filter((node) => node.kind === 'gold' && node.amount === EXPANSION_GOLD.amount)).toHaveLength(players * 2 * EXPANSION_GOLD.mines);
     expect(neutral.filter((node) => node.kind === 'stone')).toHaveLength(10);
     expect(layout.props.length).toBeGreaterThanOrEqual(500);
     expect(layout.props.length).toBeLessThanOrEqual(1100);
@@ -304,7 +323,8 @@ describe('generateMap', () => {
     expect(layout.props.some((p) => p.kind === 'wheatField')).toBe(true);
     const invalid = layout.nodes.filter((node) => node.kind !== 'fish').filter((node) => {
       const g = hf.ground(node.pos.x, node.pos.z);
-      return node.amount !== (node.kind === 'tree' ? 100 : node.kind === 'berry' ? 125 : node.kind === 'stone' ? 350 : 400)
+      return (node.amount !== (node.kind === 'tree' ? 100 : node.kind === 'berry' ? 125 : node.kind === 'stone' ? 350 : 400)
+        && !(node.kind === 'gold' && node.amount === EXPANSION_GOLD.amount))
         || !hf.isWalkable(node.pos.x, node.pos.z) || g.path > 0.04 || g.sand > 0.24
         || (node.kind !== 'stone' && g.rock > 0.32)
         || (node.kind === 'tree' && hf.forestDensity(node.pos.x, node.pos.z) < 0.43);
