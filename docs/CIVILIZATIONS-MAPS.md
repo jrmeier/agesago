@@ -36,6 +36,8 @@ civilization identifiers are rejected on load rather than silently changing the 
 The map tests cover all 20 size/landscape combinations with four-player starting
 resource equality and actual navigation between starts. `npm run bench:maps` runs
 those generations on a single process and reports the one-second budget explicitly.
+On 2026-11-12 (`52a558a`, after the M16-10 expansion gold) all 20 generations
+finished within budget, worst 278 ms: [raw results](verification/maps-generation-52a558a.json).
 Low-tier rendering tests check finite terrain, dimensions, a 305k triangle ceiling
 and the inexpensive water material for all combinations. These structural checks
 are not a physical-phone frame-rate measurement.
@@ -59,7 +61,8 @@ IDs select the union, e.g. `CIV_BENCH_CIV=romans,celts`. Do not infer that this 
 from the existence of the benchmark script; record its actual completed results.
 
 
-[Completed balance evidence](CIVILIZATIONS-BALANCE.md) records the baseline,
+[Completed balance evidence](CIVILIZATIONS-BALANCE.md) records the current
+M13-7 rerun on `52a558a` (all six bands pass) and, as history, the original baseline,
 failed tuning rounds, final six passing capped benchmark bands, raw seed/side
 results and conquest/score-cap distinction. Use a fresh benchmark output file after simulation
 or tuning changes; resume a partial file only against the same source.

@@ -4,6 +4,8 @@ On 2026-10-10, all 20 size × landscape combinations generated, started and rend
 
 A focused check after adding variant ruins and relics again measured about 60 FPS on Giant Forest and Giant Islands (p95 17.4 ms), with generation under 171 ms.
 
+A 2026-11-12 rerun of `npm run bench:maps` on `52a558a` (after the M16-10 expansion gold clusters) kept all 20 generations under the one-second budget, worst 278 ms on a shared Linux host: [maps-generation-52a558a.json](verification/maps-generation-52a558a.json). The hardware-Chrome frame-rate measurement below was not repeated; it needs a GPU-backed desktop browser.
+
 Raw data: [maps-low-tier-2026-10-10.json](maps-low-tier-2026-10-10.json). Map tests separately cover deterministic generation, multi-player resources, land and sea reachability, terrain geometry and saved map identity.
 
 Reproduce against a running production build:

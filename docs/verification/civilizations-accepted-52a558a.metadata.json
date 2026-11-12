@@ -1,0 +1,581 @@
+{
+  "ticket": "M13-7",
+  "sourceRevision": "52a558a",
+  "baseRevision": "3db2f1c",
+  "date": "2026-11-12",
+  "command": "CIV_BENCH_SHARDS=6 CIV_BENCH_SHARD=<0..5> CIV_BENCH_OUTPUT=<file> npm run bench:civilizations",
+  "runtime": {
+    "os": "Linux x86_64",
+    "node": "v24.15.0",
+    "shards": 6,
+    "wallClockUtc": [
+      "07:57:50",
+      "08:04:36"
+    ]
+  },
+  "games": 120,
+  "coverage": {
+    "pairings": 6,
+    "mapSeeds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "swappedSides": [
+      false,
+      true
+    ],
+    "uniqueIds": 120
+  },
+  "map": "legacy Large Mediterranean, generateMap(seed, 2)",
+  "difficulty": "moderate",
+  "scoreCapSimMinutes": 30,
+  "score": "villagers + army + completed buildings",
+  "drawCredit": 0.5,
+  "acceptedBand": [
+    0.4,
+    0.6
+  ],
+  "resolutionCounts": {
+    "conquest": 7,
+    "score-cap": 113
+  },
+  "pairings": [
+    {
+      "pair": [
+        "hellenes",
+        "celts"
+      ],
+      "games": 20,
+      "firstWins": 10,
+      "draws": 0,
+      "firstWinRate": 0.5,
+      "passes": true,
+      "conquests": 4
+    },
+    {
+      "pair": [
+        "hellenes",
+        "persians"
+      ],
+      "games": 20,
+      "firstWins": 11,
+      "draws": 1,
+      "firstWinRate": 0.575,
+      "passes": true,
+      "conquests": 0
+    },
+    {
+      "pair": [
+        "hellenes",
+        "romans"
+      ],
+      "games": 20,
+      "firstWins": 11,
+      "draws": 1,
+      "firstWinRate": 0.575,
+      "passes": true,
+      "conquests": 2
+    },
+    {
+      "pair": [
+        "persians",
+        "celts"
+      ],
+      "games": 20,
+      "firstWins": 11,
+      "draws": 0,
+      "firstWinRate": 0.55,
+      "passes": true,
+      "conquests": 0
+    },
+    {
+      "pair": [
+        "romans",
+        "celts"
+      ],
+      "games": 20,
+      "firstWins": 12,
+      "draws": 0,
+      "firstWinRate": 0.6,
+      "passes": true,
+      "conquests": 1
+    },
+    {
+      "pair": [
+        "romans",
+        "persians"
+      ],
+      "games": 20,
+      "firstWins": 9,
+      "draws": 0,
+      "firstWinRate": 0.45,
+      "passes": true,
+      "conquests": 0
+    }
+  ],
+  "conquests": [
+    {
+      "id": "hellenes/celts/1/false",
+      "winner": "celts",
+      "scores": [
+        0,
+        195
+      ],
+      "simSeconds": 1702.0499999989997
+    },
+    {
+      "id": "hellenes/celts/2/false",
+      "winner": "celts",
+      "scores": [
+        0,
+        202
+      ],
+      "simSeconds": 1619.9999999990744
+    },
+    {
+      "id": "hellenes/celts/3/true",
+      "winner": "hellenes",
+      "scores": [
+        0,
+        153
+      ],
+      "simSeconds": 1600.0499999990925
+    },
+    {
+      "id": "hellenes/celts/7/true",
+      "winner": "hellenes",
+      "scores": [
+        0,
+        216
+      ],
+      "simSeconds": 1657.0499999990407
+    },
+    {
+      "id": "hellenes/romans/3/false",
+      "winner": "romans",
+      "scores": [
+        0,
+        159
+      ],
+      "simSeconds": 1559.0499999991298
+    },
+    {
+      "id": "hellenes/romans/9/false",
+      "winner": "romans",
+      "scores": [
+        0,
+        181
+      ],
+      "simSeconds": 1779.0499999989297
+    },
+    {
+      "id": "romans/celts/1/false",
+      "winner": "celts",
+      "scores": [
+        0,
+        204
+      ],
+      "simSeconds": 1713.0499999989897
+    }
+  ],
+  "seatWins": {
+    "firstSeat": 33,
+    "secondSeat": 85,
+    "draws": 2
+  },
+  "reproducibility": {
+    "note": "The final run was a fresh full tournament on the committed source. Its non-Hellenic rows equal the 3db2f1c baseline and its Hellenic rows equal the 8% candidate round, field for field.",
+    "games": 120,
+    "mismatches": 0,
+    "fields": [
+      "winner",
+      "scores",
+      "resolution",
+      "simSeconds"
+    ]
+  },
+  "tuning": {
+    "baseline": {
+      "file": "civilizations-baseline-3db2f1c.jsonl",
+      "pairings": [
+        {
+          "pair": [
+            "hellenes",
+            "celts"
+          ],
+          "games": 20,
+          "firstWins": 6,
+          "draws": 1,
+          "firstWinRate": 0.325,
+          "passes": false,
+          "conquests": 0
+        },
+        {
+          "pair": [
+            "hellenes",
+            "persians"
+          ],
+          "games": 20,
+          "firstWins": 10,
+          "draws": 1,
+          "firstWinRate": 0.525,
+          "passes": true,
+          "conquests": 0
+        },
+        {
+          "pair": [
+            "hellenes",
+            "romans"
+          ],
+          "games": 20,
+          "firstWins": 8,
+          "draws": 0,
+          "firstWinRate": 0.4,
+          "passes": true,
+          "conquests": 0
+        },
+        {
+          "pair": [
+            "persians",
+            "celts"
+          ],
+          "games": 20,
+          "firstWins": 11,
+          "draws": 0,
+          "firstWinRate": 0.55,
+          "passes": true,
+          "conquests": 0
+        },
+        {
+          "pair": [
+            "romans",
+            "celts"
+          ],
+          "games": 20,
+          "firstWins": 12,
+          "draws": 0,
+          "firstWinRate": 0.6,
+          "passes": true,
+          "conquests": 1
+        },
+        {
+          "pair": [
+            "romans",
+            "persians"
+          ],
+          "games": 20,
+          "firstWins": 9,
+          "draws": 0,
+          "firstWinRate": 0.45,
+          "passes": true,
+          "conquests": 0
+        }
+      ]
+    },
+    "rejected": [
+      {
+        "variant": "hellenes-train-9pct",
+        "change": "Hellenes infantry train 9% faster",
+        "pairings": [
+          {
+            "pair": [
+              "hellenes",
+              "celts"
+            ],
+            "games": 20,
+            "firstWins": 12,
+            "draws": 0,
+            "firstWinRate": 0.6,
+            "passes": true,
+            "conquests": 0
+          },
+          {
+            "pair": [
+              "hellenes",
+              "persians"
+            ],
+            "games": 20,
+            "firstWins": 10,
+            "draws": 0,
+            "firstWinRate": 0.5,
+            "passes": true,
+            "conquests": 0
+          },
+          {
+            "pair": [
+              "hellenes",
+              "romans"
+            ],
+            "games": 20,
+            "firstWins": 6,
+            "draws": 0,
+            "firstWinRate": 0.3,
+            "passes": false,
+            "conquests": 0
+          }
+        ]
+      },
+      {
+        "variant": "hellenes-9pct+roman-engineering-10pct",
+        "change": "Hellenes 9%; Roman Engineering construction +10% (no game changed: inert in this bench)",
+        "pairings": [
+          {
+            "pair": [
+              "hellenes",
+              "romans"
+            ],
+            "games": 20,
+            "firstWins": 6,
+            "draws": 0,
+            "firstWinRate": 0.3,
+            "passes": false,
+            "conquests": 0
+          },
+          {
+            "pair": [
+              "romans",
+              "celts"
+            ],
+            "games": 20,
+            "firstWins": 12,
+            "draws": 0,
+            "firstWinRate": 0.6,
+            "passes": true,
+            "conquests": 1
+          },
+          {
+            "pair": [
+              "romans",
+              "persians"
+            ],
+            "games": 20,
+            "firstWins": 9,
+            "draws": 0,
+            "firstWinRate": 0.45,
+            "passes": true,
+            "conquests": 0
+          }
+        ]
+      },
+      {
+        "variant": "hellenes-9pct+legionary-melee-7",
+        "change": "Hellenes 9%; Legionary melee 8 -> 7",
+        "pairings": [
+          {
+            "pair": [
+              "hellenes",
+              "romans"
+            ],
+            "games": 20,
+            "firstWins": 12,
+            "draws": 0,
+            "firstWinRate": 0.6,
+            "passes": true,
+            "conquests": 0
+          },
+          {
+            "pair": [
+              "romans",
+              "celts"
+            ],
+            "games": 20,
+            "firstWins": 7,
+            "draws": 0,
+            "firstWinRate": 0.35,
+            "passes": false,
+            "conquests": 0
+          },
+          {
+            "pair": [
+              "romans",
+              "persians"
+            ],
+            "games": 20,
+            "firstWins": 11,
+            "draws": 0,
+            "firstWinRate": 0.55,
+            "passes": true,
+            "conquests": 0
+          }
+        ]
+      },
+      {
+        "variant": "hellenes-9pct+legionary-hp-60",
+        "change": "Hellenes 9%; Legionary HP 65 -> 60",
+        "pairings": [
+          {
+            "pair": [
+              "hellenes",
+              "romans"
+            ],
+            "games": 20,
+            "firstWins": 8,
+            "draws": 0,
+            "firstWinRate": 0.4,
+            "passes": true,
+            "conquests": 1
+          },
+          {
+            "pair": [
+              "romans",
+              "celts"
+            ],
+            "games": 20,
+            "firstWins": 7,
+            "draws": 0,
+            "firstWinRate": 0.35,
+            "passes": false,
+            "conquests": 2
+          },
+          {
+            "pair": [
+              "romans",
+              "persians"
+            ],
+            "games": 20,
+            "firstWins": 10,
+            "draws": 1,
+            "firstWinRate": 0.525,
+            "passes": true,
+            "conquests": 1
+          }
+        ]
+      },
+      {
+        "variant": "hellenes-9pct+legionary-hp-62",
+        "change": "Hellenes 9%; Legionary HP 65 -> 62",
+        "pairings": [
+          {
+            "pair": [
+              "hellenes",
+              "romans"
+            ],
+            "games": 20,
+            "firstWins": 12,
+            "draws": 0,
+            "firstWinRate": 0.6,
+            "passes": true,
+            "conquests": 1
+          },
+          {
+            "pair": [
+              "romans",
+              "celts"
+            ],
+            "games": 20,
+            "firstWins": 7,
+            "draws": 0,
+            "firstWinRate": 0.35,
+            "passes": false,
+            "conquests": 0
+          },
+          {
+            "pair": [
+              "romans",
+              "persians"
+            ],
+            "games": 20,
+            "firstWins": 8,
+            "draws": 1,
+            "firstWinRate": 0.425,
+            "passes": true,
+            "conquests": 2
+          }
+        ]
+      }
+    ],
+    "accepted": "Hellenes infantry train 8% faster (trainTime x0.92); no other data changed"
+  },
+  "supersededPreRebaseRun": {
+    "file": "civilizations-prerebase-551f803.jsonl",
+    "sourceRevision": "551f803",
+    "pairings": [
+      {
+        "pair": [
+          "hellenes",
+          "romans"
+        ],
+        "games": 20,
+        "firstWins": 12,
+        "draws": 0,
+        "firstWinRate": 0.6,
+        "passes": true,
+        "conquests": 0
+      },
+      {
+        "pair": [
+          "hellenes",
+          "persians"
+        ],
+        "games": 20,
+        "firstWins": 12,
+        "draws": 1,
+        "firstWinRate": 0.625,
+        "passes": false,
+        "conquests": 0
+      },
+      {
+        "pair": [
+          "hellenes",
+          "celts"
+        ],
+        "games": 20,
+        "firstWins": 10,
+        "draws": 0,
+        "firstWinRate": 0.5,
+        "passes": true,
+        "conquests": 0
+      },
+      {
+        "pair": [
+          "romans",
+          "persians"
+        ],
+        "games": 20,
+        "firstWins": 9,
+        "draws": 0,
+        "firstWinRate": 0.45,
+        "passes": true,
+        "conquests": 0
+      },
+      {
+        "pair": [
+          "romans",
+          "celts"
+        ],
+        "games": 20,
+        "firstWins": 10,
+        "draws": 0,
+        "firstWinRate": 0.5,
+        "passes": true,
+        "conquests": 0
+      },
+      {
+        "pair": [
+          "persians",
+          "celts"
+        ],
+        "games": 20,
+        "firstWins": 11,
+        "draws": 0,
+        "firstWinRate": 0.55,
+        "passes": true,
+        "conquests": 1
+      }
+    ]
+  },
+  "assembledSha256": "82c134ef1d8c3f6f2414c1c6dda401d495981decc6af0290cf6f6b02888495bf",
+  "sourceTrees": {
+    "src/core": "91c557226c842d63f69477d821f605e30793b7af",
+    "src/ai": "9d367eff9caed1c9e64fef15c59ad6dbe9d82b76",
+    "src/sim": "f61b2a995c1e3d2e620eac12f6d64d75c0c647b1"
+  }
+}

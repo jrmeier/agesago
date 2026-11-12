@@ -1,5 +1,92 @@
 # Civilization AI balance evidence
 
+## Current: M13-7 rerun after the M13–M16 pacing changes (2026-11-12)
+
+M13 (age gates, unit lines, pacing, AI), M16 (siege, champions, heroes,
+late-game AI, counter table) and M16-10 (expansion gold, AI resignation)
+changed the economy and armies this benchmark runs on. The tournament
+therefore ran again with the same harness and rules as the history below:
+`npm run bench:civilizations`, six pairings × seeds 1–10 × both sides,
+moderate AI, legacy Large Mediterranean, a 30-minute score cap, villagers +
+army + completed buildings, and draws worth half a win. All runs used six
+pairing shards on one Linux x86_64 host with Node 24.15.0.
+
+### Baseline on `3db2f1c`: one pairing fails
+
+[Raw 120-game baseline](verification/civilizations-baseline-3db2f1c.jsonl).
+
+| Pairing | First civ benchmark win rate | 40–60% |
+| --- | ---: | --- |
+| Hellenes / Romans | 40% | Pass |
+| Hellenes / Persians | 52.5% | Pass |
+| Hellenes / Celts | 32.5% | Fail |
+| Romans / Persians | 45% | Pass |
+| Romans / Celts | 60% | Pass |
+| Persians / Celts | 55% | Pass |
+
+An earlier full run on `551f803`, before M16-8/9/10 merged, failed only
+Hellenes / Persians (62.5%). It is kept as
+[superseded pre-rebase data](verification/civilizations-prerebase-551f803.jsonl)
+and is not acceptance evidence.
+
+### Tuning rounds
+
+[All rejected candidate rows](verification/civilizations-tuning-3db2f1c.jsonl)
+carry a `variant` field. Each round reran every pairing that involves a
+changed civilization; the other pairings keep their baseline results.
+
+| Candidate | H / R | H / P | H / C | R / P | R / C |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Hellenes infantry train 9% faster | **30%** | 50% | 60% | — | — |
+| + Roman Engineering +10% (from 15%) | **30%** | — | — | 45% | 60% |
+| + Legionary melee 7 (from 8) | 60% | — | — | 55% | **35%** |
+| + Legionary HP 60 (from 65) | 40% | — | — | 52.5% | **35%** |
+| + Legionary HP 62 (from 65) | 60% | — | — | 42.5% | **35%** |
+| **Hellenes infantry train 8% faster (accepted)** | 57.5% | 57.5% | 50% | — | — |
+
+Roman Engineering changed no game at all, field for field, so that research
+has no effect in this benchmark, and the change was reverted. Any Legionary
+nerf large enough to move Hellenes / Romans also dropped Romans / Celts to 35%,
+so the Legionary keeps its stats. The accepted change is Hellenes' infantry
+training bonus from 7% to 8%. Romans, Persians and Celts are unchanged.
+
+### Final verified table on `52a558a`: all six bands pass
+
+[Raw 120-game acceptance run](verification/civilizations-accepted-52a558a.jsonl)
+and [machine-readable provenance](verification/civilizations-accepted-52a558a.metadata.json).
+This was a fresh full tournament on the committed source, 07:58–08:05 UTC.
+Its 120 IDs exactly cover the six pairings, seeds 1–10 and both sides, with no
+duplicates. The non-Hellenic rows reproduce the `3db2f1c` baseline, and the
+Hellenic rows reproduce the 8% candidate round, with 0 mismatches in winner,
+scores, resolution or simulation time.
+
+| Pairing | First civ wins | Draws | Games | First civ benchmark win rate | 40–60% |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Hellenes / Romans | 11 | 1 | 20 | 57.5% | Pass |
+| Hellenes / Persians | 11 | 1 | 20 | 57.5% | Pass |
+| Hellenes / Celts | 10 | 0 | 20 | 50% | Pass |
+| Romans / Persians | 9 | 0 | 20 | 45% | Pass |
+| Romans / Celts | 12 | 0 | 20 | 60% | Pass |
+| Persians / Celts | 11 | 0 | 20 | 55% | Pass |
+
+**113 games reached the score cap and 7 ended in conquest.** The capped
+benchmark meaning is unchanged: these are not conquest-only win rates, and no
+threshold was relaxed. Final starting bonuses are Hellenes infantry training 8%
+faster, Romans buildings +3% HP, Persians food gathering 5% faster, and Celts
+wood gathering 6% faster.
+
+**Caveats.** With 20 games per pairing, one result has a binomial standard
+deviation of about ±11 points, and most games end on small score margins.
+Several pairings sit at the band edge (Romans / Celts 60%). Small, unrelated
+changes reshuffle close games, so any later sim or AI change needs a fresh run
+(M16-9's late-game pass is the next one). The second seat won 85 of 118
+decisive games, against 33 for the first seat. The swapped-sides design cancels
+this seat bias within each pairing, but it points to an asymmetry in the legacy
+two-player map layout that deserves its own look.
+
+## History (2026-10-10, superseded by the rerun above)
+
+
 The full baseline tournament ran on 2026-10-10 against integrated simulation
 `bf8af51`, with FIFO production and naval unit classes included. Every pairing
 uses seeds 1–10, both starting sides, moderate AI, the legacy Large Mediterranean
@@ -11,7 +98,7 @@ villagers + army + completed buildings at the cap; equal scores earn half a win
 each. **All baseline games reached the score cap. These are score outcomes, not
 measured conquest victory rates.**
 
-## Baseline: failed two pairing bands
+### Baseline: failed two pairing bands
 
 [Raw 120-game results](verification/civilizations-baseline-bf8af51.jsonl).
 
@@ -31,7 +118,7 @@ pairings involving Romans or Celts (100 new games); Hellenes / Persians is
 unchanged. The first rerun completed all 100 unique expected games.
 
 
-## First tuning: one pairing still fails
+### First tuning: one pairing still fails
 
 [Raw 100-game rerun](verification/civilizations-tuning-e943a06.jsonl), source `e943a06`.
 97 games reached the score cap and three ended in conquest, with no draws.
@@ -51,7 +138,7 @@ pairings will run again; Roman / Persian, Roman / Celt and Persian / Celt result
 remain valid because their civilization data is unchanged. The second rerun completed all 60 unique expected games on GitHub runners.
 
 
-## Second tuning: one Celtic pairing still fails
+### Second tuning: one Celtic pairing still fails
 
 [Raw 60-game Hellenic rerun](verification/civilizations-hellenes-8af05a9.jsonl),
 source `8af05a9`. [Temporary verification run](https://github.com/jrmeier/agesago/actions/runs/38096576652)
@@ -76,7 +163,7 @@ from 7% to 6%; all three Celtic pairings were rerun. The final Celtic rerun
 completed all 60 unique expected games.
 
 
-## Final verified table: all six capped benchmark bands pass
+### Final verified table: all six capped benchmark bands pass
 
 [Raw final Celtic rerun](verification/civilizations-celts-a95d627.jsonl), source
 `a95d627`, ran in [three isolated Node 20 jobs](https://github.com/jrmeier/agesago/actions/runs/38097537489).
@@ -111,7 +198,7 @@ it does not establish a conquest-only win-rate band. No threshold was relaxed,
 and the Persian / Celt draw contributes half a win. This final evidence update
 changes documentation and data only; the tested source table stays at `a95d627`.
 
-## Applicability to the integrated product source
+### Applicability to the integrated product source
 
 Product source `d2c5eee` has identical `src/core` and `src/ai` trees to `a95d627`,
 but its `src/sim` tree differs. The exact tree match stated above applies to the

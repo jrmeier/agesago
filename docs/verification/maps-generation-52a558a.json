@@ -1,0 +1,199 @@
+{
+  "ticket": "M13-7",
+  "sourceRevision": "52a558a",
+  "date": "2026-11-12",
+  "command": "npm run bench:maps",
+  "runtime": {
+    "os": "Linux x86_64",
+    "node": "v24.15.0",
+    "note": "shared host, other benches and the test suite running concurrently"
+  },
+  "seed": 9,
+  "players": 4,
+  "budgetMs": 1000,
+  "combinations": 20,
+  "worstMs": 278.25460100000004,
+  "allWithinBudget": true,
+  "results": [
+    {
+      "size": "small",
+      "type": "mediterranean",
+      "width": 120,
+      "players": 4,
+      "nodes": 383,
+      "ms": 33.667114,
+      "withinOneSecond": true
+    },
+    {
+      "size": "small",
+      "type": "highlands",
+      "width": 120,
+      "players": 4,
+      "nodes": 457,
+      "ms": 22.781784000000016,
+      "withinOneSecond": true
+    },
+    {
+      "size": "small",
+      "type": "riverValley",
+      "width": 120,
+      "players": 4,
+      "nodes": 457,
+      "ms": 21.753978999999987,
+      "withinOneSecond": true
+    },
+    {
+      "size": "small",
+      "type": "forest",
+      "width": 120,
+      "players": 4,
+      "nodes": 975,
+      "ms": 19.364712999999995,
+      "withinOneSecond": true
+    },
+    {
+      "size": "small",
+      "type": "islands",
+      "width": 120,
+      "players": 4,
+      "nodes": 176,
+      "ms": 15.060746999999992,
+      "withinOneSecond": true
+    },
+    {
+      "size": "medium",
+      "type": "mediterranean",
+      "width": 144,
+      "players": 4,
+      "nodes": 618,
+      "ms": 34.070970999999986,
+      "withinOneSecond": true
+    },
+    {
+      "size": "medium",
+      "type": "highlands",
+      "width": 144,
+      "players": 4,
+      "nodes": 703,
+      "ms": 36.34722800000003,
+      "withinOneSecond": true
+    },
+    {
+      "size": "medium",
+      "type": "riverValley",
+      "width": 144,
+      "players": 4,
+      "nodes": 707,
+      "ms": 35.04066599999999,
+      "withinOneSecond": true
+    },
+    {
+      "size": "medium",
+      "type": "forest",
+      "width": 144,
+      "players": 4,
+      "nodes": 1791,
+      "ms": 34.845617000000004,
+      "withinOneSecond": true
+    },
+    {
+      "size": "medium",
+      "type": "islands",
+      "width": 144,
+      "players": 4,
+      "nodes": 254,
+      "ms": 23.57923999999997,
+      "withinOneSecond": true
+    },
+    {
+      "size": "large",
+      "type": "mediterranean",
+      "width": 176,
+      "players": 4,
+      "nodes": 3333,
+      "ms": 278.25460100000004,
+      "withinOneSecond": true
+    },
+    {
+      "size": "large",
+      "type": "highlands",
+      "width": 176,
+      "players": 4,
+      "nodes": 1334,
+      "ms": 74.14213000000007,
+      "withinOneSecond": true
+    },
+    {
+      "size": "large",
+      "type": "riverValley",
+      "width": 176,
+      "players": 4,
+      "nodes": 1331,
+      "ms": 65.31827799999996,
+      "withinOneSecond": true
+    },
+    {
+      "size": "large",
+      "type": "forest",
+      "width": 176,
+      "players": 4,
+      "nodes": 3405,
+      "ms": 64.83750099999997,
+      "withinOneSecond": true
+    },
+    {
+      "size": "large",
+      "type": "islands",
+      "width": 176,
+      "players": 4,
+      "nodes": 335,
+      "ms": 49.57753600000001,
+      "withinOneSecond": true
+    },
+    {
+      "size": "giant",
+      "type": "mediterranean",
+      "width": 192,
+      "players": 4,
+      "nodes": 1539,
+      "ms": 76.56845600000008,
+      "withinOneSecond": true
+    },
+    {
+      "size": "giant",
+      "type": "highlands",
+      "width": 192,
+      "players": 4,
+      "nodes": 1649,
+      "ms": 80.87886200000003,
+      "withinOneSecond": true
+    },
+    {
+      "size": "giant",
+      "type": "riverValley",
+      "width": 192,
+      "players": 4,
+      "nodes": 1634,
+      "ms": 78.51452600000016,
+      "withinOneSecond": true
+    },
+    {
+      "size": "giant",
+      "type": "forest",
+      "width": 192,
+      "players": 4,
+      "nodes": 4386,
+      "ms": 79.39093099999991,
+      "withinOneSecond": true
+    },
+    {
+      "size": "giant",
+      "type": "islands",
+      "width": 192,
+      "players": 4,
+      "nodes": 365,
+      "ms": 45.603387999999995,
+      "withinOneSecond": true
+    }
+  ]
+}
