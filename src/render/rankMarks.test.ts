@@ -177,20 +177,27 @@ describe('rank marks in the scene', () => {
   });
 
   it('keeps instanced rank marks within the frame budget for a large veteran army', () => {
-    const world = makeWorld(200);
-    const views = new EntityViews(world);
     const camera = cameraAt(40, 34, 30, 22);
-    const time = (frames: number) => {
+    // Two identical armies, one plain and one ranked, timed in alternating windows and compared
+    // best against best: a parallel test run's shifting CPU load then hits both alike (timing them
+    // one after the other let a load swing between the two phases break the ratio).
+    const plainWorld = makeWorld(200), rankedWorld = makeWorld(200);
+    scouts(rankedWorld).forEach((u, i) => gainXp(rankedWorld, u, i % 2 ? 300 : 100));
+    const plainViews = new EntityViews(plainWorld), rankedViews = new EntityViews(rankedWorld);
+    const time = (views: EntityViews, frames: number) => {
       const start = performance.now();
       for (let f = 0; f < frames; f++) views.sync(0, f / 60, camera);
       return (performance.now() - start) / frames;
     };
-    time(10);
-    const plain = time(40);
-    scouts(world).forEach((u, i) => gainXp(world, u, i % 2 ? 300 : 100));
-    time(10);
-    const ranked = time(40);
-    expect(mesh(views, 'rank-fill').count).toBe(300);
+    time(plainViews, 10);
+    time(rankedViews, 10);
+    let plain = Infinity, ranked = Infinity;
+    for (let round = 0; round < 6; round++) {
+      plain = Math.min(plain, time(plainViews, 10));
+      ranked = Math.min(ranked, time(rankedViews, 10));
+    }
+    expect(mesh(rankedViews, 'rank-fill').count).toBe(300);
+    expect(mesh(plainViews, 'rank-fill').count).toBe(0);
     // Two extra instanced draws; the per-unit work is a few matrix writes.
     expect(ranked).toBeLessThan(plain * 1.5 + 0.5);
   });
