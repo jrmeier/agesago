@@ -59,6 +59,26 @@ Choose **Islands** in the match setup for connected sea lanes. Build a **Dock** 
 
 Move a transport near shore, then order selected land units onto it to board. Select the loaded transport, press **Unload**, and click or tap a reachable coast. On a phone, ship training is in the **Train** sheet and unloading is in **Orders**.
 
+## Armies, territory and victory
+
+Press **?** in a match for every key, the mouse orders, and a counter table ("who beats what, cost for cost").
+
+- **Upgrades:** select a house, watch tower or palisade and press **Shift+U** (or its button) to upgrade it in place. Examples are House → Large House and Watch Tower → Guard Tower → Fortress Tower. Unit-line upgrades, researched from the Town Age, strengthen and rename a whole line.
+- **Ranks:** soldiers gain experience from kills and are promoted Basic → Advanced → Elite. Each promotion improves their stats and heals them to full, and rank marks show above them.
+- **Garrison:** put villagers and soldiers inside Town Centers, towers, fortresses and other shelters. Occupants add arrows, the temple heals them, and the town bell (**U**) sends villagers to the nearest shelter.
+- **Batch training:** Shift-click a train button (**×5** on touch) to queue five units as one batch.
+- **Siege:** the Siege Workshop (City Age, **Shift+B**) trains battering rams, catapults and bolt shooters. Catapults and bolt shooters unpack before they shoot.
+- **Fortress, champions and heroes:**
+  - The Fortress (City Age, **Shift+N**, at most two) trains each civilization's infantry and cavalry champions.
+  - In the Empire Age it also trains the civilization's hero (Leonidas, Scipio, Cyrus or Vercingetorix). A hero carries an aura for nearby troops. Only one can be alive at a time, with a 120 s wait after it falls. Press **;** to select it.
+- **Wonder:** the Empire Age goal (**Shift+H**). When it is finished, a victory countdown starts that rivals must stop by destroying it. The timer and the option are set in the match setup.
+- **Formations, patrol and guard:**
+  - Right-drag a front line with soldiers selected. Pick line, column, box or loose with **Shift+L / Shift+C / Shift+X / Shift+S**.
+  - **Q** attack-moves, **Shift+Q** patrols between points, and **Shift+G** or **Alt+right-click** guards a unit or building.
+- **Territory:** Town Centers and other key buildings claim borders, and most buildings must go inside them. Buildings cut off from your Town Centers decay unless garrisoned.
+- **Capture:** right-click an enemy or neutral building with soldiers to capture it, and garrison it to hold it. **Ctrl+right-click** or the **Raze** button destroys it instead.
+- **Computer rivals resign** once they have lost every Town Center and villager and have fewer than five soldiers left. The toast and the end-of-match summary say so.
+
 ## Build & deploy
 
 ```bash
@@ -66,7 +86,7 @@ npm run build   # static site to dist/
 ```
 
 Pushes to `main` are tested, built and deployed to https://agesago.jedm.dev by `.github/workflows/ci.yml`.
-The trained-unit work, livestock, and permanent-farm simulation uses multiplayer protocol 3; deploy the web client and relay together.
+Online play checks a multiplayer protocol version (`NETWORK_VERSION` in `src/network/protocol.ts`, currently 16); deploy the web client and relay together.
 
 ## Building and resource work
 
