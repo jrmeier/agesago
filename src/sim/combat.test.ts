@@ -8,6 +8,7 @@ import { applyDamage } from './systems/combat';
 import { deserializeWorld, serializeWorld } from './serialize';
 import { damageTo, unitSpeed } from './systems/stats';
 import { defaultPlayers, World } from './World';
+import { perfBudget } from '../testing/perf';
 
 const DT = 1 / BALANCE.tickRate;
 
@@ -592,6 +593,6 @@ describe('performance', () => {
     run(world, n * DT);
     const per = (performance.now() - t0) / n;
     expect(world.units.size).toBeGreaterThan(40);
-    expect(per).toBeLessThan(6);
+    expect(per).toBeLessThan(perfBudget(6));
   });
 });

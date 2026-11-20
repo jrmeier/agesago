@@ -21,6 +21,7 @@ import {
   THROW_SECONDS,
   type SiegeKind,
 } from './siegeModels';
+import { perfBudget } from '../testing/perf';
 
 const KINDS: SiegeKind[] = ['ram', 'catapult', 'boltShooter'];
 
@@ -92,7 +93,7 @@ describe('siege engine models', () => {
     }
     const perFrame = (performance.now() - started) / 120;
     // Pivot moves only; generous so a loaded machine does not flake (about 0.05 ms on a dev box).
-    expect(perFrame).toBeLessThan(4);
+    expect(perFrame).toBeLessThan(perfBudget(4));
   });
 
   it('rolls wheels when walking and leaves them still when idle', () => {

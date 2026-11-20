@@ -17,6 +17,7 @@ import { layFoundation } from './systems/build';
 import { nearestDrop } from './systems/sites';
 import { EXPLORED } from './visibility';
 import { World } from './World';
+import { perfBudget } from '../testing/perf';
 
 const DT = 1 / BALANCE.tickRate;
 
@@ -151,7 +152,7 @@ describe('canPlace', () => {
     const t0 = performance.now();
     for (let i = 0; i < n; i++) w.canPlace(kinds[i % 3], { x: tc.x - 30 + (i % 60), z: tc.z - 20 + ((i * 7) % 40) }, 0);
     const per = (performance.now() - t0) / n;
-    expect(per).toBeLessThan(0.3);
+    expect(per).toBeLessThan(perfBudget(0.3));
   });
 });
 
@@ -396,7 +397,7 @@ describe('NavGrid rectangles', () => {
       w.nav.addRect(1000 + i, { x0: tc.x + 6, z0: tc.z + 6, x1: tc.x + 9, z1: tc.z + 9 });
       w.nav.removeRect(1000 + i);
     }
-    expect((performance.now() - t0) / 50).toBeLessThan(2);
+    expect((performance.now() - t0) / 50).toBeLessThan(perfBudget(2));
   });
 });
 

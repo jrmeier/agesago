@@ -26,6 +26,7 @@ import { AIPlayer } from '../ai/AIPlayer';
 import { makeGame, run as runAI } from '../ai/harness';
 import { EXPLORED } from './visibility';
 import { defaultPlayers, World } from './World';
+import { perfBudget } from '../testing/perf';
 
 const DT = 1 / BALANCE.tickRate;
 
@@ -635,8 +636,7 @@ describe('statOf cost', () => {
       ms = Math.min(ms, (performance.now() - t0) / 20);
     }
     console.log(`statOf, 200 units × 4 stats: ${ms.toFixed(4)} ms/tick`);
-    // Hosted CI runners are about 2x slower per core than a dev machine.
-    expect(ms).toBeLessThan(process.env.CI ? 0.3 : 0.1);
+    expect(ms).toBeLessThan(perfBudget(0.1));
   });
 
   it('statOf without research returns the base value', () => {

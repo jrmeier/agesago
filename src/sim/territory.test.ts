@@ -9,6 +9,7 @@ import { destroyBuilding } from './systems/combat';
 import { completeResearch } from './systems/research';
 import { territoryInfluence } from './territory';
 import { defaultPlayers, World } from './World';
+import { perfBudget } from '../testing/perf';
 
 const DT = 1 / BALANCE.tickRate;
 
@@ -237,7 +238,7 @@ describe('territory (M18-1)', () => {
     }
     console.log(`territory, giant map, 4 players × 61 buildings: recompute ${full.toFixed(3)} ms, idle sync ${idle.toFixed(4)} ms`);
     // A tick is 50 ms; a recompute happens only on a completion, death, conversion or age-up.
-    expect(full).toBeLessThan(10);
-    expect(idle).toBeLessThan(0.1);
+    expect(full).toBeLessThan(perfBudget(10));
+    expect(idle).toBeLessThan(perfBudget(0.1));
   });
 });

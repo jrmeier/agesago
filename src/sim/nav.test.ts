@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GRASS_ONLY, type Heightfield, type Vec2 } from '../core/types';
 import { NavGrid } from './nav';
+import { perfBudget } from '../testing/perf';
 
 /** Flat 64×48 field where `water(x, z)` marks lake cells. */
 function flatField(water: (x: number, z: number) => boolean = () => false): Heightfield {
@@ -128,6 +129,6 @@ describe('NavGrid', () => {
       expect(nav.findPath({ x: 2 + (i % 10), z: 2 + i * 0.4 }, { x: 60 - (i % 7), z: 46 - i * 0.4 })).not.toBeNull();
     }
     // 100 cross-map requests (5 ticks' worth at 20/tick) well under a frame budget each.
-    expect(performance.now() - t0).toBeLessThan(500);
+    expect(performance.now() - t0).toBeLessThan(perfBudget(500));
   });
 });

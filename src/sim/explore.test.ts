@@ -5,6 +5,7 @@ import { generateMap } from './mapgen';
 import { findFrontier } from './systems/explore';
 import { SIGHT } from './visibility';
 import { World } from './World';
+import { perfBudget } from '../testing/perf';
 
 const DT = 1 / BALANCE.tickRate;
 
@@ -236,8 +237,8 @@ describe('frontier search cost on the generated map', () => {
 
     console.info(`frontier search: near ${near.ms.toFixed(3)} ms, far ${worst.ms.toFixed(3)} ms, none ${none.ms.toFixed(3)} ms`);
     // Generous for slow CI machines; typical numbers are logged above.
-    expect(near.ms).toBeLessThan(8);
-    expect(worst.ms).toBeLessThan(8);
-    expect(none.ms).toBeLessThan(8);
+    expect(near.ms).toBeLessThan(perfBudget(8));
+    expect(worst.ms).toBeLessThan(perfBudget(8));
+    expect(none.ms).toBeLessThan(perfBudget(8));
   });
 });

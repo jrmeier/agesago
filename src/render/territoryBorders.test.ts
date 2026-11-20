@@ -16,6 +16,7 @@ import {
   type BorderEdge,
 } from './territoryBorders';
 import { borderProfile, buildBorderMesh, TerritoryView } from './TerritoryView';
+import { perfBudget } from '../testing/perf';
 
 /** `rows` strings of digits, '.' = UNSEEN. */
 function grid(...rows: string[]): { known: Uint8Array; cols: number; rows: number } {
@@ -279,6 +280,6 @@ describe('TerritoryView (M18-2)', () => {
     const edges = view.object.geometry.getAttribute('position').count / 4;
     console.log(`territory borders, giant map, 4 players: rescan + rebuild ${best.toFixed(3)} ms, ${edges} edges`);
     expect(edges).toBeGreaterThan(100);
-    expect(best).toBeLessThan(4);
+    expect(best).toBeLessThan(perfBudget(4));
   });
 });

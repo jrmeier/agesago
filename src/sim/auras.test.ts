@@ -12,6 +12,7 @@ import { gatherInterval } from './systems/gather';
 import { armorOf } from './systems/stats';
 import { EXPLORED } from './visibility';
 import { defaultPlayers, World } from './World';
+import { perfBudget } from '../testing/perf';
 
 const DT = 1 / BALANCE.tickRate;
 
@@ -267,6 +268,6 @@ describe('aura cost', () => {
     }
     console.log(`auras, 200 units + 20 sources: ${ms.toFixed(4)} ms/tick`);
     expect(world.auraSources.size).toBeGreaterThanOrEqual(20);
-    expect(ms).toBeLessThan(0.1);
+    expect(ms).toBeLessThan(perfBudget(0.1));
   });
 });

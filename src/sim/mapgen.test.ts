@@ -3,6 +3,7 @@ import { EXPANSION_GOLD } from '../core/maps';
 import { type Heightfield, type MapLayout, type PropPlacement, type Vec2 } from '../core/types';
 import { BUILD_RING_RADIUS, generateMap, START_RADIUS } from './mapgen';
 import { terrainFeatures } from './terrain';
+import { perfBudget } from '../testing/perf';
 
 // The synchronous seed sweep can exceed Vitest's worker RPC deadline on CI.
 // Let pending worker messages drain between cases without changing generation timings.
@@ -172,7 +173,7 @@ describe('generateMap', () => {
     const first = maps.get(`${players}/${seed}`)!;
     const start = performance.now();
     const repeated = generateMap(seed, players);
-    expect(performance.now() - start).toBeLessThan(2000);
+    expect(performance.now() - start).toBeLessThan(perfBudget(2000));
     expect(repeated.layout).toEqual(first.layout);
     for (let z = 0; z <= first.hf.depth; z += 7.5) {
       for (let x = 0; x <= first.hf.width; x += 7.5) {
@@ -388,7 +389,7 @@ describe('generateMap', () => {
   it.each(rivalCases)('keeps starting resources within 10% and town centers connected by land for %i players, seed %i', (players, seed) => {
     const start = performance.now();
     const { hf, layout } = generateMap(seed, players);
-    expect(performance.now() - start).toBeLessThan(2000);
+    expect(performance.now() - start).toBeLessThan(perfBudget(2000));
     const starts = [layout, ...(layout.extraStarts ?? [])];
     expect(starts).toHaveLength(players);
     const totals = starts.map((playerStart) => resourcesInStart(layout, playerStart.townCenter));
@@ -411,6 +412,6 @@ describe('generateMap', () => {
     let sum = 0;
     for (let i = 0; i < 80000; i++) sum += hf.ground(i % 176 + 0.25, Math.floor(i / 176) % 176 + 0.25).grass;
     expect(sum).toBeGreaterThan(0);
-    expect(performance.now() - start).toBeLessThan(150);
+    expect(performance.now() - start).toBeLessThan(perfBudget(150));
   });
 });

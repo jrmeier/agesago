@@ -5,6 +5,7 @@ import { validCommand } from '../network/protocol';
 import { defaultPlayers, World } from './World';
 import { formationLayout, formationSlots, movementSystem, orderMove, slotsAcross } from './systems/movement';
 import { orderAttackMove } from './systems/combat';
+import { perfBudget } from '../testing/perf';
 
 const DT = 0.05;
 function field(): Heightfield {
@@ -255,6 +256,6 @@ describe('formation planning cost', () => {
     for (let i = 0; i < 5; i++) orderMove(world, ids, { x: 150 - i, z: 45 + i }, { formation: 'line' });
     const ms = (performance.now() - start) / 5;
     console.info(`orderMove plan, 200 units (line): ${ms.toFixed(2)} ms`);
-    expect(ms).toBeLessThan(250);
+    expect(ms).toBeLessThan(perfBudget(250));
   });
 });

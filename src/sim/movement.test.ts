@@ -4,6 +4,7 @@ import { isShip, UNITS } from '../core/units';
 import { BALANCE } from './balance';
 import { World } from './World';
 import { formationOffset, formationSlots, movementSystem, orderMove, speedOf } from './systems/movement';
+import { perfBudget } from '../testing/perf';
 
 const DT = 0.05;
 function field(water: (x: number, z: number) => boolean = () => false): Heightfield {
@@ -226,6 +227,6 @@ describe('local steering and jam recovery', () => {
     const ms = (performance.now() - start) / 200;
     console.info(`movement + separation, 200 units: ${ms.toFixed(3)} ms/tick`);
     expect(units.every((u) => u.path.length > 0)).toBe(true);
-    expect(ms).toBeLessThan(4); // movement tick only; desktop budget
+    expect(ms).toBeLessThan(perfBudget(4)); // movement tick only; desktop budget
   });
 });
