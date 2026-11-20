@@ -10,8 +10,11 @@ export default defineConfig({
   // quarter of the cores: every page rasterises with multi-threaded SwiftShader (90-300 ms a
   // frame alone), so Playwright's default of half the cores drove the load past 100 on 24 cores
   // and starved frame-driven specs (territory, tutorial, queues...). Six workers there finish the
-  // suite in the same 4 minutes without a failure.
-  workers: process.env.CI ? 1 : Math.max(1, Math.floor(cpus().length / 4)),
+  // suite in the same 4 minutes without a failure. PW_WORKERS overrides both (the self-hosted
+  // forge runner sets it to use the local quarter-of-cores figure under CI).
+  workers: process.env.PW_WORKERS
+    ? Number(process.env.PW_WORKERS)
+    : process.env.CI ? 1 : Math.max(1, Math.floor(cpus().length / 4)),
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {

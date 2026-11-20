@@ -11,9 +11,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Pushes to main and manual runs use the self-hosted runner on forge (label "forge").
+# Pull requests stay on GitHub-hosted runners: this repository is public, so a fork's
+# pull request must never run code on our own machine.
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","forge"]') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -23,8 +26,9 @@ jobs:
           cache: npm
 
       - run: npm ci
-      # Bound concurrent simulation suites to avoid worker RPC timeouts under runner load.
-      - run: npm test -- --maxWorkers=2
+      # Bound concurrent simulation suites to avoid worker RPC timeouts under runner load:
+      # 2 on a hosted runner, 6 (a quarter of the cores) on forge, which also runs agents.
+      - run: npm test -- --maxWorkers=${{ runner.environment == 'github-hosted' && '2' || '6' }}
       - run: npm run build
 
       - uses: actions/upload-artifact@v4
@@ -35,7 +39,7 @@ jobs:
 
   # Browser smoke tests: real page in headless Chromium (software WebGL), desktop + phone viewports.
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","forge"]') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -45,8 +49,12 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      # Hosted runners need the system libraries; forge has them installed once
+      # (`npx playwright install-deps chromium`) and has no passwordless apt.
+      - run: npx playwright install ${{ runner.environment == 'github-hosted' && '--with-deps' || '' }} chromium
       - run: npm run e2e
+        env:
+          PW_WORKERS: ${{ runner.environment == 'github-hosted' && '1' || '6' }}
 
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -60,7 +68,7 @@ jobs:
   deploy:
     needs: [build, e2e]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, forge]
     environment:
       name: production
       url: https://agesago.jedm.dev
@@ -70,18 +78,24 @@ jobs:
           name: dist
           path: dist
 
+      # Keep the key and host list in the per-job temp directory, never in the runner
+      # user's own ~/.ssh (on forge that is a real account).
       - name: Install deploy key
         run: |
-          install -m 700 -d ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          install -m 700 -d "$RUNNER_TEMP/ssh"
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > "$RUNNER_TEMP/ssh/deploy_key"
+          chmod 600 "$RUNNER_TEMP/ssh/deploy_key"
+          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > "$RUNNER_TEMP/ssh/known_hosts"
 
       - name: Sync to droplet
         run: >
           rsync -rlz --delete-after --delay-updates
-          -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes"
+          -e "ssh -i $RUNNER_TEMP/ssh/deploy_key -o UserKnownHostsFile=$RUNNER_TEMP/ssh/known_hosts -o IdentitiesOnly=yes -o BatchMode=yes"
           dist/ jedmeier@157.245.7.84:/
+
+      - name: Remove deploy key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/ssh/deploy_key"
 
       - name: Smoke test
         run: curl -fsS https://agesago.jedm.dev/ | grep -q '<title>Ages Ago</title>'
