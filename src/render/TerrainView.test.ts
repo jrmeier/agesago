@@ -153,6 +153,10 @@ describe('TerrainView splats', () => {
       const box = geometry.boundingBox!;
       const sphere = geometry.boundingSphere!;
       expect(sphere.radius).toBeLessThan(CHUNK_SIZE * 1.5 + box.max.y - box.min.y);
+      // A sphere computed from the whole shared position attribute would still pass the
+      // radius limit above on this small map, so pin it to the chunk's own box as well.
+      expect(sphere.radius).toBeLessThanOrEqual(box.getSize(new THREE.Vector3()).length() / 2 + 1e-6);
+      expect(box.containsPoint(sphere.center)).toBe(true);
       expect(box.max.x - box.min.x).toBeLessThanOrEqual(CHUNK_SIZE);
       expect(box.max.z - box.min.z).toBeLessThanOrEqual(CHUNK_SIZE);
       for (const index of geometry.index!.array) {
