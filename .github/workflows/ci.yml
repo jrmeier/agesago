@@ -59,8 +59,11 @@ jobs:
       - name: Read Playwright version
         id: playwright-version
         run: node -p "'version=' + require('./package-lock.json').packages['node_modules/@playwright/test'].version" >> "$GITHUB_OUTPUT"
+      # Hosted runners start empty, so cache Chromium. forge keeps its own copy in the runner
+      # account's ~/.cache; `playwright install` below is then a quick no-op.
       - uses: actions/cache@v4
         id: playwright-cache
+        if: runner.environment == 'github-hosted'
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-playwright-${{ steps.playwright-version.outputs.version }}
@@ -106,8 +109,11 @@ jobs:
       - name: Read Playwright version
         id: playwright-version
         run: node -p "'version=' + require('./package-lock.json').packages['node_modules/@playwright/test'].version" >> "$GITHUB_OUTPUT"
+      # Hosted runners start empty, so cache Chromium. forge keeps its own copy in the runner
+      # account's ~/.cache; `playwright install` below is then a quick no-op.
       - uses: actions/cache@v4
         id: playwright-cache
+        if: runner.environment == 'github-hosted'
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-playwright-${{ steps.playwright-version.outputs.version }}
