@@ -18,6 +18,9 @@ jobs:
   build:
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","forge"]') }}
     steps:
+      # forge's /tmp is a small RAM-backed tmpfs; keep Vite, Vitest and Playwright scratch
+      # files in the runner's on-disk temp directory instead (also fine on hosted runners).
+      - run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -41,6 +44,9 @@ jobs:
   e2e:
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","forge"]') }}
     steps:
+      # forge's /tmp is a small RAM-backed tmpfs; keep Vite, Vitest and Playwright scratch
+      # files in the runner's on-disk temp directory instead (also fine on hosted runners).
+      - run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
