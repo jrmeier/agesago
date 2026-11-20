@@ -35,6 +35,18 @@ an idle human. It checks for each seed:
 - no farm before the home berries are gone
 - average AI planning time under 1 ms per sim tick
 
+## M7-3 acceptance tests
+
+`src/ai/military.test.ts` covers scripted early raid defence and counter-unit selection (8 tests).
+Six hoplites raid at 4:00 on moderate seeds 1–5: all five Town Centers survive, villagers recover
+to 36, and raids clear in 205/85/165/125/175 s (seed 4's obstructed spawn rotates along the same
+ring). A flat-field scenario checks sheltering at the 5 s reaction delay and release after the
+raid dies. With 60 choices per building, cavalry enemies yield 60 hoplites; infantry yields
+60 swordsmen and 60 slingers; archers yield 60 stable horsemen and switch the range to 60 archers.
+Counters disabled gives 37 hoplites / 23 swordsmen; unseen enemies still yield a valid choice.
+The guards require at least 4/6 raiders killed per seed and 4/5 raids cleared, 70% counter picks,
+and 30–70% each barracks unit without counters. Match length remains open in `docs/BALANCE.md`.
+
 ## M8-16: research, ages and the market (`research.ts`)
 
 The `Research` planner runs on the build schedule and only issues `research`, `build` and
