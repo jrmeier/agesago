@@ -1,6 +1,6 @@
-import type { Stockpile } from '../core/types';
+import type { Difficulty, Stockpile } from '../core/types';
 
-export type Difficulty = 'easy' | 'moderate' | 'hard' | 'hardest';
+export type { Difficulty } from '../core/types';
 export type Personality = 'rusher' | 'boomer' | 'turtle';
 
 export interface AIOptions {

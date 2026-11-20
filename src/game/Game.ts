@@ -6,7 +6,7 @@ import { PerfOverlay } from './perfOverlay';
 import { CIV_IDS, type CivId } from '../core/civilizations';
 import { normalizeMapOptions, type MapSize, type MapType } from '../core/maps';
 import { deviceQuality, type Quality } from '../core/quality';
-import type { EntityId, Vec2 } from '../core/types';
+import type { Difficulty, EntityId, StartingResources, TeamSetup, Vec2 } from '../core/types';
 import { CameraRig } from '../camera/CameraRig';
 import { yawBasis } from '../camera/FpsCamera';
 import { MAX_DISTANCE, MIN_DISTANCE } from '../camera/RtsCamera';
@@ -42,7 +42,7 @@ import {
 import { audioBus } from './audioBus';
 import { MatchMusic } from './musicDirector';
 import { MatchAudio } from './sfxDirector';
-import { matchPlayers, matchSeed, matchWonderRules } from './matchSetup';
+import { matchPlayers, matchResources, matchSeed, matchTeams, matchWonderRules } from './matchSetup';
 import type { WonderRules } from '../core/wonder';
 import { WonderTimer } from '../ui/WonderTimer';
 import { isGameSpeed, simScale, type GameSpeed } from './pace';
@@ -66,6 +66,9 @@ export interface MatchStart {
   seed?: number;
   players?: number;
   fresh?: boolean;
+  difficulty?: Difficulty;
+  teams?: TeamSetup;
+  startingResources?: StartingResources;
   civ?: CivId;
   civs?: CivId[];
   mapSize?: MapSize;
@@ -210,6 +213,18 @@ export class Game {
       generated = generateMap(seed);
     }
     const { hf, layout } = generated;
+    const freshWorld = () => {
+      const fixedSetup = tutorial || start.online;
+      const roster = defaultPlayers(players, civs, {
+        difficulty: fixedSetup ? 'moderate' : start.difficulty,
+        teams: fixedSetup ? 'ffa' : matchTeams(start.teams, players),
+      });
+      if (start.online) for (const player of roster) {
+        player.control = 'human';
+        delete player.difficulty;
+      }
+      return new World(hf, layout, roster, fixedSetup ? 'standard' : matchResources(start.startingResources));
+    };
     let world: World;
     if (resume) {
       try {
@@ -218,11 +233,11 @@ export class Game {
       } catch {
         resume = null;
         resumeFailed = true;
-        world = new World(hf, layout, defaultPlayers(players,civs));
+        world = freshWorld();
         world.seed = mapSeed;
       }
     } else {
-      world = new World(hf, layout, defaultPlayers(players,civs));
+      world = freshWorld();
       world.seed = mapSeed;
     }
     world.mapOptions = mapOptions;
@@ -284,7 +299,7 @@ export class Game {
     this.online = parts.online?.session ?? null;
     this.perf = new PerfOverlay(container);
     if (!parts.tutorial && !this.online) {
-      for (const { player } of this.world.players.values()) if (player.control === 'ai') this.ais.push(new AIPlayer(this.world, player.id, { difficulty: 'moderate', seed: (this.world.seed ?? 1) * 10 + player.id }));
+      for (const { player } of this.world.players.values()) if (player.control === 'ai') this.ais.push(new AIPlayer(this.world, player.id, { difficulty: player.difficulty ?? 'moderate', seed: (this.world.seed ?? 1) * 10 + player.id }));
     }
     if (parts.online) {
       parts.online.session.bindWorld(this.world, parts.online.data.turn);

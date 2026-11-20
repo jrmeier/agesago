@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GRASS_ONLY, type Heightfield, type MapLayout } from '../core/types';
-import { BALANCE } from './balance';
-import { World } from './World';
+import { BALANCE, startingStockPresets } from './balance';
+import { World, defaultPlayers } from './World';
 
 function flat(): Heightfield {
   return {
@@ -89,5 +89,50 @@ describe('training queues', () => {
     // Another player can't cancel it.
     w.dispatch({ type: 'cancelTrain', buildingId: tc.id, index: 0 }, 2);
     expect(tc.queue).toBe(1);
+  });
+});
+
+
+describe('new-game player options', () => {
+  it('assigns difficulty only to AI and teams to the requested groups', () => {
+    const roster = defaultPlayers(4, undefined, { difficulty: 'hard', teams: 'pairs' });
+    expect(roster.map(p => p.team)).toEqual([1, 1, 2, 2]);
+    expect(roster.map(p => p.difficulty)).toEqual([undefined, 'hard', 'hard', 'hard']);
+    expect(defaultPlayers(3).map(p => p.team)).toEqual([1, 2, 3]);
+    expect(defaultPlayers(3)[1].difficulty).toBe('moderate');
+    expect(defaultPlayers(3, undefined, { teams: 'pairs' }).map(p => p.team)).toEqual([1, 2, 3]);
+    expect(defaultPlayers(4, undefined, { teams: 'allied-rivals' }).map(p => p.team)).toEqual([1, 2, 2, 2]);
+  });
+
+  it('treats allied rivals as friends and awards victory to their team', () => {
+    const layout: MapLayout = {
+      townCenter: { x: 10, z: 10 }, villagers: [], scouts: [], nodes: [], props: [],
+      extraStarts: [20, 40].map(x => ({ townCenter: { x, z: 50 }, villagers: [], scouts: [] })),
+    };
+    const w = new World(flat(), layout, defaultPlayers(3, undefined, { teams: 'allied-rivals' }));
+    expect(w.areEnemies(2, 3)).toBe(false);
+    expect(w.areEnemies(1, 2)).toBe(true);
+    expect(w.areEnemies(1, 3)).toBe(true);
+    const soldier = w.spawnUnit('hoplite', { x: 30, z: 50 }, 2);
+    w.dispatch({ type: 'attack', unitIds: [soldier.id], targetId: w.townCenterOf(3)!.id }, 2);
+    expect(w.combatState.has(soldier.id)).toBe(false);
+    w.dispatch({ type: 'resign' }, 1);
+    expect(w.gameOver).toEqual({ winners: [2, 3], reason: 'resign' });
+  });
+
+  it.each(['low', 'standard', 'high'] as const)('gives every player independent %s stock', preset => {
+    const layout: MapLayout = {
+      townCenter: { x: 15, z: 15 }, villagers: [], scouts: [], nodes: [], props: [],
+      extraStarts: [{ townCenter: { x: 65, z: 65 }, villagers: [], scouts: [] }],
+    };
+    const w = new World(flat(), layout, defaultPlayers(2), preset);
+    const multiplier = preset === 'low' ? 0.5 : preset === 'high' ? 3 : 1;
+    for (const { stock } of w.players.values()) {
+      expect(stock).toEqual(startingStockPresets[preset]);
+      expect(stock).toEqual({ food: 200 * multiplier, wood: 200 * multiplier, gold: 100 * multiplier, stone: 100 * multiplier });
+    }
+    w.stock.food = 0;
+    expect(w.stockOf(2).food).toBe(200 * multiplier);
+    expect(startingStockPresets[preset].food).toBe(200 * multiplier);
   });
 });

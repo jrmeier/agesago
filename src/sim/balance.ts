@@ -1,4 +1,11 @@
-import type { BuildingKind, UnitKind } from '../core/types';
+import type { BuildingKind, StartingResources, Stockpile, UnitKind } from '../core/types';
+
+/** Equal starting resources for every player; standard preserves the original economy. */
+export const startingStockPresets: Record<StartingResources, Stockpile> = {
+  low: { food: 100, wood: 100, gold: 50, stone: 50 },
+  standard: { food: 200, wood: 200, gold: 100, stone: 100 },
+  high: { food: 600, wood: 600, gold: 300, stone: 300 },
+};
 
 /** Gameplay tuning numbers. Owned by the Sim lane (T3). */
 export const BALANCE = {
@@ -42,7 +49,7 @@ export const BALANCE = {
   placementSample: 0.5,
   /** A farmer stands this far inside the field edge. */
   farmInset: 0.6,
-  startingStock: { food: 200, wood: 200, gold: 100, stone: 100 },
+  startingStock: startingStockPresets.standard,
   villagerRadius: 0.3,
   townCenterRadius: 1.6,
   /** Gap kept between a villager's edge and the node / building it walks up to. */

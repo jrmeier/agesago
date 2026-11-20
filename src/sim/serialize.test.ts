@@ -89,6 +89,38 @@ function active(): World {
 }
 
 describe('world save/load', () => {
+  it('round-trips AI difficulty, teams and the actual resource stock', () => {
+    const w = fresh();
+    const rival = w.players.get(2)!.player;
+    rival.difficulty = 'hard';
+    rival.team = 1;
+    w.stockOf(2).food = 600;
+    const loaded = deserializeWorld(JSON.parse(JSON.stringify(serializeWorld(w))), hf);
+    expect(loaded.players.get(2)!.player).toEqual(rival);
+    expect(loaded.stockOf(2).food).toBe(600);
+    expect(loaded.areEnemies(1, 2)).toBe(false);
+    expect(loaded.players.get(1)!.player.difficulty).toBeUndefined();
+  });
+
+  it('loads v15 AI as moderate while keeping saved teams', () => {
+    const save = serializeWorld(fresh());
+    save.version = 15;
+    const rival = save.players[1].player;
+    delete rival.difficulty;
+    rival.team = 1;
+    const loaded = deserializeWorld(save, hf);
+    expect(loaded.players.get(2)!.player.difficulty).toBe('moderate');
+    expect(loaded.players.get(2)!.player.team).toBe(1);
+    expect(loaded.players.get(1)!.player.difficulty).toBeUndefined();
+    expect(rival.difficulty).toBeUndefined();
+  });
+
+  it('rejects an invalid saved AI difficulty', () => {
+    const save = JSON.parse(JSON.stringify(serializeWorld(fresh())));
+    save.players[1].player.difficulty = 'impossible';
+    expect(() => deserializeWorld(save, hf)).toThrow('Invalid save: AI difficulty');
+  });
+
   it('round trips through JSON and runs combat, economy, farming, building, training and exploring in lockstep', () => {
     const a = active();
     const save = JSON.parse(JSON.stringify(serializeWorld(a)));

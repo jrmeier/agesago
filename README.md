@@ -51,6 +51,8 @@ Then open http://localhost:5173
 | **Build** / **Train** / **Orders** | Open the selected unit or building's actions; **Close** returns to the map |
 | Villager views | Drag anywhere on the scene to look / orbit; tap the labeled view button to cycle |
 
+New game lets you choose civilization, map size and landscape, seed, rival count and difficulty, teams, starting resources, and wonder victory with its timer.
+
 ## Exploration and naval play
 
 Send any unit to a discovered ruin to claim its one-time resource or technology cache. Build a Temple in Town Age and train a Priest to collect a relic; bring the priest near your temple to earn 30 gold per minute. Order priests onto injured allies to heal or visible enemy land units to channel a conversion.
@@ -92,7 +94,7 @@ Repository pushes and manual runs use forge (six test workers); `main` pushes an
 run the full browser suite there without sharding. Deployment from `main` to https://agesago.jedm.dev
 requires the build, smoke gate and full suite to pass. The test-step targets are under three minutes
 for smoke and under ten minutes for each full-suite shard (or the single forge run).
-Online play checks a multiplayer protocol version (`NETWORK_VERSION` in `src/network/protocol.ts`, currently 17); deploy the web client and relay together.
+Online play checks a multiplayer protocol version (`NETWORK_VERSION` in `src/network/protocol.ts`, currently 18); deploy the web client and relay together.
 
 ## Building and resource work
 

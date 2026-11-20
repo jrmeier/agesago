@@ -3708,8 +3708,8 @@ body.touch.menu-train #market-panel {
 .title-field.title-check { flex-direction: row; align-items: center; justify-content: space-between; min-height: 44px; }
 .title-field.title-check input { width: 24px; height: 24px; margin: 0; accent-color: #c8a453; }
 .title-field select:disabled { opacity: .55; }
-.title-field select { color: #eee3cc; background: #252e31; border: 1px solid #77715d; padding: .6rem; border-radius: .3rem; width:100%; min-height:44px; font:inherit; }
-#title-setup { max-height:85dvh; overflow:auto; }
+.title-field select { color: #eee3cc; background: #252e31; border: 1px solid #77715d; padding: .6rem; border-radius: .3rem; width:100%; min-width:0; min-height:44px; font:inherit; }
+#title-setup { max-height:calc(100dvh - 96px); overflow:auto; }
 
 /* Corral instructions stay collapsed beside the livestock action on small screens. */
 #livestock-help { max-width: 280px; font-size: 13px; pointer-events: auto; }

@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { matchPlayers, matchSeed, matchWonderRules, parseSeed, seedFromSearch, WONDER_TIMER_CHOICES, wonderTimerLabel } from './matchSetup';
+import { matchPlayers, matchResources, matchTeams, matchSeed, matchWonderRules, parseSeed, seedFromSearch, WONDER_TIMER_CHOICES, wonderTimerLabel } from './matchSetup';
 
 describe('match setup', () => {
+  it.each([1, 2, 3, 4])('normalizes team presets for %i towns', players => {
+    expect(matchTeams(undefined, players)).toBe('ffa');
+    expect(matchTeams('ffa', players)).toBe('ffa');
+    expect(matchTeams('allied-rivals', players)).toBe(players >= 3 ? 'allied-rivals' : 'ffa');
+    expect(matchTeams('pairs', players)).toBe(players === 4 ? 'pairs' : 'ffa');
+  });
+
+  it('looks up resource choices with standard as the default', () => {
+    expect(matchResources(undefined)).toBe('standard');
+    expect(matchResources('standard')).toBe('standard');
+    expect(matchResources('low')).toBe('low');
+    expect(matchResources('high')).toBe('high');
+  });
+
   it('parses a shareable seed and rejects blanks and junk', () => {
     expect(parseSeed('12')).toBe(12);
     expect(parseSeed(' 7 ')).toBe(7);

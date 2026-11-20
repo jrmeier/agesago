@@ -7,6 +7,9 @@ import {
   NODE_RESOURCE,
   GAIA,
   type Player,
+  type Difficulty,
+  type TeamSetup,
+  type StartingResources,
   type PlayerId,
   type StartLayout,
   type Building,
@@ -28,7 +31,7 @@ import {
   type MarketResource,
   type TechId,
 } from '../core/types';
-import { BALANCE } from './balance';
+import { BALANCE, startingStockPresets } from './balance';
 import { NavGrid } from './nav';
 import { Visibility, type Viewer } from './visibility';
 import { Territory } from './territory';
@@ -87,14 +90,16 @@ const FOG_INTERVAL = 0.2;
 /** Default player roster: player 1 is the local human, the rest AI opponents. */
 export const PLAYER_COLORS = [0x2f6fb5, 0xb23a32, 0xd4a843, 0x3f8a4a];
 
-export function defaultPlayers(count: number, civs?: readonly CivId[]): Player[] {
+export function defaultPlayers(count: number, civs?: readonly CivId[], opts: { difficulty?: Difficulty; teams?: TeamSetup } = {}): Player[] {
   return Array.from({ length: count }, (_, i) => ({
     id: i + 1,
     ...(civs?.[i] ? { civ: civs[i] } : {}),
     name: i === 0 ? 'You' : `Rival ${i}`,
     color: PLAYER_COLORS[i % PLAYER_COLORS.length],
-    team: i + 1,
+    team: opts.teams === 'allied-rivals' ? (i === 0 ? 1 : 2)
+      : opts.teams === 'pairs' && count === 4 ? Math.floor(i / 2) + 1 : i + 1,
     control: i === 0 ? 'human' : 'ai',
+    ...(i > 0 ? { difficulty: opts.difficulty ?? 'moderate' } : {}),
   }));
 }
 
@@ -184,12 +189,13 @@ export class World {
   constructor(
     readonly hf: Heightfield,
     layout: MapLayout,
-    players: Player[] = defaultPlayers(1 + (layout.extraStarts?.length ?? 0))
+    players: Player[] = defaultPlayers(1 + (layout.extraStarts?.length ?? 0)),
+    startingResources: StartingResources = 'standard'
   ) {
     for (const player of players) {
       this.players.set(player.id, {
         player,
-        stock: { ...BALANCE.startingStock },
+        stock: { ...startingStockPresets[startingResources] },
         visibility: new Visibility(hf.width, hf.depth),
         researched: new Set(),
         age: 0,

@@ -58,3 +58,81 @@ test('the wonder toggle reaches the match, and a finished wonder shows its count
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth+1);expect(overflow).toBe(false);
   expect(errors).toEqual([]);
 });
+
+test('difficulty, teams and resources reach the sim and survive Continue', async ({ page }, info) => {
+  test.setTimeout(120_000);
+  const phone = info.project.name === 'phone';
+  if (phone) await page.setViewportSize({ width: 360, height: 640 });
+  const activate = async (selector: string) => {
+    if (phone) await page.locator(selector).tap();
+    else await page.locator(selector).click();
+  };
+  await page.goto('/?e2e&title&seed=12');
+  await page.waitForFunction(() => document.getElementById('title-screen')?.dataset.resume === 'no');
+  await activate('#title-new');
+  await expect(page.locator('#title-seed')).toHaveValue('12');
+  await expect(page.locator('#title-difficulty')).toHaveValue('moderate');
+  await expect(page.locator('#title-resources')).toHaveValue('standard');
+  await activate('[data-players="1"]');
+  await expect(page.locator('#title-difficulty')).toBeDisabled();
+  await expect(page.locator('#title-teams option[value="allied-rivals"]')).toBeDisabled();
+  await expect(page.locator('#title-teams option[value="pairs"]')).toBeDisabled();
+  await activate('[data-players="4"]');
+  await page.locator('#title-teams').selectOption('pairs');
+  await activate('[data-players="3"]');
+  await expect(page.locator('#title-teams')).toHaveValue('ffa');
+  await expect(page.locator('#title-teams option[value="pairs"]')).toBeDisabled();
+  await page.locator('#title-teams').selectOption('allied-rivals');
+  await activate('[data-players="2"]');
+  await expect(page.locator('#title-teams')).toHaveValue('ffa');
+  await activate('[data-players="3"]');
+  await expect(page.locator('#title-difficulty')).toBeEnabled();
+  await page.locator('#title-difficulty').selectOption('hard');
+  await page.locator('#title-teams').selectOption('allied-rivals');
+  await page.locator('#title-resources').selectOption('high');
+  await page.locator('#title-map-size').selectOption('small');
+  for (const selector of ['#title-difficulty', '#title-teams', '#title-resources']) {
+    const select = page.locator(selector);
+    await select.scrollIntoViewIfNeeded();
+    await expect(select).toBeInViewport();
+    const box = await select.boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual((await page.viewportSize())!.width);
+  }
+  expect(await page.locator('#title-setup').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await activate('#title-start');
+  await page.waitForFunction(() => (window as any).game?.world);
+  expect(await page.evaluate(() => ({ ...document.documentElement.dataset }))).toMatchObject({
+    seed: '12', players: '3', difficulty: 'hard', teams: 'allied-rivals', resources: 'high',
+  });
+  await expect(page.locator('#res-food')).toHaveText('600');
+  const inspect = () => page.evaluate(() => {
+    const game = (window as any).game;
+    return {
+      players: [...game.world.players.values()].map((s: any) => ({ difficulty: s.player.difficulty ?? null, team: s.player.team })),
+      enemies: game.world.areEnemies(2, 3),
+      profiles: game.ais.map((ai: any) => ({ targetVillagers: ai.profile.targetVillagers, reaction: ai.profile.reaction })),
+    };
+  });
+  const expected = {
+    players: [{ difficulty: null, team: 1 }, { difficulty: 'hard', team: 2 }, { difficulty: 'hard', team: 2 }],
+    enemies: false,
+    // Actual Game-created hard profiles, rather than just the requested label.
+    profiles: [{ targetVillagers: 48, reaction: 2.5 }, { targetVillagers: 48, reaction: 2.5 }],
+  };
+  expect(await inspect()).toEqual(expected);
+  if (phone) await activate('#pause-match');
+  await activate('#save-copy');
+  await expect(page.locator('#save-note')).toHaveText('Saved');
+  await page.goto('/?e2e&title');
+  await page.waitForFunction(() => document.getElementById('title-screen')?.dataset.resume === 'yes');
+  await activate('#title-continue');
+  await page.waitForFunction(() => (window as any).game?.world);
+  expect(await inspect()).toEqual(expected);
+  expect(await page.evaluate(() => document.documentElement.dataset.difficulty)).toBe('hard');
+  expect(await page.evaluate(() => document.documentElement.dataset.teams)).toBe('allied-rivals');
+  await page.evaluate(() => (window as any).game.world.dispatch({ type: 'resign' }, 1));
+  await expect(page.locator('#endgame-winners')).toHaveText('Winners: Rival 1, Rival 2');
+});

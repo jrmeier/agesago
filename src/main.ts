@@ -21,7 +21,7 @@ function reportBoot(label: string, fraction: number): void {
 
 let running: Game | null = null;
 
-function reveal(game: Game): void {
+function reveal(game: Game, start: MatchStart): void {
   running = game;
   // Seed and town count for a match opened from the title screen, which has no dev hook.
   document.documentElement.dataset.seed = String(game.world.seed ?? '');
@@ -30,6 +30,11 @@ function reveal(game: Game): void {
   document.documentElement.dataset.mapType = game.world.mapOptions.type ?? 'mediterranean';
   document.documentElement.dataset.wonder = game.world.wonderRules.enabled ? String(game.world.wonderRules.seconds) : 'off';
   document.documentElement.dataset.civ = game.world.players.get(game.world.localPlayer)?.player.civ ?? '';
+  const roster = [...game.world.players.values()].map(({ player }) => player);
+  document.documentElement.dataset.difficulty = roster.find(p => p.control === 'ai')?.difficulty ?? 'moderate';
+  document.documentElement.dataset.teams = roster.length === 4 && roster.map(p => p.team).join(',') === '1,1,2,2'
+    ? 'pairs' : roster.length >= 3 && roster.slice(1).every(p => p.team === 2) ? 'allied-rivals' : 'ffa';
+  document.documentElement.dataset.resources = start.online || start.tutorial ? 'standard' : start.startingResources ?? 'standard';
   if (loading) {
     loading.classList.add('is-done');
     loading.addEventListener('transitionend', () => loading.remove(), { once: true });
@@ -47,7 +52,7 @@ function reveal(game: Game): void {
 async function bootMatch(start: MatchStart): Promise<void> {
   document.documentElement.classList.remove('show-title');
   const game = await Game.start(container, reportBoot, start);
-  reveal(game);
+  reveal(game, start);
 }
 
 initSettings();

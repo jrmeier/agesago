@@ -1,4 +1,4 @@
-import { DEFAULT_SEED } from '../core/types';
+import { DEFAULT_SEED, type StartingResources, type TeamSetup } from '../core/types';
 import { DEFAULT_WONDER_SECONDS, normalizeWonderRules, type WonderRules } from '../core/wonder';
 
 /** Largest seed the new-game field accepts. */
@@ -42,4 +42,15 @@ export function wonderTimerLabel(seconds: number): string {
 /** Wonder victory rules from setup fields. Missing or invalid values use the defaults (on, 5 min). */
 export function matchWonderRules(value: Partial<WonderRules> | null | undefined): WonderRules {
   return normalizeWonderRules(value);
+}
+
+/** Team presets only make sense with the required number of towns. */
+export function matchTeams(value: TeamSetup | undefined, players: number): TeamSetup {
+  if (value === 'allied-rivals' && players >= 3) return value;
+  if (value === 'pairs' && players === 4) return value;
+  return 'ffa';
+}
+
+export function matchResources(value: StartingResources | undefined): StartingResources {
+  return value === 'low' || value === 'high' ? value : 'standard';
 }

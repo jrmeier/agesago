@@ -837,3 +837,34 @@ The vitest guard runs seed 1 up to the City Age and asserts that Town and City l
 It also checks that Bronze Axe, Ox Plough, Bronze Picks, Iron Axe and Iron Ploughshare pay back
 within 5 minutes, measured over a 180 s window. If you change gather rates, villager costs, the map
 kit or tech numbers, rerun the bench and update the tables above.
+
+## AI difficulty ladder (M7-4)
+
+New game offers Easy, Moderate, Hard and Hardest for every rival. The ladder pairs adjacent
+levels on the large Mediterranean map with Hellenes on both sides, seeds 1–10 in both seats,
+and a 40-minute cap. Conquest or resignation decides a game; otherwise the higher count of
+villagers + soldiers + finished buildings wins (the census excludes scouts; a tie is a draw).
+Wonder victory is disabled for this military-strength benchmark. Profiles are unchanged.
+
+Planner baseline on `7157fcc`:
+
+| Pairing | Higher level won | As seat 1 | As seat 2 | Decided ≤ 40 min |
+|---|---|---|---|---|
+| easy vs moderate | 16/20 (80%) | 6/10 | 10/10 | 6 |
+| moderate vs hard | 19/20 (95%) | 10/10 | 9/10 | 8 |
+| hard vs hardest | 17/20 (85%) | 10/10 | 7/10 | 10 |
+
+Easy vs moderate is exactly on the 80% bar. Three of moderate's four losses were score calls
+within 1–9 points (105–114, 101–102, 99–101), all with moderate in seat 1. The known seat
+advantage belongs to M16-11; this setup change does not retune profiles or alter map generation.
+
+Run `npm run bench:difficulty` (six shards, about 20 minutes). It appends resumable JSONL to
+`/tmp/agesago-difficulty-<git revision>.jsonl` and exits 1 if any pairing has fewer than 16 wins
+out of 20, including draws as non-wins. `DIFFICULTY_BENCH_SHARDS` sets concurrency;
+`DIFFICULTY_BENCH_OUTPUT` selects the output file. For manually scheduled shards set
+`DIFFICULTY_BENCH_SHARD=0` through `5`, then run with `DIFFICULTY_BENCH_SUMMARY=1` to check the
+complete ladder. Resume only against the same source revision; use a new file after edits.
+
+Starting resources are equal for every player: Low is 100 food, 100 wood, 50 gold and 50 stone;
+Standard remains 200/200/100/100; High is 600/600/300/300. Tutorial and online matches always
+use Standard and free-for-all teams.

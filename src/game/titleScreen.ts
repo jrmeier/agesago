@@ -1,7 +1,7 @@
 import { CIVS, CIV_IDS, type CivId } from '../core/civilizations';
 import { MAP_SIZES, MAP_TYPES, type MapSize, type MapType } from '../core/maps';
-import { DEFAULT_SEED } from '../core/types';
-import { parseSeed, WONDER_TIMER_CHOICES, wonderTimerLabel } from './matchSetup';
+import { DEFAULT_SEED, type Difficulty, type StartingResources, type TeamSetup } from '../core/types';
+import { matchTeams, parseSeed, WONDER_TIMER_CHOICES, wonderTimerLabel } from './matchSetup';
 import { DEFAULT_WONDER_SECONDS, type WonderRules } from '../core/wonder';
 import { idbResumeStore, readResume } from './resume';
 import { AUDIO_CREDIT } from './music';
@@ -9,7 +9,7 @@ import { closeSettings, settingsOpen } from './settingsPanel';
 
 export interface TitleHooks {
   onContinue(): void;
-  onStart(seed: number, players: number, options: {civ:CivId;mapSize:MapSize;mapType:MapType;wonder:WonderRules}): void;
+  onStart(seed: number, players: number, options: {civ:CivId;mapSize:MapSize;mapType:MapType;wonder:WonderRules;difficulty:Difficulty;teams:TeamSetup;startingResources:StartingResources}): void;
   onTutorial(): void;
 }
 
@@ -50,6 +50,15 @@ export function mountTitle(root: HTMLElement, hooks: TitleHooks): () => void {
   const sizeSelect=select('title-map-size','Map size',Object.entries(MAP_SIZES).map(([id,size])=>[id,`${id[0].toUpperCase()+id.slice(1)} (${size} × ${size})`]),'large');
   const names={mediterranean:'Mediterranean',highlands:'Highlands',riverValley:'River Valley',forest:'Forest',islands:'Islands'};
   const typeSelect=select('title-map-type','Landscape',MAP_TYPES.map(id=>[id,names[id]]),'mediterranean');
+  const difficultySelect = select('title-difficulty', 'Rival difficulty', [
+    ['easy', 'Easy'], ['moderate', 'Moderate'], ['hard', 'Hard'], ['hardest', 'Hardest'],
+  ], 'moderate');
+  const teamsSelect = select('title-teams', 'Teams', [
+    ['ffa', 'Free for all'], ['allied-rivals', 'Rivals allied against you'], ['pairs', 'Two against two'],
+  ], 'ffa');
+  const resourcesSelect = select('title-resources', 'Starting resources', [
+    ['low', 'Low'], ['standard', 'Standard'], ['high', 'High'],
+  ], 'standard');
   const wonderField=document.createElement('label');wonderField.className='title-field title-check';wonderField.htmlFor='title-wonder';wonderField.textContent='Wonder victory';
   const wonderToggle=document.createElement('input');wonderToggle.type='checkbox';wonderToggle.id='title-wonder';wonderToggle.checked=true;wonderField.append(wonderToggle);
   setup.querySelector('.title-actions')?.before(wonderField);
@@ -73,6 +82,11 @@ export function mountTitle(root: HTMLElement, hooks: TitleHooks): () => void {
 
   const selectPlayers = (n: number) => {
     players = n;
+    difficultySelect.disabled = n === 1;
+    for (const option of teamsSelect.options) {
+      option.disabled = matchTeams(option.value as TeamSetup, n) !== option.value;
+    }
+    teamsSelect.value = matchTeams(teamsSelect.value as TeamSetup, n);
     for (const btn of root.querySelectorAll<HTMLButtonElement>('[data-players]')) {
       btn.setAttribute('aria-pressed', btn.dataset.players === String(n) ? 'true' : 'false');
     }
@@ -109,7 +123,7 @@ export function mountTitle(root: HTMLElement, hooks: TitleHooks): () => void {
       seedInput.focus();
       return;
     }
-    hooks.onStart(seed, players, {civ:civSelect.value as CivId,mapSize:sizeSelect.value as MapSize,mapType:typeSelect.value as MapType,wonder:{enabled:wonderToggle.checked,seconds:Number(wonderTimer.value)}});
+    hooks.onStart(seed, players, {civ:civSelect.value as CivId,mapSize:sizeSelect.value as MapSize,mapType:typeSelect.value as MapType,difficulty:difficultySelect.value as Difficulty,teams:teamsSelect.value as TeamSetup,startingResources:resourcesSelect.value as StartingResources,wonder:{enabled:wonderToggle.checked,seconds:Number(wonderTimer.value)}});
   });
 
   const onKey = (event: KeyboardEvent) => {
@@ -138,6 +152,7 @@ export function mountTitle(root: HTMLElement, hooks: TitleHooks): () => void {
   return () => {
     window.removeEventListener('keydown', onKey);
     credit.remove();
+    difficultySelect.parentElement?.remove();teamsSelect.parentElement?.remove();resourcesSelect.parentElement?.remove();
     civSelect.parentElement?.remove();sizeSelect.parentElement?.remove();typeSelect.parentElement?.remove();wonderField.remove();wonderTimer.parentElement?.remove();bonus.remove();
   };
 }

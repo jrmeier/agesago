@@ -15,6 +15,7 @@
     "relay": "node server/start.mjs",
     "bench:maps": "vite-node scripts/bench-maps.ts",
     "bench:civilizations": "vite-node scripts/bench-civilizations.ts",
+    "bench:difficulty": "vite-node scripts/bench-difficulty.ts",
     "bench:matches": "vite-node scripts/bench-matches.ts",
     "bench:counters": "vite-node scripts/bench-counters.ts"
   },

@@ -21,6 +21,10 @@ export type EntityId = number;
 export type PlayerId = number;
 export const GAIA: PlayerId = 0;
 
+export type Difficulty = 'easy' | 'moderate' | 'hard' | 'hardest';
+export type StartingResources = 'low' | 'standard' | 'high';
+export type TeamSetup = 'ffa' | 'allied-rivals' | 'pairs';
+
 export interface Player {
   id: PlayerId;
   /** Absent in legacy saves: the original neutral roster. */
@@ -32,6 +36,8 @@ export interface Player {
   team: number;
   /** Who issues this player's commands. */
   control: 'human' | 'ai';
+  /** AI only; absent means moderate. */
+  difficulty?: Difficulty;
 }
 
 /** How a unit reacts to enemies it can see. */

@@ -20,6 +20,7 @@ import type { ExplorationSite, PriestOrder } from './systems/explorationRewards'
 import { normalizeWonderRules, type GameResult, type WonderCountdown, type WonderRules } from './systems/victory';
 
 /**
+ * 16: M7-4 AI difficulty on players. Older saves load AI as moderate, retaining saved teams.
  * 15: M16-6 heroes: per-player retrain cooldown (PlayerState.heroReadyAt). Older saves load ready (0).
  * 14: M18-4 building capture (Building.capture points per player, CombatState.capture). Older
  *    saves load with every building's points all its owner's and nobody capturing.
@@ -39,7 +40,7 @@ import { normalizeWonderRules, type GameResult, type WonderCountdown, type Wonde
  * 3: M14-1 in-place building upgrades (Building.tier, Building.upgrading).
  * 2: M8 research (researched techs, ages, market prices, building research queues).
  */
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 16;
 /** Oldest version that still loads; v2 buildings load at tier 0 with no upgrade running, v2–9 units out of formation. */
 export const MIN_SAVE_VERSION = 2;
 
@@ -271,6 +272,11 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
     if (transition && u.packTimer === undefined) throw new Error('Invalid save: siege pack state');
   }
   const saved = copy(data);
+  for (const { player } of saved.players) {
+    if (player.control !== 'ai') continue;
+    if (saved.version < 16 || player.difficulty === undefined) player.difficulty = 'moderate';
+    if (!['easy', 'moderate', 'hard', 'hardest'].includes(player.difficulty)) throw new Error('Invalid save: AI difficulty');
+  }
   const generated = generateMap(saved.seed, saved.playerCount, saved.mapOptions);
   const terrain = hf ?? generated.hf;
   if (terrain.width !== saved.width || terrain.depth !== saved.depth) throw new Error('Invalid save: terrain dimensions differ');
