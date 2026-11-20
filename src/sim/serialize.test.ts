@@ -307,7 +307,8 @@ describe('world save/load', () => {
     expect(b.units.get(s1.id)!.path.length).toBeGreaterThan(0);
     run(b, 200);
     expect(b.units.get(s1.id)!.state).toBe('idle');
-  });
+    // Eight full world round trips: about 9 s on a 2-core CI runner.
+  }, 30_000);
 
   it('documents the exploration contract gap: the private empty-frontier cache changes the search budget', () => {
     // A half-cell barrier splits navigation but not the coarser fog BFS. Empty searches
