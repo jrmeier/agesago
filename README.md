@@ -85,7 +85,13 @@ Press **?** in a match for every key, the mouse orders, and a counter table ("wh
 npm run build   # static site to dist/
 ```
 
-Pushes to `main` are tested, built and deployed to https://agesago.jedm.dev by `.github/workflows/ci.yml`.
+Every branch push runs the build/unit tests and the `@smoke` browser gate in `.github/workflows/ci.yml`.
+Pull requests also run the full browser suite across eight GitHub-hosted shards; same-repository PRs
+reuse their push's build and smoke checks, while fork PRs run all checks on hosted runners.
+Repository pushes and manual runs use forge (six test workers); `main` pushes and manual runs also
+run the full browser suite there without sharding. Deployment from `main` to https://agesago.jedm.dev
+requires the build, smoke gate and full suite to pass. The test-step targets are under three minutes
+for smoke and under ten minutes for each full-suite shard (or the single forge run).
 Online play checks a multiplayer protocol version (`NETWORK_VERSION` in `src/network/protocol.ts`, currently 17); deploy the web client and relay together.
 
 ## Building and resource work

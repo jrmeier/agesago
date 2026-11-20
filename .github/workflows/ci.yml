@@ -2,7 +2,6 @@ name: CI / Deploy
 
 on:
   push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -11,11 +10,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Pushes to main and manual runs use the self-hosted runner on forge (label "forge").
+# Repository pushes and manual runs use the self-hosted runner on forge (label "forge").
 # Pull requests stay on GitHub-hosted runners: this repository is public, so a fork's
 # pull request must never run code on our own machine.
 jobs:
   build:
+    # Same-repository PRs already get a build and smoke gate from their branch push.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","forge"]') }}
     steps:
       # forge's /tmp is a small RAM-backed tmpfs; keep Vite, Vitest and Playwright scratch
@@ -40,9 +41,56 @@ jobs:
           path: dist
           retention-days: 7
 
-  # Browser smoke tests: real page in headless Chromium (software WebGL), desktop + phone viewports.
-  e2e:
+  # Fast gate for every branch: real Chromium (software WebGL), desktop + phone.
+  e2e-smoke:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","forge"]') }}
+    timeout-minutes: 10
+    steps:
+      - run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - name: Read Playwright version
+        id: playwright-version
+        run: node -p "'version=' + require('./package-lock.json').packages['node_modules/@playwright/test'].version" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-playwright-${{ steps.playwright-version.outputs.version }}
+      # forge already has the system libraries and has no passwordless apt.
+      - run: npx playwright install ${{ runner.environment == 'github-hosted' && '--with-deps' || '' }} chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+      - run: npx playwright install-deps chromium
+        if: runner.environment == 'github-hosted' && steps.playwright-cache.outputs.cache-hit == 'true'
+      - run: npx playwright test --grep @smoke
+        env:
+          PW_WORKERS: ${{ runner.environment == 'github-hosted' && '1' || '6' }}
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-smoke
+          path: test-results
+          retention-days: 7
+
+  # Full coverage on main/manual runs and ALL PRs, including same-repository PRs:
+  # feature-branch pushes only run smoke, so skipping these PRs would lose coverage.
+  e2e:
+    if: github.ref == 'refs/heads/main' || github.event_name != 'push'
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || fromJSON('["self-hosted","forge"]') }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # One unsharded run on forge; eight concurrent single-worker shards on hosted PR runners.
+        shard: ${{ fromJSON(github.event_name == 'pull_request' && '[1,2,3,4,5,6,7,8]' || '[1]') }}
     steps:
       # forge's /tmp is a small RAM-backed tmpfs; keep Vite, Vitest and Playwright scratch
       # files in the runner's on-disk temp directory instead (also fine on hosted runners).
@@ -55,24 +103,41 @@ jobs:
           cache: npm
 
       - run: npm ci
-      # Hosted runners need the system libraries; forge has them installed once
-      # (`npx playwright install-deps chromium`) and has no passwordless apt.
+      - name: Read Playwright version
+        id: playwright-version
+        run: node -p "'version=' + require('./package-lock.json').packages['node_modules/@playwright/test'].version" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-playwright-${{ steps.playwright-version.outputs.version }}
+      # Hosted runners need the system libraries even when Chromium is cached.
       - run: npx playwright install ${{ runner.environment == 'github-hosted' && '--with-deps' || '' }} chromium
-      - run: npm run e2e
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+      - run: npx playwright install-deps chromium
+        if: runner.environment == 'github-hosted' && steps.playwright-cache.outputs.cache-hit == 'true'
+      - name: Full suite on forge
+        if: github.event_name != 'pull_request'
+        run: npx playwright test --grep-invert @smoke
         env:
-          PW_WORKERS: ${{ runner.environment == 'github-hosted' && '1' || '6' }}
+          PW_WORKERS: 6
+      - name: Full suite shard on hosted runner
+        if: github.event_name == 'pull_request'
+        run: npx playwright test --grep-invert @smoke --shard=${{ matrix.shard }}/8
+        env:
+          PW_WORKERS: 1
 
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: test-results
           retention-days: 7
 
   # Ships dist/ to agesago.jedm.dev on the jedm droplet. The deploy key is restricted
   # server-side to `rrsync -wo /var/www/agesago.jedm.dev`, so "/" below is the web root.
   deploy:
-    needs: [build, e2e]
+    needs: [build, e2e-smoke, e2e]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, forge]
     environment:

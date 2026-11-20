@@ -15,7 +15,7 @@ async function boot(page: Page, query = ''): Promise<string[]> {
   return errors;
 }
 
-test('boots, renders and shows the HUD without errors', async ({ page }) => {
+test('boots, renders and shows the HUD without errors', { tag: '@smoke' }, async ({ page }) => {
   const errors = await boot(page);
   const bootInfo = await page.evaluate(() => ({
     loadingAt: (window as any).__loadingAt as number,
@@ -37,7 +37,7 @@ test('boots, renders and shows the HUD without errors', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('villagers gather and deposit food', async ({ page }) => {
+test('villagers gather and deposit food', { tag: '@smoke' }, async ({ page }) => {
   await boot(page);
   const { before, food } = await page.evaluate(() => {
     const g = (window as any).game;
@@ -57,7 +57,7 @@ test('villagers gather and deposit food', async ({ page }) => {
   await expect(page.locator('#res-food')).not.toHaveText(String(before));
 });
 
-test('the scout explores and the fog lifts', async ({ page }) => {
+test('the scout explores and the fog lifts', { tag: '@smoke' }, async ({ page }) => {
   await boot(page);
   const result = await page.evaluate(() => {
     const w = (window as any).game.world;
@@ -71,7 +71,7 @@ test('the scout explores and the fog lifts', async ({ page }) => {
   expect(result.state).toBe('exploring');
 });
 
-test('villagers build a house and the population cap rises', async ({ page }) => {
+test('villagers build a house and the population cap rises', { tag: '@smoke' }, async ({ page }) => {
   await boot(page);
   const result = await page.evaluate(() => {
     const w = (window as any).game.world;
@@ -97,14 +97,14 @@ test('villagers build a house and the population cap rises', async ({ page }) =>
 });
 
 for (const tier of ['low', 'high']) {
-  test(`quality=${tier} boots cleanly`, async ({ page }) => {
+  test(`quality=${tier} boots cleanly`, { tag: '@smoke' }, async ({ page }) => {
     const errors = await boot(page, `&quality=${tier}`);
     expect(await page.evaluate(() => (window as any).game.quality.tier)).toBe(tier);
     expect(errors).toEqual([]);
   });
 }
 
-test('layout fits the viewport (no horizontal scroll)', async ({ page }) => {
+test('layout fits the viewport (no horizontal scroll)', { tag: '@smoke' }, async ({ page }) => {
   await boot(page);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
