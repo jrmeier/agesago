@@ -274,8 +274,8 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   const saved = copy(data);
   for (const { player } of saved.players) {
     if (player.control !== 'ai') continue;
-    if (saved.version < 16 || player.difficulty === undefined) player.difficulty = 'moderate';
-    if (!['easy', 'moderate', 'hard', 'hardest'].includes(player.difficulty)) throw new Error('Invalid save: AI difficulty');
+    if (saved.version < 16) player.difficulty = 'moderate';
+    if (player.difficulty !== undefined && !['easy', 'moderate', 'hard', 'hardest'].includes(player.difficulty)) throw new Error('Invalid save: AI difficulty');
   }
   const generated = generateMap(saved.seed, saved.playerCount, saved.mapOptions);
   const terrain = hf ?? generated.hf;

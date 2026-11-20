@@ -115,6 +115,13 @@ describe('world save/load', () => {
     expect(rival.difficulty).toBeUndefined();
   });
 
+  it('preserves an omitted current-save difficulty (the moderate default)', () => {
+    const w = fresh();
+    delete w.players.get(2)!.player.difficulty;
+    const saved = serializeWorld(w);
+    expect(serializeWorld(deserializeWorld(saved, hf))).toEqual(saved);
+  });
+
   it('rejects an invalid saved AI difficulty', () => {
     const save = JSON.parse(JSON.stringify(serializeWorld(fresh())));
     save.players[1].player.difficulty = 'impossible';
