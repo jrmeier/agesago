@@ -100,6 +100,16 @@ export const START_RADIUS = 24;
 /** Open construction area around each TC, excluding resource footprints. */
 export const BUILD_RING_RADIUS = 12;
 
+/**
+ * How far the seats are turned around the default map's starts (M16-11): seat `i` takes start
+ * `(i + turn) % players`. The landscape is the same for every seed and its starts are not equal
+ * (the east one won about 64% of two-player AI mirror matches), so a seat fixed to one start had a
+ * built-in edge. Seed 1 keeps the original layout.
+ */
+export function startTurn(seed: number, players: number): number {
+  return players > 1 ? (((seed - 1) % players) + players) % players : 0;
+}
+
 /** Rich ancient countryside; spatial spacing and connected-land filtering keep placement cheap. */
 export function generateMap(seed: number, players = 2, options: MapOptions = {}): { hf: Heightfield; layout: MapLayout } {
   if (!Number.isInteger(players) || players < 1 || players > 4) throw new RangeError('players must be 1, 2, 3 or 4');
@@ -108,8 +118,9 @@ export function generateMap(seed: number, players = 2, options: MapOptions = {})
   const features = terrainFeatures(seed);
   const startRandom = createSeededRandom(seed ^ 0x6a09e667);
   const phase = Math.PI + (startRandom() - 0.5) * 0.06;
+  const turn = startTurn(seed, players);
   const centers = Array.from({ length: players }, (_, i) => {
-    const angle = phase + i * Math.PI * 2 / players;
+    const angle = phase + ((i + turn) % players) * Math.PI * 2 / players;
     return players === 1 ? { ...features.townCenter } : {
       x: Math.round((MAP_W / 2 + Math.cos(angle) * 52) * 2) / 2,
       z: Math.round((MAP_D / 2 + Math.sin(angle) * 52) * 2) / 2,

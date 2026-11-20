@@ -17,7 +17,8 @@
     "bench:civilizations": "vite-node scripts/bench-civilizations.ts",
     "bench:difficulty": "vite-node scripts/bench-difficulty.ts",
     "bench:matches": "vite-node scripts/bench-matches.ts",
-    "bench:counters": "vite-node scripts/bench-counters.ts"
+    "bench:counters": "vite-node scripts/bench-counters.ts",
+    "bench:seats": "vite-node scripts/bench-seats.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",

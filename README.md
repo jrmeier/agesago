@@ -94,7 +94,7 @@ Repository pushes and manual runs use forge (six test workers); `main` pushes an
 run the full browser suite there without sharding. Deployment from `main` to https://agesago.jedm.dev
 requires the build, smoke gate and full suite to pass. The test-step targets are under three minutes
 for smoke and under ten minutes for each full-suite shard (or the single forge run).
-Online play checks a multiplayer protocol version (`NETWORK_VERSION` in `src/network/protocol.ts`, currently 18); deploy the web client and relay together.
+Online play checks a multiplayer protocol version (`NETWORK_VERSION` in `src/network/protocol.ts`, currently 19); deploy the web client and relay together.
 
 ## Building and resource work
 
