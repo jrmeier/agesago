@@ -46,16 +46,13 @@ describe('counter table', () => {
 
 describe('counter table at every unit-line tier', () => {
   const lineFights = FIGHTS.filter(([, a, b]) => LINE_UNITS.includes(a) && LINE_UNITS.includes(b));
-  // PLAN-AUDIT #60, seeds: 2 on main 7157fcc: only these cases were below 75%.
-  // Keep the original bar everywhere else, including tier-1 Archer/Hoplite at 3600 (77%).
+  // Measured with seeds: 2 after the L60 slinger retune: only these cases are below 75%
+  // (unchanged from main 7157fcc). Everything else keeps the published bar, including
+  // Archer-line vs Slinger-line at every tier (100%) and tier-1 Archer/Hoplite at 3600 (77%).
   const exceptions = [
     { a: 'archer', b: 'hoplite', tier: 1, budget: 1200, measured: 0.73 },
     { a: 'archer', b: 'hoplite', tier: 2, budget: 1200, measured: 0.73 },
     { a: 'archer', b: 'hoplite', tier: 2, budget: 3600, measured: 0.71 },
-    { a: 'archer', b: 'slinger', tier: 1, budget: 1200, measured: 0 },
-    { a: 'archer', b: 'slinger', tier: 1, budget: 3600, measured: 0 },
-    { a: 'archer', b: 'slinger', tier: 3, budget: 1200, measured: 0 },
-    { a: 'archer', b: 'slinger', tier: 3, budget: 3600, measured: 0 },
   ];
   const cases = lineFights.flatMap(([, a, b]) =>
     ([1, 2, 3] as const).flatMap((tier) => [1200, 3600].map((budget) => ({ a, b, tier, budget }))));

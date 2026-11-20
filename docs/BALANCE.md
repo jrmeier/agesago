@@ -223,10 +223,10 @@ Both players receive every generic line tech through the selected tier before un
 so they start with upgraded HP. There are no forge techs or civilization bonuses. The arena
 uses City Age at tiers 0–2 and Empire Age at tier 3.
 
-The 60 added test cases require at least 60% of the value left. They retain the 75% bar for
-all cases that met it before L60. The explicit historical exceptions are Composite Archer
-versus Veteran Hoplite at 1,200 (73%), Cretan Archer versus Phalangite at both budgets (73%,
-71%), and Archer versus Slinger at tiers 1 and 3 (0% at both budgets before the fix).
+The 60 added test cases require at least 60% of the value left, and the published 75% bar
+for every case except three that sit just under it: Composite Archer versus Veteran Hoplite
+at 1,200 (73%) and Cretan Archer versus Phalangite at both budgets (73%, 71%). Archer versus
+Slinger lost at tiers 1 and 3 before L60 (0% at both budgets) and is now held to 75% too.
 Veteran Hoplite versus Light Cavalry is also asserted to stay a clean 100% win.
 
 Output from `npm run bench:counters -- --tiers`:
