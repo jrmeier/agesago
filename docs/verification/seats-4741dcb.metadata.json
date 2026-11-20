@@ -1,0 +1,166 @@
+{
+  "ticket": "M16-11",
+  "sourceRevision": "4741dcb9997e7538fe7bf7f36765ea0605f80a77",
+  "baseRevision": "d3a772d",
+  "date": "2026-11-20",
+  "command": "SEAT_BENCH_SHARDS=8 SEAT_BENCH_SHARD=<0..7> SEAT_BENCH_OUTPUT=<fresh-file> nice -n 10 npm run bench:seats",
+  "runtime": {
+    "os": "Linux x86_64",
+    "node": "v24.15.0",
+    "sourceRevision": "4741dcb9997e7538fe7bf7f36765ea0605f80a77",
+    "startedUtc": "2026-11-20T22:57:13Z",
+    "shards": 8,
+    "endedUtc": "2026-11-20T23:22:26Z",
+    "wallSeconds": 1512.709,
+    "exitCodes": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "games": 160,
+  "coverage": {
+    "uniqueIds": 160,
+    "mapSeeds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40
+    ],
+    "civilizations": [
+      "hellenes",
+      "romans",
+      "persians",
+      "celts"
+    ]
+  },
+  "map": "legacy Large Mediterranean, generateMap(seed, 2)",
+  "difficulty": "moderate",
+  "scoreCapSimMinutes": 30,
+  "score": "villagers + army + completed buildings",
+  "drawCredit": "excluded from decided shares",
+  "acceptedBand": [
+    0.4,
+    0.6
+  ],
+  "resolutionCounts": {
+    "conquest": 15,
+    "score-cap": 145
+  },
+  "summaries": [
+    {
+      "group": "hellenes",
+      "games": 40,
+      "decided": 40,
+      "seat1Wins": 18,
+      "seat2Wins": 22,
+      "seat2Share": 0.55,
+      "eastStartShare": 0.6,
+      "seat1East": 20,
+      "passes": true
+    },
+    {
+      "group": "romans",
+      "games": 40,
+      "decided": 40,
+      "seat1Wins": 22,
+      "seat2Wins": 18,
+      "seat2Share": 0.45,
+      "eastStartShare": 0.7,
+      "seat1East": 20,
+      "passes": true
+    },
+    {
+      "group": "persians",
+      "games": 40,
+      "decided": 40,
+      "seat1Wins": 23,
+      "seat2Wins": 17,
+      "seat2Share": 0.425,
+      "eastStartShare": 0.525,
+      "seat1East": 20,
+      "passes": true
+    },
+    {
+      "group": "celts",
+      "games": 40,
+      "decided": 38,
+      "seat1Wins": 20,
+      "seat2Wins": 18,
+      "seat2Share": 0.47368421052631576,
+      "eastStartShare": 0.4473684210526316,
+      "seat1East": 20,
+      "passes": true
+    },
+    {
+      "group": "all",
+      "games": 160,
+      "decided": 158,
+      "seat1Wins": 83,
+      "seat2Wins": 75,
+      "seat2Share": 0.47468354430379744,
+      "eastStartShare": 0.569620253164557,
+      "seat1East": 80,
+      "passes": true
+    }
+  ],
+  "reproducibility": {
+    "reference": "reports/PLAN-M16-11-data/seats-fix.jsonl",
+    "games": 160,
+    "mismatches": 0,
+    "fields": [
+      "winner",
+      "scores",
+      "resolution",
+      "simSeconds",
+      "seat1East"
+    ]
+  },
+  "assembledSha256": "a510b31be10b60bd482a47e1cfe20df5f0d7ac30c4446ed6b52414fa7e1bbdf7",
+  "sourceTrees": {
+    "src/core": "91c557226c842d63f69477d821f605e30793b7af",
+    "src/ai": "9d367eff9caed1c9e64fef15c59ad6dbe9d82b76",
+    "src/sim": "de819a0b25a74a471ff86a0a6235368ba03ea8cf"
+  }
+}

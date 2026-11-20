@@ -344,6 +344,50 @@ not rerun. Persian Immortals are archer-class unique units with their own one-st
 their matchup against slingers remains unchecked. AI match length and civilization targets
 remain separate follow-ups (M16-10 / M16-11).
 
+## Seat fairness (M16-11)
+
+The default Large Mediterranean map has a fixed landscape with unequal starts.
+Seat 1 always held the west start and seat 2 the east; the east won about 64% of moderate AI mirrors.
+The seed now rotates seats around those starts: `(seed − 1) mod players`; seed 1 keeps its layout.
+
+For two players, seat 1 starts west on odd seeds and east on even seeds. Other map generators
+are unchanged, as are terrain, resources and scenery. Saved games retain their own entities,
+so the save format stays at version 16. Multiplayer protocol 19 rejects older peers.
+
+Diagnosis (Romans mirrors, moderate AI, 30-minute cap, villagers + army + completed buildings):
+
+| Condition | Games | Seat 2 wins | East start wins |
+|---|---|---|---|
+| Before rotation, seeds 1–80 | 80 | 63.3% (50 of 79 decided) | 63.3% |
+| Starts swapped: seat 1 east, seeds 1–40 | 40 | 32.5% | 67.5% (27 of 40) |
+| Large Highlands, a landscape drawn from the seed | 40 | 50.0% (20–20) | n/a |
+
+The advantage follows the start, rather than player id, AI update order, command order or
+combat tie-breaks. Acceptance uses all four civilizations in mirror matches, seeds 1–40,
+with each seat required to win 40–60% of decided games overall and within each civilization.
+Equal scores at the cap are draws, excluded from seat and east-start shares.
+
+Fresh 160-game run on `4741dcb`: [rows](verification/seats-4741dcb.jsonl) and
+[provenance](verification/seats-4741dcb.metadata.json). It took 1,512.709 s wall time across
+eight reduced-priority shards. All 160 unique IDs cover the four civilizations and seeds 1–40;
+every row matches the prototype's winner, scores, resolution, simulation time and start side.
+
+| Civilization | Decided | Seat 1 – Seat 2 | Seat 2 share | East-start share |
+|---|---|---|---|---|
+| Hellenes | 40 | 18 – 22 | 55.0% | 60.0% |
+| Romans | 40 | 22 – 18 | 45.0% | 70.0% |
+| Persians | 40 | 23 – 17 | 42.5% | 52.5% |
+| Celts | 38 | 20 – 18 | 47.4% | 44.7% |
+| All | 158 | 83 – 75 | 47.5% | 57.0% |
+
+All seat-share bands pass. Two Celtic games drew; 158 games were decided.
+
+**Open follow-up: start imbalance.** Rotation removes the fixed seat advantage, but does not
+make the two starts equally strong. The east start still won 57.0% of decided mirrors, as reported above.
+Making neutral resources point-symmetric tipped the prototype toward the west (52–70%), so a
+resource-only adjustment is not a supported fix. A separate terrain or AI balance pass should
+address the remaining start advantage; no resource, terrain or AI tuning ships in M16-11.
+
 ## AI-vs-AI match length (M16-9, M16-10)
 
 `npm run bench:matches` plays moderate AI against moderate AI on the default map, seeds 1–20,
@@ -607,18 +651,22 @@ heal 1 hp/s (`garrisonHeal`), 3 hp/s in a temple (`garrisonHealBy`). Below 20% o
 
 ## Results
 
-From `npm run bench:pacing` after M13-3 (permanent farms, three-tier unit lines, starting
+The age table is refreshed for M16-11. Gather-rate and payback tables retain the M13-3
+`npm run bench:pacing` measurements (permanent farms, three-tier unit lines, starting
 stockpile, 70 villagers, standing army).
 
 ### Age times, seeds 1–5
 
+Fresh M16-11 run on `4741dcb` (`npm run bench:pacing -- --no-payback`, 668.235 s wall time).
+Seeds 2 and 4 now play from the east start. All 15 age times remain inside their bands.
+
 | Seed | Town | City | Empire |
 |---|---|---|---|
-| 1 | 4:33 | 12:00 | 20:01 |
-| 2 | 4:57 | 12:18 | 19:45 |
-| 3 | 4:57 | 11:59 | 19:48 |
-| 4 | 4:57 | 12:15 | 20:37 |
-| 5 | 4:57 | 12:08 | 19:54 |
+| 1 | 4:57 | 12:30 | 20:05 |
+| 2 | 4:55 | 12:57 | 20:02 |
+| 3 | 4:58 | 11:39 | 19:45 |
+| 4 | 4:56 | 12:27 | 20:05 |
+| 5 | 4:33 | 12:14 | 19:37 |
 
 With the M8-17 costs (`townAge` 400f/60 s, `cityAge` 3800f 800g/150 s, `empireAge` 12000f 1500g
 1000s/240 s) and the starting stockpile, the same build order reached Town at about 8:20, City at
@@ -822,6 +870,14 @@ Modelled on 0 A.D.'s Capturable (`src/sim/systems/capture.ts`; data in `CAPTURE`
 ## Rerunning
 
 ```sh
+npm run bench:seats                           # 4 civs × seeds 1–40, moderate mirrors
+SEAT_BENCH_SEEDS=1-80 SEAT_BENCH_CIVS=romans npm run bench:seats
+# Use a fresh output path for a new source revision; resumed runs skip existing IDs.
+for s in 0 1 2 3 4 5 6 7; do
+  SEAT_BENCH_OUTPUT=/tmp/seats.jsonl SEAT_BENCH_SHARDS=8 SEAT_BENCH_SHARD=$s nice -n 10 npm run bench:seats &
+done
+wait
+SEAT_BENCH_OUTPUT=/tmp/seats.jsonl SEAT_BENCH_SUMMARY=1 npm run bench:seats
 npm run bench:pacing                          # seeds 1–5 age table + payback table (~4 min)
 npm run bench:pacing -- --seeds 2 --verbose   # minute-by-minute workers, gather rates, stockpile
 npm run bench:pacing -- --skip ironAxe        # counterfactual: the build order never researches it

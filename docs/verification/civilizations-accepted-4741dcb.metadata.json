@@ -1,0 +1,212 @@
+{
+  "ticket": "M16-11",
+  "sourceRevision": "4741dcb9997e7538fe7bf7f36765ea0605f80a77",
+  "baseRevision": "d3a772d",
+  "date": "2026-11-20",
+  "command": "CIV_BENCH_SEEDS=20 CIV_BENCH_SHARDS=6 CIV_BENCH_SHARD=<0..5> CIV_BENCH_OUTPUT=<fresh-file> nice -n 10 npm run bench:civilizations",
+  "runtime": {
+    "os": "Linux x86_64",
+    "node": "v24.15.0",
+    "sourceRevision": "4741dcb9997e7538fe7bf7f36765ea0605f80a77",
+    "startedUtc": "2026-11-20T23:21:57Z",
+    "shards": 6,
+    "endedUtc": "2026-11-20T23:57:46Z",
+    "wallSeconds": 2148.983,
+    "exitCodes": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "games": 240,
+  "coverage": {
+    "uniqueIds": 240,
+    "mapSeeds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+    ],
+    "pairings": 6,
+    "swappedSides": [
+      false,
+      true
+    ]
+  },
+  "map": "legacy Large Mediterranean, generateMap(seed, 2)",
+  "difficulty": "moderate",
+  "scoreCapSimMinutes": 30,
+  "score": "villagers + army + completed buildings",
+  "drawCredit": 0.5,
+  "acceptedBand": [
+    0.4,
+    0.6
+  ],
+  "resolutionCounts": {
+    "conquest": 12,
+    "score-cap": 228
+  },
+  "summaries": [
+    {
+      "pair": [
+        "hellenes",
+        "romans"
+      ],
+      "games": 40,
+      "firstWins": 18,
+      "draws": 0,
+      "firstWinRate": 0.45,
+      "passes": true
+    },
+    {
+      "pair": [
+        "hellenes",
+        "persians"
+      ],
+      "games": 40,
+      "firstWins": 20,
+      "draws": 0,
+      "firstWinRate": 0.5,
+      "passes": true
+    },
+    {
+      "pair": [
+        "hellenes",
+        "celts"
+      ],
+      "games": 40,
+      "firstWins": 20,
+      "draws": 1,
+      "firstWinRate": 0.5125,
+      "passes": true
+    },
+    {
+      "pair": [
+        "romans",
+        "persians"
+      ],
+      "games": 40,
+      "firstWins": 18,
+      "draws": 1,
+      "firstWinRate": 0.4625,
+      "passes": true
+    },
+    {
+      "pair": [
+        "romans",
+        "celts"
+      ],
+      "games": 40,
+      "firstWins": 21,
+      "draws": 1,
+      "firstWinRate": 0.5375,
+      "passes": true
+    },
+    {
+      "pair": [
+        "persians",
+        "celts"
+      ],
+      "games": 40,
+      "firstWins": 17,
+      "draws": 0,
+      "firstWinRate": 0.425,
+      "passes": true
+    }
+  ],
+  "reproducibility": {
+    "reference": "reports/PLAN-M16-11-data/civ-fix.jsonl",
+    "games": 240,
+    "mismatches": 0,
+    "fields": [
+      "winner",
+      "scores",
+      "resolution",
+      "simSeconds",
+      "pair",
+      "seed",
+      "swap",
+      "civs"
+    ]
+  },
+  "assembledSha256": "a482ef0ecb557152bca76499b33c246d3ac1ec4566f8a79e365cdfe9e80fd0d2",
+  "sourceTrees": {
+    "src/core": "91c557226c842d63f69477d821f605e30793b7af",
+    "src/ai": "9d367eff9caed1c9e64fef15c59ad6dbe9d82b76",
+    "src/sim": "de819a0b25a74a471ff86a0a6235368ba03ea8cf"
+  },
+  "tenSeedSubset": [
+    {
+      "pair": [
+        "hellenes",
+        "romans"
+      ],
+      "games": 20,
+      "firstWinRate": 0.4
+    },
+    {
+      "pair": [
+        "hellenes",
+        "persians"
+      ],
+      "games": 20,
+      "firstWinRate": 0.6
+    },
+    {
+      "pair": [
+        "hellenes",
+        "celts"
+      ],
+      "games": 20,
+      "firstWinRate": 0.425
+    },
+    {
+      "pair": [
+        "romans",
+        "persians"
+      ],
+      "games": 20,
+      "firstWinRate": 0.425
+    },
+    {
+      "pair": [
+        "romans",
+        "celts"
+      ],
+      "games": 20,
+      "firstWinRate": 0.65
+    },
+    {
+      "pair": [
+        "persians",
+        "celts"
+      ],
+      "games": 20,
+      "firstWinRate": 0.45
+    }
+  ],
+  "seatWins": {
+    "firstSeat": 112,
+    "secondSeat": 125,
+    "draws": 3
+  }
+}

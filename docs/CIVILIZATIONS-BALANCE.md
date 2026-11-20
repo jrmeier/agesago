@@ -1,6 +1,61 @@
 # Civilization AI balance evidence
 
-## Current: M13-7 rerun after the M13–M16 pacing changes (2026-11-12)
+## Current: M16-11 seat rotation (2026-11-20)
+
+Acceptance now uses **20 seeds per pairing**, each played from both sides: six pairings,
+40 games each, 240 total. The default ten-seed quick run remains available. Moderate AI,
+Large Mediterranean, the 30-minute cap and scoring (villagers + army + completed buildings)
+are unchanged. Draws still contribute half a win to the first civilization's rate.
+
+Fresh run on `4741dcb`: [240 game rows](verification/civilizations-accepted-4741dcb.jsonl)
+and [provenance](verification/civilizations-accepted-4741dcb.metadata.json). Six reduced-priority
+shards took 2,148.983 s wall time. All 240 unique IDs cover six pairings, seeds 1–20 and both
+sides. Every winner, score, resolution and simulation time matches the prototype.
+
+| Pairing | First civ wins | Draws | Games | First civ benchmark win rate | 40–60% |
+|---|---|---|---|---|---|
+| Hellenes / Romans | 18 | 0 | 40 | 45.0% | Pass |
+| Hellenes / Persians | 20 | 0 | 40 | 50.0% | Pass |
+| Hellenes / Celts | 20 | 1 | 40 | 51.3% | Pass |
+| Romans / Persians | 18 | 1 | 40 | 46.3% | Pass |
+| Romans / Celts | 21 | 1 | 40 | 53.8% | Pass |
+| Persians / Celts | 17 | 0 | 40 | 42.5% | Pass |
+
+All six pairing bands pass. Twelve games ended in conquest and 228 at the score cap; these
+are capped benchmark rates, not conquest-only win rates. Seat 2 won 125 of 237 decided games
+(52.7%), compared with 85 of 118 (72.0%) in the historical M13-7 run.
+
+The M13-7 fixed-seat bias note below is resolved by M16-11: seats rotate around the default
+map's starts with the seed. The remaining geographic start advantage is an open follow-up
+in [Seat fairness](BALANCE.md#seat-fairness-m16-11), separate from civilization balance.
+
+**Romans / Celts was a sampling issue.** On unchanged main, seeds 1–10 reproduced 60.0%,
+seeds 11–20 gave 42.5%, and all 40 games gave 51.3%. After rotation, the first ten seeds alone
+give 65.0%, while the full 20-seed acceptance run is in band. Do not tune civilization numbers
+from that 20-game subset; no civilization, unit or technology number changes in M16-11.
+
+**Civilization technologies remain an AI follow-up.** In the diagnosis, moderate AI researched
+Roman Engineering in only 15 of 964 Roman player-games; Hellenic Discipline, Royal Roads and
+Woodland Craft each appeared in 0 of 20. The forge research rule requires five soldiers and
+spare stock above the age-up reserve. Across eight probed player-games after Town Age, the
+blockers were affordability (2,427 passes, including 1,802 holding an age reserve), no forge
+(393), fewer than five soldiers (291), and a busy forge (49); no other tech outscored them.
+Raising priority alone barely helped. A separate rule outside the forge group, bought once in
+Town Age from the reserve, merits its own four-civilization balance rerun. This is outside the
+seat fix: enabling four techs of differing strength together needs a separate balance pass.
+
+Rerun on a fresh output path (do not reuse rows from another source revision):
+
+```sh
+for s in 0 1 2 3 4 5; do
+  CIV_BENCH_SEEDS=20 CIV_BENCH_OUTPUT=/tmp/civ.jsonl CIV_BENCH_SHARDS=6 CIV_BENCH_SHARD=$s nice -n 10 npm run bench:civilizations &
+done
+wait
+# Existing IDs are skipped; this prints the final six complete summaries.
+CIV_BENCH_SEEDS=20 CIV_BENCH_OUTPUT=/tmp/civ.jsonl npm run bench:civilizations
+```
+
+## History: M13-7 rerun after the M13–M16 pacing changes (2026-11-12)
 
 M13 (age gates, unit lines, pacing, AI), M16 (siege, champions, heroes,
 late-game AI, counter table) and M16-10 (expansion gold, AI resignation)
