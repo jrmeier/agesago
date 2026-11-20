@@ -7,6 +7,7 @@
  */
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import type { Difficulty, PlayerId } from '../src/core/types';
 import { generateMap } from '../src/sim/mapgen';
 import { World, defaultPlayers } from '../src/sim/World';
@@ -41,7 +42,10 @@ if (process.env.DIFFICULTY_BENCH_SUMMARY !== '1') {
   if (shard === null) {
     rowsById(); // Reject incompatible output before launching shards.
     const codes = await Promise.all(Array.from({ length: shards }, (_, index) => new Promise<number>((resolve, reject) => {
-      const child = spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], {
+      const child = spawn(process.execPath, [
+        fileURLToPath(new URL('../node_modules/vite-node/vite-node.mjs', import.meta.url)),
+        fileURLToPath(import.meta.url),
+      ], {
         env: { ...process.env, DIFFICULTY_BENCH_SHARD: String(index), DIFFICULTY_BENCH_OUTPUT: output },
         stdio: 'inherit',
       });
