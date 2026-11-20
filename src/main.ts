@@ -1,10 +1,11 @@
-import { mountOnline } from './network/lobby';
-import { devHook } from './game/devHook';
-import { Game, type MatchStart } from './game/Game';
+import type { Game, MatchStart } from './game/Game';
 import { deleteResume, idbResumeStore } from './game/resume';
 import { initSettings } from './game/settings';
 import { mountSettings } from './game/settingsPanel';
 import { mountTitle } from './game/titleScreen';
+
+// Start fetching the match while the title screen becomes interactive.
+const gameModule = import('./game/Game');
 
 const containerEl = document.getElementById('game-container');
 if (!containerEl) throw new Error('#game-container not found');
@@ -21,7 +22,13 @@ function reportBoot(label: string, fraction: number): void {
 
 let running: Game | null = null;
 
-function reveal(game: Game, start: MatchStart): void {
+async function reveal(startGame: () => Promise<Game>, start: MatchStart): Promise<void> {
+  // Load inspection helpers before starting: Game.start can publish online-ready UI,
+  // and callers of that UI expect window.game and window.dev in the same turn.
+  const inspection = import.meta.env.DEV || new URLSearchParams(location.search).has('e2e')
+    ? await import('./game/devHook')
+    : null;
+  const game = await startGame();
   running = game;
   // Seed and town count for a match opened from the title screen, which has no dev hook.
   document.documentElement.dataset.seed = String(game.world.seed ?? '');
@@ -41,7 +48,8 @@ function reveal(game: Game, start: MatchStart): void {
     window.setTimeout(() => loading.remove(), 700);
   }
   // Dev builds, and production builds opened with ?e2e (browser smoke tests), expose the game for inspection.
-  if (import.meta.env.DEV || new URLSearchParams(location.search).has('e2e')) {
+  if (inspection) {
+    const { devHook } = inspection;
     (window as unknown as { game: Game }).game = game;
     // Dev-only cheats for e2e tests (resources, finished buildings, fast-forward, statOf).
     (window as unknown as { dev: ReturnType<typeof devHook> }).dev = devHook(game.world);
@@ -51,8 +59,8 @@ function reveal(game: Game, start: MatchStart): void {
 
 async function bootMatch(start: MatchStart): Promise<void> {
   document.documentElement.classList.remove('show-title');
-  const game = await Game.start(container, reportBoot, start);
-  reveal(game, start);
+  const { Game } = await gameModule;
+  await reveal(() => Game.start(container, reportBoot, start), start);
 }
 
 initSettings();
@@ -64,19 +72,20 @@ if ((params.has('e2e') && !params.has('title')) || !title) {
   await bootMatch(params.has('tutorial') ? { tutorial: true, players: 2, fresh: true } : {});
 } else {
   let closeTitle = () => {};
-  const closeOnline = mountOnline(title, (session, data) => { closeOnline(); closeTitle(); void bootMatch({ seed: data.config.seed, players: data.config.players, fresh: true, online: { session, data } }); });
+  let closeOnline = () => {};
+  const leaveTitle = () => { closeOnline(); closeTitle(); };
   closeTitle = mountTitle(title, {
     onContinue() {
-      closeTitle();
+      leaveTitle();
       void bootMatch({});
     },
     onTutorial() {
-      closeTitle();
+      leaveTitle();
       document.documentElement.classList.remove('show-title');
       void bootMatch({ tutorial: true, players: 2, fresh: true });
     },
     onStart(seed, players, options) {
-      closeTitle();
+      leaveTitle();
       const url = new URL(location.href);
       url.searchParams.set('seed', String(seed));
       history.replaceState(null, '', url);
@@ -85,6 +94,14 @@ if ((params.has('e2e') && !params.has('title')) || !title) {
         .catch(() => undefined)
         .then(() => bootMatch({ seed, players, ...options, fresh: true }));
     },
+  });
+  // The lobby's session/checksum code depends on the sim; don't block the title on it.
+  void import('./network/lobby').then(({ mountOnline }) => {
+    if (!document.documentElement.classList.contains('show-title')) return;
+    closeOnline = mountOnline(title, (session, data) => {
+      leaveTitle();
+      void bootMatch({ seed: data.config.seed, players: data.config.players, fresh: true, online: { session, data } });
+    });
   });
 }
 

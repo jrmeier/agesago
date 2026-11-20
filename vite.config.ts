@@ -17,8 +17,26 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        // three.js changes far less often than the game: its own chunk stays cached across deploys.
-        manualChunks: (id) => (id.includes('node_modules/three/') ? 'three' : undefined),
+        // Keep shared title dependencies out of the explicitly assigned match chunks.
+        onlyExplicitManualChunks: true,
+        manualChunks(id, { getModuleInfo }) {
+          // three.js changes less often than the game, so cache it across deploys.
+          if (id.includes('node_modules/three/')) return 'three';
+          if (!/\/src\/(sim|core|ai)\//.test(id)) return;
+          // Shared setup data must not pull the entire sim into the title's static imports.
+          // Follow static importers only: Game and the lobby are dynamic entry points.
+          const pending = [id];
+          const seen = new Set<string>();
+          while (pending.length) {
+            const current = pending.pop()!;
+            if (seen.has(current)) continue;
+            seen.add(current);
+            const info = getModuleInfo(current);
+            if (info?.isEntry) return;
+            pending.push(...(info?.importers ?? []));
+          }
+          return 'sim';
+        },
       },
     },
   },

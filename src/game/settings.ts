@@ -1,5 +1,5 @@
 import { deviceQuality, qualityTier, type Quality, type QualityTier } from '../core/quality';
-import { PLAYER_COLORS } from '../sim/World';
+import { PLAYER_COLORS } from '../core/players';
 
 /** localStorage key. Written only after the player changes a setting. */
 export const SETTINGS_KEY = 'agesago-settings';

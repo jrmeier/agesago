@@ -16,7 +16,23 @@ test('the title screen starts a seeded match and continue reopens it', async ({ 
     if (m.type() === 'error') errors.push(m.text());
   });
 
-  await page.goto('/');
+  let releaseMatch!: () => void;
+  const matchReady = new Promise<void>(resolve => { releaseMatch = resolve; });
+  await page.route(/\/assets\/(?:Game|sim|three)-[^/]+\.js$/, async route => {
+    await matchReady;
+    await route.continue();
+  });
+  try {
+    await page.goto('/', { waitUntil: 'commit' });
+    await expect(page.locator('#title-new')).toBeVisible();
+    // The title must work even before the prefetched match module has finished loading.
+    await page.waitForFunction(() => document.getElementById('title-screen')?.dataset.resume);
+    await activate(page, '#title-new', phone);
+    await expect(page.locator('#title-setup')).toBeVisible();
+    await activate(page, '#title-setup-back', phone);
+  } finally {
+    releaseMatch();
+  }
   await expect(page.locator('#title-home')).toBeVisible();
   await expect(page.locator('#loading')).toBeHidden();
   if (!phone) {
@@ -64,6 +80,7 @@ test('the title screen starts a seeded match and continue reopens it', async ({ 
     { timeout: 30_000 },
   );
   await expect(page.locator('#title-screen')).toBeHidden();
+  await expect(page.locator('#hud')).toBeVisible();
   expect(await page.evaluate(() => location.search)).toBe('?seed=42');
 
   await page.setViewportSize(phone ? { width: 412, height: 915 } : { width: 1280, height: 800 });

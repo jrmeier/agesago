@@ -1,3 +1,4 @@
+import { PLAYER_COLORS } from '../core/players';
 import type { CivId } from '../core/civilizations';
 import type { MapOptions } from '../core/maps';
 import { MARKET, MAX_POP, footprintRadius, popBonusOf } from '../core/buildings';
@@ -88,7 +89,7 @@ import { siegeSystem } from './systems/siege';
 const FOG_INTERVAL = 0.2;
 
 /** Default player roster: player 1 is the local human, the rest AI opponents. */
-export const PLAYER_COLORS = [0x2f6fb5, 0xb23a32, 0xd4a843, 0x3f8a4a];
+export { PLAYER_COLORS } from '../core/players';
 
 export function defaultPlayers(count: number, civs?: readonly CivId[], opts: { difficulty?: Difficulty; teams?: TeamSetup } = {}): Player[] {
   return Array.from({ length: count }, (_, i) => ({

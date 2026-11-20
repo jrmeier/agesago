@@ -1,5 +1,6 @@
 import type { EntityId } from '../core/types';
-import { MIN_SAVE_VERSION, SAVE_VERSION, type SaveData } from '../sim/serialize';
+import type { SaveData } from '../sim/serialize';
+import { MIN_SAVE_VERSION, SAVE_VERSION } from '../core/saveVersion';
 import type { EndgameSample } from '../ui/endgameLog';
 
 /** Wrapper around SaveData. The sim format stays at SAVE_VERSION. */
