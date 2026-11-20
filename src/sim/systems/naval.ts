@@ -131,7 +131,9 @@ export function navalSystem(world: World, dt: number): void {
       const p = dockApproach(world, home, u.pos);
       if (!p) { world.navalJobs.delete(id); continue; }
       if (u.path.length || dist(u.pos, p) > 1.2) { if (!u.path.length) sail(world, u, p, 'toDrop'); continue; }
-      world.stockOf(u.owner).food += u.carry?.amount ?? 0; u.carry = null;
+      const banked = u.carry?.amount ?? 0;
+      world.stockOf(u.owner).food += banked; u.carry = null;
+      if (banked > 0) world.events.emit({ type: 'deposited', owner: u.owner, pos: { ...u.pos }, resource: 'food', amount: banked });
       if (u.owner === world.localPlayer) world.emitStock();
       job.phase = 'out';
     }
@@ -147,7 +149,11 @@ export function navalSystem(world: World, dt: number): void {
     u.path = []; world.setState(u, 'gathering'); job.timer += dt * FISHING_RATE;
     const amount = Math.min(Math.floor(job.timer), node.amount, FISHING_CAPACITY - (u.carry?.amount ?? 0));
     if (amount > 0) { job.timer -= amount; node.amount -= amount; u.carry = { type: 'food', amount: (u.carry?.amount ?? 0) + amount }; }
-    if (node.amount <= 0) { world.nodes.delete(node.id); world.events.emit({ type: 'removed', id: node.id }); }
+    if (node.amount <= 0) {
+      world.nodes.delete(node.id);
+      world.events.emit({ type: 'depleted', id: node.id, kind: node.kind, pos: { ...node.pos } });
+      world.events.emit({ type: 'removed', id: node.id });
+    }
     if ((u.carry?.amount ?? 0) >= FISHING_CAPACITY || node.amount <= 0) {
       job.phase = 'back'; const p = dockApproach(world, home, u.pos); if (p) sail(world, u, p, 'toDrop');
     }

@@ -517,6 +517,8 @@ export type ProjectileKind = 'arrow' | 'stone' | 'javelin' | 'boulder' | 'bolt';
 export type SimEvent =
   | { type: 'spawned'; id: EntityId; kind: EntityKind }
   | { type: 'removed'; id: EntityId }
+  | { type: 'deposited'; owner: PlayerId; pos: Vec2; resource: ResourceType; amount: number }
+  | { type: 'depleted'; id: EntityId; kind: NodeKind; pos: Vec2 }
   | { type: 'stockpile'; stock: Stockpile; pop: number; popCap: number }
   /** A foundation finished construction. */
   | { type: 'constructed'; id: EntityId }

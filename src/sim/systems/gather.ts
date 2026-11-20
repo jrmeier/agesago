@@ -295,6 +295,7 @@ function gatherTick(world: World, u: Unit, dt: number): void {
     node.amount = amount;
     if (amount <= 0) {
       world.nodes.delete(node.id);
+      world.events.emit({ type: 'depleted', id: node.id, kind: node.kind, pos: { ...node.pos } });
       world.events.emit({ type: 'removed', id: node.id });
     }
   }
@@ -335,6 +336,7 @@ function deposit(world: World, u: Unit): void {
   if (gs) gs.drop = undefined;
   if (u.carry && u.carry.amount > 0) {
     world.stockOf(u.owner)[u.carry.type] += u.carry.amount;
+    world.events.emit({ type: 'deposited', owner: u.owner, pos: { ...u.pos }, resource: u.carry.type, amount: u.carry.amount });
     u.carry = null;
     if (u.owner === world.localPlayer) world.emitStock();
   }

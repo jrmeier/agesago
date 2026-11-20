@@ -1,8 +1,9 @@
-import type { UnitKind, Vec2 } from '../core/types';
+import { NODE_RESOURCE, type BuildingKind, type UnitKind, type Vec2 } from '../core/types';
+import { BUILDINGS } from '../core/buildings';
 import { isHero, UNITS } from '../core/units';
 import { heroDeathText } from './heroes';
 import type { World } from '../sim/World';
-import { AlertLimiter, BurstCounter, attackText, captureText, deathText, resignText, unlockText } from './alertRules';
+import { AlertLimiter, BurstCounter, DepletionLimiter, depletedText, destroyedText, lastNodeNearDrop, attackText, captureText, deathText, resignText, unlockText } from './alertRules';
 import { pushPing } from './pings';
 import { TECHS } from '../core/techs';
 import { researchedText } from './research';
@@ -27,6 +28,9 @@ export class Alerts {
   private readonly limiter = new AlertLimiter();
   private readonly deaths = new BurstCounter();
   private lastDeath: Vec2 | null = null;
+  private readonly destroyed = new BurstCounter();
+  private readonly depletion = new DepletionLimiter();
+  private lastDestroyed: { kind: BuildingKind; pos: Vec2 } | null = null;
   private time = 0;
   /** Where the last "under attack" happened (for a jump-to-alert key later). */
   lastAttack: Vec2 | null = null;
@@ -44,6 +48,12 @@ export class Alerts {
       this.show('alert', '#i-alert', attackText(this.home(), e.pos), e.pos);
     });
     world.events.on('died', (e) => {
+      if (e.owner === world.localPlayer && e.kind in BUILDINGS) {
+        this.lastDestroyed = { kind: e.kind as BuildingKind, pos: { ...e.pos } };
+        const n = this.destroyed.add(this.time);
+        if (n) this.showDestroyed(n);
+        return;
+      }
       if (e.owner === world.localPlayer && e.kind in UNITS && isHero(e.kind as UnitKind)) {
         pushPing(world, e.pos, 'death');
         this.show('alert', `#i-${e.kind}`, heroDeathText(e.kind as UnitKind), e.pos);
@@ -54,6 +64,18 @@ export class Alerts {
       pushPing(world, e.pos, 'death');
       const n = this.deaths.add(this.time);
       if (n) this.show('death', '#i-skull', deathText(n), e.pos);
+    });
+    world.events.on('depleted', (e) => {
+      const resource = NODE_RESOURCE[e.kind];
+      const remaining = [...world.nodes.values()].filter((n) => n.id !== e.id)
+        .map((n) => ({ pos: n.pos, resource: NODE_RESOURCE[n.kind], amount: n.amount }));
+      for (const drop of world.buildings.values()) {
+        if (drop.owner !== world.localPlayer || !drop.complete) continue;
+        if (!lastNodeNearDrop(e.pos, resource, drop, remaining)) continue;
+        if (!this.depletion.shouldAlert(drop.id, resource, this.time)) continue;
+        this.show('research', '#i-tech', depletedText(resource, drop.kind), drop.pos);
+        break;
+      }
     });
     // "Iron Axe researched" (age-ups get the banner instead; see Hud).
     // A new age: what it opens up (the banner says "Entered the Town Age"; see Hud).
@@ -85,8 +107,17 @@ export class Alerts {
 
   update(time: number): void {
     this.time = time;
+    const buildings = this.destroyed.poll(time);
+    if (buildings) this.showDestroyed(buildings);
     const n = this.deaths.poll(time);
     if (n && this.lastDeath) this.show('death', '#i-skull', deathText(n), this.lastDeath);
+  }
+
+  private showDestroyed(count: number): void {
+    if (!this.lastDestroyed) return;
+    const { kind, pos } = this.lastDestroyed;
+    pushPing(this.world, pos, 'attack');
+    this.show('alert', '#i-alert', destroyedText(kind, count), pos);
   }
 
   private home(): Vec2 {

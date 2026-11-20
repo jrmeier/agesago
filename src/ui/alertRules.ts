@@ -1,6 +1,6 @@
 import { BUILDINGS } from '../core/buildings';
 import { AGE_NAMES, type Age } from '../core/techs';
-import type { BuildingKind, UnitKind, Vec2 } from '../core/types';
+import type { BuildingKind, EntityId, ResourceType, UnitKind, Vec2 } from '../core/types';
 import { UNITS } from '../core/units';
 import { directionWord } from './discover';
 
@@ -102,4 +102,41 @@ export function unlockText(age: Age, unlocks: { buildings: readonly BuildingKind
 /** A rival gave up (M16-10: a beaten computer player resigns). */
 export function resignText(name: string): string {
   return `${name} resigned`;
+}
+
+export function destroyedText(kind: BuildingKind, count = 1): string {
+  return count === 1 ? `Your ${BUILDINGS[kind].name} was destroyed` : `${count} buildings destroyed`;
+}
+
+export function depletedText(resource: ResourceType, dropKind: BuildingKind): string {
+  return `${resource[0].toUpperCase()}${resource.slice(1)} near your ${BUILDINGS[dropKind].name} is exhausted`;
+}
+
+/** Positions are centres; callers supply only completed local drop sites. */
+export function lastNodeNearDrop(
+  depleted: Vec2, resource: ResourceType, drop: { pos: Vec2; kind: BuildingKind },
+  remaining: Iterable<{ pos: Vec2; resource: ResourceType; amount: number }>,
+): boolean {
+  if (!BUILDINGS[drop.kind].drop?.includes(resource)) return false;
+  if (resource === 'wood' && drop.kind !== 'storehouse') return false;
+  const near = (p: Vec2) => Math.hypot(p.x - drop.pos.x, p.z - drop.pos.z) <= 12;
+  if (!near(depleted)) return false;
+  for (const node of remaining) {
+    if (node.resource === resource && node.amount > 0 && near(node.pos)) return false;
+  }
+  return true;
+}
+
+/** Remember announcements only when shown; suppressed sites can qualify on a later event. */
+export class DepletionLimiter {
+  private readonly announced = new Set<string>();
+  private last = -Infinity;
+
+  shouldAlert(site: EntityId, resource: ResourceType, time: number): boolean {
+    const key = `${site}:${resource}`;
+    if (this.announced.has(key) || time - this.last < 20) return false;
+    this.announced.add(key);
+    this.last = time;
+    return true;
+  }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALERT_COOLDOWN, ALERT_MIN_GAP, ALERT_RADIUS, AlertLimiter, BurstCounter, attackText, captureText, deathText, resignText } from './alertRules';
+import { ALERT_COOLDOWN, ALERT_MIN_GAP, ALERT_RADIUS, AlertLimiter, BurstCounter, DepletionLimiter, depletedText, destroyedText, lastNodeNearDrop, attackText, captureText, deathText, resignText } from './alertRules';
 
 describe('under-attack alerts', () => {
   const here = { x: 50, z: 50 };
@@ -56,5 +56,35 @@ describe('capture toasts (M18-4)', () => {
 describe('resignation toast (M16-10)', () => {
   it('names the rival who resigned', () => {
     expect(resignText('Rival 1')).toBe('Rival 1 resigned');
+  });
+});
+
+
+describe('work feedback rules', () => {
+  const pos = { x: 20, z: 20 };
+  const drop = { pos, kind: 'miningCamp' as const };
+  it('names one destroyed building and batches several', () => {
+    expect(destroyedText('barracks')).toBe('Your Barracks was destroyed');
+    expect(destroyedText('palisade', 3)).toBe('3 buildings destroyed');
+    expect(depletedText('gold', 'miningCamp')).toBe('Gold near your Mining Camp is exhausted');
+  });
+  it('announces the last nearby node, considering only live nodes of the same resource', () => {
+    expect(lastNodeNearDrop(pos, 'gold', drop, [{ pos, resource: 'gold', amount: 1 }])).toBe(false);
+    expect(lastNodeNearDrop(pos, 'gold', drop, [{ pos, resource: 'gold', amount: 0 },
+      { pos, resource: 'stone', amount: 100 }])).toBe(true);
+    expect(lastNodeNearDrop({ x: 33, z: 20 }, 'gold', drop, [])).toBe(false);
+    expect(lastNodeNearDrop(pos, 'food', drop, [])).toBe(false);
+    expect(lastNodeNearDrop(pos, 'wood', { pos, kind: 'townCenter' }, [])).toBe(false);
+    expect(lastNodeNearDrop(pos, 'wood', { pos, kind: 'storehouse' }, [
+      { pos: { x: 33, z: 20 }, resource: 'wood', amount: 100 },
+    ])).toBe(true);
+  });
+  it('announces only once per site/resource and separates all announcements by 20 seconds', () => {
+    const limiter = new DepletionLimiter();
+    expect(limiter.shouldAlert(1, 'gold', 0)).toBe(true);
+    expect(limiter.shouldAlert(2, 'gold', 19.99)).toBe(false);
+    expect(limiter.shouldAlert(2, 'gold', 20)).toBe(true);
+    expect(limiter.shouldAlert(1, 'gold', 60)).toBe(false);
+    expect(limiter.shouldAlert(1, 'stone', 60)).toBe(true);
   });
 });

@@ -35,7 +35,13 @@ describe('staffed livestock', () => {
     const { w, b, worker, sheep } = setup(); const food = w.stock.food;
     run(w, 130); expect(w.stock.food).toBe(food); expect(corralSheep(w, b)).toHaveLength(2);
     w.dispatch({ type: 'tend', unitIds: [worker.id], buildingId: b.id });
+    const deposits: number[] = [];
+    w.events.on('deposited', e => {
+      expect(e.resource).toBe('food'); expect(e.owner).toBe(worker.owner); expect(e.pos).toEqual(worker.pos);
+      deposits.push(e.amount);
+    });
     run(w, 125); expect(w.stock.food).toBeGreaterThan(food);
+    expect(deposits.reduce((sum, n) => sum + n, 0)).toBe(w.stock.food - food);
     expect(corralSheep(w, b).length).toBeGreaterThanOrEqual(2);
     expect(corralSheep(w, b).length).toBeLessThanOrEqual(HERD_CAP);
     expect(sheep.every(s => w.units.has(s.id))).toBe(true);

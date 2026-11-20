@@ -1,15 +1,12 @@
 import * as THREE from 'three';
 import type { Quality } from '../core/quality';
 import type { PlayerId, Vec2 } from '../core/types';
+import { createDust, disposeDust, dustCount, updateDust, type DustPuff } from './workFx';
 import { rubbleGeometry } from './modelBridge';
 
 export const CORPSE_SECONDS = 6;
 export const RUBBLE_SECONDS = 20;
 const COLLAPSE_SECONDS = 0.55;
-const DUST_SECONDS = 0.9;
-
-const DUST_GEO = new THREE.SphereGeometry(0.35, 5, 4);
-DUST_GEO.userData.shared = 1;
 
 export interface CorpseSource {
   object: THREE.Object3D;
@@ -27,13 +24,6 @@ interface Corpse {
   owner: PlayerId;
   x: number;
   z: number;
-}
-
-interface DustPuff {
-  mesh: THREE.Mesh;
-  mat: THREE.MeshBasicMaterial;
-  ox: number;
-  oz: number;
 }
 
 interface Rubble {
@@ -68,7 +58,7 @@ export class DeathGhosts {
   constructor(parent: THREE.Object3D, quality?: Pick<Quality, 'tier'>) {
     this.object.name = 'deaths';
     const tier = quality?.tier ?? 'medium';
-    this.dustCount = tier === 'low' ? 1 : tier === 'medium' ? 3 : 5;
+    this.dustCount = dustCount(tier);
     this.maxCorpses = tier === 'low' ? 10 : tier === 'high' ? 24 : 16;
     this.maxRubble = tier === 'low' ? 4 : tier === 'high' ? 8 : 6;
     parent.add(this.object);
@@ -113,25 +103,7 @@ export class DeathGhosts {
     mesh.castShadow = this.shadows;
     mesh.receiveShadow = this.shadows;
     object.add(mesh);
-    const dust: DustPuff[] = [];
-    for (let i = 0; i < this.dustCount; i++) {
-      const puffMat = new THREE.MeshBasicMaterial({
-        color: 0xcbb89a,
-        transparent: true,
-        opacity: 0.4,
-        depthWrite: false,
-      });
-      const puff = new THREE.Mesh(DUST_GEO, puffMat);
-      puff.name = 'dust';
-      puff.userData.noShadow = 1;
-      puff.castShadow = false;
-      puff.receiveShadow = false;
-      const ox = Math.cos((i / this.dustCount) * Math.PI * 2) * size * 0.28;
-      const oz = Math.sin((i / this.dustCount) * Math.PI * 2) * size * 0.28;
-      puff.position.set(ox, 0.4, oz);
-      object.add(puff);
-      dust.push({ mesh: puff, mat: puffMat, ox, oz });
-    }
+    const dust = createDust(object, this.dustCount, size);
     object.visible = visible;
     this.object.add(object);
     this.rubble.push({
@@ -189,17 +161,7 @@ export class DeathGhosts {
         pile.mat.needsUpdate = true;
       }
       pile.mat.opacity = opacity;
-      const puffT = age / DUST_SECONDS;
-      for (let d = 0; d < pile.dust.length; d++) {
-        const puff = pile.dust[d];
-        const alive = puffT < 1 && visible;
-        puff.mesh.visible = alive;
-        if (!alive) continue;
-        puff.mesh.position.set(puff.ox, 0.35 + puffT * 1.15, puff.oz);
-        const spread = 0.45 + puffT * 2.1;
-        puff.mesh.scale.setScalar(spread);
-        puff.mat.opacity = (1 - puffT) * 0.42;
-      }
+      if (pile.dust.length) updateDust(pile.dust, age, visible);
     }
   }
 
@@ -215,7 +177,7 @@ export class DeathGhosts {
     const pile = this.rubble[index];
     this.object.remove(pile.object);
     pile.mat.dispose();
-    for (let i = 0; i < pile.dust.length; i++) pile.dust[i].mat.dispose();
+    disposeDust(pile.dust);
     this.rubble.splice(index, 1);
   }
 }

@@ -49,10 +49,11 @@ test('villagers gather and deposit food', async ({ page }) => {
       .sort((a: any, b: any) => Math.hypot(a.pos.x - tc.x, a.pos.z - tc.z) - Math.hypot(b.pos.x - tc.x, b.pos.z - tc.z));
     const villagers = [...w.units.values()].filter((u: any) => u.kind === 'villager').map((u: any) => u.id);
     w.dispatch({ type: 'gather', unitIds: villagers, nodeId: berries[0].id });
-    for (let i = 0; i < 20 * 60; i++) w.tick(0.05);
+    for (let i = 0; i < 20 * 60 && w.stock.food === before; i++) w.tick(0.05);
     return { before, food: w.stock.food as number };
   });
   expect(food).toBeGreaterThan(before);
+  await expect(page.locator('.loot-floater', { hasText: /\+.*food/ }).first()).toBeVisible();
   await expect(page.locator('#res-food')).not.toHaveText(String(before));
 });
 

@@ -102,6 +102,7 @@ export function livestockSystem(world: World, dt: number): void {
       world.units.delete(surplus.id); world.combatState.delete(surplus.id);
       world.events.emit({ type: 'removed', id: surplus.id });
       world.players.get(b.owner)!.stock.food += LIVESTOCK_FOOD;
+      world.events.emit({ type: 'deposited', owner: b.owner, pos: { ...worker.pos }, resource: 'food', amount: LIVESTOCK_FOOD });
       b.harvestProgress = 0; world.emitStock(); world.refreshFog();
     }
   }

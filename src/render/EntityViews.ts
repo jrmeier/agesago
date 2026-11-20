@@ -24,6 +24,7 @@ import type { World } from '../sim/World';
 import type { Visibility } from '../sim/visibility';
 import { ExplorationView } from './ExplorationView';
 import { createBuildingVisual, createGhost, footprintMinY, tintGhost, type BuildingVisual } from './buildingVisuals';
+import { WorkFx } from './workFx';
 import { DeathGhosts } from './deaths';
 import { applyFog, createFogDepthMaterial, isConcealed, matrixForConcealment, type FogOfWar } from './fog';
 import {
@@ -292,6 +293,7 @@ export class EntityViews {
   /** Interpolated sim clock for this frame (projectiles and impacts run on it). */
   private simNow = 0;
   private readonly deaths: DeathGhosts;
+  private readonly workFx: WorkFx;
 
   constructor(
     readonly world: World,
@@ -369,6 +371,7 @@ export class EntityViews {
     this.captureBars = new CaptureBars(this.object);
     this.projectiles = new ProjectilePool(this.object, quality);
     this.deaths = new DeathGhosts(this.object, quality);
+    this.workFx = new WorkFx(this.object, quality.tier);
     this.impacts = new ImpactPuffs(this.object, quality);
     this.projectiles.onLand = (kind, x, y, z, targetId) => this.onLand(kind, x, y, z, targetId);
 
@@ -408,6 +411,8 @@ export class EntityViews {
       // Completing in fog must not swap the mesh to the finished model.
       if (building.owner !== this.world.localPlayer && !this.sight().isVisible(building.pos.x, building.pos.z)) return;
       view.setProgress(building.buildProgress, true);
+      const { w, d } = BUILDINGS[building.kind].size;
+      this.workFx.constructed(building.kind, building.pos, this.groundY(building.pos.x, building.pos.z), Math.max(w, d));
     });
 
     for (const building of this.world.buildings.values()) this.mountBuilding(building);
@@ -464,6 +469,7 @@ export class EntityViews {
     // Impacts first, so puffs from shots landing this frame are born at this frame's clock.
     this.impacts.update(this.simNow);
     this.projectiles.update(this.simNow);
+    if (this.workFx.active) this.workFx.update(time, (x, z) => this.sight().isVisible(x, z));
     this.deaths.update(time, (owner, x, z, rubble) => this.ghostShown(owner, x, z, rubble));
   }
 
@@ -810,7 +816,12 @@ export class EntityViews {
     const pool = this.nodePool.get(id);
     if (pool) {
       const base = pool.remove(id);
-      if (base && pool.label.startsWith('tree:')) this.stumps.add(id, base);
+      if (base && pool.label.startsWith('tree:')) {
+        this.stumps.add(id, base);
+        if (this.sight().isVisible(base.elements[12], base.elements[14])) {
+          this.workFx.fell(id, base, this.geometries.tree[id % this.geometries.tree.length], this.material);
+        }
+      }
       this.nodePool.delete(id);
     }
     if (this.memoryViews.has(id)) {

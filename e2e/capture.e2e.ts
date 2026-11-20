@@ -138,3 +138,47 @@ test('on a phone the Orders sheet has a Raze button that attacks the tapped buil
   }, { id: soldiers[0], target: house })).toEqual({ target: true, capture: false });
   expect(errors).toEqual([]);
 });
+
+
+test('destroyed and depleted alerts fit together and jump to their locations', async ({ page }, testInfo) => {
+  if (testInfo.project.name === 'phone') await page.setViewportSize({ width: 360, height: 800 });
+  const errors = await boot(page);
+  const fixture = await page.evaluate(() => {
+    const g = (window as any).game, dev = (window as any).dev, w = g.world;
+    g.rig.rts.edgeScroll = false;
+    const building = dev.placeComplete('barracks');
+    const camp = dev.placeComplete('miningCamp');
+    if (building === null || camp === null) throw new Error('no room for feedback buildings');
+    const destroyedAt = { ...w.buildings.get(building).pos };
+    const depletedAt = { ...w.buildings.get(camp).pos };
+    // Set up the last nearby gold node notification while keeping remote deposits intact.
+    for (const [id, node] of w.nodes) {
+      if (node.type === 'gold' && Math.hypot(node.pos.x - depletedAt.x, node.pos.z - depletedAt.z) <= 12) w.nodes.delete(id);
+    }
+    const home = w.townCenter.pos;
+    const dx = depletedAt.x - home.x, dz = depletedAt.z - home.z, distance = Math.hypot(dx, dz);
+    const nodePos = { x: depletedAt.x + dx / distance * 11, z: depletedAt.z + dz / distance * 11 };
+    w.events.emit({ type: 'depleted', id: -1, kind: 'gold', pos: nodePos });
+    dev.raze(building);
+    g.rig.focusOn({ x: destroyedAt.x + 20, z: destroyedAt.z + 20 });
+    return { destroyedAt, depletedAt, before: { ...g.rig.rts.target } };
+  });
+  const destroyed = page.locator('.toast', { hasText: 'Your Barracks was destroyed' });
+  const depleted = page.locator('.toast', { hasText: 'Gold near your Mining Camp is exhausted' });
+  await expect(destroyed).toBeVisible();
+  await expect(depleted).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+  for (const toast of [destroyed, depleted]) {
+    const bounds = await toast.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+    expect(await toast.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+  await destroyed.click();
+  const after = await page.evaluate(() => ({ ...(window as any).game.rig.rts.target }));
+  expect(after).toEqual(fixture.destroyedAt);
+  expect(after).not.toEqual(fixture.before);
+  await depleted.click();
+  expect(await page.evaluate(() => ({ ...(window as any).game.rig.rts.target }))).toEqual(fixture.depletedAt);
+  expect(errors).toEqual([]);
+});

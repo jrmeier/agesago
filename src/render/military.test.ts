@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { qualityTier } from '../core/quality';
 import {
@@ -12,6 +12,8 @@ import {
 import { defaultPlayers, PLAYER_COLORS, World } from '../sim/World';
 import { VISIBLE } from '../sim/visibility';
 import { CORPSE_SECONDS, RUBBLE_SECONDS } from './deaths';
+import { DUST_SECONDS, dustCount } from './workFx';
+import * as settings from '../game/settings';
 import { EntityViews } from './EntityViews';
 import { HP_GREEN, HP_RED, hpColor } from './hpBars';
 import { ENEMY_RING } from './palette';
@@ -480,5 +482,77 @@ describe('capture bars (M18-4)', () => {
     expect(color.getHex()).toBe(PLAYER_COLORS[1]);
     back().getColorAt(0, color);
     expect(color.getHex()).toBe(PLAYER_COLORS[0]);
+  });
+});
+
+
+describe('construction and tree feedback', () => {
+  beforeAll(installCanvasMock);
+  afterEach(() => vi.restoreAllMocks());
+  it.each(['low', 'medium', 'high'] as const)('cleans construction dust on %s and limits wall puffs', tier => {
+    const world = makeWorld();
+    world.visibility.state.fill(VISIBLE);
+    const views = new EntityViews(world, qualityTier(tier));
+    const house = place(world, views, 'house', { x: 45, z: 45 }, 1);
+    const camera = cameraAt(45, 45);
+    world.events.emit({ type: 'constructed', id: house.id });
+    const effect = views.object.getObjectByName('construction-dust')!;
+    expect(effect.children).toHaveLength(dustCount(tier));
+    const material = (effect.children[0] as THREE.Mesh).material as THREE.Material;
+    const disposed = vi.spyOn(material, 'dispose');
+    views.sync(0, 0, camera); views.sync(0, DUST_SECONDS + 0.01, camera);
+    expect(views.object.getObjectByName('construction-dust')).toBeUndefined();
+    expect(disposed).toHaveBeenCalledOnce();
+    const wall = place(world, views, 'palisade', { x: 48, z: 45 }, 1);
+    world.events.emit({ type: 'constructed', id: wall.id });
+    expect(views.object.getObjectByName('construction-dust')?.children.length ?? 0).toBe(tier === 'low' ? 0 : 1);
+  });
+
+  it.each(['high', 'low'] as const)('adds the stump immediately and cleans the temporary tree on %s', tier => {
+    const world = makeWorld();
+    world.visibility.state.fill(VISIBLE);
+    const views = new EntityViews(world, qualityTier(tier));
+    const id = world.allocId(), pos = { x: 45, z: 45 };
+    world.nodes.set(id, { id, kind: 'tree', type: 'wood', pos, amount: 1, radius: 0.5 });
+    world.events.emit({ type: 'spawned', id, kind: 'tree' });
+    world.nodes.delete(id); world.events.emit({ type: 'removed', id });
+    expect(views.object.children.some(o => o.name.startsWith('stumps') && (o as THREE.InstancedMesh).count === 1)).toBe(true);
+    const tree = views.object.getObjectByName('falling-tree');
+    if (tier === 'low') { expect(tree).toBeUndefined(); return; }
+    expect(tree).toBeDefined();
+    const mesh = tree!.children[0] as THREE.Mesh;
+    const disposeGeometry = vi.spyOn(mesh.geometry, 'dispose');
+    const disposeMaterial = vi.spyOn(mesh.material as THREE.Material, 'dispose');
+    const camera = cameraAt(45, 45);
+    views.sync(0, 0, camera); views.sync(0, 0.6, camera);
+    expect(tree!.quaternion.angleTo(new THREE.Quaternion())).toBeCloseTo(Math.PI * 85 / 180);
+    views.sync(0, 0.8, camera); expect(tree!.position.y).toBeLessThan(1);
+    views.sync(0, 1.01, camera);
+    expect(tree!.parent).toBeNull(); expect(tree!.children).toHaveLength(0);
+    expect(disposeGeometry).not.toHaveBeenCalled(); expect(disposeMaterial).not.toHaveBeenCalled();
+  });
+
+  it('caps trees, skips hidden removals and suppresses construction and falling with reduced motion', () => {
+    const world = makeWorld();
+    const views = new EntityViews(world, qualityTier('high'));
+    const fell = (x: number) => {
+      const id = world.allocId();
+      world.nodes.set(id, { id, kind: 'tree', type: 'wood', pos: { x, z: 45 }, amount: 1, radius: 0.5 });
+      world.events.emit({ type: 'spawned', id, kind: 'tree' });
+      world.nodes.delete(id); world.events.emit({ type: 'removed', id });
+    };
+    world.visibility.state.fill(0); fell(45);
+    expect(views.object.getObjectByName('falling-tree')).toBeUndefined();
+    world.visibility.state.fill(VISIBLE);
+    for (let i = 0; i < 8; i++) fell(45 + i);
+    const effects = views.object.getObjectByName('work-fx')!;
+    expect(effects.children).toHaveLength(6);
+    const camera = cameraAt(45, 45);
+    views.sync(0, 0, camera); views.sync(0, 1.01, camera);
+    vi.spyOn(settings, 'currentSettings').mockReturnValue({ ...settings.currentSettings(), reducedMotion: true });
+    fell(45);
+    const house = place(world, views, 'house', { x: 45, z: 45 }, 1);
+    world.events.emit({ type: 'constructed', id: house.id });
+    expect(effects.children).toHaveLength(0);
   });
 });

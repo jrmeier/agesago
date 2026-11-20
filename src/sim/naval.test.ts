@@ -59,7 +59,14 @@ describe('naval economy', () => {
     const food=w.stock.food; w.dispatch({type:'gather',unitIds:[boat.id],nodeId:fish.id}); run(w,20);
     expect(boat.carry!.amount).toBeGreaterThan(0); expect(boat.carry!.amount).toBeLessThanOrEqual(FISHING_CAPACITY);
     const loaded=deserializeWorld(serializeWorld(w),hf); expect(serializeWorld(loaded)).toEqual(serializeWorld(w));
-    run(loaded,120); expect(loaded.stock.food-food).toBe(60); expect(loaded.nodes.has(fish.id)).toBe(false);
+    const deposited: number[] = [], exhausted: string[] = [];
+    loaded.events.on('deposited', e => { expect(e.resource).toBe('food'); deposited.push(e.amount); });
+    loaded.events.on('depleted', e => { expect(e.kind).toBe('fish'); exhausted.push('depleted'); });
+    loaded.events.on('removed', e => { if (e.id === fish.id) exhausted.push('removed'); });
+    run(loaded,120);
+    expect(deposited.reduce((sum, n) => sum + n, 0)).toBe(60);
+    expect(exhausted).toEqual(['depleted', 'removed']);
+    expect(loaded.stock.food-food).toBe(60); expect(loaded.nodes.has(fish.id)).toBe(false);
   });
   it('trades between own docks for distance-scaled gold and rejects enemy docks', () => {
     const w=world(); dock(w,{x:30,z:10}); const far=dock(w,{x:70,z:70}); const enemy=dock(w,{x:70,z:10},2);

@@ -5,6 +5,7 @@ import { World } from './World';
 import { completeBuilding, layFoundation } from './systems/build';
 import { deserializeWorld, serializeWorld } from './serialize';
 import { buildingRect, nearestDrop, nodeApproach, nodeInReach } from './systems/sites';
+import { stateHash } from '../network/lockstep';
 import { sendToDrop } from './systems/gather';
 
 const DT = 1 / BALANCE.tickRate;
@@ -324,5 +325,29 @@ describe('chosen villager jobs', () => {
     expect(worker.state).toBe('idle');
     expect(worker.carry).toEqual(cargo);
     expect(house.buildProgress).toBe(0);
+  });
+});
+
+
+describe('resource notifications', () => {
+  it('reports the banked load and emits depletion before removal without changing the sim hash', () => {
+    const nodes: MapLayout['nodes'] = [{ kind: 'tree', pos: { x: 15, z: 20 }, amount: 3 }];
+    const observed = setup(nodes), silent = setup(nodes);
+    const events: SimEvent[] = [];
+    const { world, worker } = observed;
+    for (const type of ['deposited', 'depleted', 'removed'] as const) world.events.on(type, e => events.push(e));
+    const node = [...world.nodes.values()][0];
+    for (const fixture of [observed, silent]) {
+      fixture.world.seed = 17;
+      fixture.world.dispatch({ type: 'gather', unitIds: [fixture.worker.id], nodeId: node.id });
+      run(fixture.world, 30);
+    }
+    expect(events).toEqual([
+      { type: 'depleted', id: node.id, kind: 'tree', pos: node.pos },
+      { type: 'removed', id: node.id },
+      { type: 'deposited', owner: worker.owner, pos: worker.pos, resource: 'wood', amount: 3 },
+    ]);
+    expect(world.stock.wood).toBe(3);
+    expect(stateHash(world)).toBe(stateHash(silent.world));
   });
 });
