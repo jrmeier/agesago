@@ -86,7 +86,7 @@ npm run build   # static site to dist/
 ```
 
 Pushes to `main` are tested, built and deployed to https://agesago.jedm.dev by `.github/workflows/ci.yml`.
-Online play checks a multiplayer protocol version (`NETWORK_VERSION` in `src/network/protocol.ts`, currently 16); deploy the web client and relay together.
+Online play checks a multiplayer protocol version (`NETWORK_VERSION` in `src/network/protocol.ts`, currently 17); deploy the web client and relay together.
 
 ## Building and resource work
 

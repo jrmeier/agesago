@@ -145,14 +145,14 @@ row, so the text can't drift from the fights.
 
 **How it is measured** (`src/bench/counters.ts`):
 - Two groups of about equal spend meet on open flat ground, 16 apart, and both attack-move.
-  Both are in the City Age with no research.
+  The original table uses the City Age with no research; the tier table below adds only line upgrades.
 - The counter gets floor(budget / cost) units and the victim ceil(budget / cost), so rounding
   never helps the counter.
 - Each fight runs three jittered line-ups, each played from both sides.
 - "Value left" is the share of the spend still standing, with each survivor weighted by its hp.
 
 The test needs the counter to keep at least 75% of the value left, at both 1,200 and 3,600
-resources. Every row clears that comfortably. Results from `npm run bench:counters` are below
+resources in the original no-research table. Every row there clears that comfortably. Results from `npm run bench:counters` are below
 (counter's value left / victim's value left).
 
 | Counter | Victim | ≈ 1,200 | ≈ 3,600 |
@@ -214,6 +214,135 @@ answer to massed swordsmen is slingers. No unit cost changed in M16-9: every cou
 once the bench was measured correctly. An earlier draft of the harness dropped player 2's orders,
 which made the first mover look stronger and bolt shooters look overpriced.
 Heroes are not in the table: there is one per player, and their value is the aura.
+
+### Unit-line counters (L60 / M8-10)
+
+`npm run bench:counters -- --tiers` checks the ten published matchups between the six generic
+lines at tiers 0–3, budgets 1,200 and 3,600, with two jittered line-ups from both sides.
+Both players receive every generic line tech through the selected tier before units spawn,
+so they start with upgraded HP. There are no forge techs or civilization bonuses. The arena
+uses City Age at tiers 0–2 and Empire Age at tier 3.
+
+The 60 added test cases require at least 60% of the value left. They retain the 75% bar for
+all cases that met it before L60. The explicit historical exceptions are Composite Archer
+versus Veteran Hoplite at 1,200 (73%), Cretan Archer versus Phalangite at both budgets (73%,
+71%), and Archer versus Slinger at tiers 1 and 3 (0% at both budgets before the fix).
+Veteran Hoplite versus Light Cavalry is also asserted to stay a clean 100% win.
+
+Output from `npm run bench:counters -- --tiers`:
+
+| tier | counter | victim | budget | units | share | counter left | victim left | verdict |
+|---|---|---|---|---|---|---|---|---|
+| 0 | Hoplite | Horseman | 1200 | 15 v 8 | 100% | 80% | 0% | ok |
+| 0 | Hoplite | Horseman | 3600 | 45 v 24 | 100% | 81% | 0% | ok |
+| 0 | Hoplite | Scout | 1200 | 15 v 15 | 100% | 93% | 0% | ok |
+| 0 | Hoplite | Scout | 3600 | 45 v 45 | 100% | 93% | 0% | ok |
+| 0 | Swordsman | Hoplite | 1200 | 15 v 15 | 100% | 62% | 0% | ok |
+| 0 | Swordsman | Hoplite | 3600 | 45 v 45 | 100% | 64% | 0% | ok |
+| 0 | Slinger | Swordsman | 1200 | 20 v 15 | 92% | 80% | 7% | ok |
+| 0 | Slinger | Swordsman | 3600 | 60 v 45 | 92% | 82% | 7% | ok |
+| 0 | Slinger | Hoplite | 1200 | 20 v 15 | 100% | 97% | 0% | ok |
+| 0 | Slinger | Hoplite | 3600 | 60 v 45 | 100% | 91% | 0% | ok |
+| 0 | Archer | Hoplite | 1200 | 17 v 15 | 86% | 78% | 13% | ok |
+| 0 | Archer | Hoplite | 3600 | 51 v 45 | 88% | 70% | 9% | ok |
+| 0 | Archer | Slinger | 1200 | 17 v 20 | 100% | 31% | 0% | ok |
+| 0 | Archer | Slinger | 3600 | 51 v 60 | 100% | 30% | 0% | ok |
+| 0 | Horseman | Archer | 1200 | 8 v 18 | 100% | 91% | 0% | ok |
+| 0 | Horseman | Archer | 3600 | 24 v 52 | 100% | 85% | 0% | ok |
+| 0 | Horseman | Slinger | 1200 | 8 v 20 | 100% | 86% | 0% | ok |
+| 0 | Horseman | Slinger | 3600 | 24 v 60 | 100% | 78% | 0% | ok |
+| 0 | Scout | Archer | 1200 | 15 v 18 | 100% | 62% | 0% | ok |
+| 0 | Scout | Archer | 3600 | 45 v 52 | 100% | 65% | 0% | ok |
+| 1 | Veteran Hoplite | Companion Cavalry | 1200 | 15 v 8 | 100% | 80% | 0% | ok |
+| 1 | Veteran Hoplite | Companion Cavalry | 3600 | 45 v 24 | 100% | 80% | 0% | ok |
+| 1 | Veteran Hoplite | Light Cavalry | 1200 | 15 v 15 | 100% | 85% | 0% | ok |
+| 1 | Veteran Hoplite | Light Cavalry | 3600 | 45 v 45 | 100% | 85% | 0% | ok |
+| 1 | Veteran Swordsman | Veteran Hoplite | 1200 | 15 v 15 | 100% | 34% | 0% | ok |
+| 1 | Veteran Swordsman | Veteran Hoplite | 3600 | 45 v 45 | 100% | 36% | 0% | ok |
+| 1 | Balearic Slinger | Veteran Swordsman | 1200 | 20 v 15 | 98% | 81% | 1% | ok |
+| 1 | Balearic Slinger | Veteran Swordsman | 3600 | 60 v 45 | 91% | 80% | 8% | ok |
+| 1 | Balearic Slinger | Veteran Hoplite | 1200 | 20 v 15 | 100% | 94% | 0% | ok |
+| 1 | Balearic Slinger | Veteran Hoplite | 3600 | 60 v 45 | 99% | 87% | 0% | ok |
+| 1 | Composite Archer | Veteran Hoplite | 1200 | 17 v 15 | 73% | 75% | 28% | wins <75% |
+| 1 | Composite Archer | Veteran Hoplite | 3600 | 51 v 45 | 77% | 68% | 20% | ok |
+| 1 | Composite Archer | Balearic Slinger | 1200 | 17 v 20 | 100% | 35% | 0% | ok |
+| 1 | Composite Archer | Balearic Slinger | 3600 | 51 v 60 | 100% | 31% | 0% | ok |
+| 1 | Companion Cavalry | Composite Archer | 1200 | 8 v 18 | 100% | 87% | 0% | ok |
+| 1 | Companion Cavalry | Composite Archer | 3600 | 24 v 52 | 100% | 88% | 0% | ok |
+| 1 | Companion Cavalry | Balearic Slinger | 1200 | 8 v 20 | 100% | 84% | 0% | ok |
+| 1 | Companion Cavalry | Balearic Slinger | 3600 | 24 v 60 | 100% | 84% | 0% | ok |
+| 1 | Light Cavalry | Composite Archer | 1200 | 15 v 18 | 100% | 84% | 0% | ok |
+| 1 | Light Cavalry | Composite Archer | 3600 | 45 v 52 | 100% | 86% | 0% | ok |
+| 2 | Phalangite | Cataphract | 1200 | 15 v 8 | 100% | 78% | 0% | ok |
+| 2 | Phalangite | Cataphract | 3600 | 45 v 24 | 100% | 79% | 0% | ok |
+| 2 | Phalangite | Prodromos | 1200 | 15 v 15 | 100% | 83% | 0% | ok |
+| 2 | Phalangite | Prodromos | 3600 | 45 v 45 | 100% | 84% | 0% | ok |
+| 2 | Heavy Swordsman | Phalangite | 1200 | 15 v 15 | 100% | 31% | 0% | ok |
+| 2 | Heavy Swordsman | Phalangite | 3600 | 45 v 45 | 100% | 30% | 0% | ok |
+| 2 | Rhodian Slinger | Heavy Swordsman | 1200 | 20 v 15 | 81% | 73% | 17% | ok |
+| 2 | Rhodian Slinger | Heavy Swordsman | 3600 | 60 v 45 | 86% | 71% | 11% | ok |
+| 2 | Rhodian Slinger | Phalangite | 1200 | 20 v 15 | 100% | 90% | 0% | ok |
+| 2 | Rhodian Slinger | Phalangite | 3600 | 60 v 45 | 99% | 88% | 1% | ok |
+| 2 | Cretan Archer | Phalangite | 1200 | 17 v 15 | 73% | 69% | 25% | wins <75% |
+| 2 | Cretan Archer | Phalangite | 3600 | 51 v 45 | 71% | 73% | 30% | wins <75% |
+| 2 | Cretan Archer | Rhodian Slinger | 1200 | 17 v 20 | 100% | 45% | 0% | ok |
+| 2 | Cretan Archer | Rhodian Slinger | 3600 | 51 v 60 | 100% | 38% | 0% | ok |
+| 2 | Cataphract | Cretan Archer | 1200 | 8 v 18 | 100% | 95% | 0% | ok |
+| 2 | Cataphract | Cretan Archer | 3600 | 24 v 52 | 100% | 95% | 0% | ok |
+| 2 | Cataphract | Rhodian Slinger | 1200 | 8 v 20 | 100% | 93% | 0% | ok |
+| 2 | Cataphract | Rhodian Slinger | 3600 | 24 v 60 | 100% | 94% | 0% | ok |
+| 2 | Prodromos | Cretan Archer | 1200 | 15 v 18 | 100% | 80% | 0% | ok |
+| 2 | Prodromos | Cretan Archer | 3600 | 45 v 52 | 100% | 82% | 0% | ok |
+| 3 | Silver Shield | Clibanarius | 1200 | 15 v 8 | 100% | 76% | 0% | ok |
+| 3 | Silver Shield | Clibanarius | 3600 | 45 v 24 | 100% | 77% | 0% | ok |
+| 3 | Silver Shield | Tarantine Horseman | 1200 | 15 v 15 | 100% | 84% | 0% | ok |
+| 3 | Silver Shield | Tarantine Horseman | 3600 | 45 v 45 | 100% | 84% | 0% | ok |
+| 3 | Champion Swordsman | Silver Shield | 1200 | 15 v 15 | 100% | 30% | 0% | ok |
+| 3 | Champion Swordsman | Silver Shield | 3600 | 45 v 45 | 100% | 30% | 0% | ok |
+| 3 | Lead-Shot Slinger | Champion Swordsman | 1200 | 20 v 15 | 76% | 62% | 19% | ok |
+| 3 | Lead-Shot Slinger | Champion Swordsman | 3600 | 60 v 45 | 86% | 63% | 10% | ok |
+| 3 | Lead-Shot Slinger | Silver Shield | 1200 | 20 v 15 | 92% | 89% | 7% | ok |
+| 3 | Lead-Shot Slinger | Silver Shield | 3600 | 60 v 45 | 96% | 84% | 4% | ok |
+| 3 | Master Archer | Silver Shield | 1200 | 17 v 15 | 93% | 67% | 5% | ok |
+| 3 | Master Archer | Silver Shield | 3600 | 51 v 45 | 87% | 69% | 10% | ok |
+| 3 | Master Archer | Lead-Shot Slinger | 1200 | 17 v 20 | 100% | 21% | 0% | ok |
+| 3 | Master Archer | Lead-Shot Slinger | 3600 | 51 v 60 | 100% | 18% | 0% | ok |
+| 3 | Clibanarius | Master Archer | 1200 | 8 v 18 | 100% | 90% | 0% | ok |
+| 3 | Clibanarius | Master Archer | 3600 | 24 v 52 | 100% | 92% | 0% | ok |
+| 3 | Clibanarius | Lead-Shot Slinger | 1200 | 8 v 20 | 100% | 94% | 0% | ok |
+| 3 | Clibanarius | Lead-Shot Slinger | 3600 | 24 v 60 | 100% | 94% | 0% | ok |
+| 3 | Tarantine Horseman | Master Archer | 1200 | 15 v 18 | 100% | 80% | 0% | ok |
+| 3 | Tarantine Horseman | Master Archer | 3600 | 45 v 52 | 100% | 81% | 0% | ok |
+
+## Unit-line upgrades (M13-2, L60)
+
+Line upgrades stack, keep training costs unchanged, and strengthen all existing and future
+units in that line. Town/City/Empire upgrades have tiers 1/2/3; tier 3 requires a level-2
+production building. The ranged lines below are the increments at each tier, matching the
+tech descriptions displayed in game.
+
+| Line | Tier | Name | Cost | Time | Adds |
+|---|---|---|---|---|---|
+| Archer | 1 | Composite Archer | 125 wood, 75 gold | 40 s | +20% HP, +1 attack, +1 range |
+| Archer | 2 | Cretan Archer | 250 wood, 150 gold | 55 s | +20% HP, +1 attack, +1 pierce armour |
+| Archer | 3 | Master Archer | 500 wood, 300 gold | 75 s | +20% HP, +2 attack, +1 range |
+| Slinger | 1 | Balearic Slinger | 125 food, 60 stone | 40 s | +25% HP, +1 attack |
+| Slinger | 2 | Rhodian Slinger | 250 food, 125 stone | 55 s | +20% HP, +1 attack, +1 range |
+| Slinger | 3 | Lead-Shot Slinger | 500 food, 250 stone | 75 s | +25% HP, +1 attack, +1 pierce armour |
+
+L60 reduces the Balearic and Lead-Shot attack bonuses from +2 to +1. Reducing only Balearic
+attack left tier-3 archers losing (39% / 2% share), so both reductions are needed. No archer
+armour buff is needed: the retune yields 100% archer share against slingers at every tier,
+while slingers keep at least 76% against infantry. HP, costs, research time
+and the range/armour benefits stay intact. This restores the archer counter while preserving
+slingers' infantry counters and cavalry's ranged counters. Base units and combat rules are
+unchanged. The simulation data change requires `NETWORK_VERSION` 17; saved state has no new
+fields, so `SAVE_VERSION` stays unchanged and researched upgrades load with the new stats.
+
+The civilization tournament in `docs/CIVILIZATIONS-BALANCE.md` predates this retune and was
+not rerun. Persian Immortals are archer-class unique units with their own one-step line;
+their matchup against slingers remains unchecked. AI match length and civilization targets
+remain separate follow-ups (M16-10 / M16-11).
 
 ## AI-vs-AI match length (M16-9, M16-10)
 
@@ -699,6 +828,7 @@ npm run bench:pacing -- --skip ironAxe        # counterfactual: the build order 
 npm run bench:pacing -- --no-pacing --techs oxPlough,cropRotation --payback-seed 3
 npx vitest run src/bench/pacing.test.ts       # the regression guard (~30 s)
 npm run bench:counters -- --matrix            # counter table, unit matrix and raze times (~1 min)
+npm run bench:counters -- --tiers             # generic line counters at every tier
 npx vitest run src/bench/counters.test.ts     # the counter-table guard (~15 s)
 npm run bench:matches                         # AI-vs-AI match length, seeds 1–10 (shard with MATCH_BENCH_SHARDS; MATCH_BENCH_DIFFICULTY, MATCH_BENCH_TUNE)
 ```

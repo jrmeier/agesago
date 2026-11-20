@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { COUNTERS } from '../core/counters';
 import { UNITS } from '../core/units';
-import { costOf, fight, raze } from './counters';
+import { LINE_UNITS, costOf, fight, raze } from './counters';
 
 /**
  * M16-9: every row of the published counter table (src/core/counters.ts, docs/BALANCE.md, the
@@ -42,4 +42,31 @@ describe('counter table', () => {
     expect(costOf('praetorian') / costOf('swordsman')).toBe(3);
     expect(costOf('equites') / costOf('horseman')).toBe(2);
   });
+});
+
+describe('counter table at every unit-line tier', () => {
+  const lineFights = FIGHTS.filter(([, a, b]) => LINE_UNITS.includes(a) && LINE_UNITS.includes(b));
+  // PLAN-AUDIT #60, seeds: 2 on main 7157fcc: only these cases were below 75%.
+  // Keep the original bar everywhere else, including tier-1 Archer/Hoplite at 3600 (77%).
+  const exceptions = [
+    { a: 'archer', b: 'hoplite', tier: 1, budget: 1200, measured: 0.73 },
+    { a: 'archer', b: 'hoplite', tier: 2, budget: 1200, measured: 0.73 },
+    { a: 'archer', b: 'hoplite', tier: 2, budget: 3600, measured: 0.71 },
+    { a: 'archer', b: 'slinger', tier: 1, budget: 1200, measured: 0 },
+    { a: 'archer', b: 'slinger', tier: 1, budget: 3600, measured: 0 },
+    { a: 'archer', b: 'slinger', tier: 3, budget: 1200, measured: 0 },
+    { a: 'archer', b: 'slinger', tier: 3, budget: 3600, measured: 0 },
+  ];
+  const cases = lineFights.flatMap(([, a, b]) =>
+    ([1, 2, 3] as const).flatMap((tier) => [1200, 3600].map((budget) => ({ a, b, tier, budget }))));
+
+  it.each(cases)('tier $tier: $a beats $b at $budget', ({ a, b, tier, budget }) => {
+    const r = fight(a, b, budget, { tier, seeds: 2 });
+    expect(r.share).toBeGreaterThanOrEqual(0.6);
+    if (!exceptions.some((e) => e.a === a && e.b === b && e.tier === tier && e.budget === budget)) {
+      expect(r.share).toBeGreaterThanOrEqual(0.75);
+    }
+    // Ticket #60's explicit example: Veteran Hoplites beat Light Cavalry cleanly.
+    if (a === 'hoplite' && b === 'scout' && tier === 1) expect(r.share).toBe(1);
+  }, 120_000);
 });

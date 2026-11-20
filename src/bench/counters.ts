@@ -1,20 +1,26 @@
 import type { CivId } from '../core/civilizations';
+import { TECHS, type TechId } from '../core/techs';
 import { GRASS_ONLY, type Age, type Building, type BuildingKind, type Heightfield, type MapLayout, type PlayerId, type Unit, type UnitKind } from '../core/types';
 import { UNITS } from '../core/units';
 import { BALANCE } from '../sim/balance';
 import { completeBuilding, layFoundation } from '../sim/systems/build';
+import { clearStatCache } from '../sim/systems/research';
 import { EXPLORED } from '../sim/visibility';
 import { defaultPlayers, World } from '../sim/World';
 
 /**
  * Cost-for-cost counter fights (M16-9). Two equal-budget groups on open flat ground, both
- * attack-moving at each other from a realistic engagement gap, no research, in the City Age.
+ * attack-moving at each other from a realistic engagement gap, in the City Age by default.
+ * Optional unit-line tiers grant both sides the same line upgrades, without forge research.
  * The counter table (src/core/counters.ts, shown in docs/BALANCE.md and the in-game help) is
  * checked against these fights by src/bench/counters.test.ts; `npm run bench:counters` prints it.
  */
 
 const DT = 1 / BALANCE.tickRate;
 const W = 160;
+
+export type LineTier = 0 | 1 | 2 | 3;
+export const LINE_UNITS: readonly UnitKind[] = ['hoplite', 'swordsman', 'archer', 'slinger', 'scout', 'horseman'];
 
 export const costOf = (k: UnitKind) => Object.values(UNITS[k].cost).reduce((a, b) => a + (b ?? 0), 0);
 
@@ -77,8 +83,9 @@ export interface FightResult {
  * `b` ceil(budget / cost), so rounding never favours the side being tested. Mean over `seeds`
  * jittered line-ups, each played from both sides.
  */
-export function fight(a: UnitKind, b: UnitKind, budget = 1200, opts: { seeds?: number; age?: Age; gap?: number; civs?: CivId[]; sides?: PlayerId[] } = {}): FightResult {
+export function fight(a: UnitKind, b: UnitKind, budget = 1200, opts: { seeds?: number; age?: Age; gap?: number; civs?: CivId[]; sides?: PlayerId[]; tier?: LineTier } = {}): FightResult {
   const seeds = opts.seeds ?? 3;
+  const tier = opts.tier ?? 0;
   const na = Math.max(1, Math.floor(budget / costOf(a)));
   const nb = Math.max(1, Math.ceil(budget / costOf(b)));
   let leftA = 0, leftB = 0, seconds = 0;
@@ -86,7 +93,13 @@ export function fight(a: UnitKind, b: UnitKind, budget = 1200, opts: { seeds?: n
   const sides = opts.sides ?? [1, 2];
   for (let seed = 1; seed <= seeds; seed++) for (const pa of sides) {
     const pb: PlayerId = pa === 1 ? 2 : 1;
-    const world = arena(opts.age ?? 2, opts.civs);
+    const world = arena(Math.max(opts.age ?? 2, Math.min(3, tier)) as Age, opts.civs);
+    for (const id of Object.keys(TECHS) as TechId[]) {
+      const line = TECHS[id].line;
+      if (!line || !LINE_UNITS.includes(line.unit) || line.tier > tier) continue;
+      for (const p of [1, 2]) world.players.get(p)!.researched.add(id);
+    }
+    clearStatCache(world);
     const r = lcg(seed * 7919);
     const gap = opts.gap ?? 16;
     const front = (p: PlayerId) => W / 2 + (p === 1 ? -gap / 2 : gap / 2);

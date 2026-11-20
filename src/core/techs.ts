@@ -351,9 +351,9 @@ const table = {
     line: { unit: 'archer', tier: 3, title: 'Master Archer' },
   },
   balearicSlinger: {
-    name: 'Balearic Slingers', description: 'Slingers become Balearic Slingers: +25% HP, +2 attack.',
+    name: 'Balearic Slingers', description: 'Slingers become Balearic Slingers: +25% HP, +1 attack.',
     at: 'archeryRange', cost: { food: 125, stone: 60 }, time: 40, age: 1,
-    effects: [mul('slinger', 'hp', 1.25), add('slinger', 'attack.pierce', 2)],
+    effects: [mul('slinger', 'hp', 1.25), add('slinger', 'attack.pierce', 1)],
     line: { unit: 'slinger', tier: 1, title: 'Balearic Slinger' },
   },
   rhodianSlinger: {
@@ -363,9 +363,9 @@ const table = {
     line: { unit: 'slinger', tier: 2, title: 'Rhodian Slinger' },
   },
   leadShotSlinger: {
-    name: 'Lead-Shot Slingers', description: 'Rhodian Slingers become Lead-Shot Slingers: +25% HP, +2 attack, +1 pierce armour.',
+    name: 'Lead-Shot Slingers', description: 'Rhodian Slingers become Lead-Shot Slingers: +25% HP, +1 attack, +1 pierce armour.',
     at: 'archeryRange', cost: { food: 500, stone: 250 }, time: 75, age: 3, requires: ['rhodianSlinger'], requiresBuilding: { kind: 'archeryRange', tier: 1 },
-    effects: [mul('slinger', 'hp', 1.25), add('slinger', 'attack.pierce', 2), add('slinger', 'armor.pierce', 1)],
+    effects: [mul('slinger', 'hp', 1.25), add('slinger', 'attack.pierce', 1), add('slinger', 'armor.pierce', 1)],
     line: { unit: 'slinger', tier: 3, title: 'Lead-Shot Slinger' },
   },
   lightCavalry: {
