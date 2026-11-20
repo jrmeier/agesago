@@ -67,11 +67,15 @@ export class Alerts {
     });
     world.events.on('depleted', (e) => {
       const resource = NODE_RESOURCE[e.kind];
-      const remaining = [...world.nodes.values()].filter((n) => n.id !== e.id)
-        .map((n) => ({ pos: n.pos, resource: NODE_RESOURCE[n.kind], amount: n.amount }));
+      // Lazy: the nodes are only walked for a drop site that accepts the resource and is in range.
+      const remaining = function* () {
+        for (const n of world.nodes.values()) {
+          if (n.id !== e.id) yield { pos: n.pos, resource: NODE_RESOURCE[n.kind], amount: n.amount };
+        }
+      };
       for (const drop of world.buildings.values()) {
         if (drop.owner !== world.localPlayer || !drop.complete) continue;
-        if (!lastNodeNearDrop(e.pos, resource, drop, remaining)) continue;
+        if (!lastNodeNearDrop(e.pos, resource, drop, remaining())) continue;
         if (!this.depletion.shouldAlert(drop.id, resource, this.time)) continue;
         this.show('research', '#i-tech', depletedText(resource, drop.kind), drop.pos);
         break;

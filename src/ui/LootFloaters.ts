@@ -1,5 +1,5 @@
-import { detectQuality, type QualityTier } from '../core/quality';
-import { currentSettings } from '../game/settings';
+import { deviceQuality, type QualityTier } from '../core/quality';
+import { bootQuality, currentSettings } from '../game/settings';
 import type { ResourceType, Vec2 } from '../core/types';
 import type { World } from '../sim/World';
 import { formatLoot } from './endgameLog';
@@ -105,6 +105,6 @@ export class LootFloaters {
 }
 
 function floaterTier(): QualityTier {
-  const choice = currentSettings().quality;
-  return choice === 'auto' ? detectQuality().tier : choice;
+  // Same resolution as Game: a `?quality=` in the URL wins over the saved choice.
+  return bootQuality(currentSettings(), deviceQuality(), typeof location === 'undefined' ? '' : location.search).tier;
 }
