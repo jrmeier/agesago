@@ -846,7 +846,8 @@ and a 40-minute cap. Conquest or resignation decides a game; otherwise the highe
 villagers + soldiers + finished buildings wins (the census excludes scouts; a tie is a draw).
 Wonder victory is disabled for this military-strength benchmark. Profiles are unchanged.
 
-Planner baseline on `7157fcc`:
+Verified by `npm run bench:difficulty` on `8892821` (2026-11-20): all 60 winners, scores and
+finish times reproduce the planner baseline on `7157fcc`. [Per-game evidence](verification/difficulty-ladder-8892821.jsonl):
 
 | Pairing | Higher level won | As seat 1 | As seat 2 | Decided ≤ 40 min |
 |---|---|---|---|---|
