@@ -75,13 +75,13 @@ test('difficulty, teams and resources reach the sim and survive Continue', async
   await expect(page.locator('#title-resources')).toHaveValue('standard');
   await activate('[data-players="1"]');
   await expect(page.locator('#title-difficulty')).toBeDisabled();
-  await expect(page.locator('#title-teams option[value="allied-rivals"]')).toBeDisabled();
-  await expect(page.locator('#title-teams option[value="pairs"]')).toBeDisabled();
+  await expect(page.locator('#title-teams option[value="allied-rivals"]')).toHaveJSProperty('disabled', true);
+  await expect(page.locator('#title-teams option[value="pairs"]')).toHaveJSProperty('disabled', true);
   await activate('[data-players="4"]');
   await page.locator('#title-teams').selectOption('pairs');
   await activate('[data-players="3"]');
   await expect(page.locator('#title-teams')).toHaveValue('ffa');
-  await expect(page.locator('#title-teams option[value="pairs"]')).toBeDisabled();
+  await expect(page.locator('#title-teams option[value="pairs"]')).toHaveJSProperty('disabled', true);
   await page.locator('#title-teams').selectOption('allied-rivals');
   await activate('[data-players="2"]');
   await expect(page.locator('#title-teams')).toHaveValue('ffa');

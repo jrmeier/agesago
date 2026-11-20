@@ -14,7 +14,7 @@ check both again after a change.
 Like 0 A.D. phases, an age-up is a modest cost plus a building count: two distinct completed
 buildings from the current age (`AGE_BUILDINGS_NEEDED`; only the Academy for the Empire Age).
 
-**Starting stockpile.** Every player starts with 200 food, 200 wood, 100 gold and 100 stone
+**Starting stockpile.** By default, every player starts with 200 food, 200 wood, 100 gold and 100 stone
 (`BALANCE.startingStock`), so at 0:00 they can queue villagers and lay a first drop site.
 
 Every economy tech has to **pay for itself within 5 sim-minutes** of clicking it, research time
