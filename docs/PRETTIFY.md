@@ -103,6 +103,15 @@ masking as the main risks. Accepted once before implementation:
 
 ## Performance evidence
 
+Terrain chunking (L15, SwiftShader, production `?e2e&quality=<tier>`) reduces whole-frame
+triangles at default RTS zoom to 117,140 / 409,680 / 411,534 on desktop 1280 × 800
+and 50,340 / 342,880 / 344,734 on emulated Pixel 7 (low / medium / high).
+Against the unculled baselines of 815,982 / 1,625,896 / 1,627,750, those are
+85.6% / 74.8% / 74.7% and 93.8% / 78.9% / 78.8% reductions respectively,
+including shadow passes. The 121 terrain chunks share vertex attributes and one material;
+their separate indices increase draw calls and geometry counts, with no texture or quality
+budget increase. High-tier screenshots at distances 26 and 40 show continuous ground.
+
 Original revision `36a80cd` and updated workspace were served separately and
 measured sequentially on the same Apple M1 Max with Chromium 156.0.8078.4 / ANGLE
 Metal, DPR1. Each seeded selected scene had three runs, 180 warm frame samples per

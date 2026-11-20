@@ -1,11 +1,13 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
+import { qualityTier } from '../core/quality';
 import { GRASS_ONLY, type Heightfield } from '../core/types';
 import { generateMap } from '../sim/mapgen';
 import { World } from '../sim/World';
 import { EntityViews } from './EntityViews';
 import { CHUNK_SIZE, LOD_DISTANCE } from './instanceChunks';
 import { PropsView } from './PropsView';
+import { TerrainView } from './TerrainView';
 
 function installCanvasMock(): void {
   const data = new Uint8ClampedArray(64 * 64 * 4);
@@ -67,8 +69,8 @@ function triangleLoad(root: THREE.Object3D, camera: THREE.Camera): { baseline: n
   let drawn = 0;
   root.traverse((obj) => {
     const mesh = obj as THREE.InstancedMesh;
-    if (!mesh.isInstancedMesh || mesh.count === 0) return;
-    const tris = triCount(mesh.geometry) * mesh.count;
+    if (!mesh.isMesh || (!mesh.isInstancedMesh && !mesh.name.startsWith('terrain:'))) return;
+    const tris = triCount(mesh.geometry) * (mesh.isInstancedMesh ? mesh.count : 1);
     if (!mesh.name.endsWith(':lod')) baseline += tris;
     if (!mesh.visible) return;
     if (mesh.frustumCulled && !frustum.intersectsObject(mesh)) return;
@@ -159,11 +161,12 @@ describe('resource and prop chunks', () => {
     expect(impostorShown).toBe(true);
   });
 
-  it('drops at least 60% of resource and prop triangles at the default RTS zoom', () => {
+  it('drops at least 60% of terrain, resource and prop triangles at the default RTS zoom', () => {
     const map = generateMap(1);
     const world = new World(map.hf, map.layout);
     const views = new EntityViews(world);
     const props = new PropsView(map.hf, map.layout.props);
+    const terrain = new TerrainView(map.hf, qualityTier('low'));
     const aspects = [16 / 9, 9 / 16];
     for (const aspect of aspects) {
       const camera = rtsCamera(map.hf, world.townCenter!.pos.x, world.townCenter!.pos.z, aspect, 26);
@@ -171,11 +174,16 @@ describe('resource and prop chunks', () => {
       props.update(camera);
       const resources = triangleLoad(views.object, camera);
       const scenery = triangleLoad(props.object, camera);
-      const baseline = resources.baseline + scenery.baseline;
-      const drawn = resources.drawn + scenery.drawn;
+      const ground = triangleLoad(terrain.object, camera);
+      expect(ground.baseline).toBe(250_624);
+      expect(ground.drawn).toBeGreaterThan(0);
+      expect(ground.drawn).toBeLessThanOrEqual(ground.baseline * 0.35);
+      const baseline = resources.baseline + scenery.baseline + ground.baseline;
+      const drawn = resources.drawn + scenery.drawn + ground.drawn;
       expect(baseline).toBeGreaterThan(100_000);
       expect(drawn).toBeLessThanOrEqual(baseline * 0.4);
     }
     props.dispose();
+    terrain.dispose();
   });
 });

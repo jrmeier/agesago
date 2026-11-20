@@ -1,7 +1,7 @@
 {
   "format": "prettify-structural-baseline",
   "schema": 1,
-  "description": "Portable structural limits for scripts/prettify-benchmark.mjs: render/memory counters of the seeded ?e2e initial scene (every local villager selected) at the original baseline commit. No frame timing and no GPU-specific performance claim; timing needs a same-machine --baseline FILE. Triangle limits include +12 per scene (+24 with the desktop-high shadow pass): SwiftShader (--software) draws one more box than the original Metal capture, measured identically at 36a80cd itself (2026-11-11).",
+  "description": "Portable structural limits for scripts/prettify-benchmark.mjs: render/memory counters of the seeded ?e2e initial scene (every local villager selected) at the original baseline commit. No frame timing and no GPU-specific performance claim; timing needs a same-machine --baseline FILE. Triangle limits include +12 per scene (+24 with the desktop-high shadow pass): SwiftShader (--software) draws one more box than the original Metal capture, measured identically at 36a80cd itself (2026-11-11). L15 terrain chunking (2026-11-20, SwiftShader): calls and triangles use the new measured selected-scene maxima; geometry ceilings are one above the measured counts because chunks share vertices but own indices. Texture and quality ceilings are unchanged.",
   "baselineCommit": "36a80cd",
   "qualityCeilings": {
     "low": { "pixelRatio": 1, "shadows": false, "shadowMapSize": 0, "grassDensity": 0, "grassRadius": 0, "fancyWater": false },
@@ -9,8 +9,8 @@
     "high": { "pixelRatio": 2, "shadows": true, "shadowMapSize": 2048, "grassDensity": 7, "grassRadius": 45, "fancyWater": true }
   },
   "scenarios": [
-    { "name": "desktop-low", "render": { "calls": 136, "triangles": 325736 }, "memory": { "geometries": 50, "textures": 10 } },
-    { "name": "desktop-high", "render": { "calls": 393, "triangles": 748218 }, "memory": { "geometries": 57, "textures": 13 } },
-    { "name": "phone-low", "render": { "calls": 75, "triangles": 282980 }, "memory": { "geometries": 42, "textures": 10 } }
+    { "name": "desktop-low", "render": { "calls": 155, "triangles": 117320 }, "memory": { "geometries": 71, "textures": 10 } },
+    { "name": "desktop-high", "render": { "calls": 471, "triangles": 411714 }, "memory": { "geometries": 119, "textures": 13 } },
+    { "name": "phone-low", "render": { "calls": 84, "triangles": 50520 }, "memory": { "geometries": 51, "textures": 10 } }
   ]
 }

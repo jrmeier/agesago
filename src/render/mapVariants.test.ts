@@ -10,8 +10,8 @@ beforeAll(()=>{
 });
 it.each(Object.keys(MAP_SIZES).flatMap(size=>MAP_TYPES.map(type=>({size:size as MapSize,type}))))('low-tier terrain stays finite and within the giant terrain budget for $size $type',options=>{
   const g=generateMap(1,2,options); const view=new TerrainView(g.hf,qualityTier('low'));
-  const ground=view.object.children[0] as THREE.Mesh;const positions=ground.geometry.getAttribute('position');
-  expect(ground.geometry.index!.count/3).toBeLessThan(305000);
+  const chunks=view.object.children[0].children as THREE.Mesh[];const positions=chunks[0].geometry.getAttribute('position');
+  expect(chunks.reduce((sum,chunk)=>sum+chunk.geometry.index!.count/3,0)).toBeLessThan(305000);
   for(let i=0;i<positions.count;i+=113){expect(Number.isFinite(positions.getY(i))).toBe(true);expect(positions.getX(i)).toBeGreaterThanOrEqual(0);expect(positions.getX(i)).toBeLessThanOrEqual(g.hf.width);}
   const water=view.object.children[1] as THREE.Mesh;expect(water.material instanceof THREE.ShaderMaterial).toBe(false);
   view.object.traverse(object=>{if(object instanceof THREE.Mesh){object.geometry.dispose();const materials=Array.isArray(object.material)?object.material:[object.material];materials.forEach(material=>material.dispose());}});

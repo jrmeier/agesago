@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { detectQuality, type Quality } from '../core/quality';
 import { type Heightfield } from '../core/types';
 import { applyFog, type FogOfWar } from './fog';
+import { chunkCoord } from './instanceChunks';
 import { packSplat } from './terrainColor';
 import { createGroundTextures, GROUND_UV_SCALE, type GroundTextures } from './textures';
 import { Water } from './Water';
@@ -20,7 +21,7 @@ interface EdgeVert {
 }
 
 /**
- * Splat-textured terrain mesh plus sea-level water.
+ * Splat-textured terrain chunks plus sea-level water.
  * Vertex weights come from `Heightfield.ground`; the shader adds macro variation,
  * slope rock, and an underwater tint. Public surface: constructor, object, update, setFog, setFancyWater.
  * `quality` defaults to {@link detectQuality} so the current game loop still picks a tier.
@@ -28,10 +29,14 @@ interface EdgeVert {
 export class TerrainView {
   readonly object = new THREE.Group();
   private readonly water: Water;
-  private readonly ground: THREE.Mesh;
+  private readonly ground: THREE.Group;
+  private readonly groundMaterial: THREE.MeshLambertMaterial;
 
   constructor(hf: Heightfield, quality: Quality = detectQuality()) {
-    this.ground = buildTerrain(hf, quality);
+    this.groundMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+    this.groundMaterial.shadowSide = THREE.FrontSide;
+    applySplat(this.groundMaterial, createGroundTextures(quality));
+    this.ground = buildTerrain(hf, quality, this.groundMaterial);
     this.object.add(this.ground);
     this.water = new Water(hf, quality);
     this.object.add(this.water.mesh);
@@ -45,7 +50,7 @@ export class TerrainView {
 
   /** Darken the heightfield and the sea with the shared fog mask. */
   setFog(fog: FogOfWar): void {
-    applyFog(this.ground.material as THREE.Material, fog);
+    applyFog(this.groundMaterial, fog);
     this.water.setFog(fog);
   }
 
@@ -53,9 +58,16 @@ export class TerrainView {
   setFancyWater(on: boolean): 'live' | 'next' {
     return this.water.setFancy(on);
   }
+
+  /** Release ground buffers. Three's attribute cache deletes shared GPU buffers only once. */
+  dispose(): void {
+    for (const child of this.ground.children) (child as THREE.Mesh).geometry.dispose();
+    this.groundMaterial.dispose();
+    this.ground.clear();
+  }
 }
 
-function buildTerrain(hf: Heightfield, quality: Quality): THREE.Mesh {
+function buildTerrain(hf: Heightfield, quality: Quality, material: THREE.Material): THREE.Group {
   const nx = Math.round(hf.width / STEP) + 1;
   const nz = Math.round(hf.depth / STEP) + 1;
   const positions: number[] = [];
@@ -112,15 +124,44 @@ function buildTerrain(hf: Heightfield, quality: Quality): THREE.Mesh {
   geo.setIndex(indices);
   geo.computeVertexNormals();
 
-  const material = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
-  material.shadowSide = THREE.FrontSide;
-  applySplat(material, createGroundTextures(quality));
+  // Keep the full-mesh normals above: computing them per chunk would split the
+  // lighting at borders. Every pair of triangles here is one grid/skirt quad.
+  const buckets = new Map<string, number[]>();
+  for (let i = 0; i < indices.length; i += 6) {
+    const first = indices[i] * 3;
+    // The east/south skirts belong to the last interior chunk, including when
+    // the map dimension is an exact multiple of the chunk size.
+    const { cx, cz } = chunkCoord(
+      Math.min(positions[first], hf.width - STEP / 2),
+      Math.min(positions[first + 2], hf.depth - STEP / 2),
+    );
+    const key = `${cx}:${cz}`;
+    let bucket = buckets.get(key);
+    if (!bucket) buckets.set(key, bucket = []);
+    for (let k = 0; k < 6; k++) bucket.push(indices[i + k]);
+  }
 
-  const mesh = new THREE.Mesh(geo, material);
-  mesh.castShadow = quality.shadows;
-  mesh.receiveShadow = quality.shadows;
-  mesh.name = 'terrain';
-  return mesh;
+  const ground = new THREE.Group();
+  ground.name = 'terrain';
+  const point = new THREE.Vector3();
+  for (const [key, index] of buckets) {
+    const chunk = new THREE.BufferGeometry();
+    for (const [name, attribute] of Object.entries(geo.attributes)) chunk.setAttribute(name, attribute);
+    chunk.setIndex(index);
+    // BufferGeometry.computeBoundingSphere reads ALL shared positions, which
+    // would give every chunk a map-sized sphere and defeat frustum culling.
+    const box = new THREE.Box3();
+    for (const vertex of index) box.expandByPoint(point.fromBufferAttribute(geo.attributes.position, vertex));
+    chunk.boundingBox = box;
+    chunk.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
+    const mesh = new THREE.Mesh(chunk, material);
+    mesh.frustumCulled = true;
+    mesh.castShadow = quality.shadows;
+    mesh.receiveShadow = quality.shadows;
+    mesh.name = `terrain:${key}`;
+    ground.add(mesh);
+  }
+  return ground;
 }
 
 function addSkirt(

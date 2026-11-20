@@ -242,7 +242,7 @@ describe('applyFog', () => {
     installCanvasMock();
     const terrain = new TerrainView(flat(32, 24), qualityTier('low'));
     terrain.setFog(new FogOfWar(new Visibility(32, 24), qualityTier('low')));
-    const ground = terrain.object.children[0] as THREE.Mesh;
+    const ground = terrain.object.children[0].children[0] as THREE.Mesh;
     const splat = compile(
       ground.material as THREE.Material,
       THREE.ShaderLib.lambert.vertexShader,

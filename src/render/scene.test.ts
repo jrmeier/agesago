@@ -38,7 +38,7 @@ describe('TerrainView', () => {
       ground: () => GRASS_ONLY,
     };
     const view = new TerrainView(hf);
-    const ground = view.object.children[0] as THREE.Mesh;
+    const ground = view.object.children[0].children[0] as THREE.Mesh;
     const water = view.object.children[1] as THREE.Mesh;
     const pos = ground.geometry.attributes.position;
     const normal = ground.geometry.attributes.normal;
