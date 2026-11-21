@@ -40,16 +40,19 @@ describe('M7-3: scripted early raid defence', () => {
       run(world, [ai], 4 * 60);
       const tc = world.townCenterOf(1)!;
       const before = census(world, 1);
-      // Rotate the same formation around the same ring if terrain or obstacles block it.
+      // Approach from the map-centre side for either starting seat; rotate around blocked terrain.
+      const inward = { x: world.hf.width / 2 - tc.pos.x, z: world.hf.depth / 2 - tc.pos.z };
+      const approach = Math.atan2(inward.z, inward.x);
       const home = world.nav.nearestFree({ x: tc.pos.x, z: tc.pos.z + tc.radius + 1 })!;
       const positions = Array.from({ length: 24 }, (_, step) => {
-        const angle = step * Math.PI / 12;
+        const angle = approach + step * Math.PI / 12;
         return Array.from({ length: 6 }, (_, i) => {
           const x = 18 + i % 3;
           const z = 14 + Math.floor(i / 3);
           return { x: tc.pos.x + x * Math.cos(angle) - z * Math.sin(angle), z: tc.pos.z + x * Math.sin(angle) + z * Math.cos(angle) };
         });
-      }).find((group) => group.every((pos) => world.nav.isFree(pos) && world.nav.connected(pos, home)));
+      }).find((group) => group.every((pos) => (pos.x - tc.pos.x) * inward.x + (pos.z - tc.pos.z) * inward.z > 0
+        && world.nav.isFree(pos) && world.nav.connected(pos, home)));
       // A blocked or disconnected raid would make the defence assertion vacuous.
       expect(positions, `seed ${seed}: reachable raid spawn`).toBeDefined();
       const raid = positions!.map((pos) => world.spawnUnit('hoplite', pos, 2));
