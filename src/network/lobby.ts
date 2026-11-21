@@ -17,13 +17,16 @@ export function relayOverride(search: string, hostname: string): string | undefi
   return;
 }
 
+export interface OnlineLobby {
+  open(): void;
+  dispose(): void;
+}
+
 /** Kept separate from single-player setup so joining never discards its resume. */
-export function mountOnline(root: HTMLElement, onStart: (session: NetworkSession, data: Extract<ServerMessage, { type: 'start' }>) => void): () => void {
+export function mountOnline(root: HTMLElement, onStart: (session: NetworkSession, data: Extract<ServerMessage, { type: 'start' }>) => void): OnlineLobby {
   const home = root.querySelector<HTMLElement>('#title-home');
-  const actions = home?.querySelector('.title-actions');
-  if (!home || !actions) return () => {};
-  const button = document.createElement('button');
-  button.id = 'title-online'; button.type = 'button'; button.className = 'endgame-btn'; button.textContent = 'Online game'; actions.append(button);
+  const button = root.querySelector<HTMLButtonElement>('#title-online');
+  if (!home || !button) throw new Error('title screen is missing its online button');
   const panel = document.createElement('section');
   panel.id = 'online-lobby'; panel.hidden = true;
   panel.innerHTML = `<p class="loading-kicker">Online game</p><h1>Play with friends</h1>
@@ -72,11 +75,13 @@ export function mountOnline(root: HTMLElement, onStart: (session: NetworkSession
     });
     offStart = session.onStart(data => { if (booting) return; booting = true; panel.hidden = true; onStart(current, data); });
   };
-  button.addEventListener('click', () => { home.hidden = true; panel.hidden = false; field('online-name').focus(); });
   panel.querySelector('#online-create')!.addEventListener('click', () => connect(false));
   panel.querySelector('#online-join')!.addEventListener('click', () => connect(true));
   panel.querySelector('#online-wonder')!.addEventListener('change', () => { field('online-wonder-timer').disabled = !field('online-wonder').checked; });
   panel.querySelector('#online-start')!.addEventListener('click', () => session?.start());
   panel.querySelector('#online-back')!.addEventListener('click', () => { close(); panel.hidden = true; home.hidden = false; button.focus(); });
-  return () => { unsubscribe(); offStart(); button.remove(); panel.remove(); };
+  return {
+    open() { home.hidden = true; panel.hidden = false; field('online-name').focus(); },
+    dispose() { unsubscribe(); offStart(); panel.remove(); },
+  };
 }

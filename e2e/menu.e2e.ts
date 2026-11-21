@@ -104,3 +104,74 @@ test('the title screen starts a seeded match and continue reopens it', async ({ 
   );
   expect(errors).toEqual([]);
 });
+
+test('Online game paints with the menu and waits visibly for its lobby', async ({ page }, testInfo) => {
+  const phone = testInfo.project.name === 'phone';
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  let releaseScripts!: () => void;
+  let releaseLobby!: () => void;
+  const scriptsReady = new Promise<void>(resolve => { releaseScripts = resolve; });
+  const lobbyReady = new Promise<void>(resolve => { releaseLobby = resolve; });
+  await page.route(/\/assets\/[^/]+\.js$/, async route => {
+    await scriptsReady;
+    if (/\/lobby-[^/]+\.js$/.test(route.request().url())) await lobbyReady;
+    await route.continue();
+  });
+  try {
+    await page.goto('/', { waitUntil: 'commit' });
+    // No application script has run: the online action belongs to the initial HTML.
+    await expect(page.locator('#title-online')).toBeVisible();
+    // Web-font settling can move the whole centered card; compare the action's slot.
+    const buttonSlot = () => page.locator('#title-online').evaluate(button => {
+      const box = button.getBoundingClientRect();
+      const row = button.parentElement!.getBoundingClientRect();
+      return { width: box.width, height: box.height, x: box.x - row.x, y: box.y - row.y };
+    });
+    const initialSlot = await buttonSlot();
+    releaseScripts();
+    await page.waitForFunction(() => document.getElementById('title-screen')?.dataset.resume);
+    expect(await buttonSlot()).toEqual(initialSlot);
+    await activate(page, '#title-online', phone);
+    await expect(page.locator('#title-online')).toHaveText('Loading…');
+    await expect(page.locator('#title-online')).toHaveAttribute('aria-busy', 'true');
+    await expect(page.locator('#title-online')).toBeDisabled();
+    releaseLobby();
+    await expect(page.locator('#online-lobby')).toBeVisible();
+    await activate(page, '#online-back', phone);
+    await expect(page.locator('#title-online')).toHaveText('Online game');
+    await expect(page.locator('#title-online')).toHaveCount(1);
+    await expect(page.locator('#title-online')).toBeEnabled();
+    expect(await buttonSlot()).toEqual(initialSlot);
+    expect(errors).toEqual([]);
+  } finally {
+    releaseScripts();
+    releaseLobby();
+  }
+});
+
+test('a failed lobby prefetch keeps the online action and retries after a visible error', async ({ page }, testInfo) => {
+  const phone = testInfo.project.name === 'phone';
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  let requests = 0;
+  await page.route(/\/assets\/lobby-[^/]+\.js$/, async route => {
+    requests += 1;
+    if (requests === 1) await route.abort('failed');
+    else await route.continue();
+  });
+  await page.goto('/');
+  await page.waitForFunction(() => document.getElementById('title-screen')?.dataset.resume);
+  await expect.poll(() => requests).toBe(1);
+  await expect(page.locator('#title-online')).toBeVisible();
+  await activate(page, '#title-online', phone);
+  await expect(page.locator('#title-online-note')).toHaveText('Online play could not load. Check your connection and try again.');
+  await expect(page.locator('#title-online-note')).toBeVisible();
+  await expect(page.locator('#title-online')).toBeEnabled();
+  await activate(page, '#title-online', phone);
+  await expect(page.locator('#online-lobby')).toBeVisible();
+  expect(requests).toBeGreaterThanOrEqual(2);
+  await expect(page.locator('#title-online-note')).toBeHidden();
+  await expect(page.locator('#title-online-note')).toBeEmpty();
+  expect(errors).toEqual([]);
+});

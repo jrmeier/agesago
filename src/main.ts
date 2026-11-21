@@ -2,6 +2,7 @@ import type { Game, MatchStart } from './game/Game';
 import { deleteResume, idbResumeStore } from './game/resume';
 import { initSettings } from './game/settings';
 import { mountSettings } from './game/settingsPanel';
+import { mountOnlineEntry } from './game/onlineEntry';
 import { mountTitle } from './game/titleScreen';
 
 // Start fetching the match while the title screen becomes interactive.
@@ -95,13 +96,9 @@ if ((params.has('e2e') && !params.has('title')) || !title) {
         .then(() => bootMatch({ seed, players, ...options, fresh: true }));
     },
   });
-  // The lobby's session/checksum code depends on the sim; don't block the title on it.
-  void import('./network/lobby').then(({ mountOnline }) => {
-    if (!document.documentElement.classList.contains('show-title')) return;
-    closeOnline = mountOnline(title, (session, data) => {
-      leaveTitle();
-      void bootMatch({ seed: data.config.seed, players: data.config.players, fresh: true, online: { session, data } });
-    });
+  closeOnline = mountOnlineEntry(title, (session, data) => {
+    leaveTitle();
+    void bootMatch({ seed: data.config.seed, players: data.config.players, fresh: true, online: { session, data } });
   });
 }
 
