@@ -20,6 +20,8 @@ import type { NavalJob, Landing } from './systems/naval';
 import type { ExplorationSite, PriestOrder } from './systems/explorationRewards';
 import { normalizeWonderRules, type GameResult, type WonderCountdown, type WonderRules } from './systems/victory';
 
+// Bump SAVE_VERSION, and record why, in core/saveVersion.ts: the title screen reads the
+// version to check a resume, and importing it from here would load the whole sim with it.
 export { MIN_SAVE_VERSION, SAVE_VERSION } from '../core/saveVersion';
 
 /** Plain JSON, with ordered entries: iteration order affects scans, training and exploration. */
