@@ -846,17 +846,18 @@ and a 40-minute cap. Conquest or resignation decides a game; otherwise the highe
 villagers + soldiers + finished buildings wins (the census excludes scouts; a tie is a draw).
 Wonder victory is disabled for this military-strength benchmark. Profiles are unchanged.
 
-Verified by `npm run bench:difficulty` on `8892821` (2026-11-20): all 60 winners, scores and
-finish times reproduce the planner baseline on `7157fcc`. [Per-game evidence](verification/difficulty-ladder-8892821.jsonl):
+Verified by `npm run bench:difficulty` on `b51f9e4` (2026-11-21), after rebasing onto the L60
+slinger retune and the Archer vs Slinger tier fix, which moved a few results from the earlier
+`8892821` run (16/20, 19/20, 17/20). [Per-game evidence](verification/difficulty-ladder-b51f9e4.jsonl):
 
 | Pairing | Higher level won | As seat 1 | As seat 2 | Decided ≤ 40 min |
 |---|---|---|---|---|
-| easy vs moderate | 16/20 (80%) | 6/10 | 10/10 | 6 |
-| moderate vs hard | 19/20 (95%) | 10/10 | 9/10 | 8 |
-| hard vs hardest | 17/20 (85%) | 10/10 | 7/10 | 10 |
+| easy vs moderate | 16/20 (80%) | 7/10 | 9/10 | 7 |
+| moderate vs hard | 19/20 (95%) | 10/10 | 9/10 | 6 |
+| hard vs hardest | 18/20 (90%) | 10/10 | 8/10 | 10 |
 
-Easy vs moderate is exactly on the 80% bar. Three of moderate's four losses were score calls
-within 1–9 points (105–114, 101–102, 99–101), all with moderate in seat 1. The known seat
+Easy vs moderate is exactly on the 80% bar. All four of moderate's losses were score calls at
+the 40-minute cap (18–176, 88–124 and 99–101 with moderate in seat 1; 113–98 in seat 2). The known seat
 advantage belongs to M16-11; this setup change does not retune profiles or alter map generation.
 
 Run `npm run bench:difficulty` (six shards, about 20 minutes). It appends resumable JSONL to
