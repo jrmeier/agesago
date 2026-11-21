@@ -1,0 +1,214 @@
+{
+  "ticket": "M16-11",
+  "sourceRevision": "5fb11b4743e74de8a8943d376e4a0ce29c85ab35",
+  "baseRevision": "15a24c6",
+  "date": "2026-11-21",
+  "command": "CIV_BENCH_SEEDS=20 CIV_BENCH_SHARDS=6 CIV_BENCH_SHARD=<0..5> CIV_BENCH_OUTPUT=<fresh-file> nice -n 10 npm run bench:civilizations",
+  "runtime": {
+    "os": "Linux x86_64",
+    "node": "v24.15.0",
+    "sourceRevision": "5fb11b4743e74de8a8943d376e4a0ce29c85ab35",
+    "startedUtc": "2026-11-21T15:31:44Z",
+    "shards": 6,
+    "endedUtc": "2026-11-21T15:53:25Z",
+    "wallSeconds": 1301.14,
+    "exitCodes": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "games": 240,
+  "coverage": {
+    "uniqueIds": 240,
+    "mapSeeds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+    ],
+    "pairings": 6,
+    "swappedSides": [
+      false,
+      true
+    ]
+  },
+  "map": "legacy Large Mediterranean, generateMap(seed, 2)",
+  "difficulty": "moderate",
+  "scoreCapSimMinutes": 30,
+  "score": "villagers + army + completed buildings",
+  "drawCredit": 0.5,
+  "acceptedBand": [
+    0.4,
+    0.6
+  ],
+  "resolutionCounts": {
+    "score-cap": 230,
+    "conquest": 10
+  },
+  "summaries": [
+    {
+      "pair": [
+        "hellenes",
+        "romans"
+      ],
+      "games": 40,
+      "firstWins": 17,
+      "draws": 0,
+      "firstWinRate": 0.425,
+      "passes": true
+    },
+    {
+      "pair": [
+        "hellenes",
+        "persians"
+      ],
+      "games": 40,
+      "firstWins": 20,
+      "draws": 0,
+      "firstWinRate": 0.5,
+      "passes": true
+    },
+    {
+      "pair": [
+        "hellenes",
+        "celts"
+      ],
+      "games": 40,
+      "firstWins": 18,
+      "draws": 0,
+      "firstWinRate": 0.45,
+      "passes": true
+    },
+    {
+      "pair": [
+        "romans",
+        "persians"
+      ],
+      "games": 40,
+      "firstWins": 21,
+      "draws": 1,
+      "firstWinRate": 0.5375,
+      "passes": true
+    },
+    {
+      "pair": [
+        "romans",
+        "celts"
+      ],
+      "games": 40,
+      "firstWins": 20,
+      "draws": 1,
+      "firstWinRate": 0.5125,
+      "passes": true
+    },
+    {
+      "pair": [
+        "persians",
+        "celts"
+      ],
+      "games": 40,
+      "firstWins": 16,
+      "draws": 0,
+      "firstWinRate": 0.4,
+      "passes": true
+    }
+  ],
+  "reproducibility": {
+    "reference": "reports/PLAN-M16-11-data/civ-fix.jsonl",
+    "games": 240,
+    "mismatches": 153,
+    "mismatchedGames": 107,
+    "fields": [
+      "winner",
+      "scores",
+      "resolution",
+      "simSeconds",
+      "pair",
+      "seed",
+      "swap",
+      "civs"
+    ],
+    "note": "Main integrated L60 slinger upgrade retuning before this rerun, so prototype rows may differ; no balance tuning was made by M16-11."
+  },
+  "assembledSha256": "f4cc70c2beacd47b2008770f7ab8f1888654f2597073f4aa233f06c8dfab975f",
+  "sourceTrees": {
+    "src/core": "d739c329cc63cc333b3aaa98244e564fc6ca740a",
+    "src/ai": "3d59fae72dcaac8b3dee8d0e6bb94969d64fa747",
+    "src/sim": "9ae07684beca06a2d669c04af3c40d5872123e32"
+  },
+  "tenSeedSubset": [
+    {
+      "pair": [
+        "hellenes",
+        "romans"
+      ],
+      "games": 20,
+      "firstWinRate": 0.35
+    },
+    {
+      "pair": [
+        "hellenes",
+        "persians"
+      ],
+      "games": 20,
+      "firstWinRate": 0.6
+    },
+    {
+      "pair": [
+        "hellenes",
+        "celts"
+      ],
+      "games": 20,
+      "firstWinRate": 0.35
+    },
+    {
+      "pair": [
+        "romans",
+        "persians"
+      ],
+      "games": 20,
+      "firstWinRate": 0.425
+    },
+    {
+      "pair": [
+        "romans",
+        "celts"
+      ],
+      "games": 20,
+      "firstWinRate": 0.6
+    },
+    {
+      "pair": [
+        "persians",
+        "celts"
+      ],
+      "games": 20,
+      "firstWinRate": 0.35
+    }
+  ],
+  "seatWins": {
+    "firstSeat": 123,
+    "secondSeat": 115,
+    "draws": 2
+  }
+}

@@ -1,0 +1,168 @@
+{
+  "ticket": "M16-11",
+  "sourceRevision": "5fb11b4743e74de8a8943d376e4a0ce29c85ab35",
+  "baseRevision": "15a24c6",
+  "date": "2026-11-21",
+  "command": "SEAT_BENCH_SHARDS=8 SEAT_BENCH_SHARD=<0..7> SEAT_BENCH_OUTPUT=<fresh-file> nice -n 10 npm run bench:seats",
+  "runtime": {
+    "os": "Linux x86_64",
+    "node": "v24.15.0",
+    "sourceRevision": "5fb11b4743e74de8a8943d376e4a0ce29c85ab35",
+    "startedUtc": "2026-11-21T15:21:05Z",
+    "shards": 8,
+    "endedUtc": "2026-11-21T15:31:44Z",
+    "wallSeconds": 638.841,
+    "exitCodes": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "games": 160,
+  "coverage": {
+    "uniqueIds": 160,
+    "mapSeeds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40
+    ],
+    "civilizations": [
+      "hellenes",
+      "romans",
+      "persians",
+      "celts"
+    ]
+  },
+  "map": "legacy Large Mediterranean, generateMap(seed, 2)",
+  "difficulty": "moderate",
+  "scoreCapSimMinutes": 30,
+  "score": "villagers + army + completed buildings",
+  "drawCredit": "excluded from decided shares",
+  "acceptedBand": [
+    0.4,
+    0.6
+  ],
+  "resolutionCounts": {
+    "conquest": 14,
+    "score-cap": 146
+  },
+  "summaries": [
+    {
+      "group": "hellenes",
+      "games": 40,
+      "decided": 39,
+      "seat1Wins": 21,
+      "seat2Wins": 18,
+      "seat2Share": 0.46153846153846156,
+      "eastStartShare": 0.6410256410256411,
+      "seat1East": 20,
+      "passes": true
+    },
+    {
+      "group": "romans",
+      "games": 40,
+      "decided": 40,
+      "seat1Wins": 16,
+      "seat2Wins": 24,
+      "seat2Share": 0.6,
+      "eastStartShare": 0.6,
+      "seat1East": 20,
+      "passes": true
+    },
+    {
+      "group": "persians",
+      "games": 40,
+      "decided": 40,
+      "seat1Wins": 22,
+      "seat2Wins": 18,
+      "seat2Share": 0.45,
+      "eastStartShare": 0.55,
+      "seat1East": 20,
+      "passes": true
+    },
+    {
+      "group": "celts",
+      "games": 40,
+      "decided": 39,
+      "seat1Wins": 22,
+      "seat2Wins": 17,
+      "seat2Share": 0.4358974358974359,
+      "eastStartShare": 0.48717948717948717,
+      "seat1East": 20,
+      "passes": true
+    },
+    {
+      "group": "all",
+      "games": 160,
+      "decided": 158,
+      "seat1Wins": 81,
+      "seat2Wins": 77,
+      "seat2Share": 0.4873417721518987,
+      "eastStartShare": 0.569620253164557,
+      "seat1East": 80,
+      "passes": true
+    }
+  ],
+  "reproducibility": {
+    "reference": "reports/PLAN-M16-11-data/seats-fix.jsonl",
+    "games": 160,
+    "mismatches": 121,
+    "mismatchedGames": 81,
+    "fields": [
+      "winner",
+      "scores",
+      "resolution",
+      "simSeconds",
+      "seat1East"
+    ],
+    "note": "Main integrated L60 slinger upgrade retuning before this rerun, so prototype rows may differ; no balance tuning was made by M16-11."
+  },
+  "assembledSha256": "a08702eb7c86e8b77990ea09bbeaa7ba47d240609564cc6dec9758c697627715",
+  "sourceTrees": {
+    "src/core": "d739c329cc63cc333b3aaa98244e564fc6ca740a",
+    "src/ai": "3d59fae72dcaac8b3dee8d0e6bb94969d64fa747",
+    "src/sim": "9ae07684beca06a2d669c04af3c40d5872123e32"
+  }
+}

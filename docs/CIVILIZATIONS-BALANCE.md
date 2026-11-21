@@ -1,37 +1,43 @@
 # Civilization AI balance evidence
 
-## Current: M16-11 seat rotation (2026-11-20)
+## Current: M16-11 seat rotation after integration (2026-11-21)
 
 Acceptance now uses **20 seeds per pairing**, each played from both sides: six pairings,
 40 games each, 240 total. The default ten-seed quick run remains available. Moderate AI,
 Large Mediterranean, the 30-minute cap and scoring (villagers + army + completed buildings)
 are unchanged. Draws still contribute half a win to the first civilization's rate.
 
-Fresh run on `4741dcb`: [240 game rows](verification/civilizations-accepted-4741dcb.jsonl)
-and [provenance](verification/civilizations-accepted-4741dcb.metadata.json). Six reduced-priority
-shards took 2,148.983 s wall time. All 240 unique IDs cover six pairings, seeds 1–20 and both
-sides. Every winner, score, resolution and simulation time matches the prototype.
+Fresh run on `5fb11b4`, rebased onto main `15a24c6`:
+[240 game rows](verification/civilizations-accepted-5fb11b4.jsonl) and
+[provenance](verification/civilizations-accepted-5fb11b4.metadata.json). Six reduced-priority
+shards took 1,301.140 s wall time. All 240 unique IDs cover six pairings,
+seeds 1–20 and both sides. This includes main's L60 slinger retune; M16-11 does not tune any numbers.
 
 | Pairing | First civ wins | Draws | Games | First civ benchmark win rate | 40–60% |
 |---|---|---|---|---|---|
-| Hellenes / Romans | 18 | 0 | 40 | 45.0% | Pass |
+| Hellenes / Romans | 17 | 0 | 40 | 42.5% | Pass |
 | Hellenes / Persians | 20 | 0 | 40 | 50.0% | Pass |
-| Hellenes / Celts | 20 | 1 | 40 | 51.3% | Pass |
-| Romans / Persians | 18 | 1 | 40 | 46.3% | Pass |
-| Romans / Celts | 21 | 1 | 40 | 53.8% | Pass |
-| Persians / Celts | 17 | 0 | 40 | 42.5% | Pass |
+| Hellenes / Celts | 18 | 0 | 40 | 45.0% | Pass |
+| Romans / Persians | 21 | 1 | 40 | 53.8% | Pass |
+| Romans / Celts | 20 | 1 | 40 | 51.3% | Pass |
+| Persians / Celts | 16 | 0 | 40 | 40.0% | Pass |
 
-All six pairing bands pass. Twelve games ended in conquest and 228 at the score cap; these
-are capped benchmark rates, not conquest-only win rates. Seat 2 won 125 of 237 decided games
-(52.7%), compared with 85 of 118 (72.0%) in the historical M13-7 run.
+All six pairing bands pass. 10 games ended in conquest and
+230 at the score cap; these are capped benchmark rates, not
+conquest-only win rates. Seat 2 won 115 of 238 decided games
+(48.3%), compared with 85 of 118 (72.0%) in M13-7.
+
+The [original pre-L60 240-game run](verification/civilizations-accepted-4741dcb.jsonl) and its
+[provenance](verification/civilizations-accepted-4741dcb.metadata.json) remain historical evidence.
+All its rows matched the prototype and all pairings passed; those results are superseded above.
 
 The M13-7 fixed-seat bias note below is resolved by M16-11: seats rotate around the default
 map's starts with the seed. The remaining geographic start advantage is an open follow-up
 in [Seat fairness](BALANCE.md#seat-fairness-m16-11), separate from civilization balance.
 
-**Romans / Celts was a sampling issue.** On unchanged main, seeds 1–10 reproduced 60.0%,
-seeds 11–20 gave 42.5%, and all 40 games gave 51.3%. After rotation, the first ten seeds alone
-give 65.0%, while the full 20-seed acceptance run is in band. Do not tune civilization numbers
+**Romans / Celts was a sampling issue.** On pre-M16-11 main (`7157fcc`), seeds 1–10 reproduced 60.0%,
+seeds 11–20 gave 42.5%, and all 40 games gave 51.3%. In the original pre-L60 seat-rotation run,
+the first ten seeds gave 65.0%, while all 20 seeds gave 53.8%. Do not tune civilization numbers
 from that 20-game subset; no civilization, unit or technology number changes in M16-11.
 
 **Civilization technologies remain an AI follow-up.** In the diagnosis, moderate AI researched

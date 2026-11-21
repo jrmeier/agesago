@@ -339,8 +339,7 @@ slingers' infantry counters and cavalry's ranged counters. Base units and combat
 unchanged. The simulation data change requires `NETWORK_VERSION` 17; saved state has no new
 fields, so `SAVE_VERSION` stays unchanged and researched upgrades load with the new stats.
 
-The civilization tournament in `docs/CIVILIZATIONS-BALANCE.md` predates this retune and was
-not rerun. Persian Immortals are archer-class unique units with their own one-step line;
+The M16-11 civilization rerun in `docs/CIVILIZATIONS-BALANCE.md` includes this retune. Persian Immortals are archer-class unique units with their own one-step line;
 their matchup against slingers remains unchecked. AI match length and civilization targets
 remain separate follow-ups (M16-10 / M16-11).
 
@@ -354,7 +353,8 @@ For two players, seat 1 starts west on odd seeds and east on even seeds. Other m
 are unchanged, as are terrain, resources and scenery. Saved games retain their own entities,
 so the save format stays at version 16. Multiplayer protocol 19 rejects older peers.
 
-Diagnosis (Romans mirrors, moderate AI, 30-minute cap, villagers + army + completed buildings):
+Original diagnosis before L60 (Romans mirrors, moderate AI, 30-minute cap,
+villagers + army + completed buildings):
 
 | Condition | Games | Seat 2 wins | East start wins |
 |---|---|---|---|
@@ -367,23 +367,26 @@ combat tie-breaks. Acceptance uses all four civilizations in mirror matches, see
 with each seat required to win 40–60% of decided games overall and within each civilization.
 Equal scores at the cap are draws, excluded from seat and east-start shares.
 
-Fresh 160-game run on `4741dcb`: [rows](verification/seats-4741dcb.jsonl) and
-[provenance](verification/seats-4741dcb.metadata.json). It took 1,512.709 s wall time across
-eight reduced-priority shards. All 160 unique IDs cover the four civilizations and seeds 1–40;
-every row matches the prototype's winner, scores, resolution, simulation time and start side.
+Fresh 160-game run after rebasing onto main `15a24c6`, on source `5fb11b4`:
+[rows](verification/seats-5fb11b4.jsonl) and [provenance](verification/seats-5fb11b4.metadata.json).
+Eight reduced-priority shards took 638.841 s wall time. All 160 unique
+IDs cover four civilizations and seeds 1–40. Main's L60 slinger retune changed outcomes relative
+to the original prototype; M16-11 adds no AI or balance tuning.
 
 | Civilization | Decided | Seat 1 – Seat 2 | Seat 2 share | East-start share |
 |---|---|---|---|---|
-| Hellenes | 40 | 18 – 22 | 55.0% | 60.0% |
-| Romans | 40 | 22 – 18 | 45.0% | 70.0% |
-| Persians | 40 | 23 – 17 | 42.5% | 52.5% |
-| Celts | 38 | 20 – 18 | 47.4% | 44.7% |
-| All | 158 | 83 – 75 | 47.5% | 57.0% |
+| Hellenes | 39 | 21 – 18 | 46.2% | 64.1% |
+| Romans | 40 | 16 – 24 | 60.0% | 60.0% |
+| Persians | 40 | 22 – 18 | 45.0% | 55.0% |
+| Celts | 39 | 22 – 17 | 43.6% | 48.7% |
+| All | 158 | 81 – 77 | 48.7% | 57.0% |
 
-All seat-share bands pass. Two Celtic games drew; 158 games were decided.
+Every seat-share band passes. The original pre-L60 run also passed at 47.5% overall and is
+retained as [historical rows](verification/seats-4741dcb.jsonl) with
+[provenance](verification/seats-4741dcb.metadata.json); all its rows matched the prototype.
 
 **Open follow-up: start imbalance.** Rotation removes the fixed seat advantage, but does not
-make the two starts equally strong. The east start still won 57.0% of decided mirrors, as reported above.
+make the two starts equally strong. The east start won 57.0% of decided mirrors in the new run.
 Making neutral resources point-symmetric tipped the prototype toward the west (52–70%), so a
 resource-only adjustment is not a supported fix. A separate terrain or AI balance pass should
 address the remaining start advantage; no resource, terrain or AI tuning ships in M16-11.
@@ -657,7 +660,7 @@ stockpile, 70 villagers, standing army).
 
 ### Age times, seeds 1–5
 
-Fresh M16-11 run on `4741dcb` (`npm run bench:pacing -- --no-payback`, 668.235 s wall time).
+Fresh M16-11 run on `5fb11b4` (`npm run bench:pacing -- --no-payback`, 319.955 s wall time).
 Seeds 2 and 4 now play from the east start. All 15 age times remain inside their bands.
 
 | Seed | Town | City | Empire |
