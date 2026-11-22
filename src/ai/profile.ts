@@ -14,7 +14,7 @@ export interface AIOptions {
 }
 
 /** Groups in the research priority table (see research.ts). */
-export type TechGroup = 'eco' | 'tc' | 'forge' | 'line' | 'defence';
+export type TechGroup = 'eco' | 'tc' | 'forge' | 'line' | 'defence' | 'civ';
 
 /**
  * Research and age timing. `null` turns research and aging off entirely (a control AI for tests).
@@ -124,7 +124,7 @@ export interface Profile {
   late: LateGame;
 }
 
-const ALL_GROUPS: Record<TechGroup, number> = { eco: 1, tc: 1, forge: 1, line: 1, defence: 1 };
+const ALL_GROUPS: Record<TechGroup, number> = { eco: 1, tc: 1, forge: 1, line: 1, defence: 1, civ: 1 };
 
 
 const BASE: Record<Difficulty, Profile> = {
@@ -160,7 +160,7 @@ const BASE: Record<Difficulty, Profile> = {
       cityAgeTime: 18 * 60,
       ecoWorkers: 8,
       lineUnits: 8,
-      weights: { eco: 0.7, tc: 0.5, forge: 0.4, line: 0.3, defence: 0 },
+      weights: { eco: 0.7, tc: 0.5, forge: 0.4, line: 0.3, defence: 0, civ: 0 },
       gap: 75,
       villagerReserve: 100,
       marketExcess: 1500,

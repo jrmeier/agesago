@@ -1,4 +1,5 @@
 import { BUILDINGS } from '../core/buildings';
+import { CIVS, CIV_IDS } from '../core/civilizations';
 import { CHAINS, TECHS, TECH_IDS, type TechId } from '../core/techs';
 import type { Age, Building, BuildingKind, MarketResource, ResourceType, Stockpile, UnitKind, UnitState, Vec2 } from '../core/types';
 import { isAnimal, UNITS, type UnitClass } from '../core/units';
@@ -31,6 +32,8 @@ const LINE_HOLD = 150;
 const AGE_WAVE_HOLD = 180;
 /** With the gold mines dry, stock beyond what is held back plus this much is sold for gold (M16-10). */
 const DRY_CUSHION = 300;
+/** Base priority of the civilization's forge tech: above every other rule (T121). */
+const CIV_BASE = 80;
 /** Most market trades per pass. */
 const TRADES_PER_PASS = 3;
 
@@ -65,6 +68,11 @@ export interface Rule {
   bonus?: (f: Facts) => number;
   /** Must-have now: while it can't be afforded, cheaper techs wait instead of jumping ahead. */
   urgent?: (f: Facts) => boolean;
+  /**
+   * A cheap one-off that makes the civilization what it is (T121): paid out of what is saved for
+   * the age-up, a new Town Center or a key building (only the villager food is kept back).
+   */
+  fromReserve?: boolean;
 }
 
 /**
@@ -93,7 +101,8 @@ function chain(ids: readonly TechId[], group: TechGroup, bases: number[], when: 
  * group (0 = never). Chain order and age gates come from researchBlock().
  */
 export const RULES: Rule[] = [
-  ...(['hellenicDiscipline','romanEngineering','royalRoads','woodlandCraft'] as TechId[]).map(tech => ({tech,group:'forge' as const,base:30,when:(f:Facts)=>f.army>=5})),
+  // Civilization techs (T121): bought once the forge stands, ahead of everything else; the army saves for it.
+  ...CIV_IDS.map((civ): Rule => ({ tech: CIVS[civ].tech, group: 'civ', base: CIV_BASE, when: () => true, fromReserve: true })),
   // Economy: drop-site techs once enough villagers work that resource.
   ...chain(CHAINS.wood, 'eco', [60, 46, 36], (f) => f.workers.wood >= f.p.ecoWorkers),
   ...chain(CHAINS.mining, 'eco', [55, 40, 30], (f) => f.workers.gold + (f.age ? f.workers.stone : 0) >= f.p.ecoWorkers),
@@ -395,6 +404,7 @@ export class Research {
     const reserve: Partial<Stockpile> = heldBack(this.c);
     const booming = f.villagers < profile.targetVillagers && !!s.tc;
     if (booming) reserve.food = (reserve.food ?? 0) + 50 + p.villagerReserve;
+    const villagerFood: Partial<Stockpile> = booming ? { food: 50 + p.villagerReserve } : {};
     const tcBusy = booming && (world.time < this.tcFreeAt || this.nearAge(f, p));
     // Idle research buildings by kind (one tech at a time each, so training never waits long).
     const idle = new Map<BuildingKind, Building>();
@@ -413,7 +423,7 @@ export class Research {
       if ((best && score <= best.score) || !r.when(f)) continue;
       if (researchBlock(world, player, r.tech, true) !== null) continue;
       // The tech villagers are paused for doesn't also keep the villager reserve.
-      if (!canAfford(stock, spec.cost, this.hold?.tech === r.tech ? this.c.reserve : reserve)) {
+      if (!canAfford(stock, spec.cost, r.fromReserve ? villagerFood : this.hold?.tech === r.tech ? this.c.reserve : reserve)) {
         if (!want || score > want.score) want = { tech: r.tech, score, group: r.group, urgent: !!r.urgent?.(f) };
         continue;
       }

@@ -62,14 +62,15 @@ costs are read from `TECHS` (nothing hard-coded, so Balance can retune them).
   way to the army when it is raided by soldiers or sees an enemy army much bigger than its own, and
   in the Town Age it always keeps a first wave's worth of defenders. No new attack waves start
   while it saves for or researches an age. The Empire Age came with M16-8 (see below).
-- **Priority table.** `RULES` lists each tech with a group (eco, tc, forge, line, defence), a
+- **Priority table.** `RULES` lists each tech with a group (eco, tc, forge, line, defence, civ), a
   base priority and a condition. Drop-site chains start once `ecoWorkers` (6 at moderate)
   villagers work that resource. TC techs: wovenTunics at 12 villagers or when raided, donkeyPacks
   at 20, census and townWatch in the Town Age, oxCarts in the City Age. Forge lines follow the
   army's class make-up (3+ units and a quarter of the army). Unit lines start at `lineUnits` of
   that kind (tier-3 lines also need a level-2 building, which `upkeep.ts` provides in the City Age, M14-6).
   Masonry and ballistics need a ranged army; tower upgrades are per building now (M14-2). The profile
-  weights each group (0 skips it).
+  weights each group (0 skips it). The `civ` group has top priority once a forge stands and
+  pays from the age-up and building reserves, keeping villager food back; it is off for easy.
 - **Budget.** One tech at a time per building, a `gap` between starts, and a food reserve for
   villagers while it is still booming. The TC rests 45 s between techs that block villagers, and
   stays free near an age-up. The best tech it wants but can't afford is held back from army
