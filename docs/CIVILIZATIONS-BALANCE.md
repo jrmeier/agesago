@@ -1,6 +1,57 @@
 # Civilization AI balance evidence
 
-## Current: M16-11 seat rotation after integration (2026-11-21)
+## Current: AI civilization technology research (T121, 2026-11-22)
+
+Moderate, hard and hardest now prioritize their civilization's forge technology and can
+pay for it from age-up and building reserves, keeping the villager food reserve. There is
+no army-size gate. Easy deliberately leaves this group disabled. No technology values,
+unit stats or civilization bonuses changed; network and save versions remain 19 and 16.
+
+Fresh benchmarks use committed source `c9d3771` on main `2913290`, with four reduced-priority
+shards at most. The [60-game civilization-tech run](verification/civ-techs-c9d3771.jsonl)
+uses four civilization pairings, seeds 1–5, the default map and a 30-minute cap. Each cell
+counts players that started their forge technology / players that reached Town Age:
+
+| Difficulty | Hellenes | Romans | Persians | Celts | Total |
+|---|---|---|---|---|---|
+| easy (reported, not gated) | 0/10 | 0/10 | 0/10 | 0/10 | 0/40 |
+| moderate | 10/10 | 9/9 | 10/10 | 10/10 | 39/39 |
+| hard | 10/10 | 10/10 | 10/10 | 9/10 | 39/40 |
+
+Every moderate and hard civilization clears the 80% requirement. One moderate Roman
+never reached Town Age and is excluded. The hard Celt that missed the tech had a forge
+at 600 s but spent 890 sampled seconds unable to pay its cost. All 40 moderate/hard game
+rows reproduce the planner's prototype exactly apart from revision and wall time.
+Median City Age time is 1,058 s for moderate and 1,000 s for hard, compared with the
+planner's main baseline of 956 s and 983 s respectively.
+
+The fresh [240-game civilization tournament](verification/civilizations-accepted-c9d3771.jsonl)
+uses moderate AI, seeds 1–20, both seats, six pairings and a 30-minute score cap. Draws count
+as half a win. Four reduced-priority shards took 2,219.40 s. The
+[provenance and coverage audit](verification/t121-c9d3771.metadata.json) records the source,
+commands' exit codes, file hashes, expected game coverage and prototype comparisons.
+
+| Pairing | First civ wins | Draws | Games | T121 win share | Main win share | Winners changed | 40–60% |
+|---|---|---|---|---|---|---|---|
+| Hellenes / Romans | 19 | 0 | 40 | 47.5% | 42.5% | 8 | Pass |
+| Hellenes / Persians | 18 | 2 | 40 | 47.5% | 50% | 16 | Pass |
+| Hellenes / Celts | 18 | 0 | 40 | 45% | 45% | 12 | Pass |
+| Romans / Persians | 17 | 0 | 40 | 42.5% | 53.75% | 19 | Pass |
+| Romans / Celts | 20 | 1 | 40 | 51.25% | 51.25% | 17 | Pass |
+| Persians / Celts | 20 | 1 | 40 | 51.25% | 40% | 13 | Pass |
+
+All six pairings pass, with no balance tuning. Every one of the 240 gameplay rows matches
+the planner's prototype. Against main's accepted `5fb11b4` run (whose game source matches
+`2913290`), Romans/Persians moves from 53.75% to 42.5% and Persians/Celts from 40% to 51.25%:
+both changes exceed ten percentage points but remain within the band, so no adjustment is
+made. These are capped benchmark win shares: 8 games ended in conquest and
+232 at the score cap. Seat 2 won 119 of 236 decided games.
+
+The AI fielding its unique unit and researching its elite upgrade remains a follow-up, as
+does earlier forge construction. Rebase and rerun the interacting benchmarks if #119/#120
+lands before this ticket; the evidence here applies to T121 on `2913290`.
+
+## History: M16-11 seat rotation after integration (2026-11-21)
 
 Acceptance now uses **20 seeds per pairing**, each played from both sides: six pairings,
 40 games each, 240 total. The default ten-seed quick run remains available. Moderate AI,
@@ -40,21 +91,22 @@ seeds 11–20 gave 42.5%, and all 40 games gave 51.3%. In the original pre-L60 s
 the first ten seeds gave 65.0%, while all 20 seeds gave 53.8%. Do not tune civilization numbers
 from that 20-game subset; no civilization, unit or technology number changes in M16-11.
 
-**Civilization technologies remain an AI follow-up.** In the diagnosis, moderate AI researched
-Roman Engineering in only 15 of 964 Roman player-games; Hellenic Discipline, Royal Roads and
-Woodland Craft each appeared in 0 of 20. The forge research rule requires five soldiers and
-spare stock above the age-up reserve. Across eight probed player-games after Town Age, the
-blockers were affordability (2,427 passes, including 1,802 holding an age reserve), no forge
-(393), fewer than five soldiers (291), and a busy forge (49); no other tech outscored them.
-Raising priority alone barely helped. A separate rule outside the forge group, bought once in
-Town Age from the reserve, merits its own four-civilization balance rerun. This is outside the
-seat fix: enabling four techs of differing strength together needs a separate balance pass.
+**Civilization technologies are now researched by the AI (T121).** The dedicated `civ`
+group has top priority once a forge stands, without an army gate, and can spend the age-up
+and building reserves while keeping villager food back. Easy leaves it disabled; moderate,
+hard and hardest use it. The existing army reserve and market top-up fund the purchase.
+The current T121 results above verify adoption and civilization balance without changing
+any civilization bonus, unit or technology number.
+
+The AI fielding its unique unit and buying its elite upgrade remains a separate follow-up:
+unit choice rarely produces enough unique units to justify the upgrade. Forge timing is
+another follow-up: the building often arrives 3–6 minutes into the Town Age.
 
 Rerun on a fresh output path (do not reuse rows from another source revision):
 
 ```sh
-for s in 0 1 2 3 4 5; do
-  CIV_BENCH_SEEDS=20 CIV_BENCH_OUTPUT=/tmp/civ.jsonl CIV_BENCH_SHARDS=6 CIV_BENCH_SHARD=$s nice -n 10 npm run bench:civilizations &
+for s in 0 1 2 3; do
+  CIV_BENCH_SEEDS=20 CIV_BENCH_OUTPUT=/tmp/civ.jsonl CIV_BENCH_SHARDS=4 CIV_BENCH_SHARD=$s nice -n 10 npm run bench:civilizations &
 done
 wait
 # Existing IDs are skipped; this prints the final six complete summaries.

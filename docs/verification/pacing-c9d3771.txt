@@ -1,0 +1,16 @@
+
+> agesago@0.1.0 bench:pacing
+> vite-node scripts/bench-pacing.ts --no-payback
+
+
+## Age times (scripted build order, 40 min cap)
+
+| Seed | Town | City | Empire | Villagers @10/20/30 min |
+|---|---|---|---|---|
+| 1 | 4:57 | 12:30 | 20:05 | 52 / 70 / 70 |
+| 2 | 4:55 | 12:57 | 20:02 | 51 / 70 / 70 |
+| 3 | 4:58 | 11:39 | 19:45 | 52 / 70 / 70 |
+| 4 | 4:56 | 12:27 | 20:05 | 52 / 70 / 70 |
+| 5 | 4:33 | 12:14 | 19:37 | 52 / 70 / 70 |
+
+Targets: Town 5:00, City 12:00, Empire 20:00 (✗ = outside the band)

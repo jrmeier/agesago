@@ -1,0 +1,181 @@
+{
+  "ticket": "T121",
+  "sourceRevision": "c9d3771587b850fd40d3c7b0d684fe801a6859ef",
+  "baseRevision": "291329090075430efc48f76d154e21bbad6d0a09",
+  "date": "2026-11-22",
+  "runtime": {
+    "node": "v24.15.0",
+    "os": "Linux x86_64",
+    "maxShards": 4,
+    "nice": 10
+  },
+  "execution": [
+    {
+      "name": "civ-techs",
+      "exit": 0,
+      "seconds": 401.11
+    },
+    {
+      "name": "difficulty",
+      "exit": 0,
+      "seconds": 560.56
+    },
+    {
+      "name": "civilizations-shards",
+      "exits": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "seconds": 2219.4
+    },
+    {
+      "name": "civilizations-summary",
+      "exit": 0,
+      "seconds": 0.78
+    },
+    {
+      "name": "pacing",
+      "exit": 0,
+      "seconds": 248.03
+    },
+    {
+      "name": "pacing-test",
+      "exit": 0,
+      "seconds": 17.27
+    }
+  ],
+  "evidence": {
+    "civ-techs": {
+      "file": "civ-techs-c9d3771.jsonl",
+      "sha256": "e44fecb7b22d764937409466104cf3e11c7397f7c9208145c104124b322a07ee",
+      "games": 60,
+      "uniqueIds": 60,
+      "prototype": "civ-techs-prototype.jsonl",
+      "prototypeGamesCompared": 40,
+      "prototypeGameplayMismatches": 0
+    },
+    "difficulty": {
+      "file": "difficulty-ladder-c9d3771.jsonl",
+      "sha256": "7ae2a6e1ddd921e019c70071d41f828c4f167cb4231ff86ca7847e3cdf85f4f7",
+      "games": 60,
+      "uniqueIds": 60,
+      "prototype": "ladder-prototype.jsonl",
+      "prototypeGamesCompared": 60,
+      "prototypeGameplayMismatches": 0
+    },
+    "civilizations": {
+      "file": "civilizations-accepted-c9d3771.jsonl",
+      "sha256": "b6e00a7d49ba4e54b135eaaa413791b45f909972b88ec89595a40a7287ef94b6",
+      "games": 240,
+      "uniqueIds": 240,
+      "prototype": "civ-prototype.jsonl",
+      "prototypeGamesCompared": 240,
+      "prototypeGameplayMismatches": 0,
+      "summaries": [
+        {
+          "pair": [
+            "hellenes",
+            "romans"
+          ],
+          "games": 40,
+          "firstWins": 19,
+          "draws": 0,
+          "firstWinRate": 0.475,
+          "winnerChangedFromMain": 8,
+          "pass": true
+        },
+        {
+          "pair": [
+            "hellenes",
+            "persians"
+          ],
+          "games": 40,
+          "firstWins": 18,
+          "draws": 2,
+          "firstWinRate": 0.475,
+          "winnerChangedFromMain": 16,
+          "pass": true
+        },
+        {
+          "pair": [
+            "hellenes",
+            "celts"
+          ],
+          "games": 40,
+          "firstWins": 18,
+          "draws": 0,
+          "firstWinRate": 0.45,
+          "winnerChangedFromMain": 12,
+          "pass": true
+        },
+        {
+          "pair": [
+            "romans",
+            "persians"
+          ],
+          "games": 40,
+          "firstWins": 17,
+          "draws": 0,
+          "firstWinRate": 0.425,
+          "winnerChangedFromMain": 19,
+          "pass": true
+        },
+        {
+          "pair": [
+            "romans",
+            "celts"
+          ],
+          "games": 40,
+          "firstWins": 20,
+          "draws": 1,
+          "firstWinRate": 0.5125,
+          "winnerChangedFromMain": 17,
+          "pass": true
+        },
+        {
+          "pair": [
+            "persians",
+            "celts"
+          ],
+          "games": 40,
+          "firstWins": 20,
+          "draws": 1,
+          "firstWinRate": 0.5125,
+          "winnerChangedFromMain": 13,
+          "pass": true
+        }
+      ],
+      "conquests": 8,
+      "seat2Wins": 119,
+      "draws": 4
+    },
+    "pacing": {
+      "file": "pacing-c9d3771.txt",
+      "sha256": "a857746701ddc295804c6cf7b8db6ac6ab309f389259c00c38348fdb516f91c6",
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "ageTimesInBand": 15,
+      "ageTimesMatchPrevious": true,
+      "regressionTestsPassed": 2
+    }
+  },
+  "sourceTrees": {
+    "src": "12c98decc63b846c460a5811e9a0bd8f10856dcf",
+    "scripts": "f14395c3b29700b07713ca185bfff6102873ad3d"
+  },
+  "commands": [
+    "CIV_TECH_BENCH_SHARDS=4 CIV_TECH_BENCH_OUTPUT=docs/verification/civ-techs-c9d3771.jsonl nice -n 10 npm run bench:civ-techs",
+    "DIFFICULTY_BENCH_SHARDS=4 DIFFICULTY_BENCH_OUTPUT=docs/verification/difficulty-ladder-c9d3771.jsonl nice -n 10 npm run bench:difficulty",
+    "CIV_BENCH_SEEDS=20 CIV_BENCH_SHARDS=4 CIV_BENCH_SHARD=<0..3> CIV_BENCH_OUTPUT=docs/verification/civilizations-accepted-c9d3771.jsonl nice -n 10 npm run bench:civilizations",
+    "CIV_BENCH_SEEDS=20 CIV_BENCH_OUTPUT=docs/verification/civilizations-accepted-c9d3771.jsonl nice -n 10 npm run bench:civilizations",
+    "nice -n 10 npm run bench:pacing -- --no-payback",
+    "nice -n 10 npx vitest run src/bench/pacing.test.ts --maxWorkers=1"
+  ]
+}

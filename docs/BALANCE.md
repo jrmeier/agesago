@@ -662,6 +662,8 @@ stockpile, 70 villagers, standing army).
 
 Fresh M16-11 run on `5fb11b4` (`npm run bench:pacing -- --no-payback`, 319.955 s wall time).
 Seeds 2 and 4 now play from the east start. All 15 age times remain inside their bands.
+T121 repeated this on `c9d3771`: all times below are unchanged (248.03 s wall time, reduced
+priority), and both standalone pacing tests pass. [Fresh pacing output](verification/pacing-c9d3771.txt).
 
 | Seed | Town | City | Empire |
 |---|---|---|---|
@@ -881,6 +883,7 @@ for s in 0 1 2 3 4 5 6 7; do
 done
 wait
 SEAT_BENCH_OUTPUT=/tmp/seats.jsonl SEAT_BENCH_SUMMARY=1 npm run bench:seats
+npm run bench:civ-techs                       # civilization-tech adoption, 60 games, four shards
 npm run bench:pacing                          # seeds 1–5 age table + payback table (~4 min)
 npm run bench:pacing -- --seeds 2 --verbose   # minute-by-minute workers, gather rates, stockpile
 npm run bench:pacing -- --skip ironAxe        # counterfactual: the build order never researches it
@@ -903,27 +906,30 @@ New game offers Easy, Moderate, Hard and Hardest for every rival. The ladder pai
 levels on the large Mediterranean map with Hellenes on both sides, seeds 1–10 in both seats,
 and a 40-minute cap. Conquest or resignation decides a game; otherwise the higher count of
 villagers + soldiers + finished buildings wins (the census excludes scouts; a tie is a draw).
-Wonder victory is disabled for this military-strength benchmark. Profiles are unchanged.
+Wonder victory is disabled for this military-strength benchmark.
 
-Verified by `npm run bench:difficulty` on `b51f9e4` (2026-11-21), after rebasing onto the L60
-slinger retune and the Archer vs Slinger tier fix, which moved a few results from the earlier
-`8892821` run (16/20, 19/20, 17/20). [Per-game evidence](verification/difficulty-ladder-b51f9e4.jsonl):
+Verified by `npm run bench:difficulty` on `c9d3771` (T121, 2026-11-22), based on main
+`2913290`. Civilization forge technology research is now enabled for moderate, hard and
+hardest, and remains off for easy. [Per-game evidence](verification/difficulty-ladder-c9d3771.jsonl):
 
 | Pairing | Higher level won | As seat 1 | As seat 2 | Decided ≤ 40 min |
 |---|---|---|---|---|
-| easy vs moderate | 16/20 (80%) | 7/10 | 9/10 | 7 |
-| moderate vs hard | 19/20 (95%) | 10/10 | 9/10 | 6 |
-| hard vs hardest | 18/20 (90%) | 10/10 | 8/10 | 10 |
+| easy vs moderate | 17/20 (85%) | 10/10 | 7/10 | 6 |
+| moderate vs hard | 20/20 (100%) | 10/10 | 10/10 | 3 |
+| hard vs hardest | 18/20 (90%) | 10/10 | 8/10 | 7 |
 
-Easy vs moderate is exactly on the 80% bar. All four of moderate's losses were score calls at
-the 40-minute cap (18–176, 88–124 and 99–101 with moderate in seat 1; 113–98 in seat 2). The known seat
-advantage belongs to M16-11; this setup change does not retune profiles or alter map generation.
+All three pairings pass the 80% bar. Moderate's three losses to easy were score calls at
+the 40-minute cap, all with moderate in seat 2 (easy–moderate scores 161–9, 102–100 and
+105–103). All 60 gameplay rows exactly reproduce the planner's prototype.
+The previous [b51f9e4 run](verification/difficulty-ladder-b51f9e4.jsonl) was 16/20, 19/20 and
+18/20; it predates seed-based seat rotation and is historical context, not a direct baseline.
 
-Run `npm run bench:difficulty` (six shards, about 20 minutes). It appends resumable JSONL to
+Run `DIFFICULTY_BENCH_SHARDS=4 npm run bench:difficulty` (four reduced-priority shards took
+560.56 s in this run). It appends resumable JSONL to
 `/tmp/agesago-difficulty-<git revision>.jsonl` and exits 1 if any pairing has fewer than 16 wins
 out of 20, including draws as non-wins. `DIFFICULTY_BENCH_SHARDS` sets concurrency;
-`DIFFICULTY_BENCH_OUTPUT` selects the output file. For manually scheduled shards set
-`DIFFICULTY_BENCH_SHARD=0` through `5`, then run with `DIFFICULTY_BENCH_SUMMARY=1` to check the
+`DIFFICULTY_BENCH_OUTPUT` selects the output file. For manually scheduled four-shard runs set
+`DIFFICULTY_BENCH_SHARD=0` through `3`, then run with `DIFFICULTY_BENCH_SUMMARY=1` to check the
 complete ladder. Resume only against the same source revision; use a new file after edits.
 
 Starting resources are equal for every player: Low is 100 food, 100 wood, 50 gold and 50 stone;
