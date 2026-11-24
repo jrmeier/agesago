@@ -1,3 +1,5 @@
+import { CIVS, type CivId } from '../core/civilizations';
+import { UNITS } from '../core/units';
 import type { Difficulty, Stockpile } from '../core/types';
 
 export type { Difficulty } from '../core/types';
@@ -36,8 +38,8 @@ export interface ResearchProfile {
   gap: number;
   /** Extra food (beyond one villager) kept back for villager production while it still booms. */
   villagerReserve: number;
-  /** Require an opening escort and defer the food reserve during army-first spending. */
-  deferOpeningCivFoodForArmy?: boolean;
+  /** Reserve opening research food and use surplus gold to fund it. Defaults to true. */
+  fundOpeningCivTech?: boolean;
   /** Sell or buy at its market when a stock passes this and a needed resource is short. */
   marketExcess: number;
   /** Watch towers it raises toward the enemy from the Town Age (paid mostly in idle stone). */
@@ -105,6 +107,10 @@ export interface Profile {
   retreatAt: number;
   /** Picks units to counter what it has seen (else a random mix). */
   counters: boolean;
+  /** Preferred unique-unit share, including training queues; hard counters still take priority. */
+  uniqueShare: number;
+  /** Raw counter value required before the preferred unique-unit share can override a pick. */
+  uniqueCounterRatio?: number;
   /** Villagers sent to a military building / drop site. */
   builders: number;
   /** Pull villagers into the Town Center when raided. */
@@ -149,6 +155,7 @@ const BASE: Record<Difficulty, Profile> = {
     waveGap: 240,
     retreatAt: 0,
     counters: false,
+    uniqueShare: 0,
     builders: 1,
     shelter: false,
     expandAt: null,
@@ -190,6 +197,7 @@ const BASE: Record<Difficulty, Profile> = {
     waveGap: 120,
     retreatAt: 0.3,
     counters: true,
+    uniqueShare: 0.25,
     builders: 2,
     shelter: true,
     expandAt: 24,
@@ -231,6 +239,7 @@ const BASE: Record<Difficulty, Profile> = {
     waveGap: 90,
     retreatAt: 0.35,
     counters: true,
+    uniqueShare: 0.35,
     builders: 3,
     shelter: true,
     expandAt: 22,
@@ -272,6 +281,8 @@ const BASE: Record<Difficulty, Profile> = {
     waveGap: 75,
     retreatAt: 0.4,
     counters: true,
+    uniqueShare: 0.4,
+    uniqueCounterRatio: 1,
     builders: 3,
     shelter: true,
     expandAt: 22,
@@ -288,7 +299,7 @@ const BASE: Record<Difficulty, Profile> = {
       weights: { ...ALL_GROUPS, forge: 1.3, line: 1.3, defence: 1.2 },
       gap: 5,
       villagerReserve: 50,
-      deferOpeningCivFoodForArmy: true,
+      fundOpeningCivTech: false,
       marketExcess: 800,
       towers: 4,
       empireAgeAt: 50,
@@ -298,9 +309,13 @@ const BASE: Record<Difficulty, Profile> = {
 };
 
 /** The tuned profile for a difficulty and personality. */
-export function makeProfile(difficulty: Difficulty, personality?: Personality, tune?: Partial<Profile>): Profile {
+export function makeProfile(difficulty: Difficulty, personality?: Personality, tune?: Partial<Profile>, civ?: CivId): Profile {
   const base = BASE[difficulty];
   const p: Profile = { ...base, research: base.research && { ...base.research, weights: { ...base.research.weights } }, late: { ...base.late } };
+  // A moderate army can carry a slightly larger ranged contingent alongside its front line.
+  if (difficulty === 'moderate' && civ && UNITS[CIVS[civ].unit].unitClass === 'archer') {
+    p.uniqueShare = 0.265;
+  }
   switch (personality) {
     case 'rusher':
       // Early barracks, a small early wave, then steady pressure; a leaner economy.

@@ -1,9 +1,9 @@
-import { BUILDINGS } from '../core/buildings';
+import { BUILDINGS, MARKET } from '../core/buildings';
 import { CIVS, CIV_IDS } from '../core/civilizations';
 import { CHAINS, TECHS, TECH_IDS, type TechId } from '../core/techs';
 import type { Age, Building, BuildingKind, MarketResource, ResourceType, Stockpile, UnitKind, UnitState, Vec2 } from '../core/types';
 import { isAnimal, UNITS, type UnitClass } from '../core/units';
-import { buyCost, LOT, sellGain } from '../sim/systems/market';
+import { buyCost, LOT, priceStepOf, sellGain } from '../sim/systems/market';
 import { ageBuildingsNeeded, ageBuildings, ageOf, isQueued, researchBlock } from '../sim/systems/research';
 import { canAfford, dist, heldBack, type Ctx, type Snapshot } from './context';
 import { norm, PRODUCTION, type Economy } from './economy';
@@ -440,13 +440,26 @@ export class Research {
       if (openingCiv && spec.at === 'forge' && r.tech !== openingCiv) continue;
       const at = idle.get(spec.at);
       if (!at || (spec.at === 'townCenter' && tcBusy)) continue;
-      const score = (r.base + (r.bonus?.(f) ?? 0)) * w;
-      if ((best && score <= best.score) || !r.when(f)) continue;
+      // Elite unique lines unlock in City Age despite carrying line tier 1. Once our
+      // recruitment plan fields three, give their upgrade the age-line priority even if a
+      // generic City line is already done. Easy keeps its existing gate. The score tops out
+      // at 61 × 1.3 = 79.3, below the civilization forge tech's 80 (T121).
+      const elite = profile.uniqueShare > 0 && !!spec.civ && !!spec.line
+        && f.age >= (spec.age ?? 0) && (f.units[spec.line.unit] ?? 0) >= 3;
+      const score = (r.base + (elite ? 21 : (r.bonus?.(f) ?? 0))) * w;
+      if ((best && score <= best.score) || (!elite && !r.when(f))) continue;
       if (researchBlock(world, player, r.tech, true) !== null) continue;
       const civVillagerFood = r.tech === openingCiv && booming ? { food: UNITS.villager.cost.food } : villagerFood;
       // The tech villagers are paused for doesn't also keep the villager reserve.
-      if (!canAfford(stock, spec.cost, r.fromReserve ? civVillagerFood : this.hold?.tech === r.tech ? this.c.reserve : reserve)) {
-        if (!want || score > want.score) want = { tech: r.tech, score, group: r.group, urgent: !!r.urgent?.(f) };
+      let keep = r.fromReserve ? civVillagerFood : this.hold?.tech === r.tech ? this.c.reserve : reserve;
+      if (elite) {
+        // Improve the army before banking for Empire Age. Keep construction, expansion and
+        // villager food reserved; only the age-up bank can pay for this existing unit line.
+        keep = { ...reserve };
+        for (const resource of TYPES) keep[resource] = (keep[resource] ?? 0) - (this.c.reserve[resource] ?? 0);
+      }
+      if (!canAfford(stock, spec.cost, keep)) {
+        if (!want || score > want.score) want = { tech: r.tech, score, group: r.group, urgent: elite || !!r.urgent?.(f) };
         continue;
       }
       best = { tech: r.tech, at, score };
@@ -474,6 +487,7 @@ export class Research {
       this.c.villagerHold = 0;
       return;
     }
+    if (!this.c.openingCivFood && this.fundOpeningResearch(s)) return;
     const pick = this.choose(s, f, p);
     if (pick) this.start(pick.at, pick.tech);
   }
@@ -490,7 +504,7 @@ export class Research {
 
   // ---- Market ----
 
-  private openingFoodTrade(s: Snapshot): { foodTarget: number; goldFloor: number } | null {
+  private openingFoodTrade(s: Snapshot): { tech: TechId; foodTarget: number; goldFloor: number } | null {
     const { world, player } = this.c;
     const tech = this.econ.openingCivTech(s);
     if (!tech || this.c.outgunned || this.c.defenceHold || this.c.sheltered.size || world.time - this.lastHit < 30) return null;
@@ -500,7 +514,40 @@ export class Research {
     const goldFloor = cost.gold ?? 0;
     const price = buyCost(world.players.get(player)!.prices.food);
     return stock.food < foodTarget && price <= 250 && stock.gold - price >= goldFloor
-      ? { foodTarget, goldFloor } : null;
+      ? { tech, foodTarget, goldFloor } : null;
+  }
+
+  /** When the opening reserve has ended, turn spare gold into immediately usable research. */
+  private fundOpeningResearch(s: Snapshot): boolean {
+    if (!s.buildings.some(b => b.kind === 'market' && b.complete)) return false;
+    const opening = this.openingFoodTrade(s);
+    if (!opening) return false;
+    const { world, player } = this.c;
+    const forge = s.buildings.find(b => b.kind === 'forge' && b.complete && !b.research?.length && !b.upgrading && b.id !== this.c.upgradeHold);
+    if (!forge || researchBlock(world, player, opening.tech, true) !== null) return false;
+    const stock = world.stockOf(player);
+    const prices = world.players.get(player)!.prices;
+    const lots = Math.ceil((opening.foodTarget - stock.food) / LOT);
+    if (lots > TRADES_PER_PASS) return false;
+    const priceStep = MARKET.basePrice * priceStepOf(world, player);
+    let foodPrice = prices.food;
+    let gold = 0;
+    for (let i = 0; i < lots; i++) {
+      const price = buyCost(foodPrice);
+      if (price > 250) return false;
+      gold += price;
+      foodPrice = Math.min(MARKET.maxPrice, foodPrice + priceStep);
+    }
+    if (stock.gold - gold < opening.goldFloor) return false;
+    for (let i = 0; i < lots; i++) {
+      if (!this.trade('food', 'buy', prices, opening.goldFloor)) return false;
+    }
+    this.start(forge, opening.tech);
+    this.wanted = {};
+    this.c.techReserve = {};
+    this.hold = null;
+    this.c.villagerHold = 0;
+    return true;
   }
 
   /**
@@ -514,7 +561,7 @@ export class Research {
     const prices = world.players.get(player)?.prices;
     if (!prices) return;
     const stock = world.stockOf(player);
-    const opening = this.openingFoodTrade(s);
+    const opening = this.c.openingCivFood ? this.openingFoodTrade(s) : null;
     if (opening) {
       for (let i = 0; i < TRADES_PER_PASS && stock.food < opening.foodTarget; i++) {
         if (!this.trade('food', 'buy', prices, opening.goldFloor)) break;

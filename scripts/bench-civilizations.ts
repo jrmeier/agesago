@@ -1,6 +1,7 @@
 /** AI tournament: default ten seeds is a quick look; acceptance uses CIV_BENCH_SEEDS=40
  * (480 games, 80 per pairing). Pairings must be 40–60%, pooled civilizations 45–55%.
- * CIV_BENCH_SUMMARY=1 checks existing rows without playing games. */
+ * CIV_BENCH_SUMMARY=1 checks existing rows without playing games.
+ * CIV_BENCH_FIRST_SEED selects the start of a disjoint seed range. */
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { CIV_IDS, civFor, type CivId } from '../src/core/civilizations';
 import { generateMap } from '../src/sim/mapgen';
@@ -16,11 +17,15 @@ let pairIndex=-1;
 const shards=Number(process.env.CIV_BENCH_SHARDS ?? 1), shard=Number(process.env.CIV_BENCH_SHARD ?? 0);
 /** Seeds per pairing, each played from both sides (M16-11: more seeds for a pairing near a band edge). */
 const seedCount=Number(process.env.CIV_BENCH_SEEDS ?? 10);
-if(!Number.isInteger(seedCount)||seedCount<1)throw new Error('CIV_BENCH_SEEDS must be a positive integer');
+if(!Number.isSafeInteger(seedCount)||seedCount<1)throw new Error('CIV_BENCH_SEEDS must be a positive safe integer');
+const firstSeed=Number(process.env.CIV_BENCH_FIRST_SEED ?? 1);
+if(!Number.isSafeInteger(firstSeed)||firstSeed<1)throw new Error('CIV_BENCH_FIRST_SEED must be a positive safe integer');
+const endSeed=firstSeed+seedCount;
+if(!Number.isSafeInteger(endSeed))throw new Error('The civilization benchmark seed range exceeds safe integer limits');
 if(process.env.CIV_BENCH_SUMMARY!=='1') for(let a=0;a<CIV_IDS.length;a++)for(let b=a+1;b<CIV_IDS.length;b++){
   if(filters.length && !filters.includes(CIV_IDS[a]) && !filters.includes(CIV_IDS[b]))continue;
   pairIndex++;if(pairIndex%shards!==shard)continue;
-  for(let seed=1;seed<=seedCount;seed++)for(const swap of [false,true]) {
+  for(let seed=firstSeed;seed<endSeed;seed++)for(const swap of [false,true]) {
   const pair=[CIV_IDS[a],CIV_IDS[b]],id=`${pair.join('/')}/${seed}/${swap}`;
   if(done.some(r=>r.id===id))continue;
   const civs=(swap?[pair[1],pair[0]]:pair) as CivId[];
@@ -35,18 +40,19 @@ if(process.env.CIV_BENCH_SUMMARY!=='1') for(let a=0;a<CIV_IDS.length;a++)for(let
   appendFileSync(output,JSON.stringify(row)+'\n');done.push(row);console.log(JSON.stringify(row));ais.forEach(ai=>ai.dispose());
 }
 }
-const completed=existsSync(output)?readFileSync(output,'utf8').trim().split('\n').filter(Boolean).map(line=>JSON.parse(line)):[];
+const completed=existsSync(output)?readFileSync(output,'utf8').trim().split('\n').filter(Boolean)
+  .map(line=>JSON.parse(line)).filter(row=>row.seed>=firstSeed&&row.seed<endSeed):[];
 let passes = true;
 for(let a=0;a<CIV_IDS.length;a++)for(let b=a+1;b<CIV_IDS.length;b++) {
  if(filters.length && !filters.includes(CIV_IDS[a]) && !filters.includes(CIV_IDS[b]))continue;
- const pair=[CIV_IDS[a],CIV_IDS[b]],games=completed.filter(r=>r.pair.join('/')===pair.join('/')&&r.seed<=seedCount);
+ const pair=[CIV_IDS[a],CIV_IDS[b]],games=completed.filter(r=>r.pair.join('/')===pair.join('/'));
  const rate=games.reduce((sum,r)=>sum+(r.winner===pair[0]?1:r.winner===null?.5:0),0)/games.length;
  const pass=games.length===seedCount*2&&rate>=.4&&rate<=.6;
  passes &&= pass;
  console.log(JSON.stringify({pair,games:games.length,firstWinRate:rate,passes:pass}));
 }
 for (const civ of CIV_IDS) {
-  const games=completed.filter(r=>r.pair.includes(civ)&&r.seed<=seedCount);
+  const games=completed.filter(r=>r.pair.includes(civ));
   const rate=games.reduce((sum,r)=>sum+(r.winner===civ?1:r.winner===null?.5:0),0)/games.length;
   const complete=games.length===seedCount*6;
   const pass=complete&&rate>=.45&&rate<=.55;

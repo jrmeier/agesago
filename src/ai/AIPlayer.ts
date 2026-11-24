@@ -55,8 +55,9 @@ export class AIPlayer {
     readonly player: PlayerId,
     readonly opts: AIOptions
   ) {
-    if (!world.players.has(player)) throw new Error(`no player ${player}`);
-    this.profile = makeProfile(opts.difficulty, opts.personality, opts.tune);
+    const state = world.players.get(player);
+    if (!state) throw new Error(`no player ${player}`);
+    this.profile = makeProfile(opts.difficulty, opts.personality, opts.tune, state.player.civ);
     this.intel = new Intel(world, player, !!this.profile.cheat?.fullMap);
     const tc = world.townCenterOf(player);
     const home: Vec2 = tc ? { ...tc.pos } : firstOwned(world, player) ?? { x: world.hf.width / 2, z: world.hf.depth / 2 };

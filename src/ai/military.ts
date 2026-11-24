@@ -1,3 +1,4 @@
+import { CIVS } from '../core/civilizations';
 import { maxCapturePoints } from '../core/buildings';
 import type { Building, BuildingKind, EntityId, Stockpile, Unit, UnitKind, Vec2 } from '../core/types';
 import { captureRate, isAnimal, isHero, popCost, UNITS, damage, trainable, type UnitClass } from '../core/units';
@@ -264,15 +265,41 @@ export class Military {
     const army = Math.max(1, s.army.length);
     let best: UnitKind | null = null;
     let bestScore = -Infinity;
+    let bestMatchup = 0;
+    let uniqueMatchup = 0;
+    let uniqueScore = -Infinity;
+    const civ = this.c.world.players.get(this.c.player)?.player.civ;
+    const unique = civ && CIVS[civ].unit;
     for (const k of opts) {
       let score = 0;
       for (const c of CLASSES) score += (mix[c] / total) * MATCHUP.get(`${k}/${c}`)!;
+      bestMatchup = Math.max(bestMatchup, score);
+      if (k === unique) uniqueMatchup = score;
       // Spend what piles up: a unit paid in a glut resource is cheaper than its list price.
       score *= unitCost(k) / unitCost(k, stock);
       // Keep the army mixed: a class over half the army loses appeal.
       const share = mine[UNITS[k].unitClass] / army;
       score *= 1 - Math.max(0, share - 0.5) + 0.15 * this.c.rng();
+      if (k === unique) uniqueScore = score;
       if (score > bestScore) [best, bestScore] = [k, score];
+    }
+    // A quota override needs a close choice in both raw counter value and training score.
+    // Use the normal counter choice during an immediate reinforcement need.
+    const urgent = this.c.outgunned || this.c.defenceHold > 0;
+    const uniqueCounterRatio = this.c.profile.uniqueCounterRatio ?? 0.75;
+    if (unique && !urgent && this.c.profile.uniqueShare > 0 && uniqueMatchup >= bestMatchup * uniqueCounterRatio
+      && uniqueScore >= bestScore * 0.75) {
+      let count = s.army.filter((u) => u.kind === unique).length;
+      let total = s.army.length;
+      for (const b of s.buildings) {
+        for (const [i, k] of (b.queueKinds ?? []).entries()) {
+          if (k === 'villager') continue;
+          const n = b.queueCounts?.[i] ?? 1;
+          total += n;
+          if (k === unique) count += n;
+        }
+      }
+      if (count < this.c.profile.uniqueShare * (total + 1)) return unique;
     }
     return best;
   }

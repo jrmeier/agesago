@@ -9,9 +9,14 @@
  *
  * Pass (moderate and hard, every civilization): of the player-games that reached the Town Age,
  * at least 80% started the civilization's forge tech (CIVS[civ].tech). Easy never researches it
- * by design and is reported, not gated. T123 also gates median delays from Town Age: forge
- * complete <=120 s and civ tech started <=180 s, with missing milestones counted as infinity. The elite unit upgrade (City Age) is reported too: the AI
- * buys it only once it fields the unique unit, which it rarely does (a follow-up, not T121).
+ * by design and is reported separately. T123 also gates median delays from Town Age: forge
+ * completion within 120 seconds and civ tech start within 180 seconds. Missing milestones
+ * count as infinity.
+ *
+ * Set CIV_TECH_BENCH_UNIQUE=1 to enforce T122: peak of at least three unique units in 80%
+ * of Town Age player-games per civ, and elite upgrades started in 60% of hard City Age
+ * player-games pooled across civs. Per-civ elite rates below 40% are flagged. Spawn events
+ * count completed training, and converted units also contribute to the live peak.
  */
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
@@ -33,6 +38,7 @@ const SAMPLE = 10;
 const revision = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const output = process.env.CIV_TECH_BENCH_OUTPUT ?? `/tmp/agesago-civ-techs-${revision}.jsonl`;
 const shards = Number(process.env.CIV_TECH_BENCH_SHARDS ?? 3);
+const uniqueGate = process.env.CIV_TECH_BENCH_UNIQUE === '1';
 const shard = process.env.CIV_TECH_BENCH_SHARD === undefined ? null : Number(process.env.CIV_TECH_BENCH_SHARD);
 const seeds = Number(process.env.CIV_TECH_BENCH_SEEDS ?? 10);
 const difficulties = (process.env.CIV_TECH_BENCH_DIFFICULTIES ?? 'easy,moderate,hard').split(',') as Difficulty[];
@@ -53,6 +59,9 @@ interface PlayerRow {
   forgeAt: number | null;
   /** Unique units alive at the end. */
   uniqueUnits: number;
+  /** Completed training, and maximum simultaneously alive (not merely queued). */
+  uniqueTrained: number;
+  uniquePeak: number;
   /** Seconds in the Town Age or later without the forge tech, by what stood in the way. */
   waiting: { noForge: number; forgeBusy: number; poor: number; eligible: number };
   /** Non-age techs started. */
@@ -96,16 +105,34 @@ if (process.env.CIV_TECH_BENCH_SUMMARY !== '1') {
       world.wonderRules.enabled = false;
       const ais = players.map((p) => new AIPlayer(world, p.id, { difficulty: job.difficulty, seed: job.seed * 10 + p.id }));
       const rows: PlayerRow[] = civs.map((civ) => ({
-        civ, agedAt: [0], forgeTechAt: null, eliteAt: null, forgeAt: null, forgePlacedAt: null, uniqueUnits: 0,
+        civ, agedAt: [0], forgeTechAt: null, eliteAt: null, forgeAt: null, forgePlacedAt: null,
+        uniqueUnits: 0, uniqueTrained: 0, uniquePeak: 0,
         waiting: { noForge: 0, forgeBusy: 0, poor: 0, eligible: 0 }, techs: 0,
       }));
       const recordForge = (id: number, field: 'forgeAt' | 'forgePlacedAt') => {
         const b = world.buildings.get(id);
         if (b?.kind === 'forge' && rows[b.owner - 1]?.[field] === null) rows[b.owner - 1][field] = Math.round(world.time);
       };
+      // Observe short-lived units and conversions between the periodic economy samples.
+      const peak = (owner: PlayerId) => {
+        const row = rows[owner - 1];
+        if (!row) return;
+        let alive = 0;
+        for (const u of world.units.values()) if (u.owner === owner && u.kind === CIVS[row.civ].unit) alive++;
+        row.uniquePeak = Math.max(row.uniquePeak, alive);
+      };
       const offs = [
-        world.events.on('spawned', (e) => recordForge(e.id, 'forgePlacedAt')),
-        world.events.on('constructed', (e) => recordForge(e.id, 'forgeAt')),
+        world.events.on('spawned', ({ id }) => {
+          recordForge(id, 'forgePlacedAt');
+          const u = world.units.get(id);
+          const row = u && rows[u.owner - 1];
+          if (u && row && u.kind === CIVS[row.civ].unit) {
+            row.uniqueTrained++;
+            peak(u.owner);
+          }
+        }),
+        world.events.on('constructed', ({ id }) => recordForge(id, 'forgeAt')),
+        world.events.on('converted', ({ owner }) => peak(owner)),
       ];
       const over = () => world.gameOver !== null || world.defeatedPlayers.size > 0;
       for (let t = 0; t < MINUTES * 60 && !over(); t += SAMPLE) {
@@ -148,12 +175,14 @@ if (shard === null || process.env.CIV_TECH_BENCH_SUMMARY === '1') {
   const rows = rowsById();
   const complete = jobs.every((j) => rows.has(j.id));
   const summary = difficulties.flatMap((difficulty) => CIV_IDS.map((civ) => {
-    const ps = [...rows.values()].filter((r) => r.difficulty === difficulty).flatMap((r) => r.players.filter((p) => p.civ === civ));
+    const ps = jobs.flatMap((j) => rows.get(j.id) ?? []).filter((r) => r.difficulty === difficulty).flatMap((r) => r.players.filter((p) => p.civ === civ));
     const town = ps.filter((p) => p.agedAt[1] !== undefined);
     const city = ps.filter((p) => p.agedAt[2] !== undefined);
     const forgeTech = town.filter((p) => p.forgeTechAt !== null).length;
     const elite = city.filter((p) => p.eliteAt !== null).length;
     const gated = GATED.includes(difficulty);
+    const fielded = town.filter((p) => p.uniquePeak >= 3).length;
+    const median = (xs: number[]) => { const a = [...xs].sort((a, b) => a - b); return a.length ? (a[Math.floor((a.length - 1) / 2)] + a[Math.floor(a.length / 2)]) / 2 : 0; };
     const wait = (k: keyof PlayerRow['waiting']) => Math.round(town.reduce((a, p) => a + p.waiting[k], 0) / Math.max(1, town.length));
     // Missing milestones count as infinity: late/dead players cannot improve the median.
     const medianDelay = (key: 'forgeAt' | 'forgePlacedAt' | 'forgeTechAt') => {
@@ -166,12 +195,21 @@ if (shard === null || process.env.CIV_TECH_BENCH_SUMMARY === '1') {
     const forgeDelay = medianDelay('forgeAt');
     const civTechDelay = medianDelay('forgeTechAt');
     return {
-      difficulty, civ, forgePlacedDelay, forgeDelay, civTechDelay, players: ps.length, town: town.length, forgeTech, city: city.length, elite,
+      difficulty, civ, forgePlacedDelay, forgeDelay, civTechDelay, players: ps.length,
+      town: town.length, forgeTech, city: city.length, elite,
+      trained: ps.reduce((n, p) => n + p.uniqueTrained, 0), medianTrained: median(ps.map((p) => p.uniqueTrained)),
+      medianPeak: median(ps.map((p) => p.uniquePeak)), fielded,
+      eliteLow: difficulty === 'hard' && city.length > 0 && elite < 0.4 * city.length,
       noForge: wait('noForge'), forgeBusy: wait('forgeBusy'), poor: wait('poor'), eligible: wait('eligible'),
-      pass: !gated || (town.length > 0 && forgeTech >= THRESHOLD * town.length && forgeDelay !== null && forgeDelay <= 120 && civTechDelay !== null && civTechDelay <= 180),
+      pass: !gated || (town.length > 0 && forgeTech >= THRESHOLD * town.length
+        && forgeDelay !== null && forgeDelay <= 120 && civTechDelay !== null && civTechDelay <= 180
+        && (!uniqueGate || fielded >= THRESHOLD * town.length)),
     };
   }));
+  const hard = summary.filter((r) => r.difficulty === 'hard');
+  const city = hard.reduce((n, r) => n + r.city, 0), elite = hard.reduce((n, r) => n + r.elite, 0);
+  const eliteGate = { city, elite, pass: !uniqueGate || hard.length === 0 || (city > 0 && elite >= 0.6 * city) };
   console.table(summary);
-  console.log(JSON.stringify({ output, revision, complete, summary }));
-  if (!complete || summary.some((r) => !r.pass)) process.exitCode = 1;
+  console.log(JSON.stringify({ output, revision, complete, summary, eliteGate }));
+  if (!complete || summary.some((r) => !r.pass) || !eliteGate.pass) process.exitCode = 1;
 }

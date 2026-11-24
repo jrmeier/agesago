@@ -1,10 +1,12 @@
 /**
- * M7-4: adjacent difficulty ladder, Hellenes mirrors, both seats, 40 min.
- * DIFFICULTY_BENCH_SEEDS changes the default sample of seeds 1–10.
+ * M7-4: adjacent difficulty ladder, Hellenes mirrors, seeds 1–10, both seats, 40 min.
+ * DIFFICULTY_BENCH_SEEDS changes the number of seeds (default 10).
+ * DIFFICULTY_BENCH_FIRST_SEED changes the first seed (default 1), for fresh-seed confirmation.
  * Runs six shards by default; DIFFICULTY_BENCH_SHARDS changes concurrency. Set
  * DIFFICULTY_BENCH_SHARD to run one shard manually, then DIFFICULTY_BENCH_SUMMARY=1
  * to check the complete result. JSONL is resumable, keyed by source revision.
  * DIFFICULTY_BENCH_OUTPUT overrides the default /tmp/agesago-difficulty-<revision>.jsonl.
+ * DIFFICULTY_BENCH_PAIRS selects comma-separated pair IDs for a focused rerun.
  */
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
@@ -16,12 +18,15 @@ import { AIPlayer } from '../src/ai/AIPlayer';
 import { census, run } from '../src/ai/harness';
 
 const PAIRS: [Difficulty, Difficulty][] = [['easy', 'moderate'], ['moderate', 'hard'], ['hard', 'hardest']];
+const requested = process.env.DIFFICULTY_BENCH_PAIRS?.split(',');
+if (requested?.some(id => !PAIRS.some(([lo, hi]) => `${lo}<${hi}` === id))) throw new Error('Unknown difficulty pairing.');
+const pairs = requested ? PAIRS.filter(([lo, hi]) => requested.includes(`${lo}<${hi}`)) : PAIRS;
 const revision = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const output = process.env.DIFFICULTY_BENCH_OUTPUT ?? `/tmp/agesago-difficulty-${revision}.jsonl`;
-const seedCount = Number(process.env.DIFFICULTY_BENCH_SEEDS ?? 10);
-if (!Number.isInteger(seedCount) || seedCount < 1) {
-  throw new Error('DIFFICULTY_BENCH_SEEDS must be a positive integer.');
-}
+const seeds = Number(process.env.DIFFICULTY_BENCH_SEEDS ?? 10);
+if (!Number.isInteger(seeds) || seeds < 1) throw new Error('Expected a positive seed count.');
+const firstSeed = Number(process.env.DIFFICULTY_BENCH_FIRST_SEED ?? 1);
+if (!Number.isInteger(firstSeed) || firstSeed < 1) throw new Error('Expected a positive first seed.');
 const shards = Number(process.env.DIFFICULTY_BENCH_SHARDS ?? 6);
 const shard = process.env.DIFFICULTY_BENCH_SHARD === undefined ? null : Number(process.env.DIFFICULTY_BENCH_SHARD);
 if (!Number.isInteger(shards) || shards < 1 || (shard !== null && (!Number.isInteger(shard) || shard < 0 || shard >= shards))) {
@@ -35,7 +40,7 @@ interface Row {
 const read = (): Row[] => existsSync(output)
   ? readFileSync(output, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line) as Row)
   : [];
-const jobs = PAIRS.flatMap(([lo, hi]) => Array.from({ length: seedCount }, (_, i) => i + 1).flatMap(seed =>
+const jobs = pairs.flatMap(([lo, hi]) => Array.from({ length: seeds }, (_, i) => firstSeed + i).flatMap(seed =>
   ([1, 2] as PlayerId[]).map(hiSeat => ({ lo, hi, seed, hiSeat, id: `${lo}<${hi}/${seed}/${hiSeat}` }))));
 function rowsById(): Map<string, Row> {
   const rows = read();
@@ -99,13 +104,13 @@ if (process.env.DIFFICULTY_BENCH_SUMMARY !== '1') {
 
 if (shard === null || process.env.DIFFICULTY_BENCH_SUMMARY === '1') {
   const rows = rowsById();
-  const summary = PAIRS.map(([lo, hi]) => {
+  const summary = pairs.map(([lo, hi]) => {
     const pair = `${lo}<${hi}`;
     const played = jobs.filter(job => `${job.lo}<${job.hi}` === pair).flatMap(job => rows.get(job.id) ?? []);
     const wins = played.filter(row => row.hiWon);
-    return { pair, games: played.length, higherWon: wins.length, percent: 100 * wins.length / (2 * seedCount),
+    return { pair, games: played.length, higherWon: wins.length, percent: 100 * wins.length / Math.max(1, played.length),
       seat1: wins.filter(row => row.hiSeat === 1).length, seat2: wins.filter(row => row.hiSeat === 2).length,
-      decided: played.filter(row => row.decided).length, pass: played.length === 2 * seedCount && wins.length >= Math.ceil(1.6 * seedCount) };
+      decided: played.filter(row => row.decided).length, pass: played.length === seeds * 2 && wins.length >= 0.8 * played.length };
   });
   console.table(summary);
   console.log(JSON.stringify({ output, revision, summary }));
