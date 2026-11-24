@@ -355,6 +355,16 @@ export class Research {
       if (r === false) this.c.saving = { kind: 'siegeWorkshop', cost: { ...BUILDINGS.siegeWorkshop.cost } };
       if (r !== null) return;
     }
+    // T123: the civilization tech needs a forge as Town Age opens. Put it before optional
+    // towers/ranges and hold its wood, as for the workshop; otherwise those buildings and
+    // army training spend the stock on every pass. Essential economy buildings still go up.
+    if (f.age >= 1 && p.weights.civ > 0 && production > 0 && !has('forge')) {
+      // ageUp() may have just laid it using the same snapshot. One forge is enough.
+      if ([...this.c.world.buildings.values()].some((b) => b.owner === this.c.player && b.kind === 'forge')) return;
+      const r = this.place(s, 'forge');
+      if (r === false) this.c.saving = { kind: 'forge', cost: { ...BUILDINGS.forge.cost } };
+      if (r !== null) return;
+    }
     // Town Age: an archery range early when gold piles up (archers spend it), before the forge.
     if (f.age >= 1 && !has('archeryRange') && stock.gold > 300 && production < this.c.profile.maxProduction) {
       if (this.place(s, 'archeryRange') !== null) return;

@@ -6,9 +6,10 @@ import { dist } from './context';
 import { makeGame, run } from './harness';
 
 const DROP_SITES: BuildingKind[] = ['storehouse', 'granary', 'miningCamp'];
-/** Sim minutes per game: enough to boom past 30 villagers and run the berries dry.
- *  A shore fish patch can push the first farm past 12 minutes; it still waits for the berries. */
+/** Sim minutes for the boom, housing, scouting and drop-site checks. */
 const MINUTES = 15;
+/** Expansion berries and shore fish can feed the town beyond 15 minutes without farms. */
+const FARM_BY = 20 * 60;
 /** Longest pop-cap stall tolerated (sim seconds): the build pass runs every few seconds. */
 const MAX_STALL = 10;
 /** Berries this close to the Town Center count as the home berries. */
@@ -70,7 +71,13 @@ describe('economy AI (moderate, headless)', () => {
     expect(stalled()).toBe(false);
     expect(drops.length).toBeGreaterThanOrEqual(1);
     expect(scoutMoved).toBeGreaterThan(10);
-    // Fields come once the home berries are gone, not before.
+    // Free food at an expansion or a shore can postpone fields beyond the economy sample.
+    // Observe the transition itself; keep the boom and housing assertions at 15 minutes.
+    while (berriesAtFirstFarm === null && world.time < FARM_BY) {
+      run(world, [ai], 1);
+      if ([...world.buildings.values()].some((b) => b.owner === 1 && b.kind === 'farm')) berriesAtFirstFarm = homeBerries();
+    }
+    // Fields come once the home berries are gone, not before, and still arrive by the deadline.
     expect(berriesAtFirstFarm).toBe(0);
     expect(msPerTick).toBeLessThan(1);
     expect(ai.stats.commands).toBeGreaterThan(0);

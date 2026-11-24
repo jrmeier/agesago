@@ -109,6 +109,7 @@ export class AIPlayer {
     this.offs.push(
       world.events.on('attacked', (e) => {
         if (e.owner === player) {
+          this.economy.onAttacked();
           this.military.onAttacked(e.pos);
           this.research.onAttacked(e.pos);
           this.upkeep.onAttacked();
