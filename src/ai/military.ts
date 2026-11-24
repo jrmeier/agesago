@@ -1,3 +1,4 @@
+import { CIVS } from '../core/civilizations';
 import { maxCapturePoints } from '../core/buildings';
 import type { Building, BuildingKind, EntityId, Stockpile, Unit, UnitKind, Vec2 } from '../core/types';
 import { captureRate, isAnimal, isHero, popCost, UNITS, damage, trainable, type UnitClass } from '../core/units';
@@ -253,15 +254,38 @@ export class Military {
     const army = Math.max(1, s.army.length);
     let best: UnitKind | null = null;
     let bestScore = -Infinity;
+    let bestMatchup = 0;
+    let uniqueMatchup = 0;
+    const civ = this.c.world.players.get(this.c.player)?.player.civ;
+    const unique = civ && CIVS[civ].unit;
     for (const k of opts) {
       let score = 0;
       for (const c of CLASSES) score += (mix[c] / total) * MATCHUP.get(`${k}/${c}`)!;
+      bestMatchup = Math.max(bestMatchup, score);
+      if (k === unique) uniqueMatchup = score;
       // Spend what piles up: a unit paid in a glut resource is cheaper than its list price.
       score *= unitCost(k) / unitCost(k, stock);
       // Keep the army mixed: a class over half the army loses appeal.
       const share = mine[UNITS[k].unitClass] / army;
       score *= 1 - Math.max(0, share - 0.5) + 0.15 * this.c.rng();
       if (score > bestScore) [best, bestScore] = [k, score];
+    }
+    // Give the civilization a place in the army without throwing away hard counters. Compare
+    // combat value before stockpile discounts and random variety: a wood glut must not erase
+    // gold-cost Immortals/Raiders. Spears still beat swords into cavalry, and slingers beat
+    // Immortals into mass infantry. Phalangite Guards fill the spear role themselves.
+    if (unique && this.c.profile.uniqueShare > 0 && uniqueMatchup >= bestMatchup * 0.75) {
+      let count = s.army.filter((u) => u.kind === unique).length;
+      let total = s.army.length;
+      for (const b of s.buildings) {
+        for (const [i, k] of (b.queueKinds ?? []).entries()) {
+          if (k === 'villager') continue;
+          const n = b.queueCounts?.[i] ?? 1;
+          total += n;
+          if (k === unique) count += n;
+        }
+      }
+      if (count < this.c.profile.uniqueShare * (total + 1)) return unique;
     }
     return best;
   }
