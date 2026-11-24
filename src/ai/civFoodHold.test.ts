@@ -174,26 +174,18 @@ describe('T123: one bounded food hold for the first civilization tech', () => {
     ai.dispose();
   });
 
-  it('defers the hardest opening food reserve until its army can safely spare it', () => {
+  it('lets the hardest economy research the civilization tech through its usual spending policy', () => {
     const { world, ai, pass } = town(20, 'hardest');
     const ctx = (ai as unknown as { ctx: Ctx }).ctx;
-    pass();
-    expect(ctx.openingCivFood).toBe(0);
-    for (let i = 0; i < 4; i++) {
-      world.spawnUnit('hoplite', { x: 120 + i, z: 40 }, 2);
-      world.spawnUnit('hoplite', { x: 45 + i, z: 38 }, 1);
-    }
-    ai.intel.scan();
-    pass();
-    expect(ctx.openingCivFood).toBe(0);
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 8; i++) {
       world.spawnUnit('hoplite', { x: 50 + i, z: 38 }, 1);
     }
     pass();
-    expect(ctx.openingCivFood).toBeGreaterThan(0);
-    ctx.armyFirst = true;
-    pass();
     expect(ctx.openingCivFood).toBe(0);
+    expect(ai.economy.openingCivTech(snapshot(world, 1))).toBeNull();
+    Object.assign(world.stockOf(1), { food: 350, gold: 210 });
+    ai.research.pass(snapshot(world, 1));
+    expect(ai.research.started.some(({ tech }) => tech === CIVS.hellenes.tech)).toBe(true);
     ai.dispose();
   });
 

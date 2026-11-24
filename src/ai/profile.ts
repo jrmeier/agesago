@@ -36,8 +36,8 @@ export interface ResearchProfile {
   gap: number;
   /** Extra food (beyond one villager) kept back for villager production while it still booms. */
   villagerReserve: number;
-  /** Require an opening escort and defer the food reserve during army-first spending. */
-  deferOpeningCivFoodForArmy?: boolean;
+  /** Reserve opening research food and use surplus gold to fund it. Defaults to true. */
+  fundOpeningCivTech?: boolean;
   /** Sell or buy at its market when a stock passes this and a needed resource is short. */
   marketExcess: number;
   /** Watch towers it raises toward the enemy from the Town Age (paid mostly in idle stone). */
@@ -288,7 +288,7 @@ const BASE: Record<Difficulty, Profile> = {
       weights: { ...ALL_GROUPS, forge: 1.3, line: 1.3, defence: 1.2 },
       gap: 5,
       villagerReserve: 50,
-      deferOpeningCivFoodForArmy: true,
+      fundOpeningCivTech: false,
       marketExcess: 800,
       towers: 4,
       empireAgeAt: 50,

@@ -96,7 +96,7 @@ export class Economy {
     const p = profile.research;
     const state = world.players.get(player)!;
     const civ = state.player.civ;
-    if (!p || p.weights.civ <= 0 || !civ || state.age !== 1 || !s.count.forge) return null;
+    if (!p || p.fundOpeningCivTech === false || p.weights.civ <= 0 || !civ || state.age !== 1 || !s.count.forge) return null;
     // The existing Town Age villager threshold protects the minimum opening economy.
     if (s.villagers.length < p.townAgeAt) return null;
     const tech = CIVS[civ].tech;
@@ -105,14 +105,10 @@ export class Economy {
 
   private civFoodReserve(s: Snapshot, tech: TechId | null): number {
     const { world, player, profile } = this.c;
-    // The general army-first policy stays active for two minutes after a raid.
-    // The opening research window can use a quiet stretch without borrowing from an active defence.
-    // Match the observed threat while the opening army is still forming.
+    // Fund the opening tech in quiet stretches while the first wave is forming.
     const contested = tech !== null && s.army.length < Math.min(profile.firstWave, 2 * this.c.intel.enemyArmy());
-    const armyNeedsFood = profile.research?.deferOpeningCivFoodForArmy
-      && (this.c.armyFirst || s.army.length < Math.min(profile.firstWave, 3));
     if (!tech || this.c.defenceHold > 0 || this.c.sheltered.size > 0
-      || this.c.outgunned || contested || armyNeedsFood || world.time - this.lastAttacked < CIV_FOOD_CALM) {
+      || this.c.outgunned || contested || world.time - this.lastAttacked < CIV_FOOD_CALM) {
       this.pauseCivFoodHold(world.time);
       return 0;
     }
