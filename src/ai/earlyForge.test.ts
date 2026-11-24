@@ -36,12 +36,8 @@ describe('early Town Age forge (T123)', () => {
     ai.dispose();
   });
 
-  it('reserves a short forge cost against military production, then spends it on the forge', () => {
+  it('reserves wood for the opening forge even while building the first wave', () => {
     const { world, ai, pass } = town('moderate', BUILDINGS.forge.cost.wood! - 1);
-    // The first wave and emergency defenders deliberately bypass reserves; exercise normal
-    // production with a full first wave and enough food/population for another soldier.
-    const home = world.townCenterOf(2)!.pos;
-    for (let i = 0; i < ai.profile.firstWave; i++) world.spawnUnit('hoplite', { x: home.x - 4, z: home.z + i / 2 }, 2);
     world.stockOf(2).food = 100;
     pass();
     ai.military.pass(snapshot(world, 2));
@@ -50,6 +46,17 @@ describe('early Town Age forge (T123)', () => {
     pass();
     expect(forges(world)).toHaveLength(1);
     expect(world.stockOf(2).wood).toBe(0);
+    ai.dispose();
+  });
+
+  it('releases opening construction wood when outgunned', () => {
+    const { world, ai, pass } = town('moderate', BUILDINGS.forge.cost.wood! - 1);
+    world.stockOf(2).food = 100;
+    pass();
+    const ctx = (ai as unknown as { ctx: Ctx }).ctx;
+    ctx.armyFirst = ctx.outgunned = true;
+    ai.military.pass(snapshot(world, 2));
+    expect(world.stockOf(2).wood).toBeLessThan(BUILDINGS.forge.cost.wood! - 1);
     ai.dispose();
   });
 
