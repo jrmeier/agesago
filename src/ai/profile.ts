@@ -36,6 +36,8 @@ export interface ResearchProfile {
   gap: number;
   /** Extra food (beyond one villager) kept back for villager production while it still booms. */
   villagerReserve: number;
+  /** Defer the opening civilization-tech food reserve during army-first spending. */
+  deferCivFoodWhenArmyFirst?: boolean;
   /** Sell or buy at its market when a stock passes this and a needed resource is short. */
   marketExcess: number;
   /** Watch towers it raises toward the enemy from the Town Age (paid mostly in idle stone). */
@@ -286,6 +288,7 @@ const BASE: Record<Difficulty, Profile> = {
       weights: { ...ALL_GROUPS, forge: 1.3, line: 1.3, defence: 1.2 },
       gap: 5,
       villagerReserve: 50,
+      deferCivFoodWhenArmyFirst: true,
       marketExcess: 800,
       towers: 4,
       empireAgeAt: 50,

@@ -147,6 +147,18 @@ describe('T123: one bounded food hold for the first civilization tech', () => {
     ai.dispose();
   });
 
+  it('defers the hardest opening food reserve while its army has priority', () => {
+    const { ai, pass } = town(20, 'hardest');
+    const ctx = (ai as unknown as { ctx: Ctx }).ctx;
+    ctx.armyFirst = true;
+    pass();
+    expect(ctx.openingCivFood).toBe(0);
+    ctx.armyFirst = false;
+    pass();
+    expect(ctx.openingCivFood).toBeGreaterThan(0);
+    ai.dispose();
+  });
+
   it('keeps the research food out of military queues until the army needs it for defence', () => {
     const { world, ai, tc, pass } = town();
     const barracks = layFoundation(world, 'barracks', { x: 28, z: 30 }, 0, 1);
