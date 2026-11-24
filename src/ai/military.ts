@@ -41,6 +41,8 @@ const REINFORCE = 0.6;
 const FIGHT_RANGE = 9;
 /** Radius around the wave's centre searched for such soldiers. */
 const FIGHT_SCAN = 30;
+/** Food villager training leaves for soldiers while raiders outnumber the army at home (T120): a villager's price. */
+const DEFENCE_HOLD = 50;
 /** Seconds a ready wave waits at the rally point for its siege against a defended base. */
 const SIEGE_WAIT = 90;
 /** Soldiers that guard each siege engine on the way (M17-3 guard order). */
@@ -138,7 +140,10 @@ export class Military {
     const { world } = this.c;
     for (const id of this.attackers) if (!world.units.has(id)) this.attackers.delete(id);
     for (const [id, engine] of this.escorts) if (!world.units.has(id) || !world.units.has(engine) || !this.attackers.has(id)) this.escorts.delete(id);
-    if (this.answerWonder(s)) return;
+    if (this.answerWonder(s)) {
+      this.c.defenceHold = 0;
+      return;
+    }
     const home = s.army.filter((u) => !this.attackers.has(u.id) && u.state !== 'garrisoned');
     if (this.defend(s, home)) {
       // A running attack goes on meanwhile (M16-10), without reinforcements from home.
@@ -162,7 +167,7 @@ export class Military {
     const free = this.c.armyFirst || (ageOf(world, player) > 0 && s.army.length < profile.firstWave);
     const reserve: Partial<Stockpile> = free ? {} : heldBack(this.c);
     if (!free) for (const [r, n] of Object.entries(this.c.techReserve) as [keyof Stockpile, number][]) reserve[r] = (reserve[r] ?? 0) + n;
-    if (s.villagers.length < profile.targetVillagers && s.tc) reserve.food = (reserve.food ?? 0) + 50;
+    if (s.villagers.length < profile.targetVillagers && s.tc && !this.c.defenceHold) reserve.food = (reserve.food ?? 0) + 50;
     // Pop room kept for a siege engine the workshop wants but can't train yet.
     let keepPop = 0;
     // The workshop goes first: a wanted engine holds back its pop room and cost from the rest.
@@ -285,20 +290,26 @@ export class Military {
     if ((this.c.sheltered.size || this.shelters.size) && (this.calm >= 2 || world.time > this.shelterUntil)) this.release();
     if (!threats.length) {
       this.threatSince = null;
+      this.c.defenceHold = 0;
       return false;
     }
     this.threatSince ??= world.time;
     if (world.time - this.threatSince < profile.reaction) return false;
 
-    const c = { x: 0, z: 0 };
-    for (const t of threats) {
-      c.x += t.pos.x / threats.length;
-      c.z += t.pos.z / threats.length;
-    }
     // Scouts are soldiers when there's more than one (a lone scout is just looking).
     const scouts = threats.filter((t) => t.kind === 'scout').length;
     const raider = (t: Unit) => t.kind !== 'scout' || scouts > 1;
     const soldiers = threats.filter(raider).length;
+    const raiders = threats.filter(raider);
+    const c = centroid(threats);
+    // When attacks leave the home force without a soldier, let production buy the
+    // first reinforcement before the Town Center spends another 50 food.
+    const homeUnderFire = this.lastHit !== null && world.time - this.lastHit.at < 12;
+    const needsReinforcement = homeUnderFire && soldiers >= 2 && home.every((u) => u.kind === 'scout');
+    const canTrain = s.popUsed < s.popCap && profile.militaryQueue > 0
+      && s.buildings.some((b) => b.complete && b.queue === 0 && !b.upgrading
+        && b.id !== this.c.upgradeHold && PRODUCTION.includes(b.kind));
+    this.c.defenceHold = needsReinforcement && canTrain ? DEFENCE_HOLD : 0;
     let defenders = home;
     // Outnumbered at home by a real force: call the attack back, while it is still nearer home
     // than its target. Not for a couple of raiders, nor once it is past halfway (M16-10): with
@@ -313,7 +324,17 @@ export class Military {
       this.escorts.clear();
       this.mode = 'gather';
     }
-    const idle = defenders.filter((u) => u.state !== 'attacking' && dist(u.pos, c) > 4).slice(0, ORDERS_PER_PASS);
+    // The centre of a split raid can be out of sight of both groups. If defenders
+    // arrive there and stop, give them a target they can pursue on subsequent passes.
+    const stalled = raiders.length < 2 ? [] : defenders.filter((u) => u.state === 'idle'
+      && dist(u.pos, c) <= 4 && raiders.every((t) => dist(u.pos, t.pos) > UNITS[u.kind].sight))
+      .slice(0, ORDERS_PER_PASS);
+    if (stalled.length) {
+      const target = raiders.reduce((nearest, t) => dist(t.pos, c) < dist(nearest.pos, c) ? t : nearest);
+      this.c.issue({ type: 'attack', unitIds: stalled.map((u) => u.id), targetId: target.id });
+    }
+    const idle = defenders.filter((u) => u.state !== 'attacking' && dist(u.pos, c) > 4)
+      .slice(0, ORDERS_PER_PASS - stalled.length);
     if (idle.length) this.c.issue({ type: 'attackMove', unitIds: idle.map((u) => u.id), target: c });
 
     // Villagers near raiding soldiers garrison in the nearest Town Center or tower with room
@@ -325,7 +346,7 @@ export class Military {
         this.shelter(s, run);
       }
     }
-    this.holdCaptures(s, home, threats.filter(raider));
+    this.holdCaptures(s, home, raiders);
     return true;
   }
 

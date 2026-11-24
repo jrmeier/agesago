@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GRASS_ONLY, type Heightfield, type MapLayout, type UnitKind } from '../core/types';
+import { GRASS_ONLY, type Heightfield, type MapLayout, type PlayerId, type UnitKind } from '../core/types';
 import { UNITS } from '../core/units';
 import { completeBuilding, layFoundation } from '../sim/systems/build';
 import { killUnit } from '../sim/systems/combat';
@@ -31,49 +31,77 @@ function arena(): World {
   return new World(hf, layout, players);
 }
 
+/**
+ * The M7-3 raid: after four minutes of play, six hoplites appear about 23 from the AI's Town Center
+ * and attack-move onto it; four more minutes are played. `side` is where they come from: the
+ * map-centre side of the Town Center (the enemy's side) or the map-edge side behind it.
+ */
+function raidOutcome(seed: number, me: PlayerId, side: 'centre' | 'edge', exactAngle?: number) {
+  const foe = (3 - me) as PlayerId;
+  const world = makeGame(seed, me === 1 ? ['ai', 'human'] : ['human', 'ai']);
+  const ai = new AIPlayer(world, me, { difficulty: 'moderate', seed });
+  run(world, [ai], 4 * 60);
+  const tc = world.townCenterOf(me)!;
+  const before = census(world, me);
+  const sign = side === 'centre' ? 1 : -1;
+  const from = { x: sign * (world.hf.width / 2 - tc.pos.x), z: sign * (world.hf.depth / 2 - tc.pos.z) };
+  const approach = exactAngle ?? Math.atan2(from.z, from.x);
+  const home = world.nav.nearestFree({ x: tc.pos.x, z: tc.pos.z + tc.radius + 1 })!;
+  // Rotate around blocked terrain, staying on the chosen side.
+  const positions = Array.from({ length: exactAngle === undefined ? 24 : 1 }, (_, step) => {
+    const angle = approach + step * Math.PI / 12;
+    return Array.from({ length: 6 }, (_, i) => {
+      const x = 18 + i % 3;
+      const z = 14 + Math.floor(i / 3);
+      return { x: tc.pos.x + x * Math.cos(angle) - z * Math.sin(angle), z: tc.pos.z + x * Math.sin(angle) + z * Math.cos(angle) };
+    });
+  }).find((group) => group.every((pos) => (pos.x - tc.pos.x) * from.x + (pos.z - tc.pos.z) * from.z > 0
+    && world.nav.isFree(pos) && world.nav.connected(pos, home)));
+  // A blocked or disconnected raid would make the defence assertion vacuous.
+  expect(positions, `seed ${seed}: reachable raid spawn`).toBeDefined();
+  const raid = positions!.map((pos) => world.spawnUnit('hoplite', pos, foe));
+  world.dispatch({ type: 'attackMove', unitIds: raid.map((u) => u.id), target: { ...tc.pos } }, foe);
+  let clearedAt: number | null = null;
+  for (let elapsed = 5; elapsed <= 240; elapsed += 5) {
+    run(world, [ai], 5);
+    if (clearedAt === null && raid.every((u) => !world.units.has(u.id))) clearedAt = elapsed;
+  }
+  const after = census(world, me);
+  const dead = raid.filter((u) => !world.units.has(u.id)).length;
+  const east = tc.pos.x > world.hf.width / 2;
+  console.log(`raid seed ${seed}, ${east ? 'east' : 'west'} start, ${side} side: villagers/army ${before.villagers}/${before.army} -> ${after.villagers}/${after.army}, dead ${dead}/6, cleared ${clearedAt ?? '>240'}s, TC ${world.buildings.has(tc.id)}`);
+  expect(world.buildings.get(tc.id)?.owner, `seed ${seed}: Town Center`).toBe(me);
+  expect(tc.hp).toBeGreaterThan(0);
+  expect(after.villagers, `seed ${seed}: economy recovers`).toBeGreaterThanOrEqual(before.villagers);
+  expect(dead, `seed ${seed}, ${east ? 'east' : 'west'} start, ${side} side: raiders killed`).toBeGreaterThanOrEqual(4);
+  ai.dispose();
+  return { east, cleared: clearedAt !== null };
+}
+
 describe('M7-3: scripted early raid defence', () => {
   it('protects its town and economy on seeds 1–5 and clears at least four raids', () => {
     let cleared = 0;
-    for (const seed of [1, 2, 3, 4, 5]) {
-      const world = makeGame(seed, ['ai', 'human']);
-      const ai = new AIPlayer(world, 1, { difficulty: 'moderate', seed });
-      run(world, [ai], 4 * 60);
-      const tc = world.townCenterOf(1)!;
-      const before = census(world, 1);
-      // Approach from the map-centre side for either starting seat; rotate around blocked terrain.
-      const inward = { x: world.hf.width / 2 - tc.pos.x, z: world.hf.depth / 2 - tc.pos.z };
-      const approach = Math.atan2(inward.z, inward.x);
-      const home = world.nav.nearestFree({ x: tc.pos.x, z: tc.pos.z + tc.radius + 1 })!;
-      const positions = Array.from({ length: 24 }, (_, step) => {
-        const angle = approach + step * Math.PI / 12;
-        return Array.from({ length: 6 }, (_, i) => {
-          const x = 18 + i % 3;
-          const z = 14 + Math.floor(i / 3);
-          return { x: tc.pos.x + x * Math.cos(angle) - z * Math.sin(angle), z: tc.pos.z + x * Math.sin(angle) + z * Math.cos(angle) };
-        });
-      }).find((group) => group.every((pos) => (pos.x - tc.pos.x) * inward.x + (pos.z - tc.pos.z) * inward.z > 0
-        && world.nav.isFree(pos) && world.nav.connected(pos, home)));
-      // A blocked or disconnected raid would make the defence assertion vacuous.
-      expect(positions, `seed ${seed}: reachable raid spawn`).toBeDefined();
-      const raid = positions!.map((pos) => world.spawnUnit('hoplite', pos, 2));
-      world.dispatch({ type: 'attackMove', unitIds: raid.map((u) => u.id), target: { ...tc.pos } }, 2);
-      let clearedAt: number | null = null;
-      for (let elapsed = 5; elapsed <= 240; elapsed += 5) {
-        run(world, [ai], 5);
-        if (clearedAt === null && raid.every((u) => !world.units.has(u.id))) clearedAt = elapsed;
-      }
-      const after = census(world, 1);
-      const dead = raid.filter((u) => !world.units.has(u.id)).length;
-      console.log(`raid seed ${seed}: villagers/army ${before.villagers}/${before.army} -> ${after.villagers}/${after.army}, dead ${dead}/6, cleared ${clearedAt ?? '>240'}s, TC ${world.buildings.has(tc.id)}`);
-      expect(world.buildings.get(tc.id)?.owner, `seed ${seed}: Town Center`).toBe(1);
-      expect(tc.hp).toBeGreaterThan(0);
-      expect(after.villagers, `seed ${seed}: economy recovers`).toBeGreaterThanOrEqual(before.villagers);
-      expect(dead, `seed ${seed}: raiders killed`).toBeGreaterThanOrEqual(4);
-      if (clearedAt !== null) cleared++;
-      ai.dispose();
-    }
+    for (const seed of [1, 2, 3, 4, 5]) if (raidOutcome(seed, 1, 'centre').cleared) cleared++;
     expect(cleared).toBeGreaterThanOrEqual(4);
   }, perfBudget(90_000));
+
+  // T120: the same raid from behind the town, for the west and the east start on every seed
+  // (seat 1 is west on odd seeds and east on even ones, seat 2 the other).
+  it.each([1, 2] as PlayerId[])('kills at least four of six raiders from the map-edge side on seeds 1–5, as seat %i', (me) => {
+    let cleared = 0;
+    const starts = new Set<boolean>();
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const outcome = raidOutcome(seed, me, 'edge');
+      starts.add(outcome.east);
+      if (outcome.cleared) cleared++;
+    }
+    expect(starts.size).toBe(2);
+    expect(cleared).toBeGreaterThanOrEqual(4);
+  }, perfBudget(90_000));
+
+  it('repels the original seed 4 raid from the map edge', () => {
+    expect(raidOutcome(4, 1, 'edge', 0).east).toBe(true);
+  }, perfBudget(30_000));
 
   it('shelters nearby villagers after the reaction delay and releases them when the raid dies', () => {
     const world = arena();
