@@ -273,9 +273,10 @@ export class Military {
       if (score > bestScore) [best, bestScore] = [k, score];
     }
     // A quota override needs a close choice in both raw counter value and training score.
-    // When the army has priority, reinforcements use the normal counter choice.
+    // Use the normal counter choice during an immediate reinforcement need.
+    const urgent = this.c.outgunned || this.c.defenceHold > 0;
     const uniqueCounterRatio = this.c.profile.uniqueCounterRatio ?? 0.75;
-    if (unique && !this.c.armyFirst && this.c.profile.uniqueShare > 0 && uniqueMatchup >= bestMatchup * uniqueCounterRatio
+    if (unique && !urgent && this.c.profile.uniqueShare > 0 && uniqueMatchup >= bestMatchup * uniqueCounterRatio
       && uniqueScore >= bestScore * 0.75) {
       let count = s.army.filter((u) => u.kind === unique).length;
       let total = s.army.length;

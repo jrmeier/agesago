@@ -189,15 +189,24 @@ describe('T122: unique-unit recruitment', () => {
     ai.dispose();
   });
 
-  it('uses standard counter choices for reinforcements when the army has priority', () => {
+  it('uses standard counter choices when defending troops urgently need reinforcements', () => {
     const pressured = scenario('celts', 'moderate');
     const control = scenario('celts', 'moderate');
     const ctx = (pressured.ai as unknown as { ctx: Ctx }).ctx;
     ctx.armyFirst = true;
+    ctx.defenceHold = 100;
     control.ai.profile.uniqueShare = 0;
     expect(Array.from({ length: 20 }, pressured.choose)).toEqual(Array.from({ length: 20 }, control.choose));
     pressured.ai.dispose();
     control.ai.dispose();
+  });
+
+  it('resumes unique recruitment during raid recovery once troops can afford the choice', () => {
+    const { ai, choose, unique } = scenario('celts', 'moderate');
+    const ctx = (ai as unknown as { ctx: Ctx }).ctx;
+    ctx.armyFirst = true;
+    expect(choose()).toBe(unique);
+    ai.dispose();
   });
 
   it.each(CIV_IDS)('%s: easy keeps its seeded random choices independent of army composition', (civ) => {

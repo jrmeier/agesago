@@ -48,6 +48,8 @@ export interface Ctx {
   defenceHold: number;
   /** Outgunned or raided: army training ignores `reserve` and `techReserve`. */
   armyFirst: boolean;
+  /** The visible enemy's army is large enough to demand reinforcements. */
+  outgunned: boolean;
   /** Saving for or researching an age-up: hold new attack waves (defend at home). */
   aging: boolean;
   /** Villager training also leaves `reserve` (a short pause to click up to the Town Age). */
