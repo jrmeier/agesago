@@ -91,15 +91,15 @@ export class Economy {
     const civ = state.player.civ;
     if (!p || p.weights.civ <= 0 || !civ || state.age !== 1 || !s.count.forge) return null;
     // The existing Town Age villager threshold protects the minimum opening economy.
-    if (s.villagers.length < p.townAgeAt || this.c.defenceHold > 0 || this.c.sheltered.size > 0
-      || this.c.armyFirst || world.time - this.lastAttacked < CIV_FOOD_CALM) return null;
+    if (s.villagers.length < p.townAgeAt) return null;
     const tech = CIVS[civ].tech;
     return state.researched.has(tech) || s.buildings.some((b) => b.research?.includes(tech)) ? null : tech;
   }
 
   private civFoodReserve(s: Snapshot, tech: TechId | null): number {
     const { world, player, profile } = this.c;
-    if (!tech) {
+    if (!tech || this.c.defenceHold > 0 || this.c.sheltered.size > 0
+      || this.c.armyFirst || world.time - this.lastAttacked < CIV_FOOD_CALM) {
       this.civFoodHoldUntil = -Infinity;
       return 0;
     }
@@ -126,6 +126,9 @@ export class Economy {
     const stock = this.c.world.stockOf(this.c.player);
     // Everything being saved for (the age-up, a new Town Center, a building) steers the split.
     const reserve = heldBack(this.c);
+    const preparingForge = !s.count.forge && this.c.profile.research?.weights.civ
+      && (this.c.saving?.kind === 'forge' || s.tc?.research?.includes('townAge'));
+    const forgeWood = preparingForge ? BUILDINGS.forge.cost.wood ?? 0 : 0;
     let sum = 0;
     for (const t of TYPES) {
       // Saving up (an age-up): lean toward what is still missing.
@@ -135,7 +138,7 @@ export class Economy {
       // food spending. Staff their missing resources once the forge foundation is funded.
       const civCost = civTech ? TECHS[civTech].cost[t] ?? 0 : 0;
       const civTarget = civCost && t === 'food' ? civCost + 50 + (this.c.profile.research?.villagerReserve ?? 0) : civCost;
-      const civMissing = civTarget - stock[t];
+      const civMissing = Math.max(civTarget, t === 'wood' ? forgeWood : 0) - stock[t];
       if (civMissing > 0) r[t] = Math.max(r[t], 0.1) * (1 + Math.min(0.8, civMissing / 250));
       // Stockpiling more than it spends: move workers elsewhere.
       const plenty = (t === 'food' || t === 'wood' ? 400 : 300) + (reserve[t] ?? 0);

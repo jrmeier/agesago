@@ -87,10 +87,15 @@ describe('T123: one bounded food hold for the first civilization tech', () => {
     ai.dispose();
   });
 
-  it('releases on the attack event immediately, without waiting for the military reaction timer, and never rearms', () => {
+  it('ignores incidental damage, releases immediately for an enemy raid, and never rearms', () => {
     const { world, ai, tc, pass } = town();
     pass();
     expect(tc.queue).toBe(0);
+    world.events.emit({ type: 'attacked', owner: 1, id: tc.id, pos: tc.pos });
+    pass();
+    expect(tc.queue).toBe(0);
+    world.spawnUnit('hoplite', { x: tc.pos.x + 5, z: tc.pos.z }, 2);
+    run(world, [], 0.1);
     world.events.emit({ type: 'attacked', owner: 1, id: tc.id, pos: tc.pos });
     pass();
     expect(tc.queue).toBe(2);

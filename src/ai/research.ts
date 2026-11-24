@@ -181,17 +181,18 @@ export class Research {
     for (let a = 1; a <= ageOf(c.world, c.player); a++) this.agedAt[a] = c.world.time;
   }
 
-  /** One of ours was hit at `pos`: a raid if an enemy soldier is in sight there (not a wolf, a boar or a lone scout). */
-  onAttacked(pos: Vec2): void {
+  /** Confirm a visible enemy raid when one of our units or buildings takes damage. */
+  onAttacked(pos: Vec2): boolean {
     const { world, player, intel } = this.c;
-    if (world.time - this.lastHit < 5) return;
+    if (world.time - this.lastHit < 5) return true;
     let scouts = 0;
     for (const u of world.units.values()) {
       if (isAnimal(u.kind) || u.kind === 'villager' || !world.areEnemies(player, u.owner) || dist(u.pos, pos) > 12 || !intel.sees(u.pos.x, u.pos.z)) continue;
       if (u.kind === 'scout' && ++scouts < 2) continue;
       this.lastHit = world.time;
-      return;
+      return true;
     }
+    return false;
   }
 
   onAgedUp(age: Age): void {
@@ -365,7 +366,7 @@ export class Research {
       if (r === false) this.c.saving = { kind: 'forge', cost: { ...BUILDINGS.forge.cost } };
       if (r !== null) return;
     }
-    // Town Age: an archery range early when gold piles up (archers spend it), before the forge.
+    // Town Age: an archery range early when gold piles up (archers spend it).
     if (f.age >= 1 && !has('archeryRange') && stock.gold > 300 && production < this.c.profile.maxProduction) {
       if (this.place(s, 'archeryRange') !== null) return;
     }
