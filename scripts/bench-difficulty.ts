@@ -1,5 +1,6 @@
 /**
- * M7-4: adjacent difficulty ladder, Hellenes mirrors, seeds 1–10, both seats, 40 min.
+ * M7-4: adjacent difficulty ladder, Hellenes mirrors, both seats, 40 min.
+ * DIFFICULTY_BENCH_SEEDS changes the default sample of seeds 1–10.
  * Runs six shards by default; DIFFICULTY_BENCH_SHARDS changes concurrency. Set
  * DIFFICULTY_BENCH_SHARD to run one shard manually, then DIFFICULTY_BENCH_SUMMARY=1
  * to check the complete result. JSONL is resumable, keyed by source revision.
@@ -17,6 +18,10 @@ import { census, run } from '../src/ai/harness';
 const PAIRS: [Difficulty, Difficulty][] = [['easy', 'moderate'], ['moderate', 'hard'], ['hard', 'hardest']];
 const revision = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const output = process.env.DIFFICULTY_BENCH_OUTPUT ?? `/tmp/agesago-difficulty-${revision}.jsonl`;
+const seedCount = Number(process.env.DIFFICULTY_BENCH_SEEDS ?? 10);
+if (!Number.isInteger(seedCount) || seedCount < 1) {
+  throw new Error('DIFFICULTY_BENCH_SEEDS must be a positive integer.');
+}
 const shards = Number(process.env.DIFFICULTY_BENCH_SHARDS ?? 6);
 const shard = process.env.DIFFICULTY_BENCH_SHARD === undefined ? null : Number(process.env.DIFFICULTY_BENCH_SHARD);
 if (!Number.isInteger(shards) || shards < 1 || (shard !== null && (!Number.isInteger(shard) || shard < 0 || shard >= shards))) {
@@ -30,7 +35,7 @@ interface Row {
 const read = (): Row[] => existsSync(output)
   ? readFileSync(output, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line) as Row)
   : [];
-const jobs = PAIRS.flatMap(([lo, hi]) => Array.from({ length: 10 }, (_, i) => i + 1).flatMap(seed =>
+const jobs = PAIRS.flatMap(([lo, hi]) => Array.from({ length: seedCount }, (_, i) => i + 1).flatMap(seed =>
   ([1, 2] as PlayerId[]).map(hiSeat => ({ lo, hi, seed, hiSeat, id: `${lo}<${hi}/${seed}/${hiSeat}` }))));
 function rowsById(): Map<string, Row> {
   const rows = read();
@@ -98,9 +103,9 @@ if (shard === null || process.env.DIFFICULTY_BENCH_SUMMARY === '1') {
     const pair = `${lo}<${hi}`;
     const played = jobs.filter(job => `${job.lo}<${job.hi}` === pair).flatMap(job => rows.get(job.id) ?? []);
     const wins = played.filter(row => row.hiWon);
-    return { pair, games: played.length, higherWon: wins.length, percent: wins.length * 5,
+    return { pair, games: played.length, higherWon: wins.length, percent: 100 * wins.length / (2 * seedCount),
       seat1: wins.filter(row => row.hiSeat === 1).length, seat2: wins.filter(row => row.hiSeat === 2).length,
-      decided: played.filter(row => row.decided).length, pass: played.length === 20 && wins.length >= 16 };
+      decided: played.filter(row => row.decided).length, pass: played.length === 2 * seedCount && wins.length >= Math.ceil(1.6 * seedCount) };
   });
   console.table(summary);
   console.log(JSON.stringify({ output, revision, summary }));

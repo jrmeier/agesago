@@ -104,7 +104,7 @@ export class Economy {
         tc.queue < profile.tcQueue &&
         s.villagers.length + queued < profile.targetVillagers &&
         s.popUsed < s.popCap &&
-        stock.food - this.c.villagerHold - (this.c.pauseVillagers ? this.c.reserve.food ?? 0 : 0) >= 50
+        stock.food - this.c.villagerHold - this.c.defenceHold - (this.c.pauseVillagers ? this.c.reserve.food ?? 0 : 0) >= 50
       ) {
         const before = tc.queue;
         this.c.issue({ type: 'train', buildingId: tc.id, unit: 'villager' });

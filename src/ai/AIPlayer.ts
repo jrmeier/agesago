@@ -78,6 +78,7 @@ export class AIPlayer {
       townReserve: {},
       saving: null,
       villagerHold: 0,
+      defenceHold: 0,
       armyFirst: false,
       aging: false,
       pauseVillagers: false,

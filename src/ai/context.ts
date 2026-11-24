@@ -44,6 +44,8 @@ export interface Ctx {
   techReserve: Partial<Stockpile>;
   /** Food villager training leaves for an economy tech (a short, bounded pause). */
   villagerHold: number;
+  /** Food villager training leaves for the first reinforcement during a raid. */
+  defenceHold: number;
   /** Outgunned or raided: army training ignores `reserve` and `techReserve`. */
   armyFirst: boolean;
   /** Saving for or researching an age-up: hold new attack waves (defend at home). */
