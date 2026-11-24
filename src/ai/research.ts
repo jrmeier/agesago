@@ -435,8 +435,9 @@ export class Research {
       const score = (r.base + (r.bonus?.(f) ?? 0)) * w;
       if ((best && score <= best.score) || !r.when(f)) continue;
       if (researchBlock(world, player, r.tech, true) !== null) continue;
+      const civVillagerFood = r.tech === openingCiv && booming ? { food: UNITS.villager.cost.food } : villagerFood;
       // The tech villagers are paused for doesn't also keep the villager reserve.
-      if (!canAfford(stock, spec.cost, r.fromReserve ? villagerFood : this.hold?.tech === r.tech ? this.c.reserve : reserve)) {
+      if (!canAfford(stock, spec.cost, r.fromReserve ? civVillagerFood : this.hold?.tech === r.tech ? this.c.reserve : reserve)) {
         if (!want || score > want.score) want = { tech: r.tech, score, group: r.group, urgent: !!r.urgent?.(f) };
         continue;
       }

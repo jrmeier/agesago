@@ -34,18 +34,18 @@ function town(villagers = 20, difficulty: Difficulty = 'moderate', time = 0) {
 }
 
 describe('T123: one bounded food hold for the first civilization tech', () => {
-  it('leaves the tech and T121 villager cushion available, then resumes training as soon as research starts', () => {
+  it('leaves the tech and one villager affordable, then resumes training when research starts', () => {
     const { world, ai, tc, pass } = town();
     world.stockOf(1).food = 200;
     pass();
     expect(tc.queue).toBe(0);
     expect(world.stockOf(1).food).toBe(200);
-    world.stockOf(1).food = 275;
+    world.stockOf(1).food = 225;
     ai.research.pass(snapshot(world, 1));
     expect(ai.research.started[0]?.tech).toBe(CIVS.hellenes.tech);
-    expect(world.stockOf(1).food).toBe(100);
+    expect(world.stockOf(1).food).toBe(50);
     pass();
-    expect(tc.queue).toBe(2);
+    expect(tc.queue).toBe(1);
     ai.dispose();
   });
 

@@ -2,6 +2,7 @@ import { BUILDINGS, MAX_POP, TERRITORY } from '../core/buildings';
 import { MAP_SIZES } from '../core/maps';
 import { CIVS } from '../core/civilizations';
 import { TECHS, type TechId } from '../core/techs';
+import { UNITS } from '../core/units';
 import type { Building, BuildingKind, EntityId, ResourceNode, ResourceType, Unit, UnitState, Vec2 } from '../core/types';
 import { heldBack, canAfford, dist, dropsFor, nearestSiteDist, type Ctx, type Snapshot } from './context';
 import { findSpot, type SpotQuery } from './placement';
@@ -97,13 +98,15 @@ export class Economy {
   }
 
   private civFoodReserve(s: Snapshot, tech: TechId | null): number {
-    const { world, player, profile } = this.c;
+    const { world, player } = this.c;
     if (!tech || this.c.defenceHold > 0 || this.c.sheltered.size > 0
       || this.c.armyFirst || world.time - this.lastAttacked < CIV_FOOD_CALM) {
       this.civFoodHoldUntil = -Infinity;
       return 0;
     }
-    if (!s.buildings.some((b) => b.kind === 'forge' && b.complete && !b.research?.length && !b.upgrading)) return 0;
+    // Begin saving during construction. Starting only after completion leaves the
+    // full price to raise at the point the next enemy wave can interrupt.
+    if (!s.buildings.some((b) => b.kind === 'forge' && !b.research?.length && !b.upgrading)) return 0;
     const stock = world.stockOf(player);
     const cost = TECHS[tech].cost;
     if (Object.entries(cost).some(([r, n]) => r !== 'food' && stock[r as ResourceType] < n)) return 0;
@@ -112,8 +115,7 @@ export class Economy {
       this.civFoodHoldUntil = world.time + CIV_FOOD_HOLD;
     }
     if (world.time >= this.civFoodHoldUntil) return 0;
-    // Leave the tech's food AND T121's existing villager cushion available for research.
-    return (cost.food ?? 0) + 50 + (profile.research?.villagerReserve ?? 0);
+    return (cost.food ?? 0) + (UNITS.villager.cost.food ?? 0);
   }
 
   /** Target share of workers per resource right now. */
