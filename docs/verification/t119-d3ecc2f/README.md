@@ -13,4 +13,8 @@ The client and relay builds, 1,952 unit tests, TypeScript and 12 browser checks 
 A local site and protocol-20 relay activation completed a two-client match and
 rolled back successfully to the protocol-19 release.
 
+The rollback also passed using the captured production relay and the locked
+production dependencies for each release. The Persia–Celts sample retained all
+61 valid games from its first worker and completed the remaining 19 on the same revision.
+
 The release record will identify the production deployment and public verification.

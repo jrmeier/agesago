@@ -1,0 +1,36 @@
+{
+  "before": {
+    "protocol": 19,
+    "files": 18,
+    "indexSha256": "72b202025ba2fcd76636be9db27cf2a1a0c3b29df144c4292480ed939324c94d"
+  },
+  "staged": {
+    "protocol": 19,
+    "files": 18,
+    "indexSha256": "72b202025ba2fcd76636be9db27cf2a1a0c3b29df144c4292480ed939324c94d"
+  },
+  "activated": {
+    "protocol": 20,
+    "files": 18,
+    "indexSha256": "75ddf1ae217f1e31bda9261da694efb36918b90a5f2d3cddd108624e4b0216ef"
+  },
+  "rolledBack": {
+    "protocol": 19,
+    "files": 18,
+    "indexSha256": "72b202025ba2fcd76636be9db27cf2a1a0c3b29df144c4292480ed939324c94d"
+  },
+  "oldRelaySource": "291329090075430efc48f76d154e21bbad6d0a09",
+  "oldStaticRelease": "98a2bb878e3b39018a6aeb0ca3e558cf3327abf9",
+  "newSource": "d3ecc2f1b9c9dfc8fbe85cc5072bc4cd80b0788c",
+  "newRelayMatch": {
+    "endpoint": "ws://127.0.0.1:65297/multiplayer",
+    "completedClients": 2,
+    "matchingCheckpoints": [
+      0,
+      25
+    ],
+    "winners": [
+      1
+    ]
+  }
+}
