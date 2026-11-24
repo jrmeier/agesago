@@ -189,6 +189,17 @@ describe('T122: unique-unit recruitment', () => {
     ai.dispose();
   });
 
+  it('uses standard counter choices for reinforcements when the army has priority', () => {
+    const pressured = scenario('celts', 'moderate');
+    const control = scenario('celts', 'moderate');
+    const ctx = (pressured.ai as unknown as { ctx: Ctx }).ctx;
+    ctx.armyFirst = true;
+    control.ai.profile.uniqueShare = 0;
+    expect(Array.from({ length: 20 }, pressured.choose)).toEqual(Array.from({ length: 20 }, control.choose));
+    pressured.ai.dispose();
+    control.ai.dispose();
+  });
+
   it.each(CIV_IDS)('%s: easy keeps its seeded random choices independent of army composition', (civ) => {
     const a = scenario(civ, 'easy');
     const b = scenario(civ, 'easy');
