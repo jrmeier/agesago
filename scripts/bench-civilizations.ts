@@ -17,10 +17,11 @@ let pairIndex=-1;
 const shards=Number(process.env.CIV_BENCH_SHARDS ?? 1), shard=Number(process.env.CIV_BENCH_SHARD ?? 0);
 /** Seeds per pairing, each played from both sides (M16-11: more seeds for a pairing near a band edge). */
 const seedCount=Number(process.env.CIV_BENCH_SEEDS ?? 10);
-if(!Number.isInteger(seedCount)||seedCount<1)throw new Error('CIV_BENCH_SEEDS must be a positive integer');
+if(!Number.isSafeInteger(seedCount)||seedCount<1)throw new Error('CIV_BENCH_SEEDS must be a positive safe integer');
 const firstSeed=Number(process.env.CIV_BENCH_FIRST_SEED ?? 1);
-if(!Number.isInteger(firstSeed)||firstSeed<1)throw new Error('CIV_BENCH_FIRST_SEED must be a positive integer');
+if(!Number.isSafeInteger(firstSeed)||firstSeed<1)throw new Error('CIV_BENCH_FIRST_SEED must be a positive safe integer');
 const endSeed=firstSeed+seedCount;
+if(!Number.isSafeInteger(endSeed))throw new Error('The civilization benchmark seed range exceeds safe integer limits');
 if(process.env.CIV_BENCH_SUMMARY!=='1') for(let a=0;a<CIV_IDS.length;a++)for(let b=a+1;b<CIV_IDS.length;b++){
   if(filters.length && !filters.includes(CIV_IDS[a]) && !filters.includes(CIV_IDS[b]))continue;
   pairIndex++;if(pairIndex%shards!==shard)continue;
