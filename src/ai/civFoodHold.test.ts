@@ -118,6 +118,22 @@ describe('T123: one bounded food hold for the first civilization tech', () => {
     ai.dispose();
   });
 
+  it('keeps the research food out of military queues until the army needs it for defence', () => {
+    const { world, ai, pass } = town();
+    const barracks = layFoundation(world, 'barracks', { x: 28, z: 30 }, 0, 1);
+    completeBuilding(world, barracks);
+    for (let i = 0; i < 3; i++) world.spawnUnit('hoplite', { x: 28 + i, z: 34 }, 1);
+    Object.assign(world.stockOf(1), { food: 200, wood: 200 });
+    const ctx = (ai as unknown as { ctx: Ctx }).ctx;
+    pass();
+    ai.military.pass(snapshot(world, 1));
+    expect(barracks.queue).toBe(0);
+    ctx.armyFirst = true;
+    ai.military.pass(snapshot(world, 1));
+    expect(barracks.queue).toBeGreaterThan(0);
+    ai.dispose();
+  });
+
   it('does not grant another opening hold when an AI is attached to a running or loaded game', () => {
     const { ai, tc, pass } = town(20, 'moderate', 10);
     pass();
