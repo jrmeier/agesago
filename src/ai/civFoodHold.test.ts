@@ -147,6 +147,25 @@ describe('T123: one bounded food hold for the first civilization tech', () => {
     ai.dispose();
   });
 
+  it.each(['moderate', 'hard'] as const)('%s yields the opening food reserve when the enemy can contest its army', (difficulty) => {
+    const { world, ai, tc, pass } = town(20, difficulty);
+    const ctx = (ai as unknown as { ctx: Ctx }).ctx;
+    pass();
+    expect(ctx.openingCivFood).toBeGreaterThan(0);
+    for (let i = 0; i < 4; i++) {
+      world.spawnUnit('hoplite', { x: 36 + i, z: 39 }, 2);
+      world.spawnUnit('hoplite', { x: 36 + i, z: 44 }, 1);
+    }
+    world.players.get(1)!.visibility.update([{ pos: tc.pos, sight: 35 }]);
+    ai.intel.scan();
+    pass();
+    expect(ctx.openingCivFood).toBe(0);
+    for (let i = 0; i < 4; i++) world.spawnUnit('hoplite', { x: 40 + i, z: 44 }, 1);
+    pass();
+    expect(ctx.openingCivFood).toBeGreaterThan(0);
+    ai.dispose();
+  });
+
   it('defers the hardest opening food reserve until its army can safely spare it', () => {
     const { world, ai, pass } = town(20, 'hardest');
     const ctx = (ai as unknown as { ctx: Ctx }).ctx;
