@@ -1,0 +1,78 @@
+{
+  "source": "d3ecc2f1b9c9dfc8fbe85cc5072bc4cd80b0788c",
+  "passes": true,
+  "games": 480,
+  "missing": 0,
+  "pairings": [
+    {
+      "pair": [
+        "hellenes",
+        "romans"
+      ],
+      "games": 80,
+      "firstWinShare": 0.425
+    },
+    {
+      "pair": [
+        "hellenes",
+        "persians"
+      ],
+      "games": 80,
+      "firstWinShare": 0.53125
+    },
+    {
+      "pair": [
+        "hellenes",
+        "celts"
+      ],
+      "games": 80,
+      "firstWinShare": 0.475
+    },
+    {
+      "pair": [
+        "romans",
+        "persians"
+      ],
+      "games": 80,
+      "firstWinShare": 0.4875
+    },
+    {
+      "pair": [
+        "romans",
+        "celts"
+      ],
+      "games": 80,
+      "firstWinShare": 0.475
+    },
+    {
+      "pair": [
+        "persians",
+        "celts"
+      ],
+      "games": 80,
+      "firstWinShare": 0.4875
+    }
+  ],
+  "pooled": [
+    {
+      "civ": "hellenes",
+      "games": 240,
+      "winShare": 0.47708333333333336
+    },
+    {
+      "civ": "romans",
+      "games": 240,
+      "winShare": 0.5125
+    },
+    {
+      "civ": "persians",
+      "games": 240,
+      "winShare": 0.4895833333333333
+    },
+    {
+      "civ": "celts",
+      "games": 240,
+      "winShare": 0.5208333333333334
+    }
+  ]
+}

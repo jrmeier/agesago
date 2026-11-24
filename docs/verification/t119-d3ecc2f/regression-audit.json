@@ -1,0 +1,9 @@
+{
+  "revision": "d3ecc2f1b9c9dfc8fbe85cc5072bc4cd80b0788c",
+  "unitTests": 1952,
+  "typecheckPass": true,
+  "sha256": {
+    "unit.log": "a4609654bd5eb3ff550ad98c3b05d5a016d9c7f8e63d5f2bbd5b330849a4e8cd",
+    "typecheck.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

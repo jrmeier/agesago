@@ -1,0 +1,34 @@
+{
+  "revision": "d3ecc2f1b9c9dfc8fbe85cc5072bc4cd80b0788c",
+  "saveFixtures": 3,
+  "saveCompatibilityPass": true,
+  "pacingPass": true,
+  "ageBands": 15,
+  "ageSecondsBySeed": {
+    "1": [
+      292,
+      756,
+      1197
+    ],
+    "2": [
+      296,
+      719,
+      1180
+    ],
+    "3": [
+      322,
+      768,
+      1254
+    ],
+    "4": [
+      297,
+      734,
+      1210
+    ],
+    "5": [
+      298,
+      736,
+      1195
+    ]
+  }
+}
