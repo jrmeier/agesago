@@ -168,7 +168,7 @@ export class Military {
     const reserve: Partial<Stockpile> = free ? {} : heldBack(this.c);
     if (!free) for (const [r, n] of Object.entries(this.c.techReserve) as [keyof Stockpile, number][]) reserve[r] = (reserve[r] ?? 0) + n;
     if (s.villagers.length < profile.targetVillagers && s.tc && !this.c.defenceHold) reserve.food = (reserve.food ?? 0) + 50;
-    if (this.c.openingCivFood > 0 && !this.c.armyFirst && !this.c.defenceHold && s.army.length >= 3) {
+    if (this.c.openingCivFood > 0 && !this.c.outgunned && !this.c.defenceHold && s.army.length >= 3) {
       // A short research reserve needs to survive both villager and soldier spending.
       reserve.food = Math.max(reserve.food ?? 0, this.c.openingCivFood);
     }

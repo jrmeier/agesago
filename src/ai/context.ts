@@ -48,6 +48,8 @@ export interface Ctx {
   defenceHold: number;
   /** Food planned for the first civilization technology during its opening reservation. */
   openingCivFood: number;
+  /** The visible enemy's army is large enough to demand reinforcements. */
+  outgunned: boolean;
   /** Outgunned or raided: army training ignores `reserve` and `techReserve`. */
   armyFirst: boolean;
   /** Saving for or researching an age-up: hold new attack waves (defend at home). */

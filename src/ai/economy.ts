@@ -99,8 +99,10 @@ export class Economy {
 
   private civFoodReserve(s: Snapshot, tech: TechId | null): number {
     const { world, player } = this.c;
+    // The general army-first policy stays active for two minutes after a raid.
+    // The opening research window can use a quiet stretch without borrowing from an active defence.
     if (!tech || this.c.defenceHold > 0 || this.c.sheltered.size > 0
-      || this.c.armyFirst || world.time - this.lastAttacked < CIV_FOOD_CALM) {
+      || this.c.outgunned || world.time - this.lastAttacked < CIV_FOOD_CALM) {
       this.civFoodHoldUntil = -Infinity;
       return 0;
     }

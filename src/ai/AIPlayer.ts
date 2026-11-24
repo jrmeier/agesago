@@ -80,6 +80,7 @@ export class AIPlayer {
       villagerHold: 0,
       defenceHold: 0,
       openingCivFood: 0,
+      outgunned: false,
       armyFirst: false,
       aging: false,
       pauseVillagers: false,

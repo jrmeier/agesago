@@ -207,7 +207,8 @@ export class Research {
     // (M16-10): a 150-strong army used to spend the City Age's gold on more soldiers for every
     // raid, never aged, and so never attacked (saving for an age holds waves).
     const enemy = this.c.intel.enemyArmy();
-    this.c.armyFirst = (f.raided && f.army < enemy * 1.25 + 10) || enemy > f.army * 1.3 + 5;
+    this.c.outgunned = enemy > f.army * 1.3 + 5;
+    this.c.armyFirst = (f.raided && f.army < enemy * 1.25 + 10) || this.c.outgunned;
     this.ageUp(s, f, p);
     this.c.saving = null;
     this.buildings(s, f, p);
