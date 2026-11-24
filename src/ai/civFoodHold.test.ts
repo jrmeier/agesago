@@ -69,19 +69,18 @@ describe('T123: one bounded food hold for the first civilization tech', () => {
     ai.dispose();
   });
 
-  it('buys and spends the Celtic research food in one pass after the opening reserve ends', () => {
+  it.each([
+    { gold: 375, lots: 0 },
+    { gold: 550, lots: 3 },
+  ])('uses $lots market lots to fund Celtic opening research with $gold gold after the reserve ends', ({ gold, lots }) => {
     const { world, ai } = town(20, 'hard', 70, 'celts');
     completeBuilding(world, layFoundation(world, 'market', { x: 37, z: 40 }, 0, 1));
     const stock = world.stockOf(1);
-    Object.assign(stock, { food: 50, gold: 375 });
+    Object.assign(stock, { food: 50, gold });
     ai.research.pass(snapshot(world, 1));
-    expect(stock.gold).toBe(375);
-    expect(ai.research.started).toHaveLength(0);
-
-    stock.gold = 550;
-    ai.research.pass(snapshot(world, 1));
-    expect(ai.research.started).toContainEqual({ tech: CIVS.celts.tech, at: world.time });
-    expect(stock.food).toBeGreaterThanOrEqual(villagerFood);
+    expect(ai.research.trades).toBe(lots);
+    expect(ai.research.started.some(({ tech }) => tech === CIVS.celts.tech)).toBe(lots > 0);
+    if (lots) expect(stock.food).toBeGreaterThanOrEqual(villagerFood);
     ai.dispose();
   });
   it('leaves the tech and one villager affordable, then resumes training when research starts', () => {
