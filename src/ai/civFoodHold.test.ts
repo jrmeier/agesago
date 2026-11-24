@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CIVS } from '../core/civilizations';
+import { CIVS, type CivId } from '../core/civilizations';
 import { TECHS } from '../core/techs';
 import { GRASS_ONLY, type Difficulty, type Heightfield, type MapLayout } from '../core/types';
 import { UNITS } from '../core/units';
@@ -16,7 +16,7 @@ const openingFood = TECHS[civTech].cost.food! + villagerFood;
 const openingGold = TECHS[civTech].cost.gold!;
 
 /** A Town Age economy with a finished forge; food arrivals are controlled by each test. */
-function town(villagers = 20, difficulty: Difficulty = 'moderate', time = 0) {
+function town(villagers = 20, difficulty: Difficulty = 'moderate', time = 0, civ: CivId = 'hellenes') {
   const hf: Heightfield = {
     width: 150, depth: 80, heightAt: () => 1, isWater: () => false,
     isWalkable: (x, z) => x >= 0 && z >= 0 && x <= 150 && z <= 80,
@@ -26,7 +26,7 @@ function town(villagers = 20, difficulty: Difficulty = 'moderate', time = 0) {
     townCenter: { x: 20, z: 40 }, villagers: [], scouts: [], nodes: [], props: [],
     extraStarts: [{ townCenter: { x: 130, z: 40 }, villagers: [], scouts: [] }],
   };
-  const players = defaultPlayers(2, ['hellenes', 'romans']).map((p) => ({ ...p, control: p.id === 1 ? 'ai' as const : 'human' as const }));
+  const players = defaultPlayers(2, [civ, 'romans']).map((p) => ({ ...p, control: p.id === 1 ? 'ai' as const : 'human' as const }));
   const world = new World(hf, layout, players);
   world.time = time;
   world.players.get(1)!.age = 1;
@@ -66,6 +66,22 @@ describe('T123: one bounded food hold for the first civilization tech', () => {
     ai.intel.refreshNodes();
     ai.research.pass(snapshot(world, 1));
     expect([...world.buildings.values()].some(b => b.owner === 1 && b.kind === 'market')).toBe(true);
+    ai.dispose();
+  });
+
+  it('buys and spends the Celtic research food in one pass after the opening reserve ends', () => {
+    const { world, ai } = town(20, 'hard', 70, 'celts');
+    completeBuilding(world, layFoundation(world, 'market', { x: 37, z: 40 }, 0, 1));
+    const stock = world.stockOf(1);
+    Object.assign(stock, { food: 50, gold: 375 });
+    ai.research.pass(snapshot(world, 1));
+    expect(stock.gold).toBe(375);
+    expect(ai.research.started).toHaveLength(0);
+
+    stock.gold = 550;
+    ai.research.pass(snapshot(world, 1));
+    expect(ai.research.started).toContainEqual({ tech: CIVS.celts.tech, at: world.time });
+    expect(stock.food).toBeGreaterThanOrEqual(villagerFood);
     ai.dispose();
   });
   it('leaves the tech and one villager affordable, then resumes training when research starts', () => {

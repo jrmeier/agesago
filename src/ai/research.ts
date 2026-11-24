@@ -1,9 +1,9 @@
-import { BUILDINGS } from '../core/buildings';
+import { BUILDINGS, MARKET } from '../core/buildings';
 import { CIVS, CIV_IDS } from '../core/civilizations';
 import { CHAINS, TECHS, TECH_IDS, type TechId } from '../core/techs';
 import type { Age, Building, BuildingKind, MarketResource, ResourceType, Stockpile, UnitKind, UnitState, Vec2 } from '../core/types';
 import { isAnimal, UNITS, type UnitClass } from '../core/units';
-import { buyCost, LOT, sellGain } from '../sim/systems/market';
+import { buyCost, LOT, priceStepOf, sellGain } from '../sim/systems/market';
 import { ageBuildingsNeeded, ageBuildings, ageOf, isQueued, researchBlock } from '../sim/systems/research';
 import { canAfford, dist, heldBack, type Ctx, type Snapshot } from './context';
 import { norm, PRODUCTION, type Economy } from './economy';
@@ -474,6 +474,7 @@ export class Research {
       this.c.villagerHold = 0;
       return;
     }
+    if (!this.c.openingCivFood && this.fundOpeningResearch(s)) return;
     const pick = this.choose(s, f, p);
     if (pick) this.start(pick.at, pick.tech);
   }
@@ -490,7 +491,7 @@ export class Research {
 
   // ---- Market ----
 
-  private openingFoodTrade(s: Snapshot): { foodTarget: number; goldFloor: number } | null {
+  private openingFoodTrade(s: Snapshot): { tech: TechId; foodTarget: number; goldFloor: number } | null {
     const { world, player } = this.c;
     const tech = this.econ.openingCivTech(s);
     if (!tech || this.c.outgunned || this.c.defenceHold || this.c.sheltered.size || world.time - this.lastHit < 30) return null;
@@ -500,7 +501,40 @@ export class Research {
     const goldFloor = cost.gold ?? 0;
     const price = buyCost(world.players.get(player)!.prices.food);
     return stock.food < foodTarget && price <= 250 && stock.gold - price >= goldFloor
-      ? { foodTarget, goldFloor } : null;
+      ? { tech, foodTarget, goldFloor } : null;
+  }
+
+  /** When the opening reserve has ended, turn spare gold into immediately usable research. */
+  private fundOpeningResearch(s: Snapshot): boolean {
+    if (!s.buildings.some(b => b.kind === 'market' && b.complete)) return false;
+    const opening = this.openingFoodTrade(s);
+    if (!opening) return false;
+    const { world, player } = this.c;
+    const forge = s.buildings.find(b => b.kind === 'forge' && b.complete && !b.research?.length && !b.upgrading && b.id !== this.c.upgradeHold);
+    if (!forge || researchBlock(world, player, opening.tech, true) !== null) return false;
+    const stock = world.stockOf(player);
+    const prices = world.players.get(player)!.prices;
+    const lots = Math.ceil((opening.foodTarget - stock.food) / LOT);
+    if (lots > TRADES_PER_PASS) return false;
+    const priceStep = MARKET.basePrice * priceStepOf(world, player);
+    let foodPrice = prices.food;
+    let gold = 0;
+    for (let i = 0; i < lots; i++) {
+      const price = buyCost(foodPrice);
+      if (price > 250) return false;
+      gold += price;
+      foodPrice = Math.min(MARKET.maxPrice, foodPrice + priceStep);
+    }
+    if (stock.gold - gold < opening.goldFloor) return false;
+    for (let i = 0; i < lots; i++) {
+      if (!this.trade('food', 'buy', prices, opening.goldFloor)) return false;
+    }
+    this.start(forge, opening.tech);
+    this.wanted = {};
+    this.c.techReserve = {};
+    this.hold = null;
+    this.c.villagerHold = 0;
+    return true;
   }
 
   /**
@@ -514,7 +548,7 @@ export class Research {
     const prices = world.players.get(player)?.prices;
     if (!prices) return;
     const stock = world.stockOf(player);
-    const opening = this.openingFoodTrade(s);
+    const opening = this.c.openingCivFood ? this.openingFoodTrade(s) : null;
     if (opening) {
       for (let i = 0; i < TRADES_PER_PASS && stock.food < opening.foodTarget; i++) {
         if (!this.trade('food', 'buy', prices, opening.goldFloor)) break;
