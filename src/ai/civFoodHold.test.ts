@@ -147,15 +147,19 @@ describe('T123: one bounded food hold for the first civilization tech', () => {
     ai.dispose();
   });
 
-  it('defers the hardest opening food reserve while its army has priority', () => {
-    const { ai, pass } = town(20, 'hardest');
+  it('defers the hardest opening food reserve until the first wave is ready and the army can spare it', () => {
+    const { world, ai, pass } = town(20, 'hardest');
     const ctx = (ai as unknown as { ctx: Ctx }).ctx;
+    pass();
+    expect(ctx.openingCivFood).toBe(0);
+    for (let i = 0; i < ai.profile.firstWave; i++) {
+      world.spawnUnit('hoplite', { x: 45 + i % 5, z: 38 + Math.floor(i / 5) }, 1);
+    }
+    pass();
+    expect(ctx.openingCivFood).toBeGreaterThan(0);
     ctx.armyFirst = true;
     pass();
     expect(ctx.openingCivFood).toBe(0);
-    ctx.armyFirst = false;
-    pass();
-    expect(ctx.openingCivFood).toBeGreaterThan(0);
     ai.dispose();
   });
 

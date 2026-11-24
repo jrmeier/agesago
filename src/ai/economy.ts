@@ -104,12 +104,13 @@ export class Economy {
   }
 
   private civFoodReserve(s: Snapshot, tech: TechId | null): number {
-    const { world, player } = this.c;
+    const { world, player, profile } = this.c;
     // The general army-first policy stays active for two minutes after a raid.
     // The opening research window can use a quiet stretch without borrowing from an active defence.
-    const armyFirst = this.c.profile.research?.deferCivFoodWhenArmyFirst && this.c.armyFirst;
+    const armyNeedsFood = profile.research?.deferOpeningCivFoodForArmy
+      && (this.c.armyFirst || s.army.length < profile.firstWave);
     if (!tech || this.c.defenceHold > 0 || this.c.sheltered.size > 0
-      || this.c.outgunned || armyFirst || world.time - this.lastAttacked < CIV_FOOD_CALM) {
+      || this.c.outgunned || armyNeedsFood || world.time - this.lastAttacked < CIV_FOOD_CALM) {
       this.pauseCivFoodHold(world.time);
       return 0;
     }
