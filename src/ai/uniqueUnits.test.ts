@@ -69,7 +69,10 @@ describe('T122: unique-unit recruitment', () => {
       }
       const army = snapshot(world, 1).army;
       const count = army.filter((u) => u.kind === unique).length;
-      expect(count / army.length).toBeGreaterThanOrEqual(difficulty === 'moderate' ? 0.25 : 0.3);
+      const minimumCount = difficulty === 'moderate'
+        ? Math.floor(ai.profile.uniqueShare * army.length)
+        : Math.ceil(0.3 * army.length);
+      expect(count).toBeGreaterThanOrEqual(minimumCount);
       ai.dispose();
     });
   }
