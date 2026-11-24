@@ -80,6 +80,8 @@ export class AIPlayer {
       saving: null,
       villagerHold: 0,
       defenceHold: 0,
+      openingCivFood: 0,
+      outgunned: false,
       armyFirst: false,
       aging: false,
       pauseVillagers: false,
@@ -111,7 +113,7 @@ export class AIPlayer {
       world.events.on('attacked', (e) => {
         if (e.owner === player) {
           this.military.onAttacked(e.pos);
-          this.research.onAttacked(e.pos);
+          if (this.research.onAttacked(e.pos)) this.economy.onAttacked();
           this.upkeep.onAttacked();
         }
       }),

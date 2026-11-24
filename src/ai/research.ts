@@ -181,17 +181,18 @@ export class Research {
     for (let a = 1; a <= ageOf(c.world, c.player); a++) this.agedAt[a] = c.world.time;
   }
 
-  /** One of ours was hit at `pos`: a raid if an enemy soldier is in sight there (not a wolf, a boar or a lone scout). */
-  onAttacked(pos: Vec2): void {
+  /** Confirm a visible enemy raid when one of our units or buildings takes damage. */
+  onAttacked(pos: Vec2): boolean {
     const { world, player, intel } = this.c;
-    if (world.time - this.lastHit < 5) return;
+    if (world.time - this.lastHit < 5) return true;
     let scouts = 0;
     for (const u of world.units.values()) {
       if (isAnimal(u.kind) || u.kind === 'villager' || !world.areEnemies(player, u.owner) || dist(u.pos, pos) > 12 || !intel.sees(u.pos.x, u.pos.z)) continue;
       if (u.kind === 'scout' && ++scouts < 2) continue;
       this.lastHit = world.time;
-      return;
+      return true;
     }
+    return false;
   }
 
   onAgedUp(age: Age): void {
@@ -206,7 +207,8 @@ export class Research {
     // (M16-10): a 150-strong army used to spend the City Age's gold on more soldiers for every
     // raid, never aged, and so never attacked (saving for an age holds waves).
     const enemy = this.c.intel.enemyArmy();
-    this.c.armyFirst = (f.raided && f.army < enemy * 1.25 + 10) || enemy > f.army * 1.3 + 5;
+    this.c.outgunned = enemy > f.army * 1.3 + 5;
+    this.c.armyFirst = (f.raided && f.army < enemy * 1.25 + 10) || this.c.outgunned;
     this.ageUp(s, f, p);
     this.c.saving = null;
     this.buildings(s, f, p);
@@ -355,7 +357,24 @@ export class Research {
       if (r === false) this.c.saving = { kind: 'siegeWorkshop', cost: { ...BUILDINGS.siegeWorkshop.cost } };
       if (r !== null) return;
     }
-    // Town Age: an archery range early when gold piles up (archers spend it), before the forge.
+    // T123: the civilization tech needs a forge as Town Age opens. Put it before optional
+    // towers/ranges and hold its wood, as for the workshop; otherwise those buildings and
+    // army training spend the stock on every pass. Essential economy buildings still go up.
+    if (f.age >= 1 && p.weights.civ > 0 && production > 0 && !has('forge')) {
+      // ageUp() may have just laid it using the same snapshot. One forge is enough.
+      if ([...this.c.world.buildings.values()].some((b) => b.owner === this.c.player && b.kind === 'forge')) return;
+      const r = this.place(s, 'forge');
+      if (r === false) this.c.saving = { kind: 'forge', cost: { ...BUILDINGS.forge.cost } };
+      if (r !== null) return;
+    }
+    // After funding the forge, a food-poor town can put spare gold to work at the market.
+    if (!has('market') && this.openingFoodTrade(s)) {
+      this.c.saving = { kind: 'market', cost: { ...BUILDINGS.market.cost } };
+      const placed = this.place(s, 'market');
+      if (placed !== false) this.c.saving = null;
+      if (placed !== null) return;
+    }
+    // Town Age: an archery range early when gold piles up (archers spend it).
     if (f.age >= 1 && !has('archeryRange') && stock.gold > 300 && production < this.c.profile.maxProduction) {
       if (this.place(s, 'archeryRange') !== null) return;
     }
@@ -406,6 +425,7 @@ export class Research {
     if (booming) reserve.food = (reserve.food ?? 0) + 50 + p.villagerReserve;
     const villagerFood: Partial<Stockpile> = booming ? { food: 50 + p.villagerReserve } : {};
     const tcBusy = booming && (world.time < this.tcFreeAt || this.nearAge(f, p));
+    const openingCiv = this.c.openingCivFood ? this.econ.openingCivTech(s) : null;
     // Idle research buildings by kind (one tech at a time each, so training never waits long).
     const idle = new Map<BuildingKind, Building>();
     for (const b of s.buildings) {
@@ -417,13 +437,15 @@ export class Research {
       const w = p.weights[r.group];
       if (w <= 0) continue;
       const spec = TECHS[r.tech];
+      if (openingCiv && spec.at === 'forge' && r.tech !== openingCiv) continue;
       const at = idle.get(spec.at);
       if (!at || (spec.at === 'townCenter' && tcBusy)) continue;
       const score = (r.base + (r.bonus?.(f) ?? 0)) * w;
       if ((best && score <= best.score) || !r.when(f)) continue;
       if (researchBlock(world, player, r.tech, true) !== null) continue;
+      const civVillagerFood = r.tech === openingCiv && booming ? { food: UNITS.villager.cost.food } : villagerFood;
       // The tech villagers are paused for doesn't also keep the villager reserve.
-      if (!canAfford(stock, spec.cost, r.fromReserve ? villagerFood : this.hold?.tech === r.tech ? this.c.reserve : reserve)) {
+      if (!canAfford(stock, spec.cost, r.fromReserve ? civVillagerFood : this.hold?.tech === r.tech ? this.c.reserve : reserve)) {
         if (!want || score > want.score) want = { tech: r.tech, score, group: r.group, urgent: !!r.urgent?.(f) };
         continue;
       }
@@ -468,6 +490,19 @@ export class Research {
 
   // ---- Market ----
 
+  private openingFoodTrade(s: Snapshot): { foodTarget: number; goldFloor: number } | null {
+    const { world, player } = this.c;
+    const tech = this.econ.openingCivTech(s);
+    if (!tech || this.c.outgunned || this.c.defenceHold || this.c.sheltered.size || world.time - this.lastHit < 30) return null;
+    const stock = world.stockOf(player);
+    const cost = TECHS[tech].cost;
+    const foodTarget = (cost.food ?? 0) + (UNITS.villager.cost.food ?? 0);
+    const goldFloor = cost.gold ?? 0;
+    const price = buyCost(world.players.get(player)!.prices.food);
+    return stock.food < foodTarget && price <= 250 && stock.gold - price >= goldFloor
+      ? { foodTarget, goldFloor } : null;
+  }
+
   /**
    * With a finished market: when a resource is over the profile's excess while another needed
    * one (for the age-up being saved for, the tech it wants, or simply running dry) is short,
@@ -479,6 +514,13 @@ export class Research {
     const prices = world.players.get(player)?.prices;
     if (!prices) return;
     const stock = world.stockOf(player);
+    const opening = this.openingFoodTrade(s);
+    if (opening) {
+      for (let i = 0; i < TRADES_PER_PASS && stock.food < opening.foodTarget; i++) {
+        if (!this.trade('food', 'buy', prices, opening.goldFloor)) break;
+      }
+      return;
+    }
     const need: Record<ResourceType, number> = { food: 200, wood: 200, gold: 100, stone: 0 };
     // What the age-up, a new Town Center or a building being saved for still needs counts too.
     const held = heldBack(this.c);
@@ -513,15 +555,14 @@ export class Research {
     }
   }
 
-  private trade(resource: MarketResource, side: 'buy' | 'sell', prices: Record<MarketResource, number>): boolean {
+  private trade(resource: MarketResource, side: 'buy' | 'sell', prices: Record<MarketResource, number>, goldFloor = heldBack(this.c).gold ?? 0): boolean {
     const { world, player } = this.c;
     const stock = world.stockOf(player);
     // Don't dump at a crashed price or buy at a gouged one.
     if (side === 'sell' && (sellGain(prices[resource]) < 30 || stock[resource] < LOT)) return false;
     // Never buy with the gold the age-up is saving (M16-10): before, the AI sold wood for gold and
     // spent that gold, and the age's own, on the age's food, and the age never came.
-    const keep = heldBack(this.c).gold ?? 0;
-    if (side === 'buy' && (buyCost(prices[resource]) > 250 || stock.gold - buyCost(prices[resource]) < keep)) return false;
+    if (side === 'buy' && (buyCost(prices[resource]) > 250 || stock.gold - buyCost(prices[resource]) < goldFloor)) return false;
     const before = stock[resource];
     this.c.issue({ type: 'marketTrade', resource, side });
     if (stock[resource] === before) return false;

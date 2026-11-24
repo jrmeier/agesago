@@ -1,5 +1,8 @@
 import { BUILDINGS, MAX_POP, TERRITORY } from '../core/buildings';
 import { MAP_SIZES } from '../core/maps';
+import { CIVS } from '../core/civilizations';
+import { TECHS, type TechId } from '../core/techs';
+import { UNITS } from '../core/units';
 import type { Building, BuildingKind, EntityId, ResourceNode, ResourceType, Unit, UnitState, Vec2 } from '../core/types';
 import { heldBack, canAfford, dist, dropsFor, nearestSiteDist, type Ctx, type Snapshot } from './context';
 import { findSpot, type SpotQuery } from './placement';
@@ -31,6 +34,9 @@ const WOOD_SITE_CAP = 2000;
 const ESSENTIAL: ReadonlySet<BuildingKind> = new Set(['house', 'farm', 'storehouse', 'granary', 'miningCamp', 'townCenter']);
 /** Seconds a spot whose build order was rejected stays off the search. */
 const REJECTED_FOR = 120;
+/** One short opening-game pause to fund the civilization tech once its forge stands. */
+const CIV_FOOD_HOLD = 60;
+const CIV_FOOD_CALM = 30;
 export const PRODUCTION: BuildingKind[] = ['barracks', 'archeryRange', 'stable'];
 
 type Source = { id: EntityId; pos: Vec2 };
@@ -62,10 +68,70 @@ export class Economy {
   private load = new Map<EntityId, number>();
   private shortlists = new Map<ResourceType, { n: ResourceNode; d: number }[]>();
 
-  constructor(private readonly c: Ctx) {}
+  private civFoodHoldRemaining: number;
+  private civFoodHoldStarted: number | null = null;
+  private lastAttacked = -Infinity;
+
+  constructor(private readonly c: Ctx) {
+    // Reattaching an AI (including loading a save) must not grant another opening pause.
+    this.civFoodHoldRemaining = c.world.time > 0 ? 0 : CIV_FOOD_HOLD;
+  }
+
+  /** Attacks cancel the one-off food hold immediately; defence keeps its existing priority. */
+  onAttacked(): void {
+    this.lastAttacked = this.c.world.time;
+    this.pauseCivFoodHold(this.lastAttacked);
+    this.c.openingCivFood = 0;
+  }
+
+  private pauseCivFoodHold(now: number): void {
+    if (this.civFoodHoldStarted === null) return;
+    this.civFoodHoldRemaining = Math.max(0, this.civFoodHoldRemaining - (now - this.civFoodHoldStarted));
+    this.civFoodHoldStarted = null;
+  }
+
+  /** Resources needed for the opening civilization technology while the town is stable. */
+  openingCivTech(s: Snapshot): TechId | null {
+    const { world, player, profile } = this.c;
+    const p = profile.research;
+    const state = world.players.get(player)!;
+    const civ = state.player.civ;
+    if (!p || p.weights.civ <= 0 || !civ || state.age !== 1 || !s.count.forge) return null;
+    // The existing Town Age villager threshold protects the minimum opening economy.
+    if (s.villagers.length < p.townAgeAt) return null;
+    const tech = CIVS[civ].tech;
+    return state.researched.has(tech) || s.buildings.some((b) => b.research?.includes(tech)) ? null : tech;
+  }
+
+  private civFoodReserve(s: Snapshot, tech: TechId | null): number {
+    const { world, player } = this.c;
+    // The general army-first policy stays active for two minutes after a raid.
+    // The opening research window can use a quiet stretch without borrowing from an active defence.
+    if (!tech || this.c.defenceHold > 0 || this.c.sheltered.size > 0
+      || this.c.outgunned || world.time - this.lastAttacked < CIV_FOOD_CALM) {
+      this.pauseCivFoodHold(world.time);
+      return 0;
+    }
+    // Begin saving during construction. Starting only after completion leaves the
+    // full price to raise at the point the next enemy wave can interrupt.
+    const stock = world.stockOf(player);
+    const cost = TECHS[tech].cost;
+    const waitingForForge = !s.buildings.some((b) => b.kind === 'forge' && !b.research?.length && !b.upgrading);
+    const missingOtherMaterials = Object.entries(cost).some(([r, n]) => r !== 'food' && stock[r as ResourceType] < n);
+    if (waitingForForge || missingOtherMaterials) {
+      this.pauseCivFoodHold(world.time);
+      return 0;
+    }
+    this.civFoodHoldStarted ??= world.time;
+    if (world.time - this.civFoodHoldStarted >= this.civFoodHoldRemaining) {
+      this.pauseCivFoodHold(world.time);
+      return 0;
+    }
+    return (cost.food ?? 0) + (UNITS.villager.cost.food ?? 0);
+  }
 
   /** Target share of workers per resource right now. */
-  ratios(s: Snapshot): Record<ResourceType, number> {
+  ratios(s: Snapshot, civTech: TechId | null): Record<ResourceType, number> {
     const production = PRODUCTION.reduce((n, k) => n + (s.count[k] ?? 0), 0);
     let r: Record<ResourceType, number>;
     if (!production && s.villagers.length < this.c.profile.barracksAt) r = { food: 0.6, wood: 0.4, gold: 0, stone: 0 };
@@ -74,11 +140,20 @@ export class Economy {
     const stock = this.c.world.stockOf(this.c.player);
     // Everything being saved for (the age-up, a new Town Center, a building) steers the split.
     const reserve = heldBack(this.c);
+    const preparingForge = !s.count.forge && this.c.profile.research?.weights.civ
+      && (this.c.saving?.kind === 'forge' || s.tc?.research?.includes('townAge'));
+    const forgeWood = preparingForge ? BUILDINGS.forge.cost.wood ?? 0 : 0;
     let sum = 0;
     for (const t of TYPES) {
       // Saving up (an age-up): lean toward what is still missing.
       const missing = (reserve[t] ?? 0) - stock[t];
       if (missing > 0) r[t] = Math.max(r[t], 0.1) * (1 + Math.min(0.6, missing / 1000));
+      // Forge technologies need less stock than an age-up and compete with continuous
+      // food spending. Staff their missing resources once the forge foundation is funded.
+      const civCost = civTech ? TECHS[civTech].cost[t] ?? 0 : 0;
+      const civTarget = civCost && t === 'food' ? civCost + 50 + (this.c.profile.research?.villagerReserve ?? 0) : civCost;
+      const civMissing = Math.max(civTarget, t === 'wood' ? forgeWood : 0) - stock[t];
+      if (civMissing > 0) r[t] = Math.max(r[t], 0.1) * (1 + Math.min(0.8, civMissing / 250));
       // Stockpiling more than it spends: move workers elsewhere.
       const plenty = (t === 'food' || t === 'wood' ? 400 : 300) + (reserve[t] ?? 0);
       if (stock[t] > plenty) r[t] *= plenty / stock[t];
@@ -94,6 +169,9 @@ export class Economy {
   econPass(s: Snapshot): void {
     const { world, player, profile } = this.c;
     const stock = world.stockOf(player);
+    const civTech = this.openingCivTech(s);
+    this.c.openingCivFood = this.civFoodReserve(s, civTech);
+    const foodHold = Math.max(this.c.villagerHold, this.c.openingCivFood);
     // Every finished Town Center trains villagers (a second one doubles the boom, M18-5), except
     // while it upgrades or is held free for an upgrade (M14-6).
     let queued = 0;
@@ -104,7 +182,7 @@ export class Economy {
         tc.queue < profile.tcQueue &&
         s.villagers.length + queued < profile.targetVillagers &&
         s.popUsed < s.popCap &&
-        stock.food - this.c.villagerHold - this.c.defenceHold - (this.c.pauseVillagers ? this.c.reserve.food ?? 0 : 0) >= 50
+        stock.food - foodHold - this.c.defenceHold - (this.c.pauseVillagers ? this.c.reserve.food ?? 0 : 0) >= 50
       ) {
         const before = tc.queue;
         this.c.issue({ type: 'train', buildingId: tc.id, unit: 'villager' });
@@ -128,7 +206,7 @@ export class Economy {
       } else if (v.state === 'idle') idle.push(v);
     }
     const workers = idle.length + TYPES.reduce((n, t) => n + counts[t], 0);
-    const ratio = this.ratios(s);
+    const ratio = this.ratios(s, civTech);
     const want = (t: ResourceType) => ratio[t] * workers - counts[t];
     this.foodShort = 0;
 
@@ -494,7 +572,11 @@ export class Economy {
   private place(s: Snapshot, q: SpotQuery, n: number, near?: Vec2): boolean | null {
     const { world, player, intel } = this.c;
     if (ageLocked(world, q.kind, player)) return null;
-    const reserve = ESSENTIAL.has(q.kind) ? this.c.reserve : heldBack(this.c, q.kind);
+    // Fund the first civilization-tech forge before a second Town Center. Hard reaches
+    // its expansion threshold as Town Age opens; holding both costs delays the forge.
+    const firstForge = q.kind === 'forge' && (this.c.profile.research?.weights.civ ?? 0) > 0 && !s.count.forge;
+    const openingMarket = q.kind === 'market' && this.c.saving?.kind === 'market';
+    const reserve = ESSENTIAL.has(q.kind) || firstForge || openingMarket ? this.c.reserve : heldBack(this.c, q.kind);
     if (!canAfford(world.stockOf(player), BUILDINGS[q.kind].cost, reserve)) return false;
     const builders = this.builders(s, near ?? q.center, n, q.kind === 'farm');
     if (!builders.length) return null;
