@@ -398,10 +398,18 @@ export class Economy {
     // door never outbids fresh gold. Only when no such site qualifies do other mines and every 8th
     // tree seed one.
     for (const goldOnly of [true, false]) {
-      const site = this.bestSite(s, all, goldOnly ? (n) => n.type === 'gold' && n.amount >= GOLD_SITE : (n) => n.type !== 'food' && (n.type !== 'wood' || n.id % 8 === 0));
+      const site = this.bestSite(s, all, goldOnly ? (n) => n.type === 'gold' && n.amount >= GOLD_SITE : (n) => n.type !== 'food' && (n.type !== 'wood' || this.treeSite(n.pos)));
       if (site) return site;
     }
     return null;
+  }
+
+  /** Sample one eighth of tree positions in the home-relative frame, independent of ids. */
+  private treeSite(p: Vec2): boolean {
+    let x = p.x - this.c.home.x, z = p.z - this.c.home.z;
+    for (let t = 0; t < this.c.turns; t++) [x, z] = [z, -x];
+    // Quarter-unit quantization is stable under the exact half-turn used by mapgen.
+    return (Math.round(x * 4) + 31 * Math.round(z * 4)) % 8 === 0;
   }
 
   private bestSite(s: Snapshot, all: ResourceNode[], seeds: (n: ResourceNode) => boolean): Vec2 | null {
@@ -493,7 +501,7 @@ export class Economy {
     // A rejected spot (territory changed hands, the site got blocked) is remembered and the
     // search moves on to the next one, so one bad spot never stalls construction (M18-5).
     for (let attempt = 0; attempt < 3; attempt++) {
-      const pos = findSpot(world, intel, player, { ...q, region: this.c.region, avoid: this.badSpots() });
+      const pos = findSpot(world, intel, player, { ...q, turns: this.c.turns, region: this.c.region, avoid: this.badSpots() });
       if (!pos) return null;
       const before = world.buildings.size;
       this.c.issue({ type: 'build', unitIds: builders.map((u) => u.id), kind: q.kind, pos, rot: 0 });
@@ -586,12 +594,16 @@ export class Economy {
     const vis = world.visibilityOf(player);
     const region = world.nav.regionAt(u.pos);
     const step = 8;
+    const reverse = this.c.home.x > world.hf.width / 2
+      || (this.c.home.x === world.hf.width / 2 && this.c.home.z > world.hf.depth / 2);
     let best: Vec2 | null = null;
     let bestScore = Infinity;
-    for (let z = step / 2; z < world.hf.depth; z += step) {
-      for (let x = step / 2; x < world.hf.width; x += step) {
-        if (vis.isExplored(x, z)) continue;
-        const p = { x, z };
+    // Sample inside fog/nav cells, not on their edges: floor(x) and floor(W-x)
+    // select different sides of an integer boundary. Reverse scan order with the town.
+    for (let z = step / 2 + 0.25; z < world.hf.depth; z += step) {
+      for (let x = step / 2 + 0.25; x < world.hf.width; x += step) {
+        const p = reverse ? { x: world.hf.width - x, z: world.hf.depth - z } : { x, z };
+        if (vis.isExplored(p.x, p.z)) continue;
         if (world.nav.regionOfCell(p) !== region) continue;
         let taken = false;
         for (const [id, t] of this.scoutTargets) if (id !== u.id && dist(t, p) < 20) taken = true;

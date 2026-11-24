@@ -51,6 +51,8 @@ Then open http://localhost:5173
 | **Build** / **Train** / **Orders** | Open the selected unit or building's actions; **Close** returns to the map |
 | Villager views | Drag anywhere on the scene to look / orbit; tap the labeled view button to cycle |
 
+Two-player default maps (Large Mediterranean) mirror the western land and resources with a half-turn about the map centre.
+
 New game lets you choose civilization, map size and landscape, seed, rival count and difficulty, teams, starting resources, and wonder victory with its timer.
 
 ## Exploration and naval play
@@ -94,7 +96,7 @@ Repository pushes and manual runs use forge (six test workers); `main` pushes an
 run the full browser suite there without sharding. Deployment from `main` to https://agesago.jedm.dev
 requires the build, smoke gate and full suite to pass. The test-step targets are under three minutes
 for smoke and under ten minutes for each full-suite shard (or the single forge run).
-Online play checks a multiplayer protocol version (`NETWORK_VERSION` in `src/network/protocol.ts`, currently 19); deploy the web client and relay together.
+Online play checks a multiplayer protocol version (`NETWORK_VERSION` in `src/network/protocol.ts`, currently 20); deploy the web client and relay together.
 
 ## Building and resource work
 

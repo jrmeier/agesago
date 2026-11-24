@@ -102,3 +102,35 @@ test('the tech tree opens from its button and hotkey, pauses, and closes', async
 
   expect(errors).toEqual([]);
 });
+
+test('Roman Engineering tooltip and tree fit at 360 px', async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
+  const phone = testInfo.project.name === 'phone';
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.goto('/?e2e&title');
+  await page.waitForFunction(() => document.getElementById('title-screen')?.dataset.resume != null);
+  await activate(page, '#title-new', phone);
+  await page.locator('#title-civ').selectOption('romans');
+  await activate(page, '#title-start', phone);
+  await page.waitForFunction(() => document.documentElement.dataset.civ === 'romans');
+  if (phone) await activate(page, '#pause-match', true);
+  await activate(page, '#tech-tree-btn', phone);
+  const card = page.locator('#tech-tree-body [data-id="romanEngineering"]');
+  await expect(card).toContainText('Roman Engineering');
+  await card.scrollIntoViewIfNeeded();
+  const fits = await card.evaluate(el => el.scrollWidth <= el.clientWidth + 1);
+  expect(fits).toBe(true);
+  await activate(page, '#tech-tree-close', phone);
+  if (phone) await activate(page, '#pause-resume', true);
+  await page.evaluate(() => {
+    const w = window as any;
+    w.game.paused = true;
+    w.game.world.players.get(1).age = 1;
+    w.dev.give({ food: 2000, wood: 2000, gold: 2000 });
+    w.game.selection.set([w.dev.placeComplete('forge')]);
+  });
+  if (phone) await page.locator('#menu-tabs [data-menu="train"]').tap();
+  const research = page.locator('#train-grid [data-research="romanEngineering"]');
+  await expect(research).toHaveAttribute('title', /Buildings construct 30% faster; farmers gather 15% faster\./);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+});

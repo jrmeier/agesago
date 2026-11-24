@@ -19,6 +19,13 @@ export interface SpotQuery {
   region?: number;
   /** Stop after this many full canPlace checks. */
   maxChecks?: number;
+  /**
+   * Quarter-turns (0–3, counter-clockwise from +x in the x–z plane) by which every ring's scan is
+   * turned. Candidates of equal score are taken in scan order, so the scan's start decides which
+   * side of `center` fills first: the AI passes the side facing the map centre (T119), so that
+   * every seat lays out its town the same way relative to the map. Default 0: from +x.
+   */
+  turns?: number;
   /** Spots to keep clear of (recent rejections): no candidate within 2 of one. */
   avoid?: readonly Vec2[];
 }
@@ -48,16 +55,21 @@ export function findSpot(world: World, intel: Intel, player: PlayerId, q: SpotQu
   }
   const cands: { p: Vec2; s: number }[] = [];
   const seen = new Set<number>();
+  const turns = (q.turns ?? 0) & 3;
   for (let r = q.minR; r <= q.maxR; r += 1) {
     const n = Math.max(8, Math.round((2 * Math.PI * r) / 1.4));
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
-      const p = { x: Math.round((q.center.x + Math.cos(a) * r) * 2) / 2, z: Math.round((q.center.z + Math.sin(a) * r) * 2) / 2 };
+      // Unit vector of the candidate's direction, turned by exact quarter-turns (no trigonometry,
+      // so a half-turned search visits exactly the images of the unturned one's candidates).
+      let ux = Math.cos(a), uz = Math.sin(a);
+      for (let t = 0; t < turns; t++) [ux, uz] = [-uz, ux];
+      const p = { x: Math.round((q.center.x + ux * r) * 2) / 2, z: Math.round((q.center.z + uz * r) * 2) / 2 };
       const key = p.x * 1000 + p.z;
       if (seen.has(key)) continue;
       seen.add(key);
       let s = r;
-      if (q.toward && q.bias) s += q.bias * (1 - (Math.cos(a) * q.toward.x + Math.sin(a) * q.toward.z)) * 0.5;
+      if (q.toward && q.bias) s += q.bias * (1 - (ux * q.toward.x + uz * q.toward.z)) * 0.5;
       cands.push({ p, s });
     }
   }

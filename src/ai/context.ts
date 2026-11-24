@@ -42,6 +42,11 @@ export interface Ctx {
   saving: { kind: BuildingKind; cost: Partial<Stockpile> } | null;
   /** Resources held for the next tech: army training leaves this much (villagers don't). */
   techReserve: Partial<Stockpile>;
+  /**
+   * Quarter-turns from +x to the direction of the map centre seen from `home` (0 for a west
+   * start, 2 for an east one): building searches scan from that side (SpotQuery.turns, T119).
+   */
+  turns: number;
   /** Food villager training leaves for an economy tech (a short, bounded pause). */
   villagerHold: number;
   /** Food villager training leaves for the first reinforcement during a raid. */

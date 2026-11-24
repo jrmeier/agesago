@@ -27,15 +27,18 @@ describe('default map seats (M16-11)', () => {
       // Still opposite each other across the middle of the map.
       expect((seat1.x + seat2.x) / 2).toBeCloseTo(MAP_W / 2, 0);
       expect((seat1.z + seat2.z) / 2).toBeCloseTo(MAP_D / 2, 0);
-      // The villagers and the scout follow their Town Center.
-      expect(layout.villagers[1]).toEqual({ x: seat1.x, z: seat1.z + 3.8 });
-      expect(layout.extraStarts![0].scouts[0]).toEqual({ x: seat2.x - 4.2, z: seat2.z + 1.2 });
+      // The villagers and the scout follow their Town Center; the east start is the west one
+      // turned half round (T119), so its units stand on the opposite side.
+      const turned = (start: { x: number }) => (start === east ? -1 : 1);
+      expect(layout.villagers[1]).toEqual({ x: seat1.x, z: seat1.z + 3.8 * turned(seat1) });
+      expect(layout.extraStarts![0].scouts[0]).toEqual({ x: seat2.x - 4.2 * turned(seat2), z: seat2.z + 1.2 * turned(seat2) });
     }
   }, 30_000);
 
   it('turning the seats leaves the land as it was, so older saves regenerate the same scenery', () => {
     // Sums taken on main before the change (3ac53fc..7157fcc): resource nodes and scenery of seeds
-    // whose seats now turn, for two, three and four players.
+    // whose seats now turn, for two, three and four players. Two-player saves from then are on
+    // land 1 (T119 mirrored the two-player land; see mapgenMirror.test.ts).
     const sum = (list: { pos: { x: number; z: number } }[]) => list.reduce((a, n) => a + Math.round(n.pos.x * 100) * 7 + Math.round(n.pos.z * 100) * 13, 0);
     const before = [
       { seed: 2, players: 2, nodes: 3469, nodeSum: 564128767, amount: 363200, props: 731, propSum: 123786601 },
@@ -44,7 +47,7 @@ describe('default map seats (M16-11)', () => {
       { seed: 2, players: 4, nodes: 3332, nodeSum: 538153045, amount: 357650, props: 691, propSum: 111789890 },
     ];
     for (const b of before) {
-      const { layout } = generateMap(b.seed, b.players);
+      const { layout } = generateMap(b.seed, b.players, {}, 1);
       expect({
         seed: b.seed, players: b.players, nodes: layout.nodes.length, nodeSum: sum(layout.nodes),
         amount: layout.nodes.reduce((a, n) => a + n.amount, 0), props: layout.props.length, propSum: sum(layout.props),

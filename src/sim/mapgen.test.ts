@@ -262,7 +262,8 @@ describe('generateMap', () => {
     const units = [layout, ...layout.extraStarts!].flatMap((start) => [...start.villagers, ...start.scouts]);
     expect([...units, ...layout.nodes.filter((node) => node.kind !== 'fish').map((node) => node.pos)].filter((pos) => !reachable(pos))).toEqual([]);
     const quarries = layout.nodes.filter((node) => node.kind === 'stone');
-    expect(quarries).toHaveLength(10 + players * 2);
+    // Two players: the west half's six neutral quarries and their images (T119); otherwise ten.
+    expect(quarries).toHaveLength((players === 2 ? 12 : 10) + players * 2);
     const blockedApproaches = layout.nodes.filter((node) => node.kind !== 'fish').filter((node) => {
       const radius = node.kind === 'stone' || node.kind === 'gold' ? 1.3 : 1.1;
       const approaches = Array.from({ length: 8 }, (_, a) => {
@@ -298,12 +299,19 @@ describe('generateMap', () => {
       for (const ford of f.river.fords) expect(Math.abs(node.pos.x - ford.x) >= 10.5 || Math.abs(node.pos.z - ford.z) >= 4.5).toBe(true);
       expect(Math.abs(node.pos.x - f.tributary.ford.x) >= 4.5 || Math.abs(node.pos.z - f.tributary.ford.z) >= 10.5).toBe(true);
     }
-    for (const ford of f.river.fords) {
+    // The main river and its two fords are in the east half, which mirrored two-player land replaces.
+    if (players !== 2) for (const ford of f.river.fords) {
       expect(reachable({ x: ford.x - 8, z: ford.z })).toBe(true);
       expect(reachable({ x: ford.x + 8, z: ford.z })).toBe(true);
     }
     expect(reachable({ x: f.tributary.ford.x, z: f.tributary.ford.z - 8 })).toBe(true);
     expect(reachable({ x: f.tributary.ford.x, z: f.tributary.ford.z + 8 })).toBe(true);
+    if (players === 2) {
+      // The tributary and its ford appear twice: in the west, and turned half round in the east.
+      expect(hf.isWater(f.tributary.ford.x - 20, f.tributary.points[5].z)).toBe(hf.isWater(hf.width - f.tributary.ford.x + 20, hf.depth - f.tributary.points[5].z));
+      expect(reachable({ x: hf.width - f.tributary.ford.x, z: hf.depth - f.tributary.ford.z - 8 })).toBe(true);
+      expect(reachable({ x: hf.width - f.tributary.ford.x, z: hf.depth - f.tributary.ford.z + 8 })).toBe(true);
+    }
   });
 
   it.each(cases)('retains exploration landmarks and spaced resources on dry ground for %i players, seed %i', (players, seed) => {
@@ -313,9 +321,10 @@ describe('generateMap', () => {
     expect(layout.nodes.filter((node) => node.kind === 'tree').length).toBeGreaterThanOrEqual(3000);
     expect(layout.nodes.filter((node) => node.kind === 'tree').length).toBeLessThanOrEqual(4500);
     expect(neutral.filter((node) => node.kind === 'berry')).toHaveLength(42);
-    expect(neutral.filter((node) => node.kind === 'gold' && node.amount === 400)).toHaveLength(12);
+    // Two players (T119): seven neutral mines and six quarries in the west half, and their images.
+    expect(neutral.filter((node) => node.kind === 'gold' && node.amount === 400)).toHaveLength(players === 2 ? 14 : 12);
     expect(neutral.filter((node) => node.kind === 'gold' && node.amount === EXPANSION_GOLD.amount)).toHaveLength(players * 2 * EXPANSION_GOLD.mines);
-    expect(neutral.filter((node) => node.kind === 'stone')).toHaveLength(10);
+    expect(neutral.filter((node) => node.kind === 'stone')).toHaveLength(players === 2 ? 12 : 10);
     expect(layout.props.length).toBeGreaterThanOrEqual(500);
     expect(layout.props.length).toBeLessThanOrEqual(1100);
     expect(layout.props.filter((p) => p.kind === 'ruinColumn' || p.kind === 'ruinWall').length).toBeGreaterThanOrEqual(20);
@@ -379,7 +388,7 @@ describe('generateMap', () => {
     const { hf, layout } = generateMap(seed);
     const reachable = floodFill(hf, layout);
     expect(layout.extraStarts).toHaveLength(1);
-    expect(layout.nodes.filter((node) => node.kind === 'stone')).toHaveLength(14);
+    expect(layout.nodes.filter((node) => node.kind === 'stone')).toHaveLength(16);
     expect(layout.nodes.filter((node) => node.kind !== 'fish' && !reachable(node.pos))).toEqual([]);
     expect([layout, ...layout.extraStarts!].flatMap((start) => [...start.villagers, ...start.scouts])
       .filter((pos) => !reachable(pos))).toEqual([]);

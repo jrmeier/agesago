@@ -1,4 +1,6 @@
 /**
+ * 17: T119 mirrored two-player land (SaveData.land, core/maps LAND_VERSION). Older saves were made on
+ *    land 1 and regenerate it.
  * 16: M7-4 AI difficulty on players. Older saves load AI as moderate, retaining saved teams.
  * 15: M16-6 heroes: per-player retrain cooldown (PlayerState.heroReadyAt). Older saves load ready (0).
  * 14: M18-4 building capture (Building.capture points per player, CombatState.capture). Older
@@ -19,7 +21,7 @@
  * 3: M14-1 in-place building upgrades (Building.tier, Building.upgrading).
  * 2: M8 research (researched techs, ages, market prices, building research queues).
  */
-export const SAVE_VERSION = 16;
+export const SAVE_VERSION = 17;
 /** Oldest version that still loads; v2 buildings load at tier 0 with no upgrade running, v2–9 units out of formation. */
 export const MIN_SAVE_VERSION = 2;
 

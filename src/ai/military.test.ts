@@ -38,7 +38,10 @@ function arena(): World {
  */
 function raidOutcome(seed: number, me: PlayerId, side: 'centre' | 'edge', exactAngle?: number) {
   const foe = (3 - me) as PlayerId;
-  const world = makeGame(seed, me === 1 ? ['ai', 'human'] : ['human', 'ai']);
+  // The exact-angle reproduction belongs to the original landscape. The general
+  // centre and edge checks below still use the current default map.
+  const world = makeGame(seed, me === 1 ? ['ai', 'human'] : ['human', 'ai'], {},
+    exactAngle === undefined ? undefined : 1);
   const ai = new AIPlayer(world, me, { difficulty: 'moderate', seed });
   run(world, [ai], 4 * 60);
   const tc = world.townCenterOf(me)!;

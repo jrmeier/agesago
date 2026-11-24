@@ -200,8 +200,15 @@ function lineField(points: Vec2[], reach: number, columns: number, rows: number,
   return { distance, along };
 }
 
-/** Half-unit terrain and cached surface blends; render queries need only bilinear reads. */
-export function generateTerrain(seed: number, width = MAP_W, depth = MAP_D, startPads?: readonly Vec2[]): Heightfield {
+/** Half-width of the band along the north–south centre line where mirrored land blends its two halves (world units). */
+export const MIRROR_BLEND = 10;
+
+/**
+ * Half-unit terrain and cached surface blends; render queries need only bilinear reads.
+ * `mirrored` (two-player default map, T119): the west half is turned half round the map centre
+ * onto the east half, so the land is the same seen from either start.
+ */
+export function generateTerrain(seed: number, width = MAP_W, depth = MAP_D, startPads?: readonly Vec2[], mirrored = false): Heightfield {
   const features = terrainFeatures(seed, width, depth);
   const pads = startPads ?? [features.townCenter];
   const scale = Math.min(width / MAP_W, depth / MAP_D);
@@ -223,7 +230,9 @@ export function generateTerrain(seed: number, width = MAP_W, depth = MAP_D, star
     for (let i = 0; i < count; i++) roadDistance[i] = Math.min(roadDistance[i], field.distance[i]);
   }
   const lakes = [features.lake, ...features.ponds];
-  const clearings = [features.hamlet, features.abandonedHamlet, features.stoneCircle, ...features.ridges.map((r) => r.center)];
+  // Mirrored land keeps the west half: its hamlet stands at the reflection of the usual (eastern) one.
+  const clearings = [mirrored ? { x: width - features.hamlet.x, z: features.hamlet.z } : features.hamlet,
+    features.abandonedHamlet, features.stoneCircle, ...features.ridges.map((r) => r.center)];
   const belts = [
     { x: width * 0.18, z: depth * 0.39, rx: 30 * scale, rz: 48 * scale },
     { x: width * 0.37, z: depth * 0.78, rx: 43 * scale, rz: 24 * scale },
@@ -297,6 +306,19 @@ export function generateTerrain(seed: number, width = MAP_W, depth = MAP_D, star
       shores[i] = shore;
     }
   }
+  // Mirrored (two-player) land: the west half, turned half round the map centre onto the east
+  // half. Grid point i's image is count - 1 - i; a pair shares one blended value, so the result
+  // is exactly point-symmetric and continuous across the centre line.
+  const mirror = (grid: Float32Array | Float64Array): void => {
+    for (let i = 0, j = count - 1; i < j; i++, j--) {
+      const east = smoothstep(-MIRROR_BLEND * scale, MIRROR_BLEND * scale, (i % stride) * stepX - width / 2);
+      grid[i] = grid[j] = mix(grid[i], grid[j], east);
+    }
+  };
+  if (mirrored) {
+    mirror(heights);
+    mirror(shores);
+  }
 
   const sample = (grid: Float32Array | Float64Array, x: number, z: number): number => {
     const gx = clamp(x, 0, width) / stepX;
@@ -360,10 +382,15 @@ export function generateTerrain(seed: number, width = MAP_W, depth = MAP_D, star
       materials[0][i] = remaining;
     }
   }
+  if (mirrored) {
+    mirror(forest);
+    for (const grid of materials) mirror(grid);
+  }
   const inside = (x: number, z: number): boolean => x >= 0 && z >= 0 && x <= width && z <= depth;
   return {
     width,
     depth,
+    halfTurnSymmetric: mirrored,
     heightAt,
     isWater: (x, z) => heightAt(x, z) < SEA_LEVEL,
     isWalkable: (x, z) => inside(x, z) && heightAt(x, z) >= SEA_LEVEL && slopeAt(x, z) <= 0.9,

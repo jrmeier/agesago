@@ -107,10 +107,10 @@ const armor = (target: ModTarget, m: number, p: number, c = 0): Modifier[] => [
 const DEFENCES: BuildingKind[] = ['watchTower', 'townCenter'];
 
 const table = {
-  hellenicDiscipline:{name:'Hellenic Discipline',description:'Infantry +1 melee armour.',at:'forge',cost:{food:175,gold:100},time:45,age:1,civ:'hellenes',effects:armor('class:infantry',1,0)},
-  romanEngineering:{name:'Roman Engineering',description:'Buildings construct 15% faster.',at:'forge',cost:{food:175,gold:100},time:45,age:1,civ:'romans',effects:[mul('allBuildings','buildRate',1.15)]},
+  hellenicDiscipline:{name:'Hellenic Discipline',description:'Infantry +1 melee armour.',at:'forge',cost:{food:100,gold:50},time:45,age:1,civ:'hellenes',effects:armor('class:infantry',1,0)},
+  romanEngineering:{name:'Roman Engineering',description:'Buildings construct 30% faster; farmers gather 15% faster.',at:'forge',cost:{food:100,gold:50},time:45,age:1,civ:'romans',effects:[mul('allBuildings','buildRate',1.3),mul('villager','gather.farm',1.15)]},
   royalRoads:{name:'Royal Roads',description:'Villagers and trade carts walk 10% faster.',at:'forge',cost:{food:175,gold:100},time:45,age:1,civ:'persians',effects:[mul('villager','speed',1.1),mul('tradeCart','speed',1.1)]},
-  woodlandCraft:{name:'Woodland Craft',description:'Villagers carry 3 more wood; infantry walk 5% faster.',at:'forge',cost:{food:175,gold:100},time:45,age:1,civ:'celts',effects:[add('villager','carry.wood',3),mul('class:infantry','speed',1.05)]},
+  woodlandCraft:{name:'Woodland Craft',description:'Villagers carry 3 more wood; infantry walk 5% faster.',at:'forge',cost:{food:250,gold:150},time:45,age:1,civ:'celts',effects:[add('villager','carry.wood',3),mul('class:infantry','speed',1.05)]},
   // ---- Ages (Town Center) ----
   townAge: {
     name: 'Town Age', description: 'Advance to the Town Age: archers, horsemen, swordsmen, civilization units, priests, trade carts, merchant ships, triremes, forge, market, watch towers, temple, stone walls and the first unit-line upgrades.',

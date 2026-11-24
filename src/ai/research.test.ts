@@ -90,6 +90,8 @@ describe('research profiles', () => {
   it('research can be switched off for a control AI', () => {
     expect(makeProfile('moderate', undefined, { research: null }).research).toBeNull();
     const world = makeGame(1, ['ai', 'human']);
+    // Isolate research orders: exploration caches can grant technology without researching it.
+    world.exploration.clear();
     const ai = new AIPlayer(world, 1, { difficulty: 'moderate', tune: { research: null } });
     run(world, [ai], 12 * 60);
     expect(world.players.get(1)!.researched.size).toBe(0);

@@ -42,6 +42,24 @@ describe('formation orders', () => {
     expect(speedOf(villager)).toBeCloseTo(BALANCE.villagerSpeedLoaded);
   });
 
+  it('separates overlapping villagers in corresponding directions on a half-turn symmetric map', () => {
+    const hf = { ...field(), halfTurnSymmetric: true };
+    const world = worldOn(hf);
+    const turn = (point: Vec2) => ({ x: hf.width - point.x, z: hf.depth - point.z });
+    const west = { x: 30, z: 52 };
+    const target = { x: 40, z: 52 };
+    const westMover = world.spawnUnit('villager', west);
+    world.spawnUnit('villager', west).state = 'gathering';
+    const eastMover = world.spawnUnit('villager', turn(west));
+    world.spawnUnit('villager', turn(west)).state = 'gathering';
+    westMover.path = [target];
+    eastMover.path = [turn(target)];
+    westMover.state = eastMover.state = 'moving';
+    movementSystem(world, DT);
+    expect(distance(west, westMover.pos)).toBeGreaterThan(0);
+    expect(distance(turn(westMover.pos), eastMover.pos)).toBeLessThan(1e-8);
+  });
+
   it('puts melee in front of ranged rows, facing east or north regardless of selection order', () => {
     const world = worldOn();
     const units = ['archer', 'hoplite', 'slinger', 'horseman', 'swordsman', 'archer'].map((kind, i) =>

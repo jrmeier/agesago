@@ -99,7 +99,8 @@ describe('AI and territory (M18-5)', () => {
   ];
   it.each(expansionMaps)('founds a second Town Center toward resources on a %s map (seed %i)', (size, seed) => {
     const world = makeGame(seed, ['human', 'ai'], { size });
-    const ai = new AIPlayer(world, 2, { difficulty: 'moderate', seed });
+    // Measure founding: capturing the idle opponent's TC already meets the two-town target.
+    const ai = new AIPlayer(world, 2, { difficulty: 'moderate', seed, tune: { firstAttack: Infinity } });
     const first = world.townCenterOf(2)!;
     // Founded, not captured: a foundation the AI lays.
     let second: Building | undefined;

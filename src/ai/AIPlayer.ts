@@ -72,6 +72,7 @@ export class AIPlayer {
       sheltered: new Set<EntityId>(),
       explorers: new Set([...world.units.values()].filter((u) => u.owner === player && u.kind === 'scout').map((u) => u.id)),
       home,
+      turns: Math.round(Math.atan2(world.hf.depth / 2 - home.z, world.hf.width / 2 - home.x) / (Math.PI / 2)) & 3,
       region: world.nav.regionAt(tc ? { x: tc.pos.x, z: tc.pos.z + tc.radius + 1 } : home),
       reserve: {},
       techReserve: {},

@@ -56,11 +56,15 @@ function findSpot(
   const near = [...world.nodes.values()].filter((n) => dist(n.pos, anchor) < hi + 6);
   const blds = [...world.buildings.values()];
   const half = Math.hypot(BUILDINGS[kind].size.w, BUILDINGS[kind].size.d) / 2;
+  // Scan from the side of the player's Town Center that faces the map centre (T119), as the AI
+  // does: an east start is the west one turned half round, and its town is laid out likewise.
+  const home = world.townCenterOf(ME)?.pos ?? anchor;
+  const side = home.x > world.hf.width / 2 ? -1 : 1;
   for (let r = lo; r <= hi; r += 1) {
     const steps = Math.max(8, Math.round((Math.PI * 2 * r) / 1.5));
     for (let i = 0; i < steps; i++) {
       const a = (i / steps) * Math.PI * 2;
-      const p = { x: Math.round((anchor.x + Math.cos(a) * r) * 2) / 2, z: Math.round((anchor.z + Math.sin(a) * r) * 2) / 2 };
+      const p = { x: Math.round((anchor.x + side * Math.cos(a) * r) * 2) / 2, z: Math.round((anchor.z + side * Math.sin(a) * r) * 2) / 2 };
       if (near.some((n) => dist(n.pos, p) < half + clear) || avoid.some((q) => dist(q, p) < 1)) continue;
       // Farms tile edge to edge (canPlace checks the exact footprints); everything else keeps a gap.
       if (kind !== 'farm' && blds.some((b) => dist(b.pos, p) < b.radius + half + gap)) continue;

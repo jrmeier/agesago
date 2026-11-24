@@ -4,7 +4,7 @@ import { replay } from '../network/lockstep';
 import type { ServerMessage } from '../network/protocol';
 import { PerfOverlay } from './perfOverlay';
 import { CIV_IDS, type CivId } from '../core/civilizations';
-import { normalizeMapOptions, type MapSize, type MapType } from '../core/maps';
+import { LAND_VERSION, normalizeMapOptions, type MapSize, type MapType } from '../core/maps';
 import { deviceQuality, type Quality } from '../core/quality';
 import type { Difficulty, EntityId, StartingResources, TeamSetup, Vec2 } from '../core/types';
 import { CameraRig } from '../camera/CameraRig';
@@ -21,7 +21,7 @@ import { TerrainView } from '../render/TerrainView';
 import { TerritoryView } from '../render/TerritoryView';
 import { BALANCE } from '../sim/balance';
 import { generateMap } from '../sim/mapgen';
-import { deserializeWorld, serializeWorld } from '../sim/serialize';
+import { deserializeWorld, savedLand, serializeWorld } from '../sim/serialize';
 import { World, defaultPlayers } from '../sim/World';
 import { Endgame } from '../ui/Endgame';
 import { EndgameLog } from '../ui/endgameLog';
@@ -203,7 +203,8 @@ export class Game {
     let generated: ReturnType<typeof generateMap>;
     try {
       mapOptions = normalizeMapOptions(resume?.sim.mapOptions ?? {size:start.online?.data.config.mapSize ?? start.mapSize,type:start.online?.data.config.mapType ?? start.mapType});
-      generated = generateMap(mapSeed, players, mapOptions);
+      // A resumed match regenerates the land it was saved on.
+      generated = generateMap(mapSeed, players, mapOptions, resume ? savedLand(resume.sim) : LAND_VERSION);
     } catch {
       resume = null;
       resumeFailed = true;
