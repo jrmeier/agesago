@@ -46,6 +46,8 @@ export interface Ctx {
   villagerHold: number;
   /** Food villager training leaves for the first reinforcement during a raid. */
   defenceHold: number;
+  /** Food planned for the first civilization technology during its opening reservation. */
+  openingCivFood: number;
   /** Outgunned or raided: army training ignores `reserve` and `techReserve`. */
   armyFirst: boolean;
   /** Saving for or researching an age-up: hold new attack waves (defend at home). */

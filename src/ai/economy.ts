@@ -80,15 +80,16 @@ export class Economy {
   onAttacked(): void {
     this.lastAttacked = this.c.world.time;
     this.civFoodHoldUntil = -Infinity;
+    this.c.openingCivFood = 0;
   }
 
   /** Resources needed for the opening civilization technology while the town is stable. */
-  private openingCivTech(s: Snapshot): TechId | null {
+  openingCivTech(s: Snapshot): TechId | null {
     const { world, player, profile } = this.c;
     const p = profile.research;
     const state = world.players.get(player)!;
     const civ = state.player.civ;
-    if (!p || p.weights.civ <= 0 || !civ || state.age !== 1) return null;
+    if (!p || p.weights.civ <= 0 || !civ || state.age !== 1 || !s.count.forge) return null;
     // The existing Town Age villager threshold protects the minimum opening economy.
     if (s.villagers.length < p.townAgeAt || this.c.defenceHold > 0 || this.c.sheltered.size > 0
       || this.c.armyFirst || world.time - this.lastAttacked < CIV_FOOD_CALM) return null;
@@ -131,7 +132,7 @@ export class Economy {
       const missing = (reserve[t] ?? 0) - stock[t];
       if (missing > 0) r[t] = Math.max(r[t], 0.1) * (1 + Math.min(0.6, missing / 1000));
       // Forge technologies need less stock than an age-up and compete with continuous
-      // food spending. Staff their missing resources as soon as Town Age starts.
+      // food spending. Staff their missing resources once the forge foundation is funded.
       const civCost = civTech ? TECHS[civTech].cost[t] ?? 0 : 0;
       const civTarget = civCost && t === 'food' ? civCost + 50 + (this.c.profile.research?.villagerReserve ?? 0) : civCost;
       const civMissing = civTarget - stock[t];
@@ -152,7 +153,8 @@ export class Economy {
     const { world, player, profile } = this.c;
     const stock = world.stockOf(player);
     const civTech = this.openingCivTech(s);
-    const foodHold = Math.max(this.c.villagerHold, this.civFoodReserve(s, civTech));
+    this.c.openingCivFood = this.civFoodReserve(s, civTech);
+    const foodHold = Math.max(this.c.villagerHold, this.c.openingCivFood);
     // Every finished Town Center trains villagers (a second one doubles the boom, M18-5), except
     // while it upgrades or is held free for an upgrade (M14-6).
     let queued = 0;

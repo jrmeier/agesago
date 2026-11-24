@@ -168,6 +168,10 @@ export class Military {
     const reserve: Partial<Stockpile> = free ? {} : heldBack(this.c);
     if (!free) for (const [r, n] of Object.entries(this.c.techReserve) as [keyof Stockpile, number][]) reserve[r] = (reserve[r] ?? 0) + n;
     if (s.villagers.length < profile.targetVillagers && s.tc && !this.c.defenceHold) reserve.food = (reserve.food ?? 0) + 50;
+    if (this.c.openingCivFood > 0 && !this.c.armyFirst && !this.c.defenceHold && s.army.length >= 3) {
+      // A short research reserve needs to survive both villager and soldier spending.
+      reserve.food = Math.max(reserve.food ?? 0, this.c.openingCivFood);
+    }
     // Pop room kept for a siege engine the workshop wants but can't train yet.
     let keepPop = 0;
     // The workshop goes first: a wanted engine holds back its pop room and cost from the rest.

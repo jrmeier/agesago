@@ -416,6 +416,7 @@ export class Research {
     if (booming) reserve.food = (reserve.food ?? 0) + 50 + p.villagerReserve;
     const villagerFood: Partial<Stockpile> = booming ? { food: 50 + p.villagerReserve } : {};
     const tcBusy = booming && (world.time < this.tcFreeAt || this.nearAge(f, p));
+    const openingCiv = this.c.openingCivFood ? this.econ.openingCivTech(s) : null;
     // Idle research buildings by kind (one tech at a time each, so training never waits long).
     const idle = new Map<BuildingKind, Building>();
     for (const b of s.buildings) {
@@ -427,6 +428,7 @@ export class Research {
       const w = p.weights[r.group];
       if (w <= 0) continue;
       const spec = TECHS[r.tech];
+      if (openingCiv && spec.at === 'forge' && r.tech !== openingCiv) continue;
       const at = idle.get(spec.at);
       if (!at || (spec.at === 'townCenter' && tcBusy)) continue;
       const score = (r.base + (r.bonus?.(f) ?? 0)) * w;
