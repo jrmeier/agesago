@@ -567,7 +567,8 @@ export class Economy {
     // Fund the first civilization-tech forge before a second Town Center. Hard reaches
     // its expansion threshold as Town Age opens; holding both costs delays the forge.
     const firstForge = q.kind === 'forge' && (this.c.profile.research?.weights.civ ?? 0) > 0 && !s.count.forge;
-    const reserve = ESSENTIAL.has(q.kind) || firstForge ? this.c.reserve : heldBack(this.c, q.kind);
+    const openingMarket = q.kind === 'market' && this.c.saving?.kind === 'market';
+    const reserve = ESSENTIAL.has(q.kind) || firstForge || openingMarket ? this.c.reserve : heldBack(this.c, q.kind);
     if (!canAfford(world.stockOf(player), BUILDINGS[q.kind].cost, reserve)) return false;
     const builders = this.builders(s, near ?? q.center, n, q.kind === 'farm');
     if (!builders.length) return null;

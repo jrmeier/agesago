@@ -48,6 +48,19 @@ describe('T123: one bounded food hold for the first civilization tech', () => {
     expect(ai.research.started.some(({ tech }) => tech === CIVS.hellenes.tech)).toBe(true);
     ai.dispose();
   });
+
+  it('can fund a needed market before earmarking wood for expansion', () => {
+    const { world, ai, tc } = town();
+    Object.assign(world.stockOf(1), { food: 50, wood: 175, gold: 375 });
+    const ctx = (ai as unknown as { ctx: Ctx }).ctx;
+    ctx.townReserve = { wood: 275 };
+    world.players.get(1)!.visibility.update([{ pos: tc.pos, sight: 35 }]);
+    ai.intel.scan();
+    ai.intel.refreshNodes();
+    ai.research.pass(snapshot(world, 1));
+    expect([...world.buildings.values()].some(b => b.owner === 1 && b.kind === 'market')).toBe(true);
+    ai.dispose();
+  });
   it('leaves the tech and one villager affordable, then resumes training when research starts', () => {
     const { world, ai, tc, pass } = town();
     world.stockOf(1).food = 200;

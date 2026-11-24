@@ -368,7 +368,12 @@ export class Research {
       if (r !== null) return;
     }
     // After funding the forge, a food-poor town can put spare gold to work at the market.
-    if (!has('market') && this.openingFoodTrade(s) && this.place(s, 'market') === true) return;
+    if (!has('market') && this.openingFoodTrade(s)) {
+      this.c.saving = { kind: 'market', cost: { ...BUILDINGS.market.cost } };
+      const placed = this.place(s, 'market');
+      if (placed !== false) this.c.saving = null;
+      if (placed !== null) return;
+    }
     // Town Age: an archery range early when gold piles up (archers spend it).
     if (f.age >= 1 && !has('archeryRange') && stock.gold > 300 && production < this.c.profile.maxProduction) {
       if (this.place(s, 'archeryRange') !== null) return;
