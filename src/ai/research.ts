@@ -440,13 +440,26 @@ export class Research {
       if (openingCiv && spec.at === 'forge' && r.tech !== openingCiv) continue;
       const at = idle.get(spec.at);
       if (!at || (spec.at === 'townCenter' && tcBusy)) continue;
-      const score = (r.base + (r.bonus?.(f) ?? 0)) * w;
-      if ((best && score <= best.score) || !r.when(f)) continue;
+      // Elite unique lines unlock in City Age despite carrying line tier 1. Once our
+      // recruitment plan fields three, give their upgrade the age-line priority even if a
+      // generic City line is already done. Easy keeps its existing gate. The score tops out
+      // at 61 × 1.3 = 79.3, below the civilization forge tech's 80 (T121).
+      const elite = profile.uniqueShare > 0 && !!spec.civ && !!spec.line
+        && f.age >= (spec.age ?? 0) && (f.units[spec.line.unit] ?? 0) >= 3;
+      const score = (r.base + (elite ? 21 : (r.bonus?.(f) ?? 0))) * w;
+      if ((best && score <= best.score) || (!elite && !r.when(f))) continue;
       if (researchBlock(world, player, r.tech, true) !== null) continue;
       const civVillagerFood = r.tech === openingCiv && booming ? { food: UNITS.villager.cost.food } : villagerFood;
       // The tech villagers are paused for doesn't also keep the villager reserve.
-      if (!canAfford(stock, spec.cost, r.fromReserve ? civVillagerFood : this.hold?.tech === r.tech ? this.c.reserve : reserve)) {
-        if (!want || score > want.score) want = { tech: r.tech, score, group: r.group, urgent: !!r.urgent?.(f) };
+      let keep = r.fromReserve ? civVillagerFood : this.hold?.tech === r.tech ? this.c.reserve : reserve;
+      if (elite) {
+        // Improve the army before banking for Empire Age. Keep construction, expansion and
+        // villager food reserved; only the age-up bank can pay for this existing unit line.
+        keep = { ...reserve };
+        for (const resource of TYPES) keep[resource] = (keep[resource] ?? 0) - (this.c.reserve[resource] ?? 0);
+      }
+      if (!canAfford(stock, spec.cost, keep)) {
+        if (!want || score > want.score) want = { tech: r.tech, score, group: r.group, urgent: elite || !!r.urgent?.(f) };
         continue;
       }
       best = { tech: r.tech, at, score };

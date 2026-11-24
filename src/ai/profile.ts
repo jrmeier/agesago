@@ -105,6 +105,10 @@ export interface Profile {
   retreatAt: number;
   /** Picks units to counter what it has seen (else a random mix). */
   counters: boolean;
+  /** Preferred unique-unit share, including training queues; hard counters still take priority. */
+  uniqueShare: number;
+  /** Raw counter value required before the preferred unique-unit share can override a pick. */
+  uniqueCounterRatio?: number;
   /** Villagers sent to a military building / drop site. */
   builders: number;
   /** Pull villagers into the Town Center when raided. */
@@ -149,6 +153,7 @@ const BASE: Record<Difficulty, Profile> = {
     waveGap: 240,
     retreatAt: 0,
     counters: false,
+    uniqueShare: 0,
     builders: 1,
     shelter: false,
     expandAt: null,
@@ -190,6 +195,7 @@ const BASE: Record<Difficulty, Profile> = {
     waveGap: 120,
     retreatAt: 0.3,
     counters: true,
+    uniqueShare: 0.3,
     builders: 2,
     shelter: true,
     expandAt: 24,
@@ -231,6 +237,7 @@ const BASE: Record<Difficulty, Profile> = {
     waveGap: 90,
     retreatAt: 0.35,
     counters: true,
+    uniqueShare: 0.35,
     builders: 3,
     shelter: true,
     expandAt: 22,
@@ -272,6 +279,8 @@ const BASE: Record<Difficulty, Profile> = {
     waveGap: 75,
     retreatAt: 0.4,
     counters: true,
+    uniqueShare: 0.4,
+    uniqueCounterRatio: 1,
     builders: 3,
     shelter: true,
     expandAt: 22,
