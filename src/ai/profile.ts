@@ -195,7 +195,7 @@ const BASE: Record<Difficulty, Profile> = {
     waveGap: 120,
     retreatAt: 0.3,
     counters: true,
-    uniqueShare: 0.245,
+    uniqueShare: 0.265,
     builders: 2,
     shelter: true,
     expandAt: 24,
