@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { CIVS } from '../core/civilizations';
+import { TECHS } from '../core/techs';
 import { GRASS_ONLY, type Difficulty, type Heightfield, type MapLayout } from '../core/types';
+import { UNITS } from '../core/units';
 import { World, defaultPlayers } from '../sim/World';
 import { completeBuilding, layFoundation } from '../sim/systems/build';
 import { killUnit } from '../sim/systems/combat';
 import { AIPlayer } from './AIPlayer';
 import { snapshot, type Ctx } from './context';
 import { run } from './harness';
+
+const civTech = CIVS.hellenes.tech;
+const villagerFood = UNITS.villager.cost.food!;
+const openingFood = TECHS[civTech].cost.food! + villagerFood;
+const openingGold = TECHS[civTech].cost.gold!;
 
 /** A Town Age economy with a finished forge; food arrivals are controlled by each test. */
 function town(villagers = 20, difficulty: Difficulty = 'moderate', time = 0) {
@@ -41,11 +48,11 @@ describe('T123: one bounded food hold for the first civilization tech', () => {
     Object.assign(world.stockOf(1), { food: 50, gold: 375 });
     pass();
     ai.research.pass(snapshot(world, 1));
-    expect(world.stockOf(1).food).toBeGreaterThanOrEqual(225);
-    expect(world.stockOf(1).gold).toBeGreaterThanOrEqual(100);
+    expect(world.stockOf(1).food).toBeGreaterThanOrEqual(openingFood);
+    expect(world.stockOf(1).gold).toBeGreaterThanOrEqual(openingGold);
     world.time += ai.profile.research!.gap + 1;
     ai.research.pass(snapshot(world, 1));
-    expect(ai.research.started.some(({ tech }) => tech === CIVS.hellenes.tech)).toBe(true);
+    expect(ai.research.started.some(({ tech }) => tech === civTech)).toBe(true);
     ai.dispose();
   });
 
@@ -63,14 +70,15 @@ describe('T123: one bounded food hold for the first civilization tech', () => {
   });
   it('leaves the tech and one villager affordable, then resumes training when research starts', () => {
     const { world, ai, tc, pass } = town();
-    world.stockOf(1).food = 200;
+    const shortOfOpening = openingFood - villagerFood / 2;
+    world.stockOf(1).food = shortOfOpening;
     pass();
     expect(tc.queue).toBe(0);
-    expect(world.stockOf(1).food).toBe(200);
-    world.stockOf(1).food = 225;
+    expect(world.stockOf(1).food).toBe(shortOfOpening);
+    world.stockOf(1).food = openingFood;
     ai.research.pass(snapshot(world, 1));
-    expect(ai.research.started[0]?.tech).toBe(CIVS.hellenes.tech);
-    expect(world.stockOf(1).food).toBe(50);
+    expect(ai.research.started[0]?.tech).toBe(civTech);
+    expect(world.stockOf(1).food).toBe(villagerFood);
     pass();
     expect(tc.queue).toBe(1);
     ai.dispose();
@@ -86,7 +94,7 @@ describe('T123: one bounded food hold for the first civilization tech', () => {
 
   it('does not hold while the gold cost is missing', () => {
     const { world, ai, tc, pass } = town();
-    world.stockOf(1).gold = 99;
+    world.stockOf(1).gold = openingGold - 1;
     pass();
     expect(tc.queue).toBe(2);
     ai.dispose();
