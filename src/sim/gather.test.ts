@@ -6,7 +6,7 @@ import { completeBuilding, layFoundation } from './systems/build';
 import { deserializeWorld, serializeWorld } from './serialize';
 import { buildingRect, nearestDrop, nodeApproach, nodeInReach } from './systems/sites';
 import { stateHash } from '../network/lockstep';
-import { sendToDrop } from './systems/gather';
+import { nearestSources, sendToDrop } from './systems/gather';
 
 const DT = 1 / BALANCE.tickRate;
 
@@ -36,6 +36,16 @@ function run(world: World, seconds: number) {
 }
 
 describe('resource work routes', () => {
+  it('ranks equidistant berries in mirrored order when replacing a depleted patch', () => {
+    const turn = (p: { x: number; z: number }) => ({ x: 176 - p.x, z: 176 - p.z });
+    const anchor = { x: 28.65, z: 101.52775681356646 };
+    const west = [{ x: 27.8, z: 103 }, { x: 30.35, z: anchor.z }];
+    const nodes = [...west, ...west.map(turn)].map(pos => ({ kind: 'berry' as const, pos, amount: 125 }));
+    const { world, worker } = setup(nodes, { ...field(), width: 176, depth: 176, halfTurnSymmetric: true });
+    const ranked = (from: typeof anchor) => nearestSources(world, 'food', from, worker).map(n => n.pos);
+    expect(ranked(turn(anchor))).toEqual(ranked(anchor).map(turn));
+  });
+
   it('preserves a free facing work point when only its containing cell centre is blocked', () => {
     const { world, worker, rejected } = setup([{ kind: 'tree', pos: { x: 20, z: 20 }, amount: 100 }]);
     const tree = [...world.nodes.values()][0];
