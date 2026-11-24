@@ -256,6 +256,7 @@ export class Military {
     let bestScore = -Infinity;
     let bestMatchup = 0;
     let uniqueMatchup = 0;
+    let uniqueScore = -Infinity;
     const civ = this.c.world.players.get(this.c.player)?.player.civ;
     const unique = civ && CIVS[civ].unit;
     for (const k of opts) {
@@ -268,14 +269,14 @@ export class Military {
       // Keep the army mixed: a class over half the army loses appeal.
       const share = mine[UNITS[k].unitClass] / army;
       score *= 1 - Math.max(0, share - 0.5) + 0.15 * this.c.rng();
+      if (k === unique) uniqueScore = score;
       if (score > bestScore) [best, bestScore] = [k, score];
     }
-    // Give the civilization a place in the army without throwing away hard counters. Compare
-    // combat value before stockpile discounts and random variety: a wood glut must not erase
-    // gold-cost Immortals/Raiders. Spears still beat swords into cavalry, and slingers beat
-    // Immortals into mass infantry. Phalangite Guards fill the spear role themselves.
+    // A quota override needs a close choice in both raw counter value and training score.
+    // The latter accounts for resource gluts and the share of the class already in the army.
     const uniqueCounterRatio = this.c.profile.uniqueCounterRatio ?? 0.75;
-    if (unique && this.c.profile.uniqueShare > 0 && uniqueMatchup >= bestMatchup * uniqueCounterRatio) {
+    if (unique && this.c.profile.uniqueShare > 0 && uniqueMatchup >= bestMatchup * uniqueCounterRatio
+      && uniqueScore >= bestScore * 0.75) {
       let count = s.army.filter((u) => u.kind === unique).length;
       let total = s.army.length;
       for (const b of s.buildings) {

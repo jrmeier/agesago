@@ -181,6 +181,14 @@ describe('T122: unique-unit recruitment', () => {
     ai.dispose();
   });
 
+  it('keeps a stronger training choice when gold is scarce and other resources are abundant', () => {
+    const { world, ai, unique, choose } = scenario('celts', 'moderate');
+    expect(choose()).toBe(unique);
+    world.stockOf(1).gold = UNITS[unique].cost.gold!;
+    expect(choose()).not.toBe(unique);
+    ai.dispose();
+  });
+
   it.each(CIV_IDS)('%s: easy keeps its seeded random choices independent of army composition', (civ) => {
     const a = scenario(civ, 'easy');
     const b = scenario(civ, 'easy');
