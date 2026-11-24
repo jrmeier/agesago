@@ -1,3 +1,5 @@
+import { CIVS, type CivId } from '../core/civilizations';
+import { UNITS } from '../core/units';
 import type { Difficulty, Stockpile } from '../core/types';
 
 export type { Difficulty } from '../core/types';
@@ -195,7 +197,7 @@ const BASE: Record<Difficulty, Profile> = {
     waveGap: 120,
     retreatAt: 0.3,
     counters: true,
-    uniqueShare: 0.255,
+    uniqueShare: 0.25,
     builders: 2,
     shelter: true,
     expandAt: 24,
@@ -307,9 +309,13 @@ const BASE: Record<Difficulty, Profile> = {
 };
 
 /** The tuned profile for a difficulty and personality. */
-export function makeProfile(difficulty: Difficulty, personality?: Personality, tune?: Partial<Profile>): Profile {
+export function makeProfile(difficulty: Difficulty, personality?: Personality, tune?: Partial<Profile>, civ?: CivId): Profile {
   const base = BASE[difficulty];
   const p: Profile = { ...base, research: base.research && { ...base.research, weights: { ...base.research.weights } }, late: { ...base.late } };
+  // A moderate army can carry a slightly larger ranged contingent alongside its front line.
+  if (difficulty === 'moderate' && civ && UNITS[CIVS[civ].unit].unitClass === 'archer') {
+    p.uniqueShare = 0.265;
+  }
   switch (personality) {
     case 'rusher':
       // Early barracks, a small early wave, then steady pressure; a leaner economy.

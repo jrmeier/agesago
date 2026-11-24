@@ -8,6 +8,7 @@ import { defaultPlayers, World } from '../sim/World';
 import { AIPlayer } from './AIPlayer';
 import { snapshot, type Ctx } from './context';
 import { run } from './harness';
+import { makeProfile } from './profile';
 
 const HOME = { x: 20, z: 40 };
 const PRODUCTION = ['barracks', 'archeryRange', 'stable'] as const;
@@ -49,6 +50,13 @@ function fieldedElite(civ: CivId, difficulty: Difficulty) {
 }
 
 describe('T122: unique-unit recruitment', () => {
+  it('gives moderate ranged unique units a larger share and honors explicit tuning', () => {
+    expect(makeProfile('moderate', undefined, undefined, 'persians').uniqueShare).toBe(0.265);
+    expect(makeProfile('moderate', undefined, undefined, 'romans').uniqueShare).toBe(0.25);
+    expect(makeProfile('hard', undefined, undefined, 'persians').uniqueShare).toBe(makeProfile('hard').uniqueShare);
+    expect(makeProfile('moderate', undefined, { uniqueShare: 0 }, 'persians').uniqueShare).toBe(0);
+  });
+
   for (const difficulty of ['moderate', 'hard'] as const) {
     it.each(CIV_IDS)(`${difficulty}, %s: fields three unique units within two minutes of unlocking them`, (civ) => {
       const { world, ai, unique } = scenario(civ, difficulty);
