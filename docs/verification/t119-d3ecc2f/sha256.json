@@ -1,0 +1,20 @@
+{
+  "source": "d3ecc2f1b9c9dfc8fbe85cc5072bc4cd80b0788c",
+  "files": {
+    "README.md": "9a2d86d0bfeb274aa0ce0b6c89f815d7362d6fac9811dc707560666a7a17b95f",
+    "balance.json": "a989f923f4a1c27239c033f2fa744fcdcb4a465dabdf6bb3c40661c20c19a187",
+    "browser.log": "65849f462d6d253b321139b6027b843774ded6b67dbddd24503236f737c7daaa",
+    "civilization-audit.json": "4ccb1542275076137dd21b594e5086cbf397b775e17bef49e8d9921e58587fd9",
+    "civilization-games.jsonl": "ade3e0dc2edae75c26c248e2dd45a4f162141d6aa16a0dffda647cdc408cf8e4",
+    "client-and-relay.json": "4457a0c079af730c62458955dbff9de354d4a8543f23b1b9f3f61380383f43ef",
+    "compatibility-audit.json": "d1cef4cee1444d1e44aaa441f33dffd293ee1b4ec239ddd13da58bdc2378c9ae",
+    "pacing.txt": "960de87d6c026c6cdf3444492cda247c1ffe225d9dd98ba76e0802f93abb0c2f",
+    "persia-celts-recovery.json": "84e155a12292a044316b9f236b7df2fe3dbe5712830a86e7767b9560a7c09636",
+    "production-relay-rehearsal.json": "26fdecfa4ca6e469cc69d36b124e377494145a1faeef0e2bebbc8946e4879408",
+    "regression-audit.json": "8c9c4239b28e511ef0fe5acf3508bad8fc573ae3f2a3abad06976ca69c363c68",
+    "rollout-rehearsal.json": "6f487ca27a1a3bc310e2539bbbabbdc5a9ca405b91814a191cc4c86cde1cd34a",
+    "saves.jsonl": "0925322a43a0ddf9231ceb9a2e25b63cd5cff024228d54b491b6e3f56045689b",
+    "seat-audit.json": "b22760518793455c82039c1cb1eab29a82fc13eb25fd3b8662a654ee472eba41",
+    "seat-games.jsonl": "ac5b0789a891369aea83e558153cf94c6b631581b7523502ff579c46eb6c6ab9"
+  }
+}

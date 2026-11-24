@@ -1,4 +1,4 @@
-import { EXPANSION_GOLD, expansionGoldSpots, normalizeMapOptions, type MapOptions } from '../core/maps';
+import { EXPANSION_GOLD, LAND_VERSION, expansionGoldSpots, normalizeMapOptions, type MapOptions } from '../core/maps';
 import { generateVariantMap } from './mapVariants';
 import { MAP_D, MAP_W, type Heightfield, type MapLayout, type NodeKind, type PropKind, type StartLayout, type Vec2 } from '../core/types';
 import { createSeededRandom, generateTerrain, terrainFeatures } from './terrain';
@@ -111,7 +111,7 @@ export function startTurn(seed: number, players: number): number {
 }
 
 /** Rich ancient countryside; spatial spacing and connected-land filtering keep placement cheap. */
-export function generateMap(seed: number, players = 2, options: MapOptions = {}): { hf: Heightfield; layout: MapLayout } {
+export function generateMap(seed: number, players = 2, options: MapOptions = {}, land = LAND_VERSION): { hf: Heightfield; layout: MapLayout } {
   if (!Number.isInteger(players) || players < 1 || players > 4) throw new RangeError('players must be 1, 2, 3 or 4');
   const identity = normalizeMapOptions(options);
   if (identity.size !== 'large' || identity.type !== 'mediterranean') return generateVariantMap(seed, players, identity);
@@ -119,24 +119,43 @@ export function generateMap(seed: number, players = 2, options: MapOptions = {})
   const startRandom = createSeededRandom(seed ^ 0x6a09e667);
   const phase = Math.PI + (startRandom() - 0.5) * 0.06;
   const turn = startTurn(seed, players);
-  const centers = Array.from({ length: players }, (_, i) => {
-    const angle = phase + ((i + turn) % players) * Math.PI * 2 / players;
-    return players === 1 ? { ...features.townCenter } : {
+  const mirrored = players === 2 && land >= 2;
+  const half = MAP_W / 2;
+  /** A position's image under the half-turn about the map centre. */
+  const image = (pos: Vec2): Vec2 => ({ x: MAP_W - pos.x, z: MAP_D - pos.z });
+  /** Start `k` of the land (0 is the west one with two players); seat `i` takes start `(i + turn) % players`. */
+  const startAt = (k: number): Vec2 => {
+    const angle = phase + k * Math.PI * 2 / players;
+    return {
       x: Math.round((MAP_W / 2 + Math.cos(angle) * 52) * 2) / 2,
       z: Math.round((MAP_D / 2 + Math.sin(angle) * 52) * 2) / 2,
     };
+  };
+  const centers = Array.from({ length: players }, (_, i) => {
+    const k = (i + turn) % players;
+    // The mirrored east start is exactly the west one's image, whatever the rounding.
+    return players === 1 ? { ...features.townCenter } : mirrored && k === 1 ? image(startAt(0)) : startAt(k);
   });
-  const starts: StartLayout[] = centers.map((townCenter) => ({
-    townCenter,
-    villagers: [
-      { x: townCenter.x - 1.8, z: townCenter.z + 3.6 },
-      { x: townCenter.x, z: townCenter.z + 3.8 },
-      { x: townCenter.x + 1.8, z: townCenter.z + 3.6 },
-    ],
-    scouts: [{ x: townCenter.x - 4.2, z: townCenter.z + 1.2 }],
-  }));
-  const hf = generateTerrain(seed, undefined, undefined, centers);
-  const townCenter = centers[0];
+  const starts: StartLayout[] = centers.map((townCenter) => {
+    // The mirrored east start is the west one turned half round, units included.
+    const side = mirrored && townCenter.x > half ? -1 : 1;
+    return {
+      townCenter,
+      villagers: [
+        { x: townCenter.x - 1.8 * side, z: townCenter.z + 3.6 * side },
+        { x: townCenter.x, z: townCenter.z + 3.8 * side },
+        { x: townCenter.x + 1.8 * side, z: townCenter.z + 3.6 * side },
+      ],
+      scouts: [{ x: townCenter.x - 4.2 * side, z: townCenter.z + 1.2 * side }],
+    };
+  });
+  const hf = generateTerrain(seed, undefined, undefined, centers, mirrored);
+  // Mirrored land is generated for the west half only (half the scattered amounts) and copied over at the end.
+  const share = mirrored ? 0.5 : 1;
+  const west = (pos: Vec2): boolean => !mirrored || pos.x < half;
+  // The central hamlet lies east of the centre line: mirrored land builds it at its reflection in the west half.
+  const hamletAt = mirrored ? { x: MAP_W - features.hamlet.x, z: features.hamlet.z } : features.hamlet;
+  const townCenter = mirrored ? centers.find(west)! : centers[0];
   const random = createSeededRandom(seed ^ 0x1f83d9ab);
   const reachable = connectedLand(hf, townCenter);
   const occupied = new PlacementGrid(hf.width);
@@ -145,7 +164,7 @@ export function generateMap(seed: number, players = 2, options: MapOptions = {})
   const padClear = (pos: Vec2, radius: number): boolean => centers.every((center) =>
     distance(pos, center) >= START_RADIUS + radius);
   const onMap = (pos: Vec2, radius: number): boolean => pos.x >= radius + 0.5 && pos.z >= radius + 0.5
-    && pos.x <= hf.width - radius - 0.5 && pos.z <= hf.depth - radius - 0.5;
+    && pos.x <= (mirrored ? half - radius - 0.1 : hf.width - radius - 0.5) && pos.z <= hf.depth - radius - 0.5;
   const fordClear = (pos: Vec2, radius: number): boolean => features.river.fords.every((ford) =>
     Math.abs(pos.x - ford.x) >= 10 + radius || Math.abs(pos.z - ford.z) >= 4 + radius)
     && (Math.abs(pos.x - features.tributary.ford.x) >= 4 + radius || Math.abs(pos.z - features.tributary.ford.z) >= 10 + radius);
@@ -178,7 +197,7 @@ export function generateMap(seed: number, players = 2, options: MapOptions = {})
 
   // All kits use the same offsets and amounts; no random rejection can reduce one
   // player's resources. The terrain levels this entire kit and its approaches.
-  for (const center of centers) {
+  for (const center of centers.filter(west)) {
     const kitNode = (kind: NodeKind, x: number, z: number): void => {
       const pos = { x: center.x + x, z: center.z + z };
       const radius = kind === 'gold' || kind === 'stone' ? 0.8 : 0.5;
@@ -232,16 +251,16 @@ export function generateMap(seed: number, players = 2, options: MapOptions = {})
     for (let i = 0; i < 6; i++) propNear('fence', { x: center.x - 9.5, z: center.z + i * 2.8 }, 0, 0.85);
     for (let i = 0; i < 3; i++) propNear('hayBale', { x: center.x + 10, z: center.z + 3 + i * 2 }, 0.2, 0.85);
   };
-  hamlet(features.hamlet, false);
-  hamlet(features.abandonedHamlet, true);
+  hamlet(hamletAt, false);
+  if (!mirrored) hamlet(features.abandonedHamlet, true);
 
   let logs = 0;
-  for (let attempt = 0; logs < 36 && attempt < 3000; attempt++) {
+  for (let attempt = 0; logs < 36 * share && attempt < 3000; attempt++) {
     const pos = { x: 4 + random() * (hf.width - 8), z: 4 + random() * (hf.depth - 8) };
     if (hf.forestDensity(pos.x, pos.z) > 0.5 && addProp('log', pos, random() * Math.PI * 2, 0.8 + random() * 0.25)) logs++;
   }
 
-  const clearings = [features.hamlet, features.abandonedHamlet, features.stoneCircle, ...features.ridges.map((r) => r.center)];
+  const clearings = [hamletAt, features.abandonedHamlet, features.stoneCircle, ...features.ridges.map((r) => r.center)];
   const canPlaceNode = (pos: Vec2, kind: NodeKind): boolean => {
     const radius = kind === 'gold' || kind === 'stone' ? 0.8 : 0.5;
     if (!onMap(pos, radius) || !padClear(pos, radius) || !fordClear(pos, radius) || !reachable(pos) || !occupied.clear(pos, radius)) return false;
@@ -280,16 +299,16 @@ export function generateMap(seed: number, players = 2, options: MapOptions = {})
       nodeNear('berry', { x: center.x + Math.cos(angle) * 1.7, z: center.z + Math.sin(angle) * 1.7 });
     }
   };
-  for (const [x, z] of [[0.12, 0.16], [0.29, 0.40], [0.14, 0.73], [0.59, 0.21], [0.91, 0.47], [0.62, 0.84]]) {
-    berries({ x: hf.width * x, z: hf.depth * z });
-  }
-  for (const pos of features.outcrops) nodeNear('gold', { x: pos.x + 4, z: pos.z + 3 });
-  for (const [x, z] of [[0.10, 0.34], [0.48, 0.07], [0.93, 0.12], [0.96, 0.97], [0.42, 0.94]]) {
-    nodeNear('gold', { x: hf.width * x, z: hf.depth * z });
-  }
-  nodeNear('gold', { x: features.river.fords[1].x + 10, z: features.river.fords[1].z + 8 });
+  const spots = (list: number[][]): Vec2[] => list.map(([x, z]) => ({ x: hf.width * x, z: hf.depth * z })).filter(west);
+  // Mirrored land moves the west half's third patch from 42 to 77 away from its start: within
+  // reach it kept the AI picking berries instead of farming for five minutes (T119).
+  const berrySpots = [[0.12, 0.16], [0.29, 0.40], mirrored ? [0.30, 0.93] : [0.14, 0.73], [0.59, 0.21], [0.91, 0.47], [0.62, 0.84]];
+  for (const spot of spots(berrySpots)) berries(spot);
+  for (const pos of features.outcrops.filter(west)) nodeNear('gold', { x: pos.x + 4, z: pos.z + 3 });
+  for (const spot of spots([[0.10, 0.34], [0.48, 0.07], [0.93, 0.12], [0.96, 0.97], [0.42, 0.94]])) nodeNear('gold', spot);
+  if (!mirrored) nodeNear('gold', { x: features.river.fords[1].x + 10, z: features.river.fords[1].z + 8 });
   // Every player's two expansion clusters, the same amounts on the same flanks (M16-10).
-  for (const center of centers) {
+  for (const center of centers.filter(west)) {
     for (const spot of expansionGoldSpots(center, { x: MAP_W / 2, z: MAP_D / 2 }, players)) nodeNear('gold', spot, EXPANSION_GOLD.amount);
   }
 
@@ -304,13 +323,13 @@ export function generateMap(seed: number, players = 2, options: MapOptions = {})
     const j = Math.floor(random() * (i + 1));
     [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
   }
-  const treeTarget = 3500 + Math.floor(random() * 600);
-  let trees = centers.length * 20;
+  const treeTarget = (3500 + Math.floor(random() * 600)) * share;
+  let trees = centers.filter(west).length * 20;
   for (const pos of candidates) {
     if (trees >= treeTarget) break;
     if (addNode('tree', pos)) trees++;
   }
-  if (trees < 3000) throw new Error(`Insufficient reachable forest for seed ${seed}: ${trees}`);
+  if (trees < 3000 * share) throw new Error(`Insufficient reachable forest for seed ${seed}: ${trees}`);
 
   const reedAt = (pos: Vec2, rot: number): boolean => {
     const height = hf.heightAt(pos.x, pos.z);
@@ -340,7 +359,7 @@ export function generateMap(seed: number, players = 2, options: MapOptions = {})
 
   // Reserved start areas and dense forest make rejection sampling less productive
   // for larger rosters. Bound scenery work instead of chasing the last few props.
-  const propTarget = 650 + Math.floor(random() * 100);
+  const propTarget = (650 + Math.floor(random() * 100)) * share;
   for (let attempt = 0; layout.props.length < propTarget && attempt < 30000; attempt++) {
     const pos = { x: 2 + random() * (hf.width - 4), z: 2 + random() * (hf.depth - 4) };
     const ground = hf.ground(pos.x, pos.z);
@@ -360,7 +379,7 @@ export function generateMap(seed: number, players = 2, options: MapOptions = {})
     }
     addProp(kind, pos, random() * Math.PI * 2, 0.7 + random() * 0.65);
   }
-  if (layout.props.length < 500) throw new Error(`Insufficient scenery for seed ${seed}`);
+  if (layout.props.length < 500 * share) throw new Error(`Insufficient scenery for seed ${seed}`);
 
   // Neutral quarries use a separate stream and append after other resources.
   // Only loose natural scenery may give way to a quarry.
@@ -413,9 +432,9 @@ export function generateMap(seed: number, players = 2, options: MapOptions = {})
     quarries.push(best);
     quarrySpace.add(best, 0.8);
   };
-  for (const outcrop of features.outcrops) quarryNear(outcrop);
-  for (const ridge of features.ridges) quarryNear({ x: ridge.center.x, z: ridge.center.z + ridge.radiusZ * 0.5 });
-  quarryNear({ x: features.river.fords[1].x + 15, z: features.river.fords[1].z - 15 });
+  for (const outcrop of features.outcrops.filter(west)) quarryNear(outcrop);
+  for (const ridge of features.ridges.filter((r) => west(r.center))) quarryNear({ x: ridge.center.x, z: ridge.center.z + ridge.radiusZ * 0.5 });
+  if (!mirrored) quarryNear({ x: features.river.fords[1].x + 15, z: features.river.fords[1].z - 15 });
   // Leave the 1.3-unit gathering approaches clear of inflated scenery obstacles.
   layout.props = layout.props.filter((prop) => !replaceable(prop.kind)
     || quarries.every((pos) => distance(prop.pos, pos) >= PROP_RADIUS[prop.kind] * prop.scale + 1.6));
@@ -427,10 +446,10 @@ export function generateMap(seed: number, players = 2, options: MapOptions = {})
   for (const prop of layout.props) wildlifeSpace.add(prop.pos, PROP_RADIUS[prop.kind] * prop.scale);
   layout.animals = [];
   for (const [kind, count] of [['deer', 6], ['sheep', 4], ['boar', 2]] as const) {
-    for (let attempt = 0, placed = 0; placed < count && attempt < 12000; attempt++) {
+    for (let attempt = 0, placed = 0; placed < count * share && attempt < 12000; attempt++) {
       const pos = { x: 4 + wildlifeRandom() * (hf.width - 8), z: 4 + wildlifeRandom() * (hf.depth - 8) };
       const density = hf.forestDensity(pos.x, pos.z);
-      if (!padClear(pos, 5) || !fordClear(pos, 1) || !reachable(pos) || !wildlifeSpace.clear(pos, 1)) continue;
+      if (!onMap(pos, 1) || !padClear(pos, 5) || !fordClear(pos, 1) || !reachable(pos) || !wildlifeSpace.clear(pos, 1)) continue;
       if (kind === 'boar' ? density < 0.35 : density > 0.25) continue;
       if (![[-1, 0], [1, 0], [0, -1], [0, 1]].every(([dx, dz]) => reachable({ x: pos.x + dx, z: pos.z + dz }))) continue;
       layout.animals.push({ kind, pos });
@@ -438,9 +457,9 @@ export function generateMap(seed: number, players = 2, options: MapOptions = {})
       placed++;
     }
   }
-  for (let attempt = 0, placed = 0; placed < 10 && attempt < 12000; attempt++) {
+  for (let attempt = 0, placed = 0; placed < 10 * share && attempt < 12000; attempt++) {
     const pos = { x: 2 + wildlifeRandom() * (hf.width - 4), z: 2 + wildlifeRandom() * (hf.depth - 4) };
-    if (!hf.isWater(pos.x, pos.z) || !padClear(pos, 0.5) || !fordClear(pos, 0.5) || !wildlifeSpace.clear(pos, 0.5)) continue;
+    if (!onMap(pos, 0.5) || !hf.isWater(pos.x, pos.z) || !padClear(pos, 0.5) || !fordClear(pos, 0.5) || !wildlifeSpace.clear(pos, 0.5)) continue;
     // Keep each fishing patch near a connected, unobstructed shore.
     let shore = false;
     for (let a = 0; a < 16 && !shore; a++) {
@@ -454,6 +473,12 @@ export function generateMap(seed: number, players = 2, options: MapOptions = {})
     layout.nodes.push({ kind: 'fish', pos, amount: 200 });
     wildlifeSpace.add(pos, 0.5);
     placed++;
+  }
+  if (mirrored) {
+    // The east half: every resource, prop and animal of the west half, turned half round.
+    layout.nodes.push(...layout.nodes.map((node) => ({ ...node, pos: image(node.pos) })));
+    layout.props.push(...layout.props.map((prop) => ({ ...prop, pos: image(prop.pos), rot: prop.rot + Math.PI })));
+    layout.animals.push(...layout.animals.map((animal) => ({ ...animal, pos: image(animal.pos) })));
   }
   return { hf, layout };
 }

@@ -179,7 +179,15 @@ export function nearestSources(world: World, type: ResourceType, from: Vec2, u: 
       if (d <= r) out.push({ s: b, d });
     }
   }
-  return out.sort((a, b) => a.d - b.d).map((e) => e.s);
+  const { width, depth, halfTurnSymmetric } = world.hf;
+  if (!halfTurnSymmetric) return out.sort((a, b) => a.d - b.d).map((e) => e.s);
+
+  // A half-turn can change the last bits of an equal geometric distance. Rank ties
+  // in the work area's frame so depleted patches retarget to corresponding sources.
+  const direction = from.x > width / 2 || (from.x === width / 2 && from.z > depth / 2) ? -1 : 1;
+  const key = (value: number) => Math.round(value * 1e9);
+  return out.sort((a, b) => key(a.d) - key(b.d)
+    || direction * (key(a.s.pos.x) - key(b.s.pos.x) || key(a.s.pos.z) - key(b.s.pos.z))).map((e) => e.s);
 }
 
 /** Send `u` to work a node or a farm. */

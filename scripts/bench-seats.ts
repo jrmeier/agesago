@@ -1,8 +1,9 @@
 /**
- * Seat fairness (M16-11): mirror matches, the same civilization in both seats, moderate vs moderate
- * on the default map (large Mediterranean, `generateMap(seed, 2)`), 30 minutes then the civilization
- * bench's score (villagers + soldiers + finished buildings). Neither seat may win more than 60% of
- * the decided games. See docs/BALANCE.md.
+ * Seat and start fairness (M16-11, T119): mirror matches, the same civilization in both seats,
+ * moderate vs moderate on the default map (large Mediterranean, `generateMap(seed, 2)`), 30 minutes
+ * then the civilization bench's score (villagers + soldiers + finished buildings). Of the decided
+ * games, neither seat may win more than 60%; the east start must win 45–55% overall and 40–60% for
+ * every civilization. See docs/BALANCE.md.
  *
  *   npm run bench:seats                                         # 4 civs × seeds 1–40 = 160 games
  *   SEAT_BENCH_SEEDS=1-80 SEAT_BENCH_CIVS=romans npm run bench:seats
@@ -10,9 +11,9 @@
  *   SEAT_BENCH_SUMMARY=1 npm run bench:seats                    # only summarise the output file
  *
  * Rows are appended to SEAT_BENCH_OUTPUT (default /tmp/agesago-seats.jsonl); a rerun skips ids
- * already there and the summary reads the whole file. The summary also reports the east start's
- * share: the default map is one fixed landscape, so a start can be better than the other even
- * when the seats are fair. Exit code 1 when the seat share is outside 40–60%.
+ * already there and the summary reads the whole file. Exit code 1 when a share is out of band.
+ * One 40-game group has a standard error of 8 points: a fair map fails some band in about half
+ * of all 160-game runs, so judge start fairness on seeds 1–160 (640 games).
  */
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { CIV_IDS, civFor, type CivId } from '../src/core/civilizations';
@@ -64,20 +65,22 @@ if (!process.env.SEAT_BENCH_SUMMARY) for (const civ of civs) for (let seed = fir
   ais.forEach((ai) => ai.dispose());
 }
 
-const summary = (label: string, rows: Row[]) => {
+const summary = (label: string, rows: Row[], eastBand: [number, number]) => {
   const decided = rows.filter((r) => r.winner !== 0);
   const seat2 = decided.filter((r) => r.winner === 2).length;
   const east = decided.filter((r) => (r.winner === 1) === r.seat1East).length;
   const share = decided.length ? seat2 / decided.length : NaN;
+  const eastShare = decided.length ? east / decided.length : NaN;
   return {
     group: label, games: rows.length, decided: decided.length, seat1Wins: decided.length - seat2, seat2Wins: seat2,
-    seat2Share: Math.round(share * 1000) / 1000, eastStartShare: decided.length ? Math.round((east / decided.length) * 1000) / 1000 : NaN,
-    seat1East: rows.filter((r) => r.seat1East).length, passes: share >= 0.4 && share <= 0.6,
+    seat2Share: Math.round(share * 1000) / 1000, eastWins: east, eastStartShare: Math.round(eastShare * 1000) / 1000,
+    seat1East: rows.filter((r) => r.seat1East).length,
+    passes: share >= 0.4 && share <= 0.6 && eastShare >= eastBand[0] && eastShare <= eastBand[1],
   };
 };
 const rows = read();
-for (const civ of civs) console.log(JSON.stringify(summary(civ, rows.filter((r) => r.civ === civ))));
-const all = summary('all', rows.filter((r) => civs.includes(r.civ)));
-console.log(JSON.stringify(all));
+const groups = civs.map((civ) => summary(civ, rows.filter((r) => r.civ === civ), [0.4, 0.6]));
+groups.push(summary('all', rows.filter((r) => civs.includes(r.civ)), [0.45, 0.55]));
+for (const group of groups) console.log(JSON.stringify(group));
 // Shards only play their share; judge the whole file with SEAT_BENCH_SUMMARY=1 once they finish.
-if (shards === 1 && !all.passes) process.exitCode = 1;
+if ((shards === 1 || process.env.SEAT_BENCH_SUMMARY) && !groups.every((group) => group.passes)) process.exitCode = 1;

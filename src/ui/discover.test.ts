@@ -48,7 +48,8 @@ describe('points of interest on the generated map', () => {
     const { layout } = generateMap(DEFAULT_SEED);
     const sites = findSites(layout.props, layout.nodes, layout.townCenter);
     const count = (k: string) => sites.filter((s) => s.kind === k).length;
-    expect(count('ruins')).toBe(3);
+    // Two-player land (T119): the two western ridges and their images.
+    expect(count('ruins')).toBe(4);
     expect(count('stones')).toBeGreaterThanOrEqual(1);
     expect(count('hamlet')).toBe(2);
     expect(count('gold') + count('stone')).toBeGreaterThan(0);

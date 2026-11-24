@@ -47,6 +47,11 @@ const DX = [1, -1, 0, 0, 1, 1, -1, -1];
 const DZ = [0, 0, 1, -1, 1, -1, 1, -1];
 const COST = [1, 1, 1, 1, Math.SQRT2, Math.SQRT2, Math.SQRT2, Math.SQRT2];
 
+/** Exact grid boundaries belong to corresponding cells in the two map frames. */
+function cellIndex(coordinate: number, turned: boolean): number {
+  return turned ? Math.ceil(coordinate) - 1 : Math.floor(coordinate);
+}
+
 /**
  * Grid A* over Heightfield.isWalkable plus obstacle footprints.
  * Owned by the Sim lane (T3). Pure TS — no three.js.
@@ -291,10 +296,11 @@ export class NavGrid {
     const z0 = a.z / NAV_CELL;
     const x1 = b.x / NAV_CELL;
     const z1 = b.z / NAV_CELL;
-    let ix = Math.floor(x0);
-    let iz = Math.floor(z0);
-    const ex = Math.floor(x1);
-    const ez = Math.floor(z1);
+    const turned = this.turnedFrame(a);
+    let ix = cellIndex(x0, turned);
+    let iz = cellIndex(z0, turned);
+    const ex = cellIndex(x1, turned);
+    const ez = cellIndex(z1, turned);
     const dx = x1 - x0;
     const dz = z1 - z0;
     const sx = Math.sign(dx);
@@ -422,9 +428,15 @@ export class NavGrid {
     return false;
   }
 
+  private turnedFrame(p: Vec2): boolean {
+    return !!this.hf.halfTurnSymmetric && (p.x > this.hf.width / 2
+      || (p.x === this.hf.width / 2 && p.z > this.hf.depth / 2));
+  }
+
   private cellOf(p: Vec2): number {
-    const ix = Math.floor(p.x / NAV_CELL);
-    const iz = Math.floor(p.z / NAV_CELL);
+    const turned = this.turnedFrame(p);
+    const ix = cellIndex(p.x / NAV_CELL, turned);
+    const iz = cellIndex(p.z / NAV_CELL, turned);
     if (ix < 0 || iz < 0 || ix >= this.cols || iz >= this.rows) return -1;
     return iz * this.cols + ix;
   }
@@ -435,8 +447,9 @@ export class NavGrid {
 
   /** Walkable cell nearest to `p` (in region `reg`, or any region when 0), or -1. */
   private nearestCell(p: Vec2, reg: number, accept?: (p: Vec2) => boolean): number {
-    const cx = Math.min(this.cols - 1, Math.max(0, Math.floor(p.x / NAV_CELL)));
-    const cz = Math.min(this.rows - 1, Math.max(0, Math.floor(p.z / NAV_CELL)));
+    const turned = this.turnedFrame(p);
+    const cx = Math.min(this.cols - 1, Math.max(0, cellIndex(p.x / NAV_CELL, turned)));
+    const cz = Math.min(this.rows - 1, Math.max(0, cellIndex(p.z / NAV_CELL, turned)));
     const maxR = Math.max(this.cols, this.rows);
     let best = -1;
     let bestD = Infinity;
@@ -452,7 +465,7 @@ export class NavGrid {
               const c = this.center(i);
               if (accept && !accept(c)) continue;
               const d = Math.hypot(c.x - p.x, c.z - p.z);
-              if (d < bestD) {
+              if (d < bestD || (turned && d === bestD && i > best)) {
                 bestD = d;
                 best = i;
               }
@@ -498,6 +511,7 @@ export class NavGrid {
     const w = 1.0001 * Math.max(1, greed);
     const { cols, rows, g, parent, seen, closed } = this;
     const gen = ++this.gen;
+    const direction = this.turnedFrame(this.center(start)) ? -1 : 1;
     const gx = goal % cols;
     const gz = (goal - gx) / cols;
     const h = (i: number) => {
@@ -525,8 +539,8 @@ export class NavGrid {
       const x = cur % cols;
       const z = (cur - x) / cols;
       for (let d = 0; d < 8; d++) {
-        const nx = x + DX[d];
-        const nz = z + DZ[d];
+        const nx = x + direction * DX[d];
+        const nz = z + direction * DZ[d];
         if (nx < 0 || nz < 0 || nx >= cols || nz >= rows) continue;
         const ni = nz * cols + nx;
         if (!this.passCell(ni) || closed[ni] === gen) continue;

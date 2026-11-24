@@ -156,6 +156,8 @@ export const NODE_RESOURCE: Record<NodeKind, ResourceType> = {
 export interface Heightfield {
   readonly width: number;
   readonly depth: number;
+  /** Equal terrain under a half-turn around the map centre. */
+  readonly halfTurnSymmetric?: boolean;
   /** Ground height at (x, z), bilinearly interpolated. May be below SEA_LEVEL (lake/river bed). */
   heightAt(x: number, z: number): number;
   /** True where the ground is below sea level (lake, river). */

@@ -148,7 +148,10 @@ describe('late-game AI (M16-8)', () => {
     const home = world.townCenterOf(AI)!.pos;
     for (let i = 0; i < 14; i++) world.spawnUnit(i % 2 ? 'swordsman' : 'archer', { x: home.x + 6 + (i % 3), z: home.z - 4 + Math.floor(i / 3) }, AI);
     const tc = world.townCenterOf(HUMAN)!.pos;
-    const spot = world.nav.nearestFree({ x: tc.x + 14, z: tc.z }) ?? { x: tc.x + 14, z: tc.z };
+    // On the map-centre side of the human Town Center for either seat (east of a west start, as
+    // before; west of an east one): the AI's army reaches it without passing the Town Center.
+    const side = tc.x < world.hf.width / 2 ? 1 : -1;
+    const spot = world.nav.nearestFree({ x: tc.x + 14 * side, z: tc.z }) ?? { x: tc.x + 14 * side, z: tc.z };
     const wonder = layFoundation(world, 'wonder', spot, 0, HUMAN);
     completeBuilding(world, wonder);
     wonder.hp = wonder.maxHp;

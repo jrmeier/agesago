@@ -4,6 +4,13 @@ export type MapSize = keyof typeof MAP_SIZES;
 export const MAP_TYPES = ['mediterranean', 'highlands', 'riverValley', 'forest', 'islands'] as const;
 export type MapType = typeof MAP_TYPES[number];
 export interface MapOptions { size?: MapSize; type?: MapType }
+/**
+ * Land generation of the default (large Mediterranean) map. 2 (T119): with two players the land is
+ * its west half turned half round the map centre onto the east half, so both starts are equal.
+ * 1: one lopsided landscape, whose east start won about 57% of AI mirror matches. A save records
+ * the land it was made on and regenerates that one.
+ */
+export const LAND_VERSION = 2;
 export function normalizeMapOptions(options: MapOptions = {}): Required<MapOptions> {
   if (options.size !== undefined && !Object.hasOwn(MAP_SIZES,options.size)) throw new RangeError('Invalid map size');
   if (options.type !== undefined && !MAP_TYPES.includes(options.type)) throw new RangeError('Invalid map type');

@@ -272,3 +272,19 @@ describe('batch training', () => {
     expect(ltc3.queue).toBe(0);
   }, 30_000);
 });
+
+it('mirrored towns spawn units on mirrored free ground, including occupied first choices (T119D)', async () => {
+  const { defaultPlayers } = await import('./World');
+  const { spawnPoint } = await import('./systems/train');
+  const layout: MapLayout = { townCenter: { x: 20, z: 30 }, villagers: [], scouts: [], nodes: [], props: [],
+    extraStarts: [{ townCenter: { x: 60, z: 50 }, villagers: [], scouts: [] }] };
+  const w = new World(flat(), layout, defaultPlayers(2));
+  for (let i = 0; i < 8; i++) {
+    const a = spawnPoint(w, w.townCenterOf(1)!, 'villager');
+    const b = spawnPoint(w, w.townCenterOf(2)!, 'villager');
+    expect(b.x).toBeCloseTo(80 - a.x, 10);
+    expect(b.z).toBeCloseTo(80 - a.z, 10);
+    w.spawnVillager(a, 1);
+    w.spawnVillager(b, 2);
+  }
+});

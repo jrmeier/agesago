@@ -1,0 +1,68 @@
+{
+  "revision": "d3ecc2f1b9c9dfc8fbe85cc5072bc4cd80b0788c",
+  "games": 640,
+  "passes": true,
+  "sha256": "ac5b0789a891369aea83e558153cf94c6b631581b7523502ff579c46eb6c6ab9",
+  "summary": [
+    {
+      "group": "hellenes",
+      "games": 160,
+      "decided": 156,
+      "seat1Wins": 81,
+      "seat2Wins": 75,
+      "seat2Share": 0.481,
+      "eastWins": 73,
+      "eastStartShare": 0.468,
+      "seat1East": 80,
+      "passes": true
+    },
+    {
+      "group": "romans",
+      "games": 160,
+      "decided": 159,
+      "seat1Wins": 85,
+      "seat2Wins": 74,
+      "seat2Share": 0.465,
+      "eastWins": 68,
+      "eastStartShare": 0.428,
+      "seat1East": 80,
+      "passes": true
+    },
+    {
+      "group": "persians",
+      "games": 160,
+      "decided": 158,
+      "seat1Wins": 85,
+      "seat2Wins": 73,
+      "seat2Share": 0.462,
+      "eastWins": 75,
+      "eastStartShare": 0.475,
+      "seat1East": 80,
+      "passes": true
+    },
+    {
+      "group": "celts",
+      "games": 160,
+      "decided": 159,
+      "seat1Wins": 92,
+      "seat2Wins": 67,
+      "seat2Share": 0.421,
+      "eastWins": 83,
+      "eastStartShare": 0.522,
+      "seat1East": 80,
+      "passes": true
+    },
+    {
+      "group": "all",
+      "games": 640,
+      "decided": 632,
+      "seat1Wins": 343,
+      "seat2Wins": 289,
+      "seat2Share": 0.457,
+      "eastWins": 299,
+      "eastStartShare": 0.473,
+      "seat1East": 320,
+      "passes": true
+    }
+  ]
+}

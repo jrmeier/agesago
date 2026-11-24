@@ -1,5 +1,5 @@
 import { MIN_SAVE_VERSION, SAVE_VERSION } from '../core/saveVersion';
-import type { MapOptions } from '../core/maps';
+import { LAND_VERSION, type MapOptions } from '../core/maps';
 import { civFor } from '../core/civilizations';
 import { BUILDINGS, MARKET, nextUpgrade } from '../core/buildings';
 import { packs, UNITS } from '../core/units';
@@ -30,6 +30,8 @@ export interface SaveData {
   seed: number;
   playerCount: number;
   mapOptions?: MapOptions;
+  /** Land generation (core/maps LAND_VERSION); absent before v17, which was all land 1. */
+  land?: number;
   /** Wonder victory match option; absent before v8 (loads with the defaults). */
   wonderRules?: WonderRules;
   width: number;
@@ -131,6 +133,7 @@ export function serializeWorld(world: World): SaveData {
     seed: world.seed,
     playerCount: world.players.size,
     mapOptions: world.mapOptions,
+    land: world.land,
     wonderRules: world.wonderRules,
     width: world.hf.width,
     depth: world.hf.depth,
@@ -220,6 +223,11 @@ function restoreMap<K, V>(map: Map<K, V>, entries: [K, V][]): void {
   for (const [key, value] of entries) map.set(key, value);
 }
 
+/** The land generation a save was made on: generateMap's `land` for regenerating its map. */
+export function savedLand(data: SaveData): number {
+  return data.version < 17 ? 1 : data.land ?? LAND_VERSION;
+}
+
 /** Regenerate static scenery from the seed; retain queues, jobs, exact fog and clocks. */
 export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
   if (!data || typeof data.version !== 'number' || data.version < MIN_SAVE_VERSION || data.version > SAVE_VERSION) {
@@ -257,12 +265,16 @@ export function deserializeWorld(data: SaveData, hf?: Heightfield): World {
     if (saved.version < 16) player.difficulty = 'moderate';
     if (player.difficulty !== undefined && !['easy', 'moderate', 'hard', 'hardest'].includes(player.difficulty)) throw new Error('Invalid save: AI difficulty');
   }
-  const generated = generateMap(saved.seed, saved.playerCount, saved.mapOptions);
+  // Validate the original value: JSON copying turns non-finite numbers into null.
+  const land = savedLand(data);
+  if (!Number.isInteger(land) || land < 1 || land > LAND_VERSION) throw new Error('Invalid save: land version');
+  const generated = generateMap(saved.seed, saved.playerCount, saved.mapOptions, land);
   const terrain = hf ?? generated.hf;
   if (terrain.width !== saved.width || terrain.depth !== saved.depth) throw new Error('Invalid save: terrain dimensions differ');
   const world = new World(terrain, generated.layout, saved.players.map((p) => p.player));
   world.seed = saved.seed;
   world.mapOptions = saved.mapOptions ?? {};
+  world.land = land;
   // Pre-wonder saves: default wonder rules, no countdown, no completion stamps.
   if (saved.version < 8) {
     delete saved.wonderRules;

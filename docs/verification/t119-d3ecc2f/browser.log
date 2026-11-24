@@ -1,0 +1,27 @@
+[WebServer] (node:15606) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:15614) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:15654) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 12 tests using 1 worker
+
+(node:15661) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [desktop] › e2e/multiplayer.e2e.ts:5:1 › two browsers join by code, gather/train in lockstep, reconnect, and complete a match (28.4s)
+  ✓   2 [desktop] › e2e/multiplayer.e2e.ts:71:1 › opt-in performance overlay reports frames and collapses without horizontal scroll (4.3s)
+  ✓   3 [desktop] › e2e/resume.e2e.ts:30:1 › a save survives reload, a newer file does not replace it, and new match starts fresh (31.6s)
+  ✓   4 [desktop] › e2e/resume.e2e.ts:187:1 › a finished resume reopens the summary with its chart, group, and selection (21.1s)
+  ✓   5 [desktop] › e2e/tech-tree.e2e.ts:35:1 › the tech tree opens from its button and hotkey, pauses, and closes (10.8s)
+  ✓   6 [desktop] › e2e/tech-tree.e2e.ts:106:1 › Roman Engineering tooltip and tree fit at 360 px (5.9s)
+(node:17409) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   7 [phone] › e2e/multiplayer.e2e.ts:5:1 › two browsers join by code, gather/train in lockstep, reconnect, and complete a match (18.4s)
+  ✓   8 [phone] › e2e/multiplayer.e2e.ts:71:1 › opt-in performance overlay reports frames and collapses without horizontal scroll (2.9s)
+  ✓   9 [phone] › e2e/resume.e2e.ts:30:1 › a save survives reload, a newer file does not replace it, and new match starts fresh (11.8s)
+  ✓  10 [phone] › e2e/resume.e2e.ts:187:1 › a finished resume reopens the summary with its chart, group, and selection (10.0s)
+  ✓  11 [phone] › e2e/tech-tree.e2e.ts:35:1 › the tech tree opens from its button and hotkey, pauses, and closes (4.2s)
+  ✓  12 [phone] › e2e/tech-tree.e2e.ts:106:1 › Roman Engineering tooltip and tree fit at 360 px (4.7s)
+
+  12 passed (2.8m)

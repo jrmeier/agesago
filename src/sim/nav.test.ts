@@ -35,6 +35,17 @@ function pathStaysDry(hf: Heightfield, from: Vec2, path: Vec2[]): boolean {
 }
 
 describe('NavGrid', () => {
+  it('takes corresponding detours around equal-cost obstacles on a half-turn symmetric map', () => {
+    const hf = { ...flatField(rectLake(30, 18, 34, 30)), halfTurnSymmetric: true };
+    const turn = (p: Vec2) => ({ x: hf.width - p.x, z: hf.depth - p.z });
+    const from = { x: 8.25, z: 24 };
+    const to = { x: 55.75, z: 24 };
+    const nav = new NavGrid(hf);
+    const route = nav.findPath(from, to)!;
+    expect(route.length).toBeGreaterThan(1);
+    expect(nav.findPath(turn(from), turn(to))).toEqual(route.map(turn));
+  });
+
   it('snaps to unreserved free cell centres in the requested connected region', () => {
     const nav = new NavGrid(flatField((x) => x >= 30 && x <= 32));
     const region = nav.regionAt({ x: 10, z: 24 });

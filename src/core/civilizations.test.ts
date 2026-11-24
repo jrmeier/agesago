@@ -54,3 +54,18 @@ it('implicit barracks training uses an available basic unit before the unique un
   w.dispatch({type:'train',buildingId:barracks.id});expect(barracks.queueKinds).toEqual(['hoplite']);
   w.dispatch({type:'train',buildingId:barracks.id,unit:'phalangiteGuard'});expect(barracks.queueKinds).toEqual(['hoplite']);
 });
+
+it('c4 civilization prices and Roman farming stack without buffing berries', () => {
+  expect(TECHS.hellenicDiscipline.cost).toEqual({ food: 100, gold: 50 });
+  expect(TECHS.romanEngineering.cost).toEqual({ food: 100, gold: 50 });
+  expect(TECHS.royalRoads.cost).toEqual({ food: 175, gold: 100 });
+  expect(TECHS.woodlandCraft.cost).toEqual({ food: 250, gold: 150 });
+  const g = generateMap(1, 1, { size: 'small', type: 'forest' });
+  const w = new World(g.hf, g.layout, defaultPlayers(1, ['romans']));
+  completeResearch(w, 1, 'romanEngineering');
+  expect(statOf(w, 1, { building: 'house' }, 'buildRate', 1)).toBeCloseTo(1.3);
+  expect(statOf(w, 1, { unit: 'villager' }, 'gather.farm', 1)).toBeCloseTo(1.15);
+  expect(statOf(w, 1, { unit: 'villager' }, 'gather.food', 1)).toBe(1);
+  completeResearch(w, 1, 'oxPlough');
+  expect(statOf(w, 1, { unit: 'villager' }, 'gather.farm', 1)).toBeCloseTo(1.15 * 1.15);
+});

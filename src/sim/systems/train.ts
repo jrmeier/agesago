@@ -205,22 +205,25 @@ export function advanceTraining(world: World, b: Building, dt: number): void {
   emitProgress(world, b);
 }
 
-/** A free walkable spot on a ring around the building, preferring the front (+z) and empty ground. */
+/** A free walkable spot on a ring around the building, preferring empty ground with the scan half-turned on the eastern half. */
 export function spawnPoint(world: World, b: Building, kind?: UnitKind): Vec2 {
   const nav = kind && isShip(kind) ? world.waterNav : world.nav;
   const units = [...world.units.values()];
   const steps = 24;
+  // Keep opposite towns' exits opposite too. A fixed +z exit gives workers and armies
+  // different walks on point-symmetric land; use position, never owner or entity id.
+  const side = b.pos.x > world.hf.width / 2 || (b.pos.x === world.hf.width / 2 && b.pos.z > world.hf.depth / 2) ? -1 : 1;
   for (const crowdOk of [false, true]) {
     for (let ring = 0; ring < 4; ring++) {
       const r = b.radius + BALANCE.villagerRadius + 0.25 + ring * 0.7;
       for (let k = 0; k < steps; k++) {
         const a = (k % 2 ? -1 : 1) * Math.ceil(k / 2) * ((2 * Math.PI) / steps);
-        const p = { x: b.pos.x + Math.sin(a) * r, z: b.pos.z + Math.cos(a) * r };
+        const p = { x: b.pos.x + side * Math.sin(a) * r, z: b.pos.z + side * Math.cos(a) * r };
         if (!nav.isFree(p) || (kind && isShip(kind) && !nav.isWalkableCell(p))) continue;
         if (crowdOk || units.every((u) => Math.hypot(u.pos.x - p.x, u.pos.z - p.z) >= 0.6)) return p;
       }
     }
   }
-  const fallback = { x: b.pos.x, z: b.pos.z + b.radius + BALANCE.villagerRadius + 0.25 };
+  const fallback = { x: b.pos.x, z: b.pos.z + side * (b.radius + BALANCE.villagerRadius + 0.25) };
   return kind && isShip(kind) ? nav.nearestFreeCell(fallback) ?? fallback : fallback;
 }

@@ -372,8 +372,20 @@ function separation(world: World, st: Steering): void {
           const d = Math.sqrt(d2);
           if (d < 1e-6) {
             // Stable tie-breaker for identical spawn positions; independent of map iteration order.
-            const angle = (Math.min(a.u.id, b.u.id) + Math.max(a.u.id, b.u.id)) * GOLDEN_ANGLE;
-            const sign = a.u.id < b.u.id ? 1 : -1;
+            let angle = (a.u.id + b.u.id) * GOLDEN_ANGLE;
+            let sign = a.u.id < b.u.id ? 1 : -1;
+            if (world.hf.halfTurnSymmetric) {
+              // Corresponding units can have different entity IDs. Use the contact point
+              // in the same map frame so an overlap in the opposite town turns with it.
+              const { width, depth } = world.hf;
+              const x = (a.x + b.x) / 2;
+              const z = (a.z + b.z) / 2;
+              const turned = x > width / 2 || (x === width / 2 && z > depth / 2);
+              const localX = turned ? width - x : x;
+              const localZ = turned ? depth - z : z;
+              angle = (Math.round(localX / HASH_CELL) + stride * Math.round(localZ / HASH_CELL)) * GOLDEN_ANGLE;
+              if (turned) sign = -sign;
+            }
             dx = Math.sin(angle) * sign;
             dz = Math.cos(angle) * sign;
           } else { dx /= d; dz /= d; }

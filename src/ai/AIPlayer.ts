@@ -72,6 +72,7 @@ export class AIPlayer {
       sheltered: new Set<EntityId>(),
       explorers: new Set([...world.units.values()].filter((u) => u.owner === player && u.kind === 'scout').map((u) => u.id)),
       home,
+      turns: Math.round(Math.atan2(world.hf.depth / 2 - home.z, world.hf.width / 2 - home.x) / (Math.PI / 2)) & 3,
       region: world.nav.regionAt(tc ? { x: tc.pos.x, z: tc.pos.z + tc.radius + 1 } : home),
       reserve: {},
       techReserve: {},
@@ -79,6 +80,8 @@ export class AIPlayer {
       saving: null,
       villagerHold: 0,
       defenceHold: 0,
+      openingCivFood: 0,
+      outgunned: false,
       armyFirst: false,
       aging: false,
       pauseVillagers: false,
@@ -110,7 +113,7 @@ export class AIPlayer {
       world.events.on('attacked', (e) => {
         if (e.owner === player) {
           this.military.onAttacked(e.pos);
-          this.research.onAttacked(e.pos);
+          if (this.research.onAttacked(e.pos)) this.economy.onAttacked();
           this.upkeep.onAttacked();
         }
       }),

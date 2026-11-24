@@ -1,6 +1,6 @@
 import { PLAYER_COLORS } from '../core/players';
 import type { CivId } from '../core/civilizations';
-import type { MapOptions } from '../core/maps';
+import { LAND_VERSION, type MapOptions } from '../core/maps';
 import { MARKET, MAX_POP, footprintRadius, popBonusOf } from '../core/buildings';
 import { EventBus } from '../core/events';
 import { isAnimal, isShip, popCost } from '../core/units';
@@ -140,6 +140,8 @@ export class World {
   /** Map identity for saves. Set to the seed passed to generateMap before saving. */
   seed: number | null = null;
   mapOptions: MapOptions = {};
+  /** Land generation the map was made with (generateMap's `land`); saved, so a load regenerates the same land. */
+  land = LAND_VERSION;
   /** Match option: whether a standing wonder wins, and after how long (M16-7). */
   wonderRules: WonderRules = defaultWonderRules();
   /** The earliest finished wonder's countdown, while one stands. */

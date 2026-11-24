@@ -1,4 +1,6 @@
-/** Opt-in full AI tournament: ten seeds (CIV_BENCH_SEEDS), swapped sides, all six pairings. */
+/** AI tournament: default ten seeds is a quick look; acceptance uses CIV_BENCH_SEEDS=40
+ * (480 games, 80 per pairing). Pairings must be 40–60%, pooled civilizations 45–55%.
+ * CIV_BENCH_SUMMARY=1 checks existing rows without playing games. */
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { CIV_IDS, civFor, type CivId } from '../src/core/civilizations';
 import { generateMap } from '../src/sim/mapgen';
@@ -15,7 +17,7 @@ const shards=Number(process.env.CIV_BENCH_SHARDS ?? 1), shard=Number(process.env
 /** Seeds per pairing, each played from both sides (M16-11: more seeds for a pairing near a band edge). */
 const seedCount=Number(process.env.CIV_BENCH_SEEDS ?? 10);
 if(!Number.isInteger(seedCount)||seedCount<1)throw new Error('CIV_BENCH_SEEDS must be a positive integer');
-for(let a=0;a<CIV_IDS.length;a++)for(let b=a+1;b<CIV_IDS.length;b++){
+if(process.env.CIV_BENCH_SUMMARY!=='1') for(let a=0;a<CIV_IDS.length;a++)for(let b=a+1;b<CIV_IDS.length;b++){
   if(filters.length && !filters.includes(CIV_IDS[a]) && !filters.includes(CIV_IDS[b]))continue;
   pairIndex++;if(pairIndex%shards!==shard)continue;
   for(let seed=1;seed<=seedCount;seed++)for(const swap of [false,true]) {
@@ -34,9 +36,22 @@ for(let a=0;a<CIV_IDS.length;a++)for(let b=a+1;b<CIV_IDS.length;b++){
 }
 }
 const completed=existsSync(output)?readFileSync(output,'utf8').trim().split('\n').filter(Boolean).map(line=>JSON.parse(line)):[];
+let passes = true;
 for(let a=0;a<CIV_IDS.length;a++)for(let b=a+1;b<CIV_IDS.length;b++) {
  if(filters.length && !filters.includes(CIV_IDS[a]) && !filters.includes(CIV_IDS[b]))continue;
  const pair=[CIV_IDS[a],CIV_IDS[b]],games=completed.filter(r=>r.pair.join('/')===pair.join('/')&&r.seed<=seedCount);
  const rate=games.reduce((sum,r)=>sum+(r.winner===pair[0]?1:r.winner===null?.5:0),0)/games.length;
- console.log(JSON.stringify({pair,games:games.length,firstWinRate:rate,passes:games.length===seedCount*2&&rate>=.4&&rate<=.6}));
+ const pass=games.length===seedCount*2&&rate>=.4&&rate<=.6;
+ passes &&= pass;
+ console.log(JSON.stringify({pair,games:games.length,firstWinRate:rate,passes:pass}));
 }
+for (const civ of CIV_IDS) {
+  const games=completed.filter(r=>r.pair.includes(civ)&&r.seed<=seedCount);
+  const rate=games.reduce((sum,r)=>sum+(r.winner===civ?1:r.winner===null?.5:0),0)/games.length;
+  const complete=games.length===seedCount*6;
+  const pass=complete&&rate>=.45&&rate<=.55;
+  // A filtered quick look has not played the other pairings; report without judging it.
+  if(!filters.length||complete) passes &&= pass;
+  console.log(JSON.stringify({civ,games:games.length,pooledWinRate:rate,complete,passes:pass}));
+}
+if((shards===1||process.env.CIV_BENCH_SUMMARY==='1')&&!passes)process.exitCode=1;
