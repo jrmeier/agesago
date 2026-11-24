@@ -107,8 +107,11 @@ export class Economy {
     const { world, player, profile } = this.c;
     // The general army-first policy stays active for two minutes after a raid.
     // The opening research window can use a quiet stretch without borrowing from an active defence.
-    const armyNeedsFood = profile.research?.deferOpeningCivFoodForArmy
-      && (this.c.armyFirst || s.army.length < profile.firstWave);
+    // A small escort can spare food when enemy sightings show little opposition.
+    // Build toward the first wave when the enemy can contest that escort.
+    const armyNeedsFood = profile.research?.deferOpeningCivFoodForArmy && (
+      this.c.armyFirst || s.army.length < Math.min(profile.firstWave, Math.max(3, 2 * this.c.intel.enemyArmy()))
+    );
     if (!tech || this.c.defenceHold > 0 || this.c.sheltered.size > 0
       || this.c.outgunned || armyNeedsFood || world.time - this.lastAttacked < CIV_FOOD_CALM) {
       this.pauseCivFoodHold(world.time);

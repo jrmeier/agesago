@@ -36,7 +36,7 @@ export interface ResearchProfile {
   gap: number;
   /** Extra food (beyond one villager) kept back for villager production while it still booms. */
   villagerReserve: number;
-  /** Fund the first wave and army-first spending ahead of the opening civilization tech. */
+  /** Fund troops before the opening civilization tech when the first wave faces a threat. */
   deferOpeningCivFoodForArmy?: boolean;
   /** Sell or buy at its market when a stock passes this and a needed resource is short. */
   marketExcess: number;
