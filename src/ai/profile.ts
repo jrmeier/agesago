@@ -105,6 +105,8 @@ export interface Profile {
   counters: boolean;
   /** Preferred unique-unit share, including training queues; hard counters still take priority. */
   uniqueShare: number;
+  /** Raw counter value required before the preferred unique-unit share can override a pick. */
+  uniqueCounterRatio?: number;
   /** Villagers sent to a military building / drop site. */
   builders: number;
   /** Pull villagers into the Town Center when raided. */
@@ -259,7 +261,7 @@ const BASE: Record<Difficulty, Profile> = {
   hardest: {
     econInterval: 0.6,
     buildInterval: 1.5,
-    militaryInterval: 0.75,
+    militaryInterval: 1,
     reaction: 1,
     targetVillagers: 56,
     tcQueue: 2,
@@ -276,6 +278,7 @@ const BASE: Record<Difficulty, Profile> = {
     retreatAt: 0.4,
     counters: true,
     uniqueShare: 0.4,
+    uniqueCounterRatio: 1,
     builders: 3,
     shelter: true,
     expandAt: 22,

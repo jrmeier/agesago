@@ -274,7 +274,8 @@ export class Military {
     // combat value before stockpile discounts and random variety: a wood glut must not erase
     // gold-cost Immortals/Raiders. Spears still beat swords into cavalry, and slingers beat
     // Immortals into mass infantry. Phalangite Guards fill the spear role themselves.
-    if (unique && this.c.profile.uniqueShare > 0 && uniqueMatchup >= bestMatchup * 0.75) {
+    const uniqueCounterRatio = this.c.profile.uniqueCounterRatio ?? 0.75;
+    if (unique && this.c.profile.uniqueShare > 0 && uniqueMatchup >= bestMatchup * uniqueCounterRatio) {
       let count = s.army.filter((u) => u.kind === unique).length;
       let total = s.army.length;
       for (const b of s.buildings) {
