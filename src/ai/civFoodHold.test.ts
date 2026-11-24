@@ -35,6 +35,19 @@ function town(villagers = 20, difficulty: Difficulty = 'moderate', time = 0) {
 }
 
 describe('T123: one bounded food hold for the first civilization tech', () => {
+  it('buys food with surplus gold while keeping the technology itself affordable', () => {
+    const { world, ai, pass } = town();
+    completeBuilding(world, layFoundation(world, 'market', { x: 37, z: 40 }, 0, 1));
+    Object.assign(world.stockOf(1), { food: 50, gold: 375 });
+    pass();
+    ai.research.pass(snapshot(world, 1));
+    expect(world.stockOf(1).food).toBeGreaterThanOrEqual(225);
+    expect(world.stockOf(1).gold).toBeGreaterThanOrEqual(100);
+    world.time += ai.profile.research!.gap + 1;
+    ai.research.pass(snapshot(world, 1));
+    expect(ai.research.started.some(({ tech }) => tech === CIVS.hellenes.tech)).toBe(true);
+    ai.dispose();
+  });
   it('leaves the tech and one villager affordable, then resumes training when research starts', () => {
     const { world, ai, tc, pass } = town();
     world.stockOf(1).food = 200;
