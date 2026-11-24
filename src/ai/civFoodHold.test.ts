@@ -3,6 +3,7 @@ import { CIVS } from '../core/civilizations';
 import { GRASS_ONLY, type Difficulty, type Heightfield, type MapLayout } from '../core/types';
 import { World, defaultPlayers } from '../sim/World';
 import { completeBuilding, layFoundation } from '../sim/systems/build';
+import { killUnit } from '../sim/systems/combat';
 import { AIPlayer } from './AIPlayer';
 import { snapshot, type Ctx } from './context';
 import { run } from './harness';
@@ -87,22 +88,24 @@ describe('T123: one bounded food hold for the first civilization tech', () => {
     ai.dispose();
   });
 
-  it('ignores incidental damage, releases immediately for an enemy raid, and never rearms', () => {
+  it('ignores incidental damage, pauses immediately for a raid, and resumes its unused budget', () => {
     const { world, ai, tc, pass } = town();
     pass();
     expect(tc.queue).toBe(0);
     world.events.emit({ type: 'attacked', owner: 1, id: tc.id, pos: tc.pos });
     pass();
     expect(tc.queue).toBe(0);
-    world.spawnUnit('hoplite', { x: tc.pos.x + 5, z: tc.pos.z }, 2);
+    const raider = world.spawnUnit('hoplite', { x: tc.pos.x + 5, z: tc.pos.z }, 2);
     run(world, [], 0.1);
     world.events.emit({ type: 'attacked', owner: 1, id: tc.id, pos: tc.pos });
     pass();
     expect(tc.queue).toBe(2);
+    killUnit(world, raider);
     run(world, [], 31);
     world.stockOf(1).food = 100;
+    const before = tc.queue;
     pass();
-    expect(tc.queue).toBe(2);
+    expect(tc.queue).toBe(before);
     ai.dispose();
   });
 

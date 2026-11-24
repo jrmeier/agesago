@@ -68,20 +68,26 @@ export class Economy {
   private load = new Map<EntityId, number>();
   private shortlists = new Map<ResourceType, { n: ResourceNode; d: number }[]>();
 
-  private civFoodHoldUsed: boolean;
-  private civFoodHoldUntil = -Infinity;
+  private civFoodHoldRemaining: number;
+  private civFoodHoldStarted: number | null = null;
   private lastAttacked = -Infinity;
 
   constructor(private readonly c: Ctx) {
     // Reattaching an AI (including loading a save) must not grant another opening pause.
-    this.civFoodHoldUsed = c.world.time > 0;
+    this.civFoodHoldRemaining = c.world.time > 0 ? 0 : CIV_FOOD_HOLD;
   }
 
   /** Attacks cancel the one-off food hold immediately; defence keeps its existing priority. */
   onAttacked(): void {
     this.lastAttacked = this.c.world.time;
-    this.civFoodHoldUntil = -Infinity;
+    this.pauseCivFoodHold(this.lastAttacked);
     this.c.openingCivFood = 0;
+  }
+
+  private pauseCivFoodHold(now: number): void {
+    if (this.civFoodHoldStarted === null) return;
+    this.civFoodHoldRemaining = Math.max(0, this.civFoodHoldRemaining - (now - this.civFoodHoldStarted));
+    this.civFoodHoldStarted = null;
   }
 
   /** Resources needed for the opening civilization technology while the town is stable. */
@@ -103,20 +109,24 @@ export class Economy {
     // The opening research window can use a quiet stretch without borrowing from an active defence.
     if (!tech || this.c.defenceHold > 0 || this.c.sheltered.size > 0
       || this.c.outgunned || world.time - this.lastAttacked < CIV_FOOD_CALM) {
-      this.civFoodHoldUntil = -Infinity;
+      this.pauseCivFoodHold(world.time);
       return 0;
     }
     // Begin saving during construction. Starting only after completion leaves the
     // full price to raise at the point the next enemy wave can interrupt.
-    if (!s.buildings.some((b) => b.kind === 'forge' && !b.research?.length && !b.upgrading)) return 0;
     const stock = world.stockOf(player);
     const cost = TECHS[tech].cost;
-    if (Object.entries(cost).some(([r, n]) => r !== 'food' && stock[r as ResourceType] < n)) return 0;
-    if (!this.civFoodHoldUsed) {
-      this.civFoodHoldUsed = true;
-      this.civFoodHoldUntil = world.time + CIV_FOOD_HOLD;
+    const waitingForForge = !s.buildings.some((b) => b.kind === 'forge' && !b.research?.length && !b.upgrading);
+    const missingOtherMaterials = Object.entries(cost).some(([r, n]) => r !== 'food' && stock[r as ResourceType] < n);
+    if (waitingForForge || missingOtherMaterials) {
+      this.pauseCivFoodHold(world.time);
+      return 0;
     }
-    if (world.time >= this.civFoodHoldUntil) return 0;
+    this.civFoodHoldStarted ??= world.time;
+    if (world.time - this.civFoodHoldStarted >= this.civFoodHoldRemaining) {
+      this.pauseCivFoodHold(world.time);
+      return 0;
+    }
     return (cost.food ?? 0) + (UNITS.villager.cost.food ?? 0);
   }
 
